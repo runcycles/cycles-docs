@@ -1,0 +1,11 @@
+{
+  "_note": "GitHub Container Registry pull counts are NOT exposed via the GitHub API — they appear in the UI at https://github.com/orgs/runcycles/packages but no programmatic endpoint returns them. Update these numbers manually whenever you peek at the page (typical cadence: monthly).",
+  "_source": "https://github.com/orgs/runcycles/packages",
+  "lastVerifiedAt": "2026-04-30",
+  "ghPackages": {
+    "cycles-server-admin":  1030,
+    "cycles-server":         898,
+    "cycles-dashboard":      441,
+    "cycles-server-events":  303
+  }
+}

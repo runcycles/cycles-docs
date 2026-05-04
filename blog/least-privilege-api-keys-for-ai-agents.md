@@ -20,6 +20,10 @@ head:
 
 # Least-Privilege API Keys for AI Agents
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 An agent worker gets deployed with one shared API key. It runs support workflows for every customer, reads budgets, creates [reservations](/glossary#reservation), commits spend, and has enough admin access to patch policy during an incident. Six weeks later, the key appears in a build log.
 
 The immediate question is not "who leaked it?" It is "what could that key do before we revoked it?"
@@ -179,3 +183,9 @@ Least-privilege API keys make runtime authority sharper. The server can already 
 - [Security Hardening](/how-to/security-hardening) — production hardening checklist
 - [AI Agent Governance Dashboard](/blog/ai-agent-governance-admin-dashboard-monitor-control-budgets-risk) — operating keys, budgets, and risk limits from a governance UI
 - [Zero Trust for AI Agents](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) — why every tool call needs a policy decision
+
+## Related how-to guides
+
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

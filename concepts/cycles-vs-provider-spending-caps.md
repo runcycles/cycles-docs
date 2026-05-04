@@ -15,6 +15,8 @@ But a safety net is not a governance system.
 
 Provider spending caps operate at the wrong granularity, the wrong timing, and the wrong scope for teams running autonomous AI agents in production.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — provider caps fire at the org level; the calculator shows per-tenant exposure when one tenant burns the shared headroom.
+
 ## What provider caps offer
 
 Provider spending caps vary by vendor, but the general pattern is consistent.

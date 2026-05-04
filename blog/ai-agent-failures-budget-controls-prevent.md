@@ -10,6 +10,8 @@ sidebar: false
 
 # 5 AI Agent Failures Budget Controls Would Prevent
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Every team running AI agents in production has at least one horror story. The details vary — a runaway loop, a [retry storm](/glossary#retry-storm), a weekend deployment nobody was watching — but the punchline is always the same: a surprising number on an invoice and a postmortem that concludes with "we need better controls." We've collected these stories from teams across the industry, and five patterns come up again and again. Each one is preventable. Each one keeps happening because the same architectural gap — no pre-execution budget check — exists in most agent systems.
 
 <!-- more -->

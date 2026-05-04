@@ -9,6 +9,8 @@ Helicone is a popular LLM observability and gateway platform. It logs every mode
 
 The question is whether visibility and rate limiting are enough — or whether you need cumulative budget enforcement and action-level control.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — Helicone observes spend; the calculator shows what is *in scope* before any enforcement layer fires.
+
 ## What each does
 
 | | Helicone | Cycles |

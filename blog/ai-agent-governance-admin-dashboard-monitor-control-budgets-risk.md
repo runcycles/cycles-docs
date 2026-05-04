@@ -1,5 +1,5 @@
 ---
-title: "AI Agent Governance Dashboard: Operating Budgets, Risk Limits, and Keys in Production"
+title: "AI Agent Governance Dashboard: Budgets, Risk, Keys"
 date: 2026-04-09
 author: Albert Mavashev
 tags: [product, operations, dashboard, runtime-authority]
@@ -13,6 +13,8 @@ head:
 ---
 
 # Your AI Agents Are Running in Production. Who's Watching the Limits?
+
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
 Every team building AI agents eventually adds budget limits. Some add risk scoring. You set up a governance layer — cost caps per tenant, risk point budgets per agent, overdraft policies for when things get tight.
 
@@ -115,3 +117,9 @@ Login with your admin API key. Everything else is in the [README](https://github
 The dashboard is open source, ships as a Docker image, and covers the core admin workflows in the [Cycles governance spec](https://github.com/runcycles/cycles-protocol/blob/main/cycles-governance-admin-v0.1.25.yaml).
 
 If you're building a governance layer for your agents — whether you use Cycles or not — the pattern holds: your operators need write access with safety rails, not just read-only charts. Design for the 2am case, not the demo.
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [API key management](/how-to/api-key-management-in-cycles)

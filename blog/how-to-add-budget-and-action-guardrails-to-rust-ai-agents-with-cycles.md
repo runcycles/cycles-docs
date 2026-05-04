@@ -380,3 +380,9 @@ You'll need a running Cycles server with a [tenant](/glossary#tenant) and API ke
 - [How Reserve/Commit Works](/protocol/how-reserve-commit-works-in-cycles) — the protocol lifecycle in detail
 - [GitHub: runcycles/cycles-client-rust](https://github.com/runcycles/cycles-client-rust) — source, examples, AUDIT.md
 - [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) — [graceful degradation](/glossary#graceful-degradation) strategies
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Handling streaming responses](/how-to/handling-streaming-responses-with-cycles)
+- [API key management](/how-to/api-key-management-in-cycles)

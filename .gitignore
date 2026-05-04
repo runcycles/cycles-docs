@@ -6,4 +6,6 @@ public/admin-openapi.json
 public/cycles-protocol-v0.yaml
 public/llms-full.txt
 public/installs.json
+public/og/**/*.png
+coverage/
 .claude/settings.local.json

@@ -9,6 +9,8 @@ LangSmith is one of the most widely adopted observability platforms for LLM appl
 
 Cycles and LangSmith operate at different points in the agent lifecycle. Understanding where each fits prevents both gaps and redundancy in your production stack.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) · [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — observability records what happened; the calculators show what *will* happen at your token volume and action profile.
+
 ## What each does
 
 | | LangSmith | Cycles |

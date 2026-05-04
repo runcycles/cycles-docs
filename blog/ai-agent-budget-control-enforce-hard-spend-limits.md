@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Budget Control: Enforce Hard Spend Limits
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A development team sets a $50 budget for a coding agent running overnight. The agent hits an ambiguous error, retries with increasingly verbose prompts, fans out across three sub-agents to "research the problem," and loops for four hours. By morning the bill is $2,300.
 
 The dashboard showed the spike — at 7 AM, when someone checked. The alert fired at $500, forty minutes after the budget was gone. The provider spending cap was set at $5,000 per month for the whole organization. None of these controls stopped the next model call.
@@ -136,3 +138,9 @@ Cost overruns are a symptom. The root cause is the absence of a pre-execution en
 - **[Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation)** — per-tenant budgets, quotas, and isolation for SaaS platforms
 - **[Vibe Coding a Budget Wrapper vs. Owning a Runtime Authority](/blog/vibe-coding-budget-wrapper-vs-budget-authority)** — why the gap between a prototype and production enforcement is larger than it looks
 - **[Getting Started](/quickstart/getting-started-with-the-python-client)** — integrate with the [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [MCP Server](/quickstart/getting-started-with-the-mcp-server) client
+
+## Related how-to guides
+
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)

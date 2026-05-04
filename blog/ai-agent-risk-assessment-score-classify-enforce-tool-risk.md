@@ -11,6 +11,8 @@ featured: true
 
 # AI Agent Risk Assessment: How to Score, Classify, and Enforce Tool Risk Before Production
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A customer-onboarding agent sends 200 collections emails instead of welcome emails. Total model cost: $1.40. Business impact: [$50K+ in lost pipeline](/blog/ai-agent-action-control-hard-limits-side-effects). A coding agent retries an ambiguous error 240 times. Total model cost: [$4,200](/blog/ai-agent-failures-budget-controls-prevent). Both agents passed every test. Both were under their dollar budgets. In both cases, the agent had no tool-level risk assessment.
 
 These are not anomalies. They are what happens when teams deploy agents without classifying what those agents can do. Model risk — bias, hallucination, drift — gets attention. **Tool risk** — what happens when the agent acts on the world — does not.
@@ -442,3 +444,9 @@ The assessment can usually be done in an afternoon for a typical agent with 10�
 - [The AI Agent Governance Framework](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement) — mapping regulatory requirements to runtime controls
 - [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points) — [USD_MICROCENTS](/glossary#usd-microcents), TOKENS, [CREDITS](/glossary#credits), and RISK_POINTS
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — DENY, downgrade, disable, or defer
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)

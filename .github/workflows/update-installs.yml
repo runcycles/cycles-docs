@@ -1,5 +1,23 @@
 name: Update Install Count
 
+# Daily registry-only refresh.
+#
+# This workflow updates ONLY the bash-fetchable sources:
+#   - npm (api.npmjs.org)
+#   - PyPI (pypistats.org)
+#   - crates.io (crates.io/api)
+#
+# It DOES NOT touch the GitHub-side fields (`clones`, `clonesByRepo`,
+# `releases`, `releasesByRepo`, `ghPackages`, `maven`) because those
+# require a token with traffic/clones scope across the org and / or
+# manual maintenance — both handled by `npm run build` in the docs
+# deploy build, which uses installs.data.ts as the canonical updater.
+#
+# Schema preservation: this workflow uses `jq '. + { ... }'` to MERGE
+# the registry updates into the existing cache file, leaving every
+# other field intact. If you change the cache schema, update this
+# workflow's preserved-field list at the same time.
+
 on:
   schedule:
     - cron: '0 6 * * *'  # 6 AM UTC daily
@@ -14,12 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Fetch download counts
+      - name: Refresh registry counts
         run: |
           CACHE_FILE=".vitepress/theme/installs-cache.json"
-
-          # npm packages
           TODAY=$(date +%Y-%m-%d)
+
+          # ── Fetch fresh registry counts ──
           NPM_TOTAL=0
           for pkg in runcycles @runcycles/mcp-server @runcycles/openclaw-budget-guard; do
             COUNT=$(curl -sf "https://api.npmjs.org/downloads/point/2020-01-01:${TODAY}/${pkg}" | jq '.downloads // 0')
@@ -27,7 +45,6 @@ jobs:
           done
           echo "npm=$NPM_TOTAL"
 
-          # PyPI packages
           PYPI_TOTAL=0
           for pkg in runcycles runcycles-openai-agents; do
             COUNT=$(curl -sf "https://pypistats.org/api/packages/${pkg}/recent" | jq '.data.last_month // 0')
@@ -35,7 +52,6 @@ jobs:
           done
           echo "pypi=$PYPI_TOTAL"
 
-          # crates.io packages
           CRATES_TOTAL=0
           for pkg in runcycles; do
             COUNT=$(curl -sf -H 'User-Agent: runcycles-docs (https://github.com/runcycles/docs)' "https://crates.io/api/v1/crates/${pkg}" | jq '.crate.downloads // 0')
@@ -43,28 +59,61 @@ jobs:
           done
           echo "crates=$CRATES_TOTAL"
 
-          # Read per-source cached values
-          CACHED_NPM=$(jq '.npm // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
-          CACHED_PYPI=$(jq '.pypi // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
-          CACHED_CRATES=$(jq '.crates // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
-          CACHED_TOTAL=$(jq '.total // 0' "$CACHE_FILE" 2>/dev/null || echo 0)
-          echo "cached: npm=$CACHED_NPM pypi=$CACHED_PYPI crates=$CACHED_CRATES total=$CACHED_TOTAL"
+          # ── Read full existing cache (preserves GitHub-side fields) ──
+          if [ -f "$CACHE_FILE" ]; then
+            CACHED=$(cat "$CACHE_FILE")
+          else
+            # Cold start with the current schema — empty everything.
+            CACHED='{"npm":0,"pypi":0,"crates":0,"clones":0,"clonesByRepo":{},"releases":0,"releasesByRepo":{},"ghPackages":0,"maven":0,"total":0,"fetchedAt":""}'
+          fi
 
-          # Per-source high-water marks
+          # ── Schema-regression guard: refuse to operate on a pre-PR-#515 cache. ──
+          # If the file is missing `clones` / `clonesByRepo` AND has the legacy
+          # `ghcr` field, this workflow would silently propagate the wipe by
+          # merging registry updates over the top. Fail loudly instead.
+          HAS_CLONES=$(echo "$CACHED" | jq 'has("clones") and has("clonesByRepo")')
+          HAS_GHCR=$(echo "$CACHED" | jq 'has("ghcr")')
+          if [ "$HAS_CLONES" = "false" ] && [ "$HAS_GHCR" = "true" ]; then
+            echo "::error::cache schema regression at $CACHE_FILE: pre-PR-#515 shape detected."
+            echo "Re-seed via 'GITHUB_TOKEN=... npm run build' locally and commit. See .outreach/installs-cache-runbook.md."
+            exit 1
+          fi
+
+          CACHED_NPM=$(echo "$CACHED" | jq '.npm // 0')
+          CACHED_PYPI=$(echo "$CACHED" | jq '.pypi // 0')
+          CACHED_CRATES=$(echo "$CACHED" | jq '.crates // 0')
+          CACHED_TOTAL=$(echo "$CACHED" | jq '.total // 0')
+          CACHED_RELEASES=$(echo "$CACHED" | jq '.releases // 0')
+          CACHED_GHPKG=$(echo "$CACHED" | jq '.ghPackages // 0')
+          CACHED_MAVEN=$(echo "$CACHED" | jq '.maven // 0')
+          echo "cached: npm=$CACHED_NPM pypi=$CACHED_PYPI crates=$CACHED_CRATES total=$CACHED_TOTAL releases=$CACHED_RELEASES ghPackages=$CACHED_GHPKG"
+
+          # ── Per-source HWMs (registry sources only) ──
           NPM_HWM=$(( NPM_TOTAL > CACHED_NPM ? NPM_TOTAL : CACHED_NPM ))
           PYPI_HWM=$(( PYPI_TOTAL > CACHED_PYPI ? PYPI_TOTAL : CACHED_PYPI ))
           CRATES_HWM=$(( CRATES_TOTAL > CACHED_CRATES ? CRATES_TOTAL : CACHED_CRATES ))
-          SUM=$((NPM_HWM + PYPI_HWM + CRATES_HWM))
+
+          # Displayed total: same formula as installs.data.ts — excludes clones,
+          # includes the GitHub-side fields preserved from the cache.
+          SUM=$((NPM_HWM + PYPI_HWM + CRATES_HWM + CACHED_RELEASES + CACHED_GHPKG + CACHED_MAVEN))
           TOTAL=$(( SUM > CACHED_TOTAL ? SUM : CACHED_TOTAL ))
           echo "hwm: npm=$NPM_HWM pypi=$PYPI_HWM crates=$CRATES_HWM total=$TOTAL"
 
-          # Update if any source grew
+          # ── Merge fresh values into the existing cache, preserving every other field ──
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          NEW=$(echo "$CACHED" | jq -c \
+            --argjson npm "$NPM_HWM" \
+            --argjson pypi "$PYPI_HWM" \
+            --argjson crates "$CRATES_HWM" \
+            --argjson total "$TOTAL" \
+            --arg fetchedAt "$NOW" \
+            '. + { npm: $npm, pypi: $pypi, crates: $crates, total: $total, fetchedAt: $fetchedAt }')
+
+          # ── Write only if any registry source actually grew ──
           if [ "$NPM_HWM" -gt "$CACHED_NPM" ] || [ "$PYPI_HWM" -gt "$CACHED_PYPI" ] || [ "$CRATES_HWM" -gt "$CACHED_CRATES" ] || [ "$TOTAL" -gt "$CACHED_TOTAL" ]; then
-            NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-            JSON="{\"npm\":${NPM_HWM},\"pypi\":${PYPI_HWM},\"crates\":${CRATES_HWM},\"ghcr\":0,\"maven\":0,\"total\":${TOTAL},\"fetchedAt\":\"${NOW}\"}"
-            echo "$JSON" > "$CACHE_FILE"
+            echo "$NEW" > "$CACHE_FILE"
             echo "UPDATED=true" >> $GITHUB_ENV
-            echo "Updated: ${CACHED_TOTAL} \u2192 ${TOTAL}"
+            echo "Updated: ${CACHED_TOTAL} -> ${TOTAL}"
           else
             echo "UPDATED=false" >> $GITHUB_ENV
             echo "No update needed: total=${TOTAL} <= cached=${CACHED_TOTAL}"
@@ -72,20 +121,25 @@ jobs:
 
       - name: Create PR with updated count
         if: env.UPDATED == 'true'
+        # Uses ORG_TRAFFIC_TOKEN (PAT) instead of the default GITHUB_TOKEN.
+        # The default token cannot create PRs unless "Allow GitHub Actions
+        # to create and approve pull requests" is enabled in repo settings.
+        # That setting is off for this repo, which silently broke this step
+        # for weeks (PRs were opened manually from orphan branches).
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN }}
         run: |
+          set -euo pipefail
           BRANCH="chore/update-install-count-$(date +%Y%m%d)"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add .vitepress/theme/installs-cache.json
-          git commit -m "chore: update install count"
-          git push -u origin "$BRANCH"
+          git commit -m "chore: update install count (registry sources)"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
 
-          # Create PR, or skip if one already exists for today
           gh pr create \
-            --title "chore: update install count" \
-            --body "Automated daily update of download counters." \
+            --title "chore: update install count (registry sources)" \
+            --body "Automated daily update of npm / PyPI / crates download counters. GitHub-side fields (clones, releases, ghPackages) are preserved unchanged — those are updated by the docs deploy build via installs.data.ts." \
             --head "$BRANCH" \
-            --base main || echo "PR already exists, skipping"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            --base main

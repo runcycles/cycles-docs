@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Unit Economics: Cost and Margin Analysis
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A B2B SaaS company adds an AI copilot to their customer support product. They price the feature at $15/user/month and estimate $3/user/month in LLM costs based on their pilot: 20 conversations per user per month, 6 turns per conversation, GPT-4o at ~$0.15 per conversation. Gross margin target: 80%.
 
 Month one in production with 200 users: average cost per user is $4.20. Close enough. Month two: $6.80. Month three: $11.50. The average is not the problem — the distribution is. 70% of users cost under $3/month. 20% cost $8-25/month. 10% cost $40-120/month. One user triggered 340 conversations in a month — automated integration testing against the copilot endpoint. That single user cost $310.

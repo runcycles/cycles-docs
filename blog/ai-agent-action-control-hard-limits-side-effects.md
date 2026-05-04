@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Action Control: Hard Limits on Side Effects
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A customer-onboarding agent is tasked with sending personalized welcome emails to 200 trial accounts. A bug in the template-selection logic causes it to fall back to a collections template — "Your payment is overdue. Immediate action required." The agent sends all 200 emails in under three minutes. Total model spend: $1.40. Total business impact: 34 support tickets, 12 public complaints on social media, and a customer-churn spike that the sales team estimates at over $50,000 in lost pipeline. No spending limit would have caught this. The agent was under budget the entire time.
 
 The problem was not spend. The problem was that the agent _acted_ — and nobody checked what it was about to do.

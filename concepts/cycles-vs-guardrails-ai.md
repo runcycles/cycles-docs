@@ -17,6 +17,8 @@ Cycles controls **whether the model gets called at all**.
 
 One is about content safety. The other is about runtime authority. They operate at different points in the execution lifecycle, solve different problems, and complement each other cleanly.
 
+> **Run the numbers for your workload:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — content guardrails filter input/output text; the calculator shows what *actions* the agent could still take that no content filter catches.
+
 ## What Guardrails AI does
 
 Guardrails AI is a framework for validating LLM inputs and outputs. It wraps model calls with validators that check whether the response meets defined safety and quality criteria.

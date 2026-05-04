@@ -10,6 +10,10 @@ sidebar: false
 
 # Multi-Agent Budget Control: CrewAI, AutoGen, OpenAI
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A team builds a research pipeline using CrewAI with three agents: a Planner that breaks topics into sub-questions, a Researcher that investigates each one, and a Writer that synthesizes the results. The Planner delegates 5 sub-questions per topic to the Researcher. For complex sub-questions, the Researcher delegates down to a Deep Analyst agent that makes 15 LLM calls per investigation. In development, one topic costs ~$3.50.
 
 In production, a batch of 40 topics kicks off overnight. The Researcher's delegation is non-deterministic — some topics trigger zero Deep Analyst calls, others trigger four. One topic causes all 5 sub-questions to delegate to the Deep Analyst, each triggering its own [tool loop](/glossary#tool-loop) with retries. That single topic costs $89.
@@ -186,3 +190,9 @@ The research pipeline from the opening scenario would have stopped at $25 per to
 - **[Budget Wrapper vs Runtime Authority for AI Agents](/blog/vibe-coding-budget-wrapper-vs-budget-authority)** — why a per-agent counter is not the same as a runtime authority
 - **[How Much Do AI Agents Actually Cost?](/blog/how-much-do-ai-agents-cost)** — raw provider pricing behind the cost math in this post
 - **[Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation)** — per-[tenant](/glossary#tenant) budgets for teams running multi-agent systems in shared platforms
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)

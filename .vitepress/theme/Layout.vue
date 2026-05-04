@@ -15,13 +15,17 @@ import PageFeedback from './PageFeedback.vue'
 import Breadcrumb from './Breadcrumb.vue'
 import MobileThemeToggle from './MobileThemeToggle.vue'
 import SiteFooter from './SiteFooter.vue'
+import EmbedLayout from './EmbedLayout.vue'
+import StandaloneLayout from './StandaloneLayout.vue'
 
 const { Layout } = DefaultTheme
 const { frontmatter } = useData()
 </script>
 
 <template>
-  <Layout>
+  <EmbedLayout v-if="frontmatter.layout === 'embed'" />
+  <StandaloneLayout v-else-if="frontmatter.layout === 'standalone'" />
+  <Layout v-else>
     <template #home-features-before>
       <HomeDemo v-if="frontmatter.layout === 'home'" />
       <HomeSocialProof v-if="frontmatter.layout === 'home'" />

@@ -14,6 +14,8 @@ head:
 
 # When Budget Enforcement Fires: An Operator's Guide to Cycles in Production
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
 Budget enforcement works. Your agents are denied when they exceed limits. [Webhook events](/blog/real-time-budget-alerts-for-ai-agents) fire in real time. PagerDuty pages you.
 
 <!-- more -->

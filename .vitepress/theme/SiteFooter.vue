@@ -2,6 +2,7 @@
 const links = [
   { text: 'About', href: '/about' },
   { text: 'Security', href: '/security' },
+  { text: 'Tools', href: '/calculators/' },
   { text: 'Blog', href: '/blog/' },
   { text: 'Changelog', href: '/changelog' },
   { text: 'Contact', href: '/contact' },
