@@ -284,29 +284,43 @@ pub async fn summarize_or_fallback(
 
 AI coding assistants frequently produce a plausible-but-wrong integration that *looks* like it's using Cycles, but enforces nothing. It records spend after the fact instead of authorizing it before the fact.
 
+The blocks below show the structural difference using the real TypeScript SDK surface (`client.createReservation`, `client.commitReservation`). For most repos you should reach for `withCycles` from the language picker above — it does this lifecycle for you.
+
 ```typescript
 // WRONG — calls OpenAI first, then reports usage to Cycles.
 // This is observability, not enforcement. The model call has already
 // happened and the money is already spent. DENY is meaningless here.
-const result = await openai.chat.completions.create({ ... });
-await cycles.commit({ actual: { amount: 35000, unit: "USD_MICROCENTS" } });
+import { CyclesClient, CyclesConfig } from "runcycles";
+const client = new CyclesClient(CyclesConfig.fromEnv());
+
+const result = await openai.chat.completions.create({ /* ... */ });
+await client.commitReservation("rsv_...", {
+  actual: { amount: 35000, unit: "USD_MICROCENTS" },
+});
 ```
 
 ```typescript
 // RIGHT — reserve first, execute only on ALLOW, commit actuals after.
 // On DENY the OpenAI call never fires.
-const reservation = await cycles.reserve({
-  estimate: { amount: 50000, unit: "USD_MICROCENTS" },
+import { CyclesClient, CyclesConfig } from "runcycles";
+const client = new CyclesClient(CyclesConfig.fromEnv());
+
+const reservation = await client.createReservation({
+  idempotencyKey: crypto.randomUUID(),
+  subject: { tenant: "acme-corp" },
   action: { kind: "llm.completion", name: "openai:gpt-4o" },
+  estimate: { amount: 50000, unit: "USD_MICROCENTS" },
 });
 if (reservation.decision !== "ALLOW") {
   return fallback();
 }
-const result = await openai.chat.completions.create({ ... });
-await cycles.commit({ reservationId: reservation.id, actual: { ... } });
+const result = await openai.chat.completions.create({ /* ... */ });
+await client.commitReservation(reservation.reservationId, {
+  actual: { amount: 35000, unit: "USD_MICROCENTS" },
+});
 ```
 
-The decorator / HOF / annotation in the language picker above does the reserve → check → execute → commit flow for you. If a generated diff has the model call running before the Cycles primitive, it is wrong — reject it.
+The decorator / HOF / annotation in the language picker above does the reserve → check → execute → commit flow for you. Drop to the programmatic `CyclesClient` only when you need streaming, multi-step lifecycles, or a gateway integration. If a generated diff has the model call running before the Cycles primitive, it is wrong — reject it.
 
 ## Where to place Cycles in your architecture
 
