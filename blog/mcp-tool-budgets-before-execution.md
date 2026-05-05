@@ -1,6 +1,6 @@
 ---
-title: "Add Hard Per-Run Budgets to MCP Tools Before They Execute"
-date: 2026-05-06
+title: "Add Hard Budgets to MCP Tools Before They Execute"
+date: 2026-05-05
 author: Albert Mavashev
 tags:
   - MCP
@@ -8,7 +8,7 @@ tags:
   - budget-control
   - runtime-authority
   - architecture
-description: "MCP makes tools easy to expose, but it does not decide whether the next call should still run. Add a reserve / execute / commit wrapper around MCP tools to enforce tenant and run budgets before side effects happen."
+description: "MCP exposes tools, but it does not decide whether the next call should run. Wrap MCP handlers with Cycles reserve/commit checks before side effects happen."
 blog: true
 sidebar: false
 featured: false
@@ -18,7 +18,7 @@ head:
       content: MCP budget control, MCP tool guardrails, Model Context Protocol, agent budget enforcement, runtime authority, reserve commit, AI agent cost control
 ---
 
-# Add Hard Per-Run Budgets to MCP Tools Before They Execute
+# Add Hard Budgets to MCP Tools Before They Execute
 
 The Model Context Protocol makes it easy to expose a tool to an agent. Decide on a name, describe the inputs, ship the server, and the agent can call it.
 
@@ -37,15 +37,15 @@ Every MCP tool call passes through three states:
 ```text
 Agent proposes a tool call
   ↓
-reserve(tenant, run, tool, estimate)  →  ALLOW | DENY
-  ↓ (if ALLOW)
+reserve(subject, action, estimate)  →  ALLOW | ALLOW_WITH_CAPS | error
+  ↓ (if allowed, with caps applied)
 tool executes
   ↓
 commit(reservation_id, actual_usage)   on success
 release(reservation_id)                on failure
 ```
 
-`reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, once the v0.1.26 action-governance extensions ship in `cycles-server`, will be enforced at reservation time from the action kind, not at commit. The extension specs are published and SHOULD-level today, but not yet implemented in runcycles' servers — track the [changelog](/changelog) for the release.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
+`reserve` is the gate. It returns a reservation ID and a decision. For a non-dry-run reservation, insufficient budget is an HTTP error such as `409 BUDGET_EXCEEDED`; a successful response can be `ALLOW` or `ALLOW_WITH_CAPS`. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, once the v0.1.26 action-governance extensions ship in `cycles-server`, will be enforced at reservation time from the action kind, not at commit. The extension specs are published and SHOULD-level today, but not yet implemented in runcycles' servers — track the [changelog](/changelog) for the release.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
 
 If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — similar decision shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
@@ -57,7 +57,7 @@ Start with spend. That's the stable v0.1.25 baseline and the path most teams sho
 
 | Category | Example caps | What it stops |
 |---|---|---|
-| **Spend** | `$1.00 per run`, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
+| **Spend** | `$1.00 per run` where `dimensions.run` is enforced, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
 
 Two more categories will be available once the v0.1.26 action-governance extensions ship in `cycles-server`. The spec is published and SHOULD-level for protocol conformance today, but the runtime enforcement is **not yet implemented in runcycles' servers** — these are illustrative for what's coming, not testable yet:
 
@@ -68,9 +68,9 @@ Two more categories will be available once the v0.1.26 action-governance extensi
 
 The action-kind slugs above (`message.email.send`, `web.search`, `code.exec.shell`, `deploy.service`) are illustrative — the formal v0.1.26 action-kind registry is upcoming, and only `llm.completion` is currently used as a documented action kind across shipped guides. Treat your own slugs as a convention until the registry lands.
 
-Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
+Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. If you want run-level spend budgets, model the run as `subject.dimensions.run` and verify your Cycles deployment derives budget scope from that custom dimension; the base protocol requires custom dimensions to be accepted and round-tripped, but v0 implementations may ignore them for budget decisions. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
 
-The wrapper code below stays the same regardless of which category you enforce — Cycles handles the policy resolution server-side. You just pass tenant, run, tool, action kind, and an estimate.
+The wrapper code below stays the same regardless of which category you enforce — Cycles handles the policy resolution server-side. You pass the subject, action kind, tool name, run dimension, and estimate.
 
 ## The TypeScript wrapper
 
@@ -88,6 +88,9 @@ interface ToolContext {
   tenantId: string         // your customer's tenant in Cycles
   workspace: string        // e.g. 'production', 'staging'
   app: string              // e.g. 'mcp', 'web-agent', 'support-bot'
+  toolsetName: string      // category of tool, e.g. 'email', 'refund', 'search'
+                           // — matches subject.toolset in the formal scope hierarchy.
+                           // Multiple tools share one toolset; do not pass per-tool slugs.
   runId: string            // a stable ID per agent run / conversation
   toolCallId: string       // stable per proposed MCP tool call within a run;
                            // distinguishes a legitimate second send_email from
@@ -101,9 +104,14 @@ export class DeniedByCyclesError extends Error {
   constructor(message: string) { super(message); this.name = 'DeniedByCyclesError' }
 }
 
+type CyclesDecision = {
+  decision: 'ALLOW' | 'ALLOW_WITH_CAPS'
+  caps?: Record<string, unknown>
+}
+
 export async function gatedToolCall<T>(
   ctx: ToolContext,
-  execute: () => Promise<{ result: T; actualMicrocents: number }>,
+  execute: (cycles: CyclesDecision) => Promise<{ result: T; actualMicrocents: number }>,
 ): Promise<T> {
   // Stable idempotency key so a network retry hits the same reservation
   // and doesn't double-charge — but a legitimately different tool call
@@ -120,16 +128,18 @@ export async function gatedToolCall<T>(
 
   const response = await client.createReservation({
     idempotency_key: idempotencyKey,
-    subject: { tenant: ctx.tenantId, workspace: ctx.workspace, app: ctx.app },
+    subject: {
+      tenant: ctx.tenantId,
+      workspace: ctx.workspace,
+      app: ctx.app,
+      toolset: ctx.toolsetName,
+      // Run is not a standard subject field. Use dimensions.run only after
+      // verifying your Cycles deployment derives budget scope from it.
+      dimensions: { run: ctx.runId },
+    },
     action: { kind: ctx.actionKind, name: ctx.toolName },
     estimate: { unit: Unit.USD_MICROCENTS, amount: ctx.estimateMicrocents },
     ttl_ms: 60_000,
-    // Cycles' formal scope hierarchy is tenant -> workspace -> app -> workflow
-    // -> agent -> toolset; runs don't have a dedicated slot, so we put runId
-    // in metadata for dashboard filtering and audit. If you enable v0.1.26
-    // per-run action quotas, pass run_id through the formal subject dimensions
-    // expected by your v0.1.26 server/client surface — metadata alone is not
-    // enough to drive quota evaluation.
     metadata: {
       run_id: ctx.runId,
       tool_call_id: ctx.toolCallId,
@@ -150,9 +160,13 @@ export async function gatedToolCall<T>(
   }
 
   const reservationId = response.getBodyAttribute('reservation_id') as string
+  // Pass decision and caps through to the handler so it can react to
+  // ALLOW_WITH_CAPS (e.g. respect a tool denylist or max_tokens cap).
+  const decision = response.getBodyAttribute('decision') as CyclesDecision['decision']
+  const caps = response.getBodyAttribute('caps') as Record<string, unknown> | undefined
 
   try {
-    const { result, actualMicrocents } = await execute()
+    const { result, actualMicrocents } = await execute({ decision, caps })
     await client.commitReservation(reservationId, {
       idempotency_key: `commit:${idempotencyKey}`,
       actual: { unit: Unit.USD_MICROCENTS, amount: actualMicrocents },
@@ -193,13 +207,21 @@ server.tool('send_email', emailSchema, async (args) => {
       tenantId: meta.tenantId,
       workspace: meta.workspace ?? 'production',
       app: 'mcp',
+      toolsetName: 'email',  // category — send_email and send_sms would share this
       runId: meta.runId,
       toolCallId: meta.toolCallId ?? randomUUID(),
       toolName: 'send_email',
       actionKind: 'message.email.send',  // illustrative; see action-kind note above
       estimateMicrocents: 50_000,  // ~$0.0005 baseline
     },
-    async () => {
+    async ({ caps }) => {
+      // ALLOW_WITH_CAPS means "run, but respect these constraints." For a
+      // side-effecting tool, fail closed if the caps deny this tool.
+      const denylist = caps?.toolDenylist ?? caps?.tool_denylist
+      if (Array.isArray(denylist) && denylist.includes('send_email')) {
+        throw new DeniedByCyclesError('Cycles caps disallow send_email.')
+      }
+
       const sent = await sendEmail(args)
       return { result: sent, actualMicrocents: 50_000 }
     },
@@ -213,6 +235,7 @@ A few things this wrapper does deliberately:
 
 - **Idempotency keys** are derived, not random. A retried network call hits the same reservation and doesn't double-charge. Commit and release each get their own derived key off the same base.
 - **Denials throw `DeniedByCyclesError`**, not silent fallthroughs. The agent has to handle them — by stopping, downgrading, or asking for more budget.
+- **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or fail closed so the wrapper releases the reservation.
 - **Release on any throw**, including cancellations. Unused budget goes back to the tenant.
 - **Metadata travels with every call**: tenant, workspace, run, tool, action kind. That's what the dashboard groups by, and what your future audit query will join on.
 
@@ -222,15 +245,15 @@ An MCP gateway answers *can this tool be reached?* — authentication, allowlist
 
 The first question is about access. The second is about [exposure](/glossary#exposure) — the cumulative cost, action count, or blast radius the agent has already accumulated. Two questions, two layers. A gateway without runtime authority is a pass/fail access system; the 201st email goes through if the tool is allowed at all. Runtime authority without a gateway has to trust the tool inventory.
 
-Most production incidents we see are not unknown tools. They are approved tools called too many times, in the wrong scope, after the budget should have run out. That's exactly the gap a per-run budget closes.
+Most production incidents we see are not unknown tools. They are approved tools called too many times, in the wrong scope, after the budget should have run out. That's exactly the gap a per-tool-call reservation closes; when run dimensions are enforced, the same pattern also caps the whole run.
 
 For the architecture-side detail of where this sits relative to gateways and authorization, see [MCP Gateways Are Not Runtime Authority](/blog/mcp-gateways-are-not-runtime-authority).
 
 ## Try it
 
 ```bash
-npm install @runcycles/mcp-server
 npm install runcycles
+npm install @modelcontextprotocol/sdk zod   # if you are building the MCP server yourself
 ```
 
 Then bring up the local stack so you can watch denials happen in the dashboard while you wire this up:
