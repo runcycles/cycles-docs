@@ -216,7 +216,15 @@ server.tool('send_email', emailSchema, async (args) => {
     },
     async ({ caps }) => {
       // ALLOW_WITH_CAPS means "run, but respect these constraints." For a
-      // side-effecting tool, fail closed if the caps deny this tool.
+      // side-effecting tool, fail closed if the caps disallow this tool.
+      //
+      // Per the protocol, tool_allowlist takes precedence over tool_denylist:
+      // a non-empty allowlist that doesn't include this tool is an implicit
+      // deny, regardless of what the denylist says.
+      const allowlist = caps?.toolAllowlist ?? caps?.tool_allowlist
+      if (Array.isArray(allowlist) && allowlist.length > 0 && !allowlist.includes('send_email')) {
+        throw new DeniedByCyclesError('Cycles caps allowlist excludes send_email.')
+      }
       const denylist = caps?.toolDenylist ?? caps?.tool_denylist
       if (Array.isArray(denylist) && denylist.includes('send_email')) {
         throw new DeniedByCyclesError('Cycles caps disallow send_email.')
