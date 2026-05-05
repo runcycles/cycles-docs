@@ -3,7 +3,7 @@ title: "Evaluate Cycles for multi-tenant AI agents"
 description: "Evaluate whether Cycles fits your multi-tenant agent stack. Includes a fit checklist, non-fit cases, a 15-minute local test, and the first agent actions to gate."
 ---
 
-# Evaluate Cycles for a multi-tenant agent SaaS
+# Evaluate Cycles for multi-tenant agents
 
 This page is for engineering and product leads building multi-tenant agents that call models, tools, APIs, or external systems. It is **not** an implementation guide — for that, see [Building a Multi-Tenant AI SaaS with Cycles](/how-to/multi-tenant-saas-with-cycles) and [Choosing the Right Integration Pattern](/how-to/choosing-the-right-integration-pattern).
 
