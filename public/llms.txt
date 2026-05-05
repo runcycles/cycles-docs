@@ -8,6 +8,8 @@ Use Cycles when you need to: enforce spend limits on LLM calls, bound tool invoc
 
 ## Quickstart
 
+- [Add Cycles with Claude, Codex, Cursor, or Windsurf](https://runcycles.io/how-to/add-cycles-with-claude-or-codex): Canonical AI-coder integration recipe — copy-paste prompt, do/don't contract, definition of done, wrong/right examples, success test. Start here if a coding assistant is wiring Cycles into a repo.
+- [Drop-in AGENTS.md snippet](https://runcycles.io/agents/cycles-integration.md): Static integration-rules file to append to a downstream repo's AGENTS.md / CLAUDE.md / .cursorrules so future AI sessions inherit the contract
 - [What is Cycles?](https://runcycles.io/quickstart/what-is-cycles): Overview of what Cycles does and when to use it
 - [End-to-End Tutorial](https://runcycles.io/quickstart/end-to-end-tutorial): Zero to a working budget-guarded LLM call in 10 minutes
 - [Python Client](https://runcycles.io/quickstart/getting-started-with-the-python-client): Add budget enforcement to Python apps using the runcycles package
