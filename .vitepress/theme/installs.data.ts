@@ -373,10 +373,29 @@ async function fetchGithubReleaseDownloads(
 }
 
 // ── Maven Central ────────────────────────────────────────────────────
-async function fetchMavenDownloads(): Promise<number> {
-  // Maven Central has no public downloads API. The search API only
-  // exposes versionCount, not download stats.
-  return 0
+// Maven Central has no public downloads API. The search API only
+// exposes versionCount, not download stats. Sonatype Central exposes
+// downloads to publishers via an authenticated CSV export, but that's
+// not available at build time.
+//
+// Until publisher-credential access lands, we use the same manual-file
+// pattern as ghPackages: maintainers paste current download counts from
+// the Sonatype Central publisher portal into manual-package-counts.json
+// under `maven` (keyed by `groupId:artifactId`). HWM still applies, so
+// values only grow.
+//
+// TODO: replace with an authenticated Sonatype Central API call once a
+// service-account credential is available — search the portal for
+// "download statistics export" or use the s01.oss.sonatype.org REST API
+// if the artifact is hosted there.
+function fetchMavenDownloads(): number {
+  try {
+    const raw = JSON.parse(readFileSync(MANUAL_PATH, 'utf-8'))
+    const map = raw.maven ?? {}
+    return Object.values(map).reduce<number>((a, b) => a + (typeof b === 'number' ? b : 0), 0)
+  } catch {
+    return 0
+  }
 }
 
 // ── Loader ───────────────────────────────────────────────────────────
@@ -397,7 +416,7 @@ export default {
       fetchCratesDownloads(),
       fetchGithubClones(cached.clonesByRepo),
       fetchGithubReleaseDownloads(cached.releasesByRepo),
-      fetchMavenDownloads(),
+      Promise.resolve(fetchMavenDownloads()),
     ])
 
     // Per-source high-water marks: each source never decreases independently.
