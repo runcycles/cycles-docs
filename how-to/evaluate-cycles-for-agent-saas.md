@@ -1,11 +1,11 @@
 ---
 title: "Evaluate Cycles for a multi-tenant agent SaaS"
-description: "Decide whether Cycles fits your agent stack. Includes a fit checklist, anti-patterns, a 15-minute local test, and a list of agent flows worth instrumenting first."
+description: "Evaluate whether Cycles fits your multi-tenant agent stack. Includes a fit checklist, non-fit cases, a 15-minute local test, and the first agent actions to gate."
 ---
 
 # Evaluate Cycles for a multi-tenant agent SaaS
 
-This page is for engineering and product leads deciding whether Cycles belongs in their agent stack. It is **not** an implementation guide — for that, see [Building a Multi-Tenant AI SaaS with Cycles](/how-to/multi-tenant-saas-with-cycles) and [Choosing the Right Integration Pattern](/how-to/choosing-the-right-integration-pattern).
+This page is for engineering and product leads building multi-tenant agents that call models, tools, APIs, or external systems. It is **not** an implementation guide — for that, see [Building a Multi-Tenant AI SaaS with Cycles](/how-to/multi-tenant-saas-with-cycles) and [Choosing the Right Integration Pattern](/how-to/choosing-the-right-integration-pattern).
 
 The goal here is to answer one question: **does Cycles solve a problem you are about to have?**
 
@@ -30,7 +30,7 @@ Skip Cycles if:
 - Agents make **no paid calls** and trigger **no irreversible actions**.
 - There is **no multi-tenant boundary** and no need for per-tenant isolation.
 - You only need **logging or analytics** of what already happened — Cycles is a *gate* before execution, not an after-the-fact ledger.
-- You want a **managed cloud SaaS**. Cycles is self-hosted (Apache 2.0). Run it yourself or don't run it.
+- You want a **managed cloud SaaS**. Cycles is self-hosted today (Apache 2.0), so it fits teams comfortable running the control plane inside their own infrastructure.
 
 ## 15-minute local test
 
@@ -40,10 +40,16 @@ The fastest way to know whether Cycles fits is to run the full stack and watch a
 2. **Create a tenant** via the admin server. See [Tenant Creation and Management](/how-to/tenant-creation-and-management-in-cycles).
 3. **Create a budget** scoped to that tenant — a small one, e.g., a few cents.
 4. **Run one allowed reservation.** A `decide` or `reserve` call returns `ALLOW`; the reservation is recorded.
-5. **Run one denied reservation.** Either exhaust the budget or hit a per-action cap. The next call returns `DENY` *before* the underlying action executes.
+5. **Run one denied reservation.** Exhaust the tenant budget with a reservation larger than the remaining balance. The next call returns `DENY` *before* the underlying action executes. (If you're evaluating the v0.1.26 action-governance preview, you can also test per-action quotas and allow/deny lists.)
 6. **Open the dashboard.** Watch the reservation, the commit, and the denial show up under the tenant's budget view.
 
-That's the whole evaluation. If steps 5 and 6 match what you'd expect for your own product's worst case — runaway agent, tool loop, multi-tenant overspend — Cycles fits. If they don't, you've spent 15 minutes and learned something specific about why.
+You should see three things:
+
+- an **allowed reservation** that reduces available budget
+- a **committed reservation** that records actual usage
+- a **denied reservation** that prevents the next action from running
+
+If you can map those three states to your own agent workflow, Cycles is probably worth a deeper integration test. If they don't match what you'd expect for your worst case — runaway agent, tool loop, multi-tenant overspend — you've spent 15 minutes and learned something specific about why.
 
 ## What to test in your own stack
 
@@ -59,7 +65,7 @@ Once the local test passes, try Cycles against the actions in your product that 
 For each, decide:
 
 - What action kind does it map to? (`llm.completion`, `web.search`, `message.email.send`, `code.exec.shell`, etc.)
-- What's the budget unit — microcents, action-count, both?
+- What should be enforced — spend budget, token budget, risk budget, action-count quota, or some combination?
 - What scope does the cap belong on — tenant, workflow, run, agent, tool?
 
 That mapping is the design exercise. See [Assigning Risk Points to Agent Tools](/how-to/assigning-risk-points-to-agent-tools) for the framework, and [Choosing the Right Integration Pattern](/how-to/choosing-the-right-integration-pattern) for where to put the gate (SDK in-process, MCP, gateway, framework plugin).
@@ -78,7 +84,21 @@ If you want a sanity check before you start, paste the rough shape of your agent
 agent → tool → API → side effect
 ```
 
-Send it via [Contact Us](/contact) and we'll show you exactly where `reserve` and `commit` belong in your stack — and whether Cycles is the right fit at all. Honest answers, not sales calls.
+Send it via [Contact Us](/contact) with the subject "agent flow review." We'll mark where `reserve`, `commit`, and `release` belong — or tell you if Cycles is not the right fit. Honest answers, not sales calls.
+
+## What a good first integration looks like
+
+Do not start by gating every action.
+
+Start with one high-signal boundary:
+
+- one tenant
+- one workflow
+- one risky action kind
+- one small budget or quota
+- one visible denial in the dashboard
+
+Good first candidates are email sends, browser actions, coding-agent shell commands, paid search/API calls, or expensive LLM completions. Once that path works, expand to more tools and scopes.
 
 ## Next steps
 
