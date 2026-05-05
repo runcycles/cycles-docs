@@ -1,6 +1,6 @@
 ---
 title: "Add Hard Per-Run Budgets to MCP Tools Before They Execute"
-date: 2026-05-05
+date: 2026-05-06
 author: Albert Mavashev
 tags:
   - MCP
