@@ -19,8 +19,8 @@ hero:
       text: "Run the demos"
       link: "/demos/"
     - theme: alt
-      text: "Read the tutorial"
-      link: "/quickstart/end-to-end-tutorial"
+      text: "Evaluate your stack"
+      link: "/how-to/evaluate-cycles-for-agent-saas"
 features:
   - icon:
       src: /icons/rocket.svg
