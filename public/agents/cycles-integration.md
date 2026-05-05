@@ -178,3 +178,12 @@ def test_openai_not_called_on_deny(monkeypatch, httpx_mock):
 - Rust:              https://runcycles.io/quickstart/getting-started-with-the-rust-client
 - MCP enforcement:   https://runcycles.io/how-to/integrating-cycles-with-mcp
 - Machine index:     https://runcycles.io/llms.txt
+
+### Protocol references (only if the SDK doesn't expose what you need)
+
+- Reserve/commit lifecycle:  https://runcycles.io/protocol/how-reserve-commit-works-in-cycles
+- Decide (preflight):        https://runcycles.io/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation
+- Error codes:               https://runcycles.io/protocol/error-codes-and-error-handling-in-cycles
+- Units:                     https://runcycles.io/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points
+- Caps / three-way decision: https://runcycles.io/protocol/caps-and-the-three-way-decision-model-in-cycles
+- Interactive OpenAPI:       https://runcycles.io/api/

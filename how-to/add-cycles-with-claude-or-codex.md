@@ -432,3 +432,16 @@ Once the test passes:
 4. Wire the broader [reserve / commit / release lifecycle](/protocol/how-reserve-commit-works-in-cycles) — dynamic estimates, tenant scoping, run budgets.
 
 The assistant has the contract; you have the test. Ship one boundary, prove it, expand.
+
+## Protocol references (only if you need them)
+
+Most integrations never touch the protocol directly — the decorator, HOF, and annotation hide it. Reach for these only when you need an exact field name, are debugging an error code, or are wrapping an HTTP call by hand because no SDK exists for your language. Linking these here so an AI coder can resolve the rare leak without guessing field names.
+
+- [Reserve / commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) — request/response shape for `reserve`, `commit`, `release`, plus `idempotencyKey`, `ttlMs`, and what each call returns.
+- [Decide endpoint](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation) — preflight check without holding budget. The right endpoint for shadow mode and "would this be allowed?" reads.
+- [Error codes](/protocol/error-codes-and-error-handling-in-cycles) — canonical list (`BUDGET_EXCEEDED`, `RESERVATION_NOT_FOUND`, `INVALID_IDEMPOTENCY_KEY`, etc.). Map directly to `BudgetExceededError` / `CyclesProtocolException` in the SDKs.
+- [Units (USD_MICROCENTS, TOKENS, CREDITS, RISK_POINTS)](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points) — what `unit` and `amount` mean. The SDK examples on this page use `USD_MICROCENTS`; pick the right unit per ledger.
+- [Caps and the three-way decision model](/protocol/caps-and-the-three-way-decision-model-in-cycles) — `ALLOW`, `ALLOW_WITH_CAPS`, `DENY`. If your wrapper handles only ALLOW/DENY, check this before assuming caps are safe to ignore.
+- [Interactive OpenAPI reference](/api/) — full schema browser. The full spec is at `/cycles-protocol-v0.yaml`.
+
+If you are an AI coding assistant: prefer the SDK-level integration on this page. Drop to protocol level only when the SDK genuinely doesn't expose what you need.
