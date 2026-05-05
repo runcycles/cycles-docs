@@ -15,6 +15,8 @@ featured: false
 
 # Estimate Drift: The Silent Killer of Budget Enforcement
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 You calibrated your budgets correctly. You ran shadow mode for two weeks. You chose enforcement thresholds based on real data. Enforcement went live and worked.
 
 Then three months later, something changes: your `reservation.commit_overage` events start climbing. In overdraft-tolerant setups, debt may begin to accumulate; in capped-charge setups, scopes may start drifting toward `is_over_limit`. A workflow that used to run comfortably starts triggering `budget.over_limit_entered`. Nobody deployed anything. Nobody changed the budgets. Nothing obvious broke.
@@ -161,3 +163,9 @@ And when drift appears, recalibrate *estimates*, not *budgets*. Estimates track 
 - [AI Agent Budget Control: Enforce Hard Spend Limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits)
 - [AI Agent Cost Management Guide](/blog/ai-agent-cost-management-guide)
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Cost estimation cheat sheet](/how-to/cost-estimation-cheat-sheet)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

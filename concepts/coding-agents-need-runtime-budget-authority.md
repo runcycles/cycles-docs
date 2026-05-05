@@ -11,6 +11,8 @@ They can search a codebase, scaffold features, write tests, fix bugs, and compre
 
 It becomes more important.
 
+> **Quantify a coding agent's blast radius:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — DROP TABLE, schema migration, deploy, and read-only rows are pre-loaded with realistic severity factors. The "with Cycles containment" slider shows what runtime action authority is worth for an agent with database credentials.
+
 Coding agents and runtime authority solve different problems at different layers. A coding agent is designed to complete work. Runtime authority is designed to decide whether autonomous work is still allowed to continue, under what limits, and with what reconciliation afterward.
 
 This article covers the **runtime-layer** problem: reservations, enforcement, retries, concurrency, and bounded execution inside a single agent run. The business-layer problem — whether the work was worth funding in the first place — is covered separately in [Why Coding Agents Do Not Replace Cycles](/concepts/why-coding-agents-do-not-replace-cycles).

@@ -10,6 +10,8 @@ sidebar: false
 
 # Zero Trust for AI Agents: Why Every Tool Call Needs a Policy Decision
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 In a single week in March 2026, Microsoft announced [Zero Trust for AI](https://www.microsoft.com/en-us/security/blog/2026/03/19/new-tools-and-guidance-announcing-zero-trust-for-ai/), Cisco unveiled [Zero Trust Access for AI Agents](https://blogs.cisco.com/security/security-agentic-ai-how-cisco-brings-zero-trust-to-your-new-digital-workforce) at RSAC 2026, and the Cloud Security Alliance published its [Agentic Trust Framework](https://cloudsecurityalliance.org/blog/2026/02/02/the-agentic-trust-framework-zero-trust-governance-for-ai-agents). Meanwhile, on Hacker News, developers kept asking the same question: ["How are you enforcing permissions for AI agent tool calls in production?"](https://news.ycombinator.com/item?id=46740645)
 
 The industry and the community arrived at the same answer simultaneously: **every tool call an AI agent makes needs a policy decision before it executes.**

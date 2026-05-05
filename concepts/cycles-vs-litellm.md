@@ -9,6 +9,8 @@ LiteLLM is one of the most popular LLM proxy layers. It routes model calls acros
 
 The answer depends on what failure modes you're trying to prevent.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — LiteLLM proxies calls to providers; the calculator shows what total spend looks like when no per-call cap fires upstream.
+
 ## What each does
 
 | | LiteLLM | Cycles |

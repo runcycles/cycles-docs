@@ -11,6 +11,8 @@ featured: false
 
 # When Budget Runs Out: AI Agent Degradation Patterns
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Runtime enforcement solves one problem and creates another. Once your guardrails can [block an agent action before execution](/blog/what-is-runtime-authority-for-ai-agents), you need to decide what the agent should do when it gets blocked.
 
 A hard stop — "budget exceeded, goodbye" — is better than a runaway agent. But it's not a good user experience. The agent was in the middle of something. The user was waiting for a result. A bare error message doesn't help either of them.

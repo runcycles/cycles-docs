@@ -11,6 +11,8 @@ featured: false
 
 # Agent Delegation Chains Need Authority Attenuation, Not Trust Propagation
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A planning agent delegates a research task to a retrieval agent. The retrieval agent delegates a web search to a browsing agent. The browsing agent calls an API with the planning agent's full credentials, its entire budget, and permission to write to any tool the parent could access. Three hops in a multi-agent delegation chain, zero scope reduction. This is how most multi-agent systems work today — and it's why a single compromised sub-agent can drain your budget, exfiltrate data, or trigger actions the original user never authorized. The [documented incident patterns](/blog/state-of-ai-agent-incidents-2026) keep repeating: unchecked authority in delegation chains is the common thread.
 
 <!-- more -->
@@ -214,3 +216,9 @@ If you're building multi-agent systems, audit your delegation boundaries this we
 If the answer to any of these is "no," you don't have a delegation chain — you have a trust propagation chain. And trust propagation chains are one prompt injection away from an incident.
 
 Authority should attenuate through delegation chains the same way it attenuates through capability systems, OAuth scope restrictions, and Unix process permissions: each child gets strictly less than its parent, enforced by the runtime, not by convention. The primitives exist today. The question is whether you wire them in before or after your first multi-agent incident.
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)

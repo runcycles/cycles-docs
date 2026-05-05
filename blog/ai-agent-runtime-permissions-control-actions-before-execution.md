@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Runtime Permissions: Control Actions Before Execution
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A team ships an autonomous support agent. It reads tickets, queries a knowledge base, drafts replies, and sends emails. In staging it handles 50 tickets without incident. On day three in production, a customer submits a ticket in a language the model handles poorly. The agent misinterprets the request, drafts a refund confirmation for a billing dispute, and sends it — along with 47 follow-up emails to related accounts offering refunds nobody requested.
 
 Total API cost of the emails: $1.40. Business damage: $34,000 in honored refunds, an incident review, and a week of manual cleanup.
@@ -269,3 +271,9 @@ For agent frameworks (LangGraph, CrewAI, custom loops) and coding agents (Claude
 - **[What Is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents)** — foundational explainer on pre-execution enforcement
 - **[Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points)** — RISK_POINTS, USD_MICROCENTS, TOKENS, and [CREDITS](/glossary#credits) reference
 - **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — zero to a working budget-guarded app in 10 minutes
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [API key management](/how-to/api-key-management-in-cycles)

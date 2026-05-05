@@ -1,1 +1,95 @@
-{"npm":3950,"pypi":1339,"crates":49,"ghcr":0,"maven":0,"total":5338,"fetchedAt":"2026-04-28T10:05:46.492Z"}
+{
+  "npm": 4236,
+  "pypi": 1339,
+  "crates": 49,
+  "clones": 50236,
+  "clonesByRepo": {
+    ".github": {
+      "count": 748,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-server-admin": {
+      "count": 7915,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-server": {
+      "count": 5803,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-protocol": {
+      "count": 4069,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-client-python": {
+      "count": 554,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-spring-boot-starter": {
+      "count": 592,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-agent-action-authority-demo": {
+      "count": 353,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-dashboard": {
+      "count": 13697,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-server-events": {
+      "count": 1611,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-runaway-demo": {
+      "count": 773,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-client-typescript": {
+      "count": 1273,
+      "lastSeenDay": "2026-05-03"
+    },
+    "docs": {
+      "count": 9678,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-openai-agents": {
+      "count": 311,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-openclaw-budget-guard": {
+      "count": 780,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-client-rust": {
+      "count": 644,
+      "lastSeenDay": "2026-05-03"
+    },
+    "cycles-mcp-server": {
+      "count": 1435,
+      "lastSeenDay": "2026-05-03"
+    }
+  },
+  "releases": 0,
+  "releasesByRepo": {
+    "cycles-spring-boot-starter": 0,
+    "cycles-runaway-demo": 0,
+    "cycles-protocol": 0,
+    ".github": 0,
+    "cycles-agent-action-authority-demo": 0,
+    "cycles-openai-agents": 0,
+    "cycles-client-python": 0,
+    "docs": 0,
+    "cycles-client-typescript": 0,
+    "cycles-openclaw-budget-guard": 0,
+    "cycles-server-events": 0,
+    "cycles-mcp-server": 0,
+    "cycles-client-rust": 0,
+    "cycles-server": 0,
+    "cycles-server-admin": 0,
+    "cycles-dashboard": 0
+  },
+  "ghPackages": 2672,
+  "maven": 0,
+  "total": 8296,
+  "fetchedAt": "2026-05-04T11:58:07.409Z"
+}

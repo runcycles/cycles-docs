@@ -9,6 +9,8 @@ Exposure is the total cost, risk, or damage an autonomous system can create befo
 
 It is not the same as spend. A support agent that sends 200 customer emails costs $1.40 in model tokens — but creates $50,000 in lost pipeline. The spend was trivial. The exposure was catastrophic.
 
+> **Quantify exposure for your agent:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — model action classes by reversibility and visibility; the catastrophic *irreversible + public* class is what rate limits leave unbounded.
+
 ## Why exposure matters
 
 Every autonomous system has two numbers:

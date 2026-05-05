@@ -10,7 +10,11 @@ sidebar: false
 
 # How Much Do AI Agents Actually Cost?
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A team we talked to recently launched their first production agent — a customer support bot running on GPT-4o. They estimated $800/month based on their prototype traffic. The first invoice came in at $4,200. The model pricing was exactly what they expected. The number of calls was not. Their agent averaged 11 LLM calls per conversation, not the 3 they'd assumed. Context windows grew with each turn. Retries on tool failures doubled the call count on bad days. The per-token price was never the problem. The per-agent price was.
+
+> **Recreate the "estimated $800, actual $4,200" scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJDdXN0b21lciBzdXBwb3J0IGJvdCIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiIxMSBMTE0gY2FsbHMgcGVyIGNvbnZlcnNhdGlvbi4gQ29udGV4dCB3aW5kb3dzIGdyb3cgd2l0aCBlYWNoIHR1cm4uIEVzdGltYXRlZCAkODAwL21vLCBhY3R1YWwgJDQsMjAwLiIsImlucHV0VG9rZW5zIjo1MDAwLCJvdXRwdXRUb2tlbnMiOjEyMDAsImNhbGxzUGVyRGF5IjozMzAwfQ)
 
 <!-- more -->
 
@@ -214,3 +218,9 @@ If you're estimating costs for a new agent deployment or trying to understand an
 - The [End-to-End Tutorial](/quickstart/end-to-end-tutorial) walks through setting up Cycles with a working agent in under 30 minutes
 
 The cheapest agent incident is the one that never happens. Start by knowing your numbers. Then put a system in place to enforce them.
+
+## Related how-to guides
+
+- [Integrating with AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)

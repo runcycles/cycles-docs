@@ -200,3 +200,9 @@ The insurance claim processor from the opening scenario would have stopped at $1
 - **[Budget Wrapper vs Runtime Authority for AI Agents](/blog/vibe-coding-budget-wrapper-vs-budget-authority)** — why a checker is not enough when agents fan out
 - **[Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation)** — per-[tenant](/glossary#tenant) budgets for teams running LangGraph in multi-tenant platforms
 - **[Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools)** — why dashboards and proxies cannot prevent the overspend
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)

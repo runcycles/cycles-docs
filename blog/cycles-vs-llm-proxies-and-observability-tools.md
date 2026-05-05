@@ -238,3 +238,9 @@ For most teams running autonomous agents, the missing layer is runtime authority
 - [Budget Wrapper vs Runtime Authority for AI Agents](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — why building a prototype is easy but owning a runtime authority is not
 - [End-to-End Tutorial](/quickstart/end-to-end-tutorial) — set up Cycles with a working agent in under 30 minutes
 - [Shadow Mode Rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) — evaluate budget enforcement on real traffic without blocking anything
+
+## Related how-to guides
+
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)

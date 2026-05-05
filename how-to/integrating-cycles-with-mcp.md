@@ -1,16 +1,20 @@
 ---
 title: "Integrating Cycles with MCP"
-description: "Use the Cycles MCP Server to give any MCP-compatible AI agent runtime authority — reserve, enforce, and reconcile spend using MCP tools."
+description: "Expose Cycles runtime tools — decide, reserve, commit, release, balance — to any MCP-compatible agent. Patterns, resources, prompts, and transport options."
 ---
 
 # Integrating Cycles with MCP
 
-The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is the standard way AI hosts discover and call tools. The Cycles MCP Server exposes Cycles runtime authority as MCP tools, so any MCP-compatible agent (Claude Desktop, Claude Code, Cursor, Windsurf, custom agents) can reserve, spend, and release budget without any SDK integration in the agent's own code.
+The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is the standard way AI hosts discover and call tools. The Cycles MCP Server exposes Cycles runtime authority as MCP tools, so MCP-compatible agents (Claude Desktop, Claude Code, Cursor, Windsurf, custom agents) can call `decide`, `reserve`, `commit`, `release`, and balance tools without an SDK integration.
+
+This gives agents a standard way to participate in Cycles workflows. **For hard production enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require `reserve` or `decide` before the costly or risky action fires.** The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
 
 This guide covers the integration patterns, resources, prompts, and transport options available through the MCP server.
 
-::: tip Zero code changes
-MCP integration requires no changes to your agent code. You configure the Cycles MCP Server as an MCP server in your host's config file and the agent gains budget authority automatically.
+::: tip No SDK changes
+MCP integration requires no SDK changes in your agent application. You configure the Cycles MCP Server in your host, and the agent can discover Cycles tools.
+
+For deterministic enforcement, do not rely on the model voluntarily calling these tools. Put the Cycles check in the tool execution path or gateway layer.
 :::
 
 ## Prerequisites
@@ -111,14 +115,14 @@ When budget is running low, `cycles_reserve` may return `ALLOW_WITH_CAPS` instea
 }
 ```
 
-The agent should respect these caps:
+The `caps` payload may include hints such as max tokens, allowed or denied tools, remaining steps, or cooldown timing. Common fields the agent should respect when present:
 
-- **`maxTokens`** — limit output tokens on the LLM call
-- **`maxStepsRemaining`** — limit remaining agent steps
-- **`toolAllowlist` / `toolDenylist`** — restrict which tools are available
-- **`cooldownMs`** — wait between operations to slow spend rate
+- max output tokens on the LLM call
+- max remaining agent steps
+- allowed / denied tool lists
+- cooldown between operations to slow spend rate
 
-See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles) for details.
+See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles) for the full schema and current field names.
 
 ## Pattern 4: Long-running operations
 
@@ -170,6 +174,8 @@ When you can't pre-estimate cost (e.g., webhook-triggered actions, post-hoc mete
 
 No reservation needed — the event is applied atomically to all derived scopes. See [Events and Direct Debit](/protocol/how-events-work-in-cycles-direct-debit-without-reservation).
 
+> **This is post-hoc metering, not pre-execution enforcement.** `cycles_create_event` records that the action happened — it does not stop the action before it happens. For preventative control, use `cycles_decide` (preflight) or `cycles_reserve` (lock budget) before execution.
+
 ## Pattern 6: Multi-step workflow
 
 For workflows with multiple costly steps, check the balance first, then reserve per step:
@@ -186,7 +192,7 @@ For workflows with multiple costly steps, check the balance first, then reserve 
 
 **Step 3:** `cycles_reserve` → **DENY** (budget exhausted) → degrade or stop
 
-Each step gets its own reservation, so the budget authority can deny mid-workflow if the agent is burning through budget too fast. See [Common Budget Patterns](/how-to/common-budget-patterns) for more examples.
+Each step gets its own reservation, so the budget authority can deny mid-workflow if the agent is burning through budget too fast. **Do not reserve once for an entire long workflow unless you are comfortable locking that whole estimate up front** — per-step reservations give the authority layer a chance to stop mid-run, and unused budget returns to the pool sooner. See [Common Budget Patterns](/how-to/common-budget-patterns) for more examples.
 
 ## Tool reference
 
@@ -254,20 +260,27 @@ Recommends scope hierarchy, budget limits, units, TTL settings, and degradation 
 
 > "Use the design_budget_strategy prompt for my multi-agent customer support system with per-customer tenants"
 
-## HTTP transport
+## Transport modes
 
-For web integrations or remote deployments, run the server with HTTP transport:
+The Cycles MCP server supports two transports:
+
+- **STDIO** *(default)* — the AI client launches the server as a subprocess via `npx`. One server per developer, per machine. This is what every per-client quickstart uses ([Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf)).
+- **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; SSE is the older shape, supported for legacy clients. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
+
+Quick HTTP start:
 
 ```bash
 npx @runcycles/mcp-server --transport http
 ```
 
-The server starts on port 3000 (configurable via `PORT` env var) with:
+The server starts on port 3000 (configurable via `PORT`) with:
 
-- `GET /health` — health check (`{"status": "ok", "version": "0.2.0"}`)
+- `GET /health` — health check (`{"status": "ok", "version": "..."}`)
 - `POST /mcp` — MCP Streamable HTTP endpoint
 - `GET /mcp` — MCP SSE endpoint
 - `DELETE /mcp` — MCP session cleanup
+
+For the full decision tree, docker-compose example, and auth/scope behavior, see **[Running the MCP server over Streamable HTTP / SSE](/how-to/running-the-mcp-server-over-http)**.
 
 ## Error handling
 
@@ -283,9 +296,9 @@ See [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in
 
 ## Key points
 
-- **Zero code changes.** Add the MCP server to your agent's config and it gets budget tools automatically via MCP discovery.
+- **No SDK changes for tool exposure.** Add the MCP server to your agent's config and it discovers Cycles tools automatically. Hard enforcement still requires those tools to sit in the execution path.
 - **Always finalize reservations.** Every `cycles_reserve` must be followed by `cycles_commit` or `cycles_release` — never leave reservations dangling.
-- **Use unique idempotency keys.** Every tool call needs a unique `idempotencyKey` (UUID recommended) to ensure exactly-once processing.
+- **Use stable idempotency keys.** Use a unique, stable `idempotencyKey` per logical Cycles operation so retries replay safely and do not double-settle reservations. The same retry of the same logical call must use the **same** key, not a new UUID per attempt.
 - **Respect caps.** When the decision is `ALLOW_WITH_CAPS`, constrain the operation accordingly.
 - **Heartbeat long operations.** Use `cycles_extend` for operations that may exceed the reservation TTL.
 - **Tag for observability.** Use `action.tags` and `metrics.custom` to add context for debugging and auditing.

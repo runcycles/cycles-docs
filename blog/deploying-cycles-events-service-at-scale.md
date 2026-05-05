@@ -289,3 +289,9 @@ The management-port split isn't a Cycles quirk. It's the same pattern Envoy, mat
 - [Spring Boot Actuator reference](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html) — the pattern Cycles embeds, documented upstream
 - [Envoy admin interface](https://www.envoyproxy.io/docs/envoy/latest/operations/admin) — the equivalent separation in a different service
 - [Kubernetes liveness and readiness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) — the upstream probe-design guidance the probe config in this post follows
+
+## Related how-to guides
+
+- [Prometheus metrics reference](/how-to/prometheus-metrics-reference)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

@@ -15,6 +15,8 @@ head:
 
 # AI Agent Cost Control in 2026: A Landscape Guide
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 If you're running AI agents in production, you've probably evaluated — or already deployed — at least one cost control tool. LiteLLM for routing and team budgets. Helicone for observability and rate limiting. OpenRouter for unified model access with spending caps.
 
 Each solves a real problem. None of them solve the whole problem.
@@ -194,3 +196,9 @@ These tools evolve quickly. If a claim looks outdated, check the linked docs for
 - [What Is Runtime Authority for AI Agents](/blog/what-is-runtime-authority-for-ai-agents) — the enforcement model
 - [How Teams Control AI Agents Today — And Where It Breaks](/blog/how-teams-control-ai-agents-today-and-where-it-breaks) — the 5 approaches
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [API key management](/how-to/api-key-management-in-cycles)

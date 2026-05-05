@@ -21,6 +21,8 @@ head:
 
 # Tenant Lifecycle at Scale: Cascade Semantics
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
 A customer cancels. The support ticket is resolved. You click "close tenant" in your admin console, the status flips from `ACTIVE` to `CLOSED`, the incident is filed. Three days later, a monitoring alert fires: that tenant's webhook subscription just delivered to a third-party endpoint that shouldn't be reachable anymore. An audit check the next week finds one of the tenant's API keys still authorizing reservations in production. By the time the alert rolls up, the post-termination spend on the closed tenant is a number nobody wants to write into a customer-refund line item.
 
 Nothing was deleted. The problem is subtler than that: the tenant was marked closed, but every object the tenant *owned* — budgets, keys, webhook subscriptions, policies, in-flight reservations — kept operating as if nothing had changed. A tenant isn't a leaf in the data model; it's the root of a tree, and "closing" it is a statement about the whole subtree, not just the row at the top.

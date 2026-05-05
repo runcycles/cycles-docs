@@ -15,6 +15,10 @@ head:
 
 # Agents Are Cross-Cutting. Your Controls Aren't.
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A SaaS platform runs an AI feature for fifty customers. Each customer's agent calls three LLM providers — OpenAI for reasoning, Anthropic for long context, a local model for cheap embedding — and eight tools — search, a payments API, a CRM client, an outbound mailer, a vector store, a document parser, a code interpreter, and a web fetcher. The agents run on a pool of stateless workers, each handling concurrent runs across multiple customers.
 
 The platform team is asked a reasonable question by their head of engineering: **where do we put the budget cap?**
@@ -126,3 +130,9 @@ If your agent spans N providers, M tools, K tenants, and W workers, your governa
 - [We Built a Custom Agent Rate Limiter. Here's Why We Stopped.](/blog/we-built-a-custom-agent-rate-limiter-heres-why-we-stopped) — the production post-mortem of the in-process counter failure mode.
 - [Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation) — per-[tenant isolation](/glossary#tenant-isolation) and the noisy-neighbor problem.
 - [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes) — the failure modes the reserve-commit primitive is designed to survive.
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)

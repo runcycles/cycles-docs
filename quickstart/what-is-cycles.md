@@ -149,6 +149,7 @@ The **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** takes you from ze
 
 ## Next steps
 
+- **[Ballpark this for your workload](/calculators/claude-vs-gpt-cost-standalone)** — the cost calculator takes ~30 seconds and produces a shareable URL with your numbers
 - [Choose a First Rollout](/quickstart/how-to-choose-a-first-cycles-rollout-tenant-budgets-run-budgets-or-model-call-guardrails) — decide your adoption strategy
 - [Architecture Overview](/quickstart/architecture-overview-how-cycles-fits-together) — how the runtime, admin, and events components fit together
 - [How Cycles Compares](/concepts/how-cycles-compares-to-rate-limiters-observability-provider-caps-in-app-counters-and-job-schedulers) — vs. rate limiters, observability, provider caps

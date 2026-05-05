@@ -11,6 +11,8 @@ featured: true
 
 # Cursor AI Agent Reportedly Deleted a Production Database in 9 Seconds
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 JER ([@lifeof_jer](https://x.com/lifeof_jer/status/2048103471019434248)), a developer at PocketOS, posted on X this week:
 
 > "Yesterday afternoon, an AI coding agent — Cursor running Anthropic's flagship Claude Opus 4.6 — deleted our production database and all volume-level backups in a single API call to Railway, our infrastructure provider. It took 9 seconds."
@@ -22,6 +24,8 @@ The public record here is still based largely on JER's account and some agent-ge
 The reported recovery is the lucky part. The structural problem isn't.
 
 Based on the public reporting, this was not a malicious agent, a jailbreak, or a fringe model. It was a popular IDE running a frontier model against a production infrastructure API with a credentialed tool. Any team giving coding agents broad production credentials is one missing runtime gate away from the same chain of events. This post is about that missing gate — what it would have looked like, and what evidence it would have produced.
+
+> **Open this in the [Blast Radius Risk Calculator](/calculators/ai-agent-blast-radius-standalone#s=eyJhZ2VudE5hbWUiOiJDb2RpbmcgYWdlbnQgKGRhdGFiYXNlIGFjY2VzcykiLCJhZ2VudERlc2NyaXB0aW9uIjoiQUkgY29kaW5nIGFnZW50IHdpdGggcHJvZHVjdGlvbiBkYXRhYmFzZSBjcmVkZW50aWFscyDigJQgcmVhZCBzY2hlbWEsIHJ1biBtaWdyYXRpb25zLCBwdXNoIGNvZGUuIiwiY29udGFpbm1lbnRQY3QiOjAsInJvd3MiOlt7Im5hbWUiOiJEUk9QIFRBQkxFIC8gREVMRVRFIG1pZ3JhdGlvbiIsInJldmVyc2liaWxpdHkiOiJpcnJldmVyc2libGUiLCJ2aXNpYmlsaXR5IjoiY3VzdG9tZXItZmFjaW5nIiwiY29zdFBlckFjdGlvbiI6MCwiYWZmZWN0ZWRVc2VycyI6MTAwMDAwLCJjb3N0UGVyVXNlciI6NTAsImNhbGxzUGVyRGF5Ijo1MCwiZXJyb3JSYXRlIjowLjA1fSx7Im5hbWUiOiJTY2hlbWEgbWlncmF0aW9uIHRvIHByb2R1Y3Rpb24iLCJyZXZlcnNpYmlsaXR5IjoiaGFyZC10by1yZXZlcnNlIiwidmlzaWJpbGl0eSI6ImN1c3RvbWVyLWZhY2luZyIsImNvc3RQZXJBY3Rpb24iOjAsImFmZmVjdGVkVXNlcnMiOjEwMDAwMCwiY29zdFBlclVzZXIiOjIwLCJjYWxsc1BlckRheSI6NSwiZXJyb3JSYXRlIjowLjF9LHsibmFtZSI6IkNvZGUgZGVwbG95IHRvIHB1YmxpYyBzaXRlIiwicmV2ZXJzaWJpbGl0eSI6ImhhcmQtdG8tcmV2ZXJzZSIsInZpc2liaWxpdHkiOiJwdWJsaWMiLCJjb3N0UGVyQWN0aW9uIjowLCJhZmZlY3RlZFVzZXJzIjoxMDAwMDAsImNvc3RQZXJVc2VyIjoxMCwiY2FsbHNQZXJEYXkiOjIwLCJlcnJvclJhdGUiOjAuM30seyJuYW1lIjoiUmVhZCBzY2hlbWEgLyBTRUxFQ1QiLCJyZXZlcnNpYmlsaXR5IjoicmV2ZXJzaWJsZSIsInZpc2liaWxpdHkiOiJpbnRlcm5hbCIsImNvc3RQZXJBY3Rpb24iOjAsImFmZmVjdGVkVXNlcnMiOjEsImNvc3RQZXJVc2VyIjowLCJjYWxsc1BlckRheSI6NTAwMCwiZXJyb3JSYXRlIjoxfV19)** — DROP TABLE / migration / deploy / read-only rows pre-loaded with the database-coding-agent profile. Edit any row, share the URL, or export the configured view.
 
 <!-- more -->
 
@@ -114,3 +118,9 @@ If you are putting a coding agent in front of production infrastructure, the que
 - [How decide() works](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation) — the preflight decision API
 - [How reserve / commit works](/protocol/how-reserve-commit-works-in-cycles) — the lifecycle that produces the audit ledger
 - [Using the Cycles Dashboard](/how-to/using-the-cycles-dashboard) — the operator-facing audit and event views
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)
