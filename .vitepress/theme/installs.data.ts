@@ -1,7 +1,7 @@
 /**
  * Build-time data loader that aggregates total package activity across:
  *   - npm registry (downloads since 2020-01-01)
- *   - PyPI (last_month rolling — preserved via per-source high-water mark)
+ *   - PyPI (cumulative non-mirror downloads — preserved via per-source high-water mark)
  *   - crates.io (all-time downloads)
  *   - GitHub repo clones (per-repo cumulative via day-cursor accumulation)
  *   - GitHub release-asset downloads (per-repo HWM; counts are monotonic)
@@ -198,14 +198,17 @@ const PYPI_PACKAGES = [
   'runcycles-openai-agents',
 ]
 
+// /overall returns a daily series of non-mirror downloads; summing it
+// yields a cumulative total compatible with the per-source HWM used
+// downstream. /recent .last_month was rolling and broke HWM semantics.
 async function fetchPypiDownloads(): Promise<number> {
   const totals = await Promise.all(
     PYPI_PACKAGES.map(async (pkg) => {
       try {
-        const res = await fetch(`https://pypistats.org/api/packages/${pkg}/recent`)
+        const res = await fetch(`https://pypistats.org/api/packages/${pkg}/overall?mirrors=false`)
         if (!res.ok) return 0
-        const json = await res.json() as { data?: { last_month?: number } }
-        return json.data?.last_month ?? 0
+        const json = await res.json() as { data?: Array<{ downloads?: number }> }
+        return (json.data ?? []).reduce((sum, row) => sum + (row.downloads ?? 0), 0)
       } catch {
         return 0
       }
