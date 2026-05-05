@@ -8,10 +8,11 @@
     "cycles-dashboard":      517,
     "cycles-server-events":  319
   },
-  "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes per-artifact download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. Update these numbers manually after each release (typical cadence: monthly), keyed by groupId:artifactId. Leave 0 if the artifact has not been published yet.",
+  "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. The portal reports at the namespace level (groupId), so we key by groupId here rather than groupId:artifactId. Update manually after each release (typical cadence: monthly).",
   "_mavenSource": "https://central.sonatype.com/ → Statistics → Downloads",
+  "_mavenBreakdown": "Last 3 months as of 2026-05-05: March 754, April 677, May 46 (so far). Unique sources: 205. Companies: 52.",
   "mavenLastVerifiedAt": "2026-05-05",
   "maven": {
-    "io.runcycles:cycles-spring-boot-starter": 0
+    "io.runcycles": 1477
   }
 }
