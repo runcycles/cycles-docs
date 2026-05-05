@@ -45,21 +45,28 @@ commit(reservation_id, actual_usage)   on success
 release(reservation_id)                on failure
 ```
 
-`reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually used (cost in microcents, tokens, action count, whatever you're tracking) — usually less than the estimate. `release` returns unused budget to the tenant when the tool throws or is cancelled.
+`reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, when enabled through the v0.1.26 action-governance preview, are enforced at reservation time from the action kind, not at commit.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
+
+If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — same response shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
 The MCP server itself doesn't change. The wrapper sits between the MCP transport (STDIO, HTTP, whatever) and the tool's handler. Every approved tool gets the same treatment: same `reserve` call shape, same metadata, same release-on-error behavior.
 
 ## The policy this enforces
 
-Three categories of cap make sense for almost every agent product:
+Start with spend. That's the stable v0.1.25 baseline and the path most teams should evaluate first:
 
 | Category | Example caps | What it stops |
 |---|---|---|
 | **Spend** | `$1.00 per run`, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
-| **Action count** | `max 20 llm.completion`, `max 5 web.search`, `max 2 message.email.send` | Retry storms; "the 12th call" pattern |
-| **Risk class** | `deny code.exec.shell`, `deny deploy.service` unless explicitly allowlisted | Catastrophic side effects from a bad plan |
 
-You don't need all three on day one. Pick one tenant, one workflow, one risky action kind, one small budget. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
+If you're evaluating the v0.1.26 action-governance preview, the same wrapper can also carry action kinds for two more categories:
+
+| Preview category | Example caps | What it stops |
+|---|---|---|
+| **Action count** | `max 20 llm.completion`, `max 5 web.search`, `max 2 message.email.send` | Retry storms; "the 12th call" pattern |
+| **Risk class / allow-deny** | `deny code.exec.shell`, `deny deploy.service` unless explicitly allowlisted | Catastrophic side effects from a bad plan |
+
+You don't need any of the preview categories on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. After that path works, layer on a quota or allow-deny rule if you're tracking the preview. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
 
 The wrapper code below stays the same regardless of which category you enforce — Cycles handles the policy resolution server-side. You just pass tenant, run, tool, action kind, and an estimate.
 
@@ -78,6 +85,7 @@ const client = new CyclesClient(new CyclesConfig({
 interface ToolContext {
   tenantId: string         // your customer's tenant in Cycles
   workspace: string        // e.g. 'production', 'staging'
+  app: string              // e.g. 'mcp', 'web-agent', 'support-bot'
   runId: string            // a stable ID per agent run / conversation
   toolName: string         // 'send_email', 'web_search', etc.
   actionKind: string       // 'message.email.send', 'web.search', 'llm.completion', ...
@@ -100,10 +108,13 @@ export async function gatedToolCall<T>(
 
   const response = await client.createReservation({
     idempotency_key: idempotencyKey,
-    subject: { tenant: ctx.tenantId, workspace: ctx.workspace, app: 'mcp' },
+    subject: { tenant: ctx.tenantId, workspace: ctx.workspace, app: ctx.app },
     action: { kind: ctx.actionKind, name: ctx.toolName },
     estimate: { unit: Unit.USD_MICROCENTS, amount: ctx.estimateMicrocents },
     ttl_ms: 60_000,
+    // Cycles' formal scope hierarchy is tenant -> workspace -> app -> workflow
+    // -> agent -> toolset; runs don't have a dedicated slot, so we put runId
+    // in metadata so the dashboard's metadata filter picks it up.
     metadata: { run_id: ctx.runId },
   })
 
@@ -111,8 +122,11 @@ export async function gatedToolCall<T>(
   // not decision=DENY. Treat any non-success as a denial the agent must
   // handle — winding down, downgrading, or stopping. Do NOT silently retry.
   if (!response.isSuccess) {
+    // Wrap the server message rather than passing it through verbatim — server
+    // errors can carry policy IDs or internal field names you may not want in
+    // a customer-facing response. Log response.errorMessage server-side instead.
     throw new DeniedByCyclesError(
-      `Cycles denied ${ctx.actionKind} for ${ctx.toolName}: ${response.errorMessage}`,
+      `Cycles denied ${ctx.actionKind} for ${ctx.toolName}.`,
     )
   }
 
@@ -128,10 +142,14 @@ export async function gatedToolCall<T>(
   } catch (err) {
     // Tool threw or was cancelled — give the budget back so the next
     // legitimate call isn't denied because of a failed attempt.
-    await client.releaseReservation(reservationId, {
-      idempotency_key: `release:${idempotencyKey}`,
-      reason: err instanceof Error ? err.message : 'tool execution failed',
-    }).catch(() => {})
+    try {
+      await client.releaseReservation(reservationId, {
+        idempotency_key: `release:${idempotencyKey}`,
+        reason: err instanceof Error ? err.message : 'tool execution failed',
+      })
+    } catch {
+      // Don't mask the original tool error. Log release failures in production.
+    }
     throw err
   }
 }
@@ -141,11 +159,19 @@ Wrapping an MCP tool handler is then a one-liner per tool:
 
 ```typescript
 server.tool('send_email', emailSchema, async (args) => {
+  // Real MCP tool calls may have _meta undefined or missing fields —
+  // validate before trusting it in production.
+  const meta = args._meta
+  if (!meta?.tenantId || !meta?.runId) {
+    throw new Error('send_email requires _meta.tenantId and _meta.runId')
+  }
+
   return gatedToolCall(
     {
-      tenantId: args._meta.tenantId,
-      workspace: args._meta.workspace ?? 'production',
-      runId: args._meta.runId,
+      tenantId: meta.tenantId,
+      workspace: meta.workspace ?? 'production',
+      app: 'mcp',
+      runId: meta.runId,
       toolName: 'send_email',
       actionKind: 'message.email.send',
       estimateMicrocents: 50_000,  // ~$0.0005 baseline
@@ -186,7 +212,7 @@ Then bring up the local stack so you can watch denials happen in the dashboard w
 
 - [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack) — runtime server, admin server, dashboard, in one `docker-compose up`.
 - [Integrating Cycles with MCP](/how-to/integrating-cycles-with-mcp) — the implementation deep-dive: patterns, resources, prompts, transport options.
-- [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) — fit checklist, anti-patterns, 15-minute local test.
+- [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) — fit checklist, non-fit cases, 15-minute local test.
 
 ## Send me your MCP/tool-call flow
 
