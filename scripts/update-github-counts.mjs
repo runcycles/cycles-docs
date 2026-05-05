@@ -126,6 +126,34 @@ async function updateClones(repos, byRepo) {
   return { byRepo: updated, total }
 }
 
+// ── Stale-cursor guard ───────────────────────────────────────────────
+// /traffic/clones is a 14-day rolling window. If this script doesn't run
+// for >14 days, days fall off the end of the API window and are lost
+// permanently. Warn loudly when any repo's cursor slips beyond a safety
+// threshold (default 7 days) so the issue is visible before data loss.
+const STALE_DAYS_THRESHOLD = 7
+function checkStaleClones(byRepo) {
+  const today = new Date().toISOString().slice(0, 10)
+  const todayMs = Date.parse(today + 'T00:00:00Z')
+  const stale = []
+  for (const [repo, info] of Object.entries(byRepo)) {
+    if (!info?.lastSeenDay || info.lastSeenDay === '1970-01-01') continue
+    const lastMs = Date.parse(info.lastSeenDay + 'T00:00:00Z')
+    const daysBehind = Math.floor((todayMs - lastMs) / 86_400_000)
+    if (daysBehind > STALE_DAYS_THRESHOLD) {
+      stale.push({ repo, lastSeenDay: info.lastSeenDay, daysBehind })
+    }
+  }
+  if (stale.length === 0) {
+    console.log(`stale-cursor check: all ${Object.keys(byRepo).length} repos within ${STALE_DAYS_THRESHOLD}d of today (${today})`)
+    return
+  }
+  for (const { repo, lastSeenDay, daysBehind } of stale) {
+    console.warn(`::warning::stale clones cursor: ${repo} lastSeenDay=${lastSeenDay} (${daysBehind}d behind today=${today})`)
+  }
+  console.warn(`::warning::${stale.length}/${Object.keys(byRepo).length} repo(s) have stale clones cursors. /traffic/clones is a 14d rolling window — fix the scheduled workflow before days fall off.`)
+}
+
 // ── Releases: HWM on asset download_count per repo ───────────────────
 // For runcycles, every release exists as a tag-only release with no
 // attached assets (Java services publish to GHCR; SDKs publish to PyPI/
@@ -189,6 +217,7 @@ async function main() {
   console.log(`  repos: ${repos.length}`)
 
   const clonesResult = await updateClones(repos, cache.clonesByRepo)
+  checkStaleClones(clonesResult.byRepo)
   const releasesResult = await updateReleases(repos, cache.releasesByRepo)
   const ghpkgResult = await updateGhPackages()
 
