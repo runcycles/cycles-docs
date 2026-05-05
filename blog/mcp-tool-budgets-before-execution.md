@@ -219,15 +219,23 @@ server.tool('send_email', emailSchema, async (args) => {
       // side-effecting tool, fail closed if the caps disallow this tool.
       //
       // Per the protocol, tool_allowlist takes precedence over tool_denylist:
-      // a non-empty allowlist that doesn't include this tool is an implicit
-      // deny, regardless of what the denylist says.
+      // when a non-empty allowlist is returned, the denylist is ignored
+      // entirely — the allowlist is the sole authority for which tools may
+      // run.
       const allowlist = caps?.toolAllowlist ?? caps?.tool_allowlist
-      if (Array.isArray(allowlist) && allowlist.length > 0 && !allowlist.includes('send_email')) {
-        throw new DeniedByCyclesError('Cycles caps allowlist excludes send_email.')
-      }
-      const denylist = caps?.toolDenylist ?? caps?.tool_denylist
-      if (Array.isArray(denylist) && denylist.includes('send_email')) {
-        throw new DeniedByCyclesError('Cycles caps disallow send_email.')
+      const hasAllowlist = Array.isArray(allowlist) && allowlist.length > 0
+
+      if (hasAllowlist) {
+        if (!allowlist.includes('send_email')) {
+          throw new DeniedByCyclesError('Cycles caps allowlist excludes send_email.')
+        }
+        // Allowlist includes this tool → permitted. Denylist is ignored
+        // when an allowlist is present.
+      } else {
+        const denylist = caps?.toolDenylist ?? caps?.tool_denylist
+        if (Array.isArray(denylist) && denylist.includes('send_email')) {
+          throw new DeniedByCyclesError('Cycles caps disallow send_email.')
+        }
       }
 
       const sent = await sendEmail(args)
