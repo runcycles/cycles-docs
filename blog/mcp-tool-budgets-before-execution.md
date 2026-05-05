@@ -258,7 +258,7 @@ A few things this wrapper does deliberately:
 - **Denials throw `DeniedByCyclesError`**, not silent fallthroughs. The agent has to handle them — by stopping, downgrading, or asking for more budget.
 - **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or fail closed so the wrapper releases the reservation.
 - **Release on any throw**, including cancellations. Unused budget goes back to the tenant.
-- **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in `subject`, action kind and tool name in `action`, run ID in `subject.dimensions.run`, and free-form fields (run_id, tool_call_id, tool_name) in `metadata`. That's what the dashboard groups by, and what your future audit query will join on.
+- **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in `subject`, action kind and tool name in `action`, run ID in `subject.dimensions.run`, and free-form fields (run_id, tool_call_id, tool_name) in `metadata`. That's the context available for dashboard views and audit queries — subject to your server's and dashboard's support for custom dimensions (filtering on `dimensions.run` is out of scope for v0 unless your implementation explicitly supports it).
 
 ## Why this matters
 
