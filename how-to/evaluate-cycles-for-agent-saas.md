@@ -1,5 +1,5 @@
 ---
-title: "Evaluate Cycles for a multi-tenant agent SaaS"
+title: "Evaluate Cycles for multi-tenant AI agents"
 description: "Evaluate whether Cycles fits your multi-tenant agent stack. Includes a fit checklist, non-fit cases, a 15-minute local test, and the first agent actions to gate."
 ---
 
@@ -47,7 +47,7 @@ You should see three things:
 
 - an **allowed reservation** that reduces available budget
 - a **committed reservation** that records actual usage
-- a **denied reservation** that prevents the next action from running
+- a **denied check** that prevents the next action from running
 
 If you can map those three states to your own agent workflow, Cycles is probably worth a deeper integration test. If they don't match what you'd expect for your worst case — runaway agent, tool loop, multi-tenant overspend — you've spent 15 minutes and learned something specific about why.
 
@@ -74,7 +74,7 @@ That mapping is the design exercise. See [Assigning Risk Points to Agent Tools](
 
 Cycles becomes the **runtime authority layer** between agent intent and external execution: every consequential action passes through `reserve → execute → commit` (or `release` on failure), scoped by tenant / workflow / run / tool.
 
-That is the core idea. Multi-tenant isolation, per-tier quotas, OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
+That is the core idea. Multi-tenant isolation, per-tier budgets, action-governance previews, OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
 
 ## What a good first integration looks like
 
