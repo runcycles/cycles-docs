@@ -45,9 +45,13 @@ jobs:
           done
           echo "npm=$NPM_TOTAL"
 
+          # PyPI: cumulative non-mirror downloads. /overall returns a daily
+          # series; sum it. Previously used /recent .data.last_month, which
+          # is rolling and broke HWM semantics (a quiet month silently
+          # froze the displayed count above actual cumulative installs).
           PYPI_TOTAL=0
           for pkg in runcycles runcycles-openai-agents; do
-            COUNT=$(curl -sf "https://pypistats.org/api/packages/${pkg}/recent" | jq '.data.last_month // 0')
+            COUNT=$(curl -sf "https://pypistats.org/api/packages/${pkg}/overall?mirrors=false" | jq '[.data[].downloads] | add // 0')
             PYPI_TOTAL=$((PYPI_TOTAL + COUNT))
           done
           echo "pypi=$PYPI_TOTAL"
