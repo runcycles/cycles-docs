@@ -7,5 +7,11 @@
     "cycles-server":         917,
     "cycles-dashboard":      517,
     "cycles-server-events":  319
+  },
+  "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes per-artifact download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. Update these numbers manually after each release (typical cadence: monthly), keyed by groupId:artifactId. Leave 0 if the artifact has not been published yet.",
+  "_mavenSource": "https://central.sonatype.com/ → Statistics → Downloads",
+  "mavenLastVerifiedAt": "2026-05-05",
+  "maven": {
+    "io.runcycles:cycles-spring-boot-starter": 0
   }
 }
