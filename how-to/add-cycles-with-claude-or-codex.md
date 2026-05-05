@@ -118,7 +118,7 @@ Pick the language guide that matches this repo. Do NOT wrap more than one
 boundary in this pass. Stop and report when the test passes.
 ```
 
-The full machine-readable index is at [`/llms.txt`](/llms.txt) — most assistants can fetch it to discover the rest of the documentation.
+The full machine-readable index is at <a href="/llms.txt" target="_blank" rel="noopener"><code>/llms.txt</code></a> — most assistants can fetch it to discover the rest of the documentation.
 
 ## Drop-in AGENTS.md / CLAUDE.md / .cursorrules snippet
 
@@ -131,7 +131,7 @@ curl -O https://runcycles.io/agents/cycles-integration.md
 # then append or include in your repo's AGENTS.md / CLAUDE.md / .cursorrules
 ```
 
-The same content is mirrored at <a href="/agents/cycles-integration.md"><code>/agents/cycles-integration.md</code></a>.
+The same content is mirrored at <a href="/agents/cycles-integration.md" target="_blank" rel="noopener"><code>/agents/cycles-integration.md</code></a> (opens in a new tab — the file is served as raw markdown, not a VitePress page).
 
 ## Minimum viable integration by language
 
