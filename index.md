@@ -13,14 +13,14 @@ hero:
     alt: Cycles hero image
   actions:
     - theme: brand
+      text: "Start with Claude or Codex"
+      link: "/how-to/add-cycles-with-claude-or-codex"
+    - theme: alt
       text: "Run the demos"
       link: "/demos/"
     - theme: alt
       text: "Read the tutorial"
       link: "/quickstart/end-to-end-tutorial"
-    - theme: alt
-      text: "Compare stacks"
-      link: "/concepts/comparisons"
 features:
   - icon:
       src: /icons/rocket.svg
@@ -54,8 +54,8 @@ features:
       src: /icons/wrench.svg
       alt: How-To icon
     title: "How-To Guides"
-    details: "27 integrations: OpenAI, Anthropic, Groq, AutoGen, Spring AI, LangChain, LangGraph, AnyAgent, Vercel AI, Next.js, Django, Flask, MCP, and more. Budget patterns, estimation, error handling."
-    link: /how-to/adding-cycles-to-an-existing-application
+    details: "Add Cycles with Claude or Codex from a single prompt, or use language- and framework-specific guides for Python, TypeScript, Spring, MCP, LangChain, LangGraph, OpenAI Agents, and more. Budget patterns, estimation, error handling."
+    link: /how-to/add-cycles-with-claude-or-codex
     linkText: Browse guides
   - icon:
       src: /icons/book-text.svg

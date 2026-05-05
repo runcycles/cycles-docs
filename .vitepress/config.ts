@@ -232,9 +232,10 @@ export default defineConfig({
           {
             text: 'Getting Started',
             items: [
+              { text: 'Integrate via Claude / Codex', link: '/how-to/add-cycles-with-claude-or-codex' },
               { text: 'What is Cycles?', link: '/quickstart/what-is-cycles' },
               { text: 'Docs Home', link: '/docs/' },
-              { text: 'Concepts', link: '/concepts/comparisons' },
+              { text: 'Compare Stacks', link: '/concepts/comparisons' },
               { text: 'How-To Guides', link: '/how-to/adding-cycles-to-an-existing-application' },
               { text: 'Integrations', link: '/how-to/integrations-overview' },
             ],
@@ -300,6 +301,8 @@ export default defineConfig({
           items: [
             { text: 'What is Cycles?', link: '/quickstart/what-is-cycles' },
             { text: 'End-to-End Tutorial', link: '/quickstart/end-to-end-tutorial' },
+            { text: 'Use Claude or Codex', link: '/how-to/add-cycles-with-claude-or-codex' },
+            { text: 'Add to an Existing App', link: '/how-to/adding-cycles-to-an-existing-application' },
             { text: 'Add to a Python App', link: '/quickstart/getting-started-with-the-python-client' },
             { text: 'Add to a TypeScript App', link: '/quickstart/getting-started-with-the-typescript-client' },
             { text: 'Add to a Spring Boot App', link: '/quickstart/getting-started-with-the-cycles-spring-boot-starter' },
@@ -420,6 +423,7 @@ export default defineConfig({
           text: 'Integrations',
           collapsed: true,
           items: [
+            { text: 'Use Claude or Codex', link: '/how-to/add-cycles-with-claude-or-codex' },
             { text: 'Ecosystem', link: '/how-to/ecosystem' },
             { text: 'Overview', link: '/how-to/integrations-overview' },
             {
