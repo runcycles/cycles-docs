@@ -5,6 +5,10 @@ description: "Expose Cycles runtime tools — decide, reserve, commit, release, 
 
 # Integrating Cycles with MCP
 
+::: tip New MCP guide
+Read: [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) — a TypeScript reserve/commit wrapper you can drop around any MCP tool handler.
+:::
+
 The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is the standard way AI hosts discover and call tools. The Cycles MCP Server exposes Cycles runtime authority as MCP tools, so MCP-compatible agents (Claude Desktop, Claude Code, Cursor, Windsurf, custom agents) can call `decide`, `reserve`, `commit`, `release`, and balance tools without an SDK integration.
 
 This gives agents a standard way to participate in Cycles workflows. **For hard production enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require `reserve` or `decide` before the costly or risky action fires.** The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
