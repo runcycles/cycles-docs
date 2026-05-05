@@ -11,6 +11,13 @@ The Cycles server is a Spring Boot application that enforces budget reservations
 The full Cycles stack includes three services: the **Cycles Server** (runtime enforcement, covered here), the **Admin Server** (port 7979, tenant/budget management), and the optional **Events Service** (port 7980, webhook delivery). See [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack) for the end-to-end guide covering all components. For a web UI on top of the stack, see [Deploy the Admin Dashboard](/quickstart/deploying-the-cycles-dashboard).
 :::
 
+## Choose your path
+
+- **Just the runtime server** — follow this guide.
+- **Full local stack (server + admin + dashboard)** — see [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack). Recommended for evaluation.
+- **Evaluate Cycles for a multi-tenant agent SaaS** — start with the [evaluation guide](/how-to/evaluate-cycles-for-agent-saas) before deciding what to deploy.
+- **Not sure where Cycles fits?** [Send us your agent/tool-call flow](/contact) and we'll map where `reserve` / `commit` should sit.
+
 ## Prerequisites
 
 - **Docker** and **Docker Compose** (for the quick path — no Java needed), or

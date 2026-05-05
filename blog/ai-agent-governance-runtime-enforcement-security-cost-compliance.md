@@ -11,6 +11,8 @@ featured: true
 
 # AI Agent Governance: Runtime Enforcement for Security, Cost, and Compliance
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Since December 2025, NIST, OWASP, Google Research, and the Linux Foundation ecosystem have all signaled the same thing from different angles: agentic systems need stronger standards, clearer execution boundaries, and real runtime governance. OWASP published its [Top 10 for Agentic Applications](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/) in December 2025. The same month, the Linux Foundation announced the [Agentic AI Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation) — co-founded by Anthropic, OpenAI, and Block, with Google, Microsoft, and AWS as platinum members. In January 2026, Google Research published [scaling principles for multi-agent architectures](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/). In February, [NIST launched its AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure).
 
 The reason is not theoretical. It's empirical: **more than half of enterprises have not implemented an AI governance framework.** A [Gartner survey](https://futurecio.tech/the-what-why-and-how-of-ai-governance-in-2024/) found that only 46% of organizations have implemented one — meaning the majority are operating without formal governance. An [EY survey](https://assets.ey.com/content/dam/ey-sites/ey-com/en_gl/topics/emerging-technologies/ey-ai-survey-2024.pdf) found that 64% of companies with over $1 billion in revenue have lost more than $1 million to AI failures broadly — a figure that is likely worse for [autonomous agents](/glossary#autonomous-agent), where each failure can compound through tool calls and sub-agent delegation. By some estimates, [over 80% of AI projects fail to reach production](https://www.rand.org/pubs/research_reports/RRA2680-1.html).
@@ -257,3 +259,9 @@ Three paths, depending on your current state:
 - [Multi-Agent Budget Control](/blog/multi-agent-budget-control-crewai-autogen-openai-agents-sdk) — CrewAI, AutoGen, OpenAI Agents SDK
 - [The AI Agent Production Gap](/blog/ai-agent-production-gap-what-developers-are-saying) — what the community is saying
 - [AI Agent Runtime Permissions](/blog/ai-agent-runtime-permissions-control-actions-before-execution) — controlling actions before execution
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

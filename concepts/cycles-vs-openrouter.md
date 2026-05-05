@@ -9,6 +9,8 @@ OpenRouter is an LLM routing gateway that provides unified access to hundreds of
 
 If you're already routing through OpenRouter, you have some cost control built in. The question is whether per-key caps are enough — or whether you need the deeper enforcement primitives that agent systems require.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — OpenRouter routes; the calculator shows what *cheaper-model routing* alone saves vs hard per-tenant budget enforcement.
+
 ## What each does
 
 | | OpenRouter | Cycles |

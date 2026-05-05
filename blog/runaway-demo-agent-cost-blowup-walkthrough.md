@@ -10,9 +10,13 @@ sidebar: false
 
 # Your AI Agent Just Burned $6 in 30 Seconds — Here's the Three-Line Fix
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A customer support bot drafts a response, evaluates its quality, and refines it in a loop until the score exceeds 8.0. The bug: the quality evaluator never returns above 6.9. Without a budget boundary, the agent loops for 30 seconds — ~595 calls, ~$5.95 — before a safety timeout kills it. In production, there would be no timeout. With Cycles, the same agent stops cleanly at exactly $1.00 after ~100 calls. The [Cycles server](/glossary#cycles-server) returns `409 BUDGET_EXCEEDED`, the decorator raises an exception, and the agent exits gracefully. No call is wasted past the limit.
 
 The LLM calls in this demo are simulated. No API key is required. The budget enforcement is real. This post walks through the [runaway demo](https://github.com/runcycles/cycles-runaway-demo) step by step: what the agent does, how the unguarded and guarded runs differ, and what the code change looks like.
+
+> **Open the quality-loop scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJTdXBwb3J0IGFnZW50IHdpdGggcXVhbGl0eS1sb29wIGJ1ZyIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiJEcmFmdHMgYSByZXNwb25zZSwgZXZhbHVhdGVzIHF1YWxpdHksIHJlZmluZXMgdW50aWwgc2NvcmUgPjguIEJ1ZzogZXZhbHVhdG9yIG5ldmVyIHJldHVybnMgYWJvdmUgNi45LiB-MTAwIGNhbGxzIHBlciByZWZpbmVtZW50IGxvb3AuIiwiaW5wdXRUb2tlbnMiOjMwMDAsIm91dHB1dFRva2VucyI6ODAwLCJjYWxsc1BlckRheSI6NTAwfQ)
 
 <!-- more -->
 

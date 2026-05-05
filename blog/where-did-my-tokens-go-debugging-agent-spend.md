@@ -15,6 +15,8 @@ head:
 
 # Where Did My Tokens Go? Debugging Agent Spend at Production Scale
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 The bill just tripled. Your agents aren't doing anything new. You open the LLM proxy dashboard and see the total — yes, token usage is up — but the dashboard only shows you *how much*, not *who, where, or why*. An engineer sitting in front of that dashboard at 9am on a Tuesday has maybe thirty minutes to figure out which tool call cost the most before finance escalates.
 
 This is LLM token attribution at production scale — debugging AI agent spend when the proxy can't tell you *which agent, which workflow, which tool call* drove the spike. This post is about the data model you actually need to answer the question. Not which observability tool to buy — which **fields on which events**, and which **balance queries**, let you drill from "total spend tripled" down to "this workflow, this agent, this tool call, this API key, this correlation ID." The answer in Cycles is three primitives captured at enforcement time — **scope path, actor, correlation ID** — surfaced through the event stream and the balance API. Everything else is filtering.

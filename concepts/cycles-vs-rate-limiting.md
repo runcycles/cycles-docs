@@ -17,6 +17,8 @@ Cycles answers: **how much?**
 
 That distinction determines whether your system can burn through $10,000 overnight while staying perfectly within its RPM limit.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — rate limits do not bound spend; the calculator shows what one un-budgeted runaway loop is worth at your token rate.
+
 ## What rate limiting does well
 
 Rate limiters are effective at three things.

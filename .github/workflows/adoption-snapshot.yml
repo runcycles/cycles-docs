@@ -1,0 +1,133 @@
+name: Adoption Snapshot
+
+# Weekly time-series snapshot of org adoption stats.
+#
+# Appends one row to .outreach/adoption-snapshots.csv (totals) and one row
+# per repo to .outreach/adoption-snapshots-by-repo.csv. Unlike installs-cache.json
+# (which only stores latest values via per-source HWMs), these CSVs are
+# append-only — they preserve the time series so trend can be analyzed.
+#
+# Sources per snapshot:
+#   - GitHub traffic/clones (14-day window) — needs PAT with repo scope
+#   - GitHub traffic/views (14-day window)  — needs PAT with repo scope
+#   - GitHub stars + forks per repo
+#   - npm, PyPI, crates.io download totals
+#   - cumulative clones from installs-cache.json (day-cursor accumulator)
+#
+# The traffic API needs push access on each repo; the default GITHUB_TOKEN
+# only has access to this repo. Set ORG_TRAFFIC_TOKEN as a repo secret —
+# a fine-grained PAT with `repo` (or `metadata: read` + `administration: read`
+# on org-wide repos) is enough. Without it, the workflow still runs but
+# clone/view rows will be zero.
+
+on:
+  schedule:
+    - cron: '0 7 * * 0'  # 7 AM UTC every Sunday
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Collect adoption snapshot
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
+          ORG: runcycles
+        run: |
+          set -euo pipefail
+          TODAY=$(date -u +%Y-%m-%d)
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          TOTALS_CSV=".outreach/adoption-snapshots.csv"
+          BYREPO_CSV=".outreach/adoption-snapshots-by-repo.csv"
+          REFS_CSV=".outreach/adoption-snapshots-referrers.csv"
+          mkdir -p .outreach
+
+          # Headers (idempotent — only written if missing)
+          [ -f "$TOTALS_CSV" ] || echo "date,clones_14d,unique_cloners_14d,views_14d,unique_viewers_14d,stars,forks,npm_total,pypi_last_month,crates_total,cumulative_clones,fetched_at" > "$TOTALS_CSV"
+          [ -f "$BYREPO_CSV" ] || echo "date,repo,clones_14d,unique_cloners_14d,views_14d,unique_viewers_14d,stars,forks" > "$BYREPO_CSV"
+          [ -f "$REFS_CSV" ]   || echo "date,repo,rank,referrer,views,uniques" > "$REFS_CSV"
+
+          # ── Per-repo + traffic totals + top referrers ──
+          # Referrers come from /traffic/popular/referrers (top 10, ranked by
+          # views, 14d window). Captured per repo into a long-format CSV so
+          # week-over-week we can answer "did the HN post drive traffic".
+          REPOS=$(gh repo list "$ORG" --limit 50 --json name,isPrivate,isArchived --jq '.[] | select(.isPrivate==false and .isArchived==false) | .name')
+          TC=0; TCU=0; TV=0; TVU=0; TS=0; TF=0
+          BYREPO_ROWS=""
+          for r in $REPOS; do
+            c=$(gh api "repos/$ORG/$r/traffic/clones" --jq '"\(.count // 0) \(.uniques // 0)"' 2>/dev/null || echo "0 0")
+            v=$(gh api "repos/$ORG/$r/traffic/views"  --jq '"\(.count // 0) \(.uniques // 0)"' 2>/dev/null || echo "0 0")
+            sf=$(gh api "repos/$ORG/$r"               --jq '"\(.stargazers_count // 0) \(.forks_count // 0)"' 2>/dev/null || echo "0 0")
+            cc=$(echo $c | awk '{print $1}'); cu=$(echo $c | awk '{print $2}')
+            vc=$(echo $v | awk '{print $1}'); vu=$(echo $v | awk '{print $2}')
+            ss=$(echo $sf | awk '{print $1}'); ff=$(echo $sf | awk '{print $2}')
+            BYREPO_ROWS="${BYREPO_ROWS}${TODAY},${r},${cc},${cu},${vc},${vu},${ss},${ff}\n"
+            TC=$((TC + cc)); TCU=$((TCU + cu)); TV=$((TV + vc)); TVU=$((TVU + vu))
+            TS=$((TS + ss)); TF=$((TF + ff))
+
+            # Append top-N referrers for this repo. `to_entries` gives index for rank.
+            gh api "repos/$ORG/$r/traffic/popular/referrers" \
+              --jq "to_entries[] | \"${TODAY},${r},\(.key+1),\(.value.referrer),\(.value.count),\(.value.uniques)\"" \
+              >> "$REFS_CSV" 2>/dev/null || true
+          done
+
+          # ── Registry totals (same packages as installs.data.ts) ──
+          NPM=0
+          for pkg in runcycles @runcycles/mcp-server @runcycles/openclaw-budget-guard; do
+            COUNT=$(curl -sf "https://api.npmjs.org/downloads/point/2020-01-01:${TODAY}/${pkg}" | jq '.downloads // 0' || echo 0)
+            NPM=$((NPM + COUNT))
+          done
+
+          PYPI=0
+          for pkg in runcycles runcycles-openai-agents; do
+            COUNT=$(curl -sf "https://pypistats.org/api/packages/${pkg}/recent" | jq '.data.last_month // 0' || echo 0)
+            PYPI=$((PYPI + COUNT))
+          done
+
+          CRATES=0
+          for pkg in runcycles; do
+            COUNT=$(curl -sf -H 'User-Agent: runcycles-docs (https://github.com/runcycles/docs)' "https://crates.io/api/v1/crates/${pkg}" | jq '.crate.downloads // 0' || echo 0)
+            CRATES=$((CRATES + COUNT))
+          done
+
+          # ── Cumulative clones from the existing day-cursor accumulator ──
+          CUM=$(jq -r '.clones // 0' .vitepress/theme/installs-cache.json 2>/dev/null || echo 0)
+
+          # ── Append rows ──
+          echo "${TODAY},${TC},${TCU},${TV},${TVU},${TS},${TF},${NPM},${PYPI},${CRATES},${CUM},${NOW}" >> "$TOTALS_CSV"
+          printf "%b" "$BYREPO_ROWS" >> "$BYREPO_CSV"
+
+          echo "snapshot: clones14d=$TC uniqs=$TCU views14d=$TV stars=$TS forks=$TF npm=$NPM pypi=$PYPI crates=$CRATES cumClones=$CUM"
+
+      - name: Open PR with snapshot row
+        # Uses ORG_TRAFFIC_TOKEN (PAT) to push and open the PR. The default
+        # GITHUB_TOKEN cannot create PRs unless "Allow GitHub Actions to
+        # create and approve pull requests" is enabled in repo settings —
+        # using the PAT sidesteps that and works regardless.
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet .outreach/; then
+            echo "No changes to snapshot CSVs — skipping PR."
+            exit 0
+          fi
+          BRANCH="chore/adoption-snapshot-$(date -u +%Y%m%d)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add .outreach/adoption-snapshots.csv .outreach/adoption-snapshots-by-repo.csv .outreach/adoption-snapshots-referrers.csv
+          git commit -m "chore: weekly adoption snapshot $(date -u +%Y-%m-%d)"
+          # Push using the PAT so the PR's commits are attributed to the
+          # token owner and the API call below has create-PR permission.
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
+          gh pr create \
+            --title "chore: weekly adoption snapshot $(date -u +%Y-%m-%d)" \
+            --body "Automated weekly append to adoption-snapshots CSVs. Append-only — preserves time series for trend analysis." \
+            --head "$BRANCH" \
+            --base main

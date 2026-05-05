@@ -25,6 +25,8 @@ It works when you have one service, one process, one agent, and one developer wh
 
 This article explains where custom token counters break, why they break, and when to replace them with a dedicated runtime authority.
 
+> **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — token counters predict; the calculator separates the prediction (rates × volume) from the enforcement layer that bounds reality.
+
 ## The natural starting point
 
 Building your own counter is the rational first move.

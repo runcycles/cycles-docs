@@ -1,0 +1,17 @@
+{
+  "_note": "GHCR pull counts ARE exposed via the GitHub API at /orgs/{org}/packages?package_type=container when the token has read:packages scope (download_count field on each package). scripts/update-github-counts.mjs uses that path and overwrites this file when scope is present. Until ORG_TRAFFIC_TOKEN gains read:packages, this manual file is the source of truth — update it by peeking at https://github.com/orgs/runcycles/packages (typical cadence: monthly, or before publishing the homepage installs counter).",
+  "_source": "https://github.com/orgs/runcycles/packages",
+  "lastVerifiedAt": "2026-05-05",
+  "ghPackages": {
+    "cycles-server-admin":  1198,
+    "cycles-server":         917,
+    "cycles-dashboard":      517,
+    "cycles-server-events":  319
+  },
+  "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes per-artifact download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. Update these numbers manually after each release (typical cadence: monthly), keyed by groupId:artifactId. Leave 0 if the artifact has not been published yet.",
+  "_mavenSource": "https://central.sonatype.com/ → Statistics → Downloads",
+  "mavenLastVerifiedAt": "2026-05-05",
+  "maven": {
+    "io.runcycles:cycles-spring-boot-starter": 0
+  }
+}

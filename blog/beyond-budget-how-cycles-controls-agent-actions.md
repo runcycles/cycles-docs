@@ -10,6 +10,8 @@ sidebar: false
 
 # Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Most people discover Cycles because they need to stop an agent from burning through their OpenAI bill. Fair enough — that's the most visible problem.
 
 But spend is just one dimension of what an [autonomous agent](/glossary#autonomous-agent) can do wrong. An agent that stays within its token budget can still:
@@ -157,3 +159,9 @@ This is the same hierarchical isolation that prevents one [tenant](/glossary#ten
 - [Understanding Units](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points) — USD_MICROCENTS, [TOKENS](/glossary#tokens), CREDITS, RISK_POINTS
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — what to do when action authority is denied
 - [Multi-Agent Shared Budgets](/how-to/multi-agent-shared-workspace-budget-patterns) — shared and independent budgets across agents
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [Webhook integrations](/how-to/webhook-integrations)

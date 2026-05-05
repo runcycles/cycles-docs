@@ -1,5 +1,5 @@
 ---
-title: "The AI Agent Governance Framework: Mapping NIST, EU AI Act, ISO 42001, and OWASP Requirements to Runtime Enforcement Controls"
+title: "AI Agent Governance: NIST, EU AI Act, ISO 42001, OWASP"
 date: 2026-04-02
 author: Cycles Team
 tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime authority, agents]
@@ -9,7 +9,9 @@ sidebar: false
 featured: true
 ---
 
-# The AI Agent Governance Framework: Mapping NIST, EU AI Act, ISO 42001, and OWASP Requirements to Runtime Enforcement Controls
+# AI Agent Governance: Mapping NIST, EU AI Act, ISO 42001, and OWASP to Runtime Enforcement
+
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
 Regulations are converging on a single demand: if your AI system acts autonomously, you must be able to prove what it did, why it was allowed to do it, and how you would have stopped it.
 
@@ -286,3 +288,9 @@ Governance is not a feature you add after shipping. It is the infrastructure tha
 - [Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation) — per-tenant enforcement and isolation
 - [The AI Agent Production Gap](/blog/ai-agent-production-gap-what-developers-are-saying) — what the community is saying
 - [Security Overview](/security) — architecture, access control, and data handling
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)

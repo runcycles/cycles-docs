@@ -105,3 +105,9 @@ Each customer gets independent spend limits, action boundaries, and risk control
 Pick your framework from the [integration overview](/how-to/integrations-overview), follow the guide, and have budget governance running in under 10 minutes.
 
 If your stack isn't covered, [open an issue](https://github.com/runcycles/docs/issues). We're prioritizing based on real user requests.
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Handling streaming responses](/how-to/handling-streaming-responses-with-cycles)

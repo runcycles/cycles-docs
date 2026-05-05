@@ -10,6 +10,8 @@ sidebar: false
 
 # The OpenAI Agents SDK Has Guardrails for Content — But Nothing for Actions
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Two scenarios. Same agent. Very different outcomes.
 
 **Scenario A.** A user asks your support agent to generate instructions for something harmful. The agent's `InputGuardrail` fires, detects the policy violation, and blocks the request before a single token is generated. The system works exactly as designed.

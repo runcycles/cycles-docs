@@ -14,7 +14,7 @@ Every webhook delivery includes these HTTP headers:
 | Header | Value | Description |
 |--------|-------|-------------|
 | `Content-Type` | `application/json` | Always JSON |
-| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the signing secret. Omitted if no signing secret is configured. |
+| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. If no secret was provided when the subscription was created, the server-generated secret is used. |
 | `X-Cycles-Event-Id` | `evt_abc123...` | Unique event ID. Use for deduplication. |
 | `X-Cycles-Event-Type` | `budget.exhausted` | Dot-notation event type for routing. |
 | `X-Cycles-Trace-Id` | `0af7651916cd43dd8448eb211c80319c` | 32-hex W3C Trace Context identifier for the logical operation this event belongs to. Always present on deliveries from v0.1.25.7+ events services. |

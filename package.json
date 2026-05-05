@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "type": "module",
   "devDependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@resvg/resvg-js": "^2.6.2",
     "finalhandler": "^2.1.1",
-    "puppeteer": "^24.41.0",
+    "puppeteer": "^24.42.0",
+    "satori": "^0.26.0",
     "serve-static": "^2.2.1",
     "sharp": "^0.34.5",
     "vitepress": "^1.6.3",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.5"
   },
   "overrides": {
     "esbuild": "^0.25.0",
@@ -16,7 +19,9 @@
   },
   "scripts": {
     "convert-spec": "node scripts/convert-spec.js",
-    "build": "npm run convert-spec && bash scripts/generate-llms-full.sh && vitepress build",
+    "build:og": "node scripts/generate-og-images.mjs",
+    "build:og:force": "node scripts/generate-og-images.mjs --force",
+    "build": "npm run convert-spec && bash scripts/generate-llms-full.sh && npm run build:og && vitepress build",
     "build:with-pdfs": "npm run build && node scripts/generate-pdfs.js",
     "pdfs": "node scripts/generate-pdfs.js",
     "dev": "npm run convert-spec && vitepress dev",
@@ -24,10 +29,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "feed": "^5.2.0",
+    "feed": "^5.2.1",
+    "html2canvas-pro": "^2.0.2",
     "medium-zoom": "^1.1.0",
     "shiki": "^4.0.2",
     "vitepress-openapi": "^0.1.20",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.4"
   }
 }

@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Silent Failures: Why 200 OK Is the Most Dangerous Response in Production
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 Your agent completes the task. The API returns 200. The logs show a clean run. No errors, no alerts, no exceptions. And the output is completely wrong.
 
 This is a silent failure — the most expensive and least understood failure mode in production AI agent systems. Unlike crashes, timeouts, or budget overruns, silent failures don't announce themselves. They sit in your pipeline, producing confident-sounding garbage, until someone downstream — a customer, an auditor, a quarterly review — notices the damage.
@@ -196,3 +198,9 @@ The cheapest silent failure is the one caught at the checkpoint. Here's how to s
 - [The AI Agent Production Gap: What Developers Are Actually Saying](/blog/ai-agent-production-gap-what-developers-are-saying) — Community-sourced evidence from Reddit, HN, and industry reports
 - [Runtime Authority vs. Guardrails vs. Observability](/blog/runtime-authority-vs-guardrails-vs-observability) — Why logging after the fact isn't enough
 - [Zero Trust for AI Agents](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) — Why every tool call needs a policy decision
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

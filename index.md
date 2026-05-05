@@ -13,14 +13,14 @@ hero:
     alt: Cycles hero image
   actions:
     - theme: brand
+      text: "Start with Claude or Codex"
+      link: "/how-to/add-cycles-with-claude-or-codex"
+    - theme: alt
       text: "Run the demos"
       link: "/demos/"
     - theme: alt
-      text: "Read the tutorial"
-      link: "/quickstart/end-to-end-tutorial"
-    - theme: alt
-      text: "Compare stacks"
-      link: "/concepts/comparisons"
+      text: "Evaluate your stack"
+      link: "/how-to/evaluate-cycles-for-agent-saas"
 features:
   - icon:
       src: /icons/rocket.svg
@@ -37,11 +37,25 @@ features:
     link: /concepts/why-rate-limits-are-not-enough-for-autonomous-systems
     linkText: Learn more
   - icon:
+      src: /icons/book-text.svg
+      alt: Topic guides icon
+    title: "Topic Guides"
+    details: "Two reference maps covering the enforcement dimensions of runtime authority: LLM cost control (what agents spend) and risk & blast radius (what agents do)."
+    link: /guides/
+    linkText: Read the guides
+  - icon:
+      src: /icons/gauge.svg
+      alt: Tools icon
+    title: "Tools"
+    details: "Interactive tools that quantify the case for runtime authority — a Claude-vs-GPT cost calculator and an AI-agent blast-radius risk calculator. Shareable URLs, embeddable, branded export."
+    link: /calculators/
+    linkText: Open tools
+  - icon:
       src: /icons/wrench.svg
       alt: How-To icon
     title: "How-To Guides"
-    details: "27 integrations: OpenAI, Anthropic, Groq, AutoGen, Spring AI, LangChain, LangGraph, AnyAgent, Vercel AI, Next.js, Django, Flask, MCP, and more. Budget patterns, estimation, error handling."
-    link: /how-to/adding-cycles-to-an-existing-application
+    details: "Add Cycles with Claude or Codex from a single prompt, or use language- and framework-specific guides for Python, TypeScript, Spring, MCP, LangChain, LangGraph, OpenAI Agents, and more. Budget patterns, estimation, error handling."
+    link: /how-to/add-cycles-with-claude-or-codex
     linkText: Browse guides
   - icon:
       src: /icons/book-text.svg

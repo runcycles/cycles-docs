@@ -1,0 +1,53 @@
+name: Installs cache schema check
+
+# Belt-and-suspenders alongside the read-time and write-time guards
+# in installs.data.ts. Any PR that touches the cache file gets this
+# tiny check to make sure the schema hasn't regressed.
+#
+# Fails if:
+#   - file is unparseable JSON
+#   - file is missing `clones` or `clonesByRepo` (post-PR-#515 schema)
+#   - file still has the legacy `ghcr` field (pre-PR-#515 leak)
+
+on:
+  pull_request:
+    paths:
+      - '.vitepress/theme/installs-cache.json'
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify cache schema
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = ".vitepress/theme/installs-cache.json";
+            let c;
+            try {
+              c = JSON.parse(fs.readFileSync(path, "utf-8"));
+            } catch (e) {
+              console.error("::error::Failed to parse " + path + ": " + e.message);
+              process.exit(1);
+            }
+            const required = ["clones", "clonesByRepo"];
+            const missing = required.filter((k) => !(k in c));
+            if (missing.length) {
+              console.error("::error::Schema regression in " + path);
+              console.error("Missing required field(s): " + missing.join(", "));
+              console.error("This is the pre-PR-#515 schema. The accumulator state has been wiped.");
+              console.error("Re-seed via .outreach/installs-cache-runbook.md before merging.");
+              process.exit(1);
+            }
+            if ("ghcr" in c) {
+              console.error("::error::Schema regression in " + path);
+              console.error("Legacy field \"ghcr\" present. The current schema replaced ghcr with clones in PR #515.");
+              console.error("Re-seed via .outreach/installs-cache-runbook.md before merging.");
+              process.exit(1);
+            }
+            console.log("OK: cache schema is current. clones=" + (c.clones ?? 0) + " total=" + (c.total ?? 0));
+          '

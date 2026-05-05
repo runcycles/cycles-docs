@@ -161,3 +161,9 @@ The missing layer is pre-execution enforcement. [Here's what that looks like](/q
 - [Risk Assessment: Score, Classify, and Enforce Tool Risk](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk)
 - [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents)
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [API key management](/how-to/api-key-management-in-cycles)

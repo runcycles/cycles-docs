@@ -232,3 +232,9 @@ Related reading:
 - OpenAI: [Reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) — Responses API, `reasoning.effort`, `reasoning_tokens` in usage, `max_output_tokens`
 - Google: [Understand and count tokens (Gemini API)](https://ai.google.dev/gemini-api/docs/tokens) — `thoughts_token_count` returned separately; output pricing includes thinking tokens
 - DeepSeek: [R1 model card](https://api-docs.deepseek.com/guides/reasoning_model) — `reasoning_content` returned alongside `content`; both billed
+
+## Related how-to guides
+
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)
