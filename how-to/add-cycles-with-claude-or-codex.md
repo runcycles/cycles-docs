@@ -7,6 +7,8 @@ description: "One canonical recipe for AI coding assistants to wire Cycles budge
 
 This page is for engineers who want their AI coding assistant to integrate Cycles into an existing codebase. Open Claude Code (or Codex, Cursor, Windsurf) in your repo, paste the prompt below, and let it wire one budget-enforced boundary, with a test that proves enforcement, in a single session.
 
+**The invariant: Cycles must run before the costly action on the same execution path.** Every rule, example, and test on this page exists to prove or enforce that one statement.
+
 ::: tip If you only need MCP host setup
 For Claude Desktop / Claude Code / Cursor / Windsurf MCP server config, see the per-host quickstarts: [Claude Desktop](/quickstart/mcp-claude-desktop) · [Claude Code](/quickstart/mcp-claude-code) · [Cursor](/quickstart/mcp-cursor) · [Windsurf](/quickstart/mcp-windsurf). MCP gives the assistant access to Cycles tools — it does not by itself enforce budgets in your application's execution path. See [MCP vs enforcement](#mcp-availability-is-not-enforcement) below.
 :::
@@ -24,7 +26,8 @@ Prove enforcement with a test, then expand.
 
 Do:
 1. Identify model calls and external side-effect tool calls in this repo.
-2. Pick ONE boundary to wrap first. Highest cost or highest frequency wins.
+2. Pick ONE boundary to wrap first. Highest cost, highest frequency, or
+   highest blast radius wins.
 3. Use the language-specific client:
    - Python:        `runcycles` package, `@cycles` decorator
    - TypeScript:    `runcycles` package, `withCycles` HOF
@@ -58,7 +61,8 @@ Success test:
 - Env vars read via `CyclesConfig.from_env()` / `CyclesConfig.fromEnv()` /
   Spring properties.
 - One test asserting the downstream client is not called on budget denial.
-- The change is a small diff: <50 lines of production code plus the test.
+- The change is a small diff — ideally under ~50 lines of production code
+  plus the test. Spring and Rust may run slightly longer.
 ```
 
 ## Definition of done
@@ -145,7 +149,9 @@ from runcycles import (
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 
 def estimate_actual(summary: str) -> int:
-    return max(1, len(summary) * 5)              # USD_MICROCENTS — replace with usage stats
+    # Prefer provider usage/cost metadata (e.g. response.usage.total_tokens)
+    # when available. This length-based placeholder keeps the example short.
+    return max(1, len(summary) * 5)              # USD_MICROCENTS
 
 @cycles(
     estimate=2_000_000,                          # USD_MICROCENTS — tune from logs
@@ -216,6 +222,8 @@ import io.runcycles.client.java.spring.model.CyclesProtocolException;
 public class SummaryService {
 
     @Cycles(value = "2000000",
+            // Adapt to your client's response shape — the SpEL expression
+            // must resolve against whatever generateSummary() returns.
             actual = "#result.usage.totalTokens * 8",
             actionKind = "llm.completion",
             actionName = "openai:gpt-4o")
@@ -335,7 +343,11 @@ def test_openai_not_called_when_budget_denied(monkeypatch, httpx_mock):
         method="POST",
         url="http://cycles.test/v1/reservations",
         status_code=409,
-        json={"error": "BUDGET_EXCEEDED", "message": "budget exhausted"},
+        json={
+            "error": "BUDGET_EXCEEDED",
+            "message": "budget exhausted",
+            "request_id": "req_test_123",
+        },
     )
 
     import myapp.summary as summary
@@ -358,7 +370,11 @@ function mockCyclesDeny() {
     vi.fn().mockResolvedValue({
       status: 409,
       statusText: "Conflict",
-      json: () => Promise.resolve({ error: "BUDGET_EXCEEDED", message: "budget exhausted" }),
+      json: () => Promise.resolve({
+        error: "BUDGET_EXCEEDED",
+        message: "budget exhausted",
+        request_id: "req_test_123",
+      }),
       headers: new Headers(),
     }),
   );
@@ -388,7 +404,10 @@ describe("summarizeOrFallback", () => {
 });
 ```
 
-```rust [Rust — tokio test]
+```rust [Rust — test shape, adapt to your harness]
+// Sketch only — adapt to your test harness. The Python and TypeScript tests
+// above are runnable; this one outlines the equivalent structure.
+//
 // Use a mock CyclesClient that returns DENY (e.g. wiremock or a hand-rolled
 // fake server). Inject a fake `call_openai` that increments a counter, and
 // assert the counter is still zero after summarize_or_fallback returns the
