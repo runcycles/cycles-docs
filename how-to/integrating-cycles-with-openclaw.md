@@ -10,6 +10,13 @@ description: "Add budget enforcement to OpenClaw agents using the cycles-opencla
 
 This guide shows how to add budget enforcement to OpenClaw agents using the [`cycles-openclaw-budget-guard`](https://github.com/runcycles/cycles-openclaw-budget-guard) plugin. The plugin handles the full reserve → commit → release lifecycle for both model and tool calls automatically, with no custom code required.
 
+## Choose your path
+
+- **Cap OpenClaw agents in JS/TS** — install [`@runcycles/openclaw-budget-guard`](https://www.npmjs.com/package/@runcycles/openclaw-budget-guard) and follow this guide.
+- **Use Cycles directly without OpenClaw** — start with the [TypeScript client](/quickstart/getting-started-with-the-typescript-client) for custom agent frameworks.
+- **Evaluate Cycles for a multi-tenant agent SaaS** — start with the [evaluation guide](/how-to/evaluate-cycles-for-agent-saas) before reading this implementation page.
+- **Not sure where Cycles fits?** [Send us your tool-call flow](/contact) and we'll map where `reserve` / `commit` should sit.
+
 ## Why budget enforcement?
 
 AI agents make autonomous decisions — calling models, invoking tools, retrying on failure — with no human in the loop. Without runtime enforcement:
