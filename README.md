@@ -8,7 +8,7 @@ Posts, guides, and architecture articles for [Cycles](https://runcycles.io).
 
 ### Evaluating Cycles?
 
-👉 **[Evaluate Cycles for a multi-tenant agent SaaS](https://runcycles.io/how-to/evaluate-cycles-for-agent-saas)** — fit checklist, anti-patterns, and a 15-minute local test.
+👉 **[Evaluate Cycles for a multi-tenant agent SaaS](https://runcycles.io/how-to/evaluate-cycles-for-agent-saas)** — fit checklist, non-fit cases, and a 15-minute local test.
 
 ## Contributing
 

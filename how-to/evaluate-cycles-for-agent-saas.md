@@ -76,16 +76,6 @@ Cycles becomes the **runtime authority layer** between agent intent and external
 
 That is the core idea. Multi-tenant isolation, per-tier quotas, OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
 
-## Send us your flow
-
-If you want a sanity check before you start, paste the rough shape of your agent's tool-call flow:
-
-```
-agent → tool → API → side effect
-```
-
-Send it via [Contact Us](/contact) with the subject "agent flow review." We'll mark where `reserve`, `commit`, and `release` belong — or tell you if Cycles is not the right fit. Honest answers, not sales calls.
-
 ## What a good first integration looks like
 
 Do not start by gating every action.
@@ -99,6 +89,16 @@ Start with one high-signal boundary:
 - one visible denial in the dashboard
 
 Good first candidates are email sends, browser actions, coding-agent shell commands, paid search/API calls, or expensive LLM completions. Once that path works, expand to more tools and scopes.
+
+## Send us your flow
+
+If you want a sanity check before you start, paste the rough shape of your agent's tool-call flow:
+
+```
+agent → tool → API → side effect
+```
+
+Send it via [Contact Us](/contact) with the subject "agent flow review." We'll mark where `reserve`, `commit`, and `release` belong — or tell you if Cycles is not the right fit. Honest answers, not sales calls.
 
 ## Next steps
 
