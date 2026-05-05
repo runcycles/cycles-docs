@@ -11,6 +11,13 @@ This gives agents a standard way to participate in Cycles workflows. **For hard 
 
 This guide covers the integration patterns, resources, prompts, and transport options available through the MCP server.
 
+## Choose your path
+
+- **Cap MCP tool calls in JS/TS** — install [`@runcycles/mcp-server`](https://www.npmjs.com/package/@runcycles/mcp-server) and follow this guide.
+- **Run the full Cycles stack locally first** — bring up [server + admin + dashboard](/quickstart/deploying-the-full-cycles-stack) before wiring up MCP, so you can see denials in the dashboard while testing.
+- **Evaluate Cycles for a multi-tenant agent SaaS** — start with the [evaluation guide](/how-to/evaluate-cycles-for-agent-saas) before reading this implementation page.
+- **Not sure where Cycles fits?** [Send us your tool-call flow](/contact) and we'll map where `reserve` / `commit` should sit.
+
 ::: tip No SDK changes
 MCP integration requires no SDK changes in your agent application. You configure the Cycles MCP Server in your host, and the agent can discover Cycles tools.
 

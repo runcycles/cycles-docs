@@ -7,6 +7,13 @@ description: "Cycles is a runtime authority for autonomous agents that enforces 
 
 Cycles is a **runtime authority for autonomous agents**. It enforces hard limits on agent spend and actions — **before they happen, not after**.
 
+## Choose your path
+
+- **Cap agent tool calls in JS/TS** — start with the [TypeScript client](/quickstart/getting-started-with-the-typescript-client) or the [OpenClaw budget guard](/how-to/integrating-cycles-with-openclaw).
+- **Run Cycles locally to evaluate** — bring up the full stack: [runtime server, admin server, dashboard](/quickstart/deploying-the-full-cycles-stack).
+- **Evaluate Cycles for a multi-tenant agent SaaS** — start with the [evaluation guide](/how-to/evaluate-cycles-for-agent-saas) for fit/no-fit framing and a 15-minute test.
+- **Not sure where Cycles fits?** [Send us your agent/tool-call flow](/contact) and we'll map where `reserve` / `commit` should sit.
+
 ```python
 @cycles(estimate=5000, action_kind="llm.completion", action_name="openai:gpt-4o")
 def ask(prompt: str) -> str:

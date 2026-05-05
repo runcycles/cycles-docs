@@ -373,6 +373,7 @@ export default defineConfig({
           text: 'How-To Guides',
           collapsed: true,
           items: [
+            { text: 'Evaluate Cycles for Agent SaaS', link: '/how-to/evaluate-cycles-for-agent-saas' },
             { text: 'Adding Cycles to an Existing App', link: '/how-to/adding-cycles-to-an-existing-application' },
             { text: 'Choosing the Right Pattern', link: '/how-to/choosing-the-right-integration-pattern' },
             {
