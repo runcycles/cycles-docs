@@ -29,13 +29,15 @@ model or makes a paid / side-effecting external call.
    - `CYCLES_TENANT`
 3. Use `CyclesConfig.from_env()` / `CyclesConfig.fromEnv()` /
    Spring Boot auto-config — do not roll a custom config layer.
-4. On budget denial (`BudgetExceededError` / `CyclesProtocolException`
+4. Commit actual usage after execution; use estimate-as-actual only when
+   that is an explicit, reviewed choice.
+5. On budget denial (`BudgetExceededError` / `CyclesProtocolException`
    with `isBudgetExceeded()`), take ONE of: graceful fallback, downgraded
    model, queue-for-later. Never silently retry the original call.
-5. For each new wrapped boundary, add a test that mocks the downstream
+6. For each new wrapped boundary, add a test that mocks the downstream
    client and asserts it received zero calls when Cycles denies. This
    test is the proof of correctness.
-6. Ship one wrapped boundary per PR. Tune estimates from logs before
+7. Ship one wrapped boundary per PR. Tune estimates from logs before
    wrapping the next.
 
 ### Do not
@@ -66,7 +68,12 @@ from runcycles import (
 
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 
-@cycles(estimate=2_000_000, action_kind="llm.completion", action_name="openai:gpt-4o")
+@cycles(
+    estimate=2_000_000,
+    actual=lambda summary: max(1, len(summary) * 5),
+    action_kind="llm.completion",
+    action_name="openai:gpt-4o",
+)
 def generate_summary(document: str) -> str:
     return openai.chat.completions.create(...).choices[0].message.content
 
@@ -88,7 +95,12 @@ import {
 setDefaultClient(new CyclesClient(CyclesConfig.fromEnv()));
 
 const generateSummary = withCycles(
-  { estimate: 2_000_000, actionKind: "llm.completion", actionName: "openai:gpt-4o" },
+  {
+    estimate: 2_000_000,
+    actual: (summary: string) => Math.max(1, summary.length * 5),
+    actionKind: "llm.completion",
+    actionName: "openai:gpt-4o",
+  },
   async (document: string) => (await openai.chat.completions.create({ ... })).choices[0].message.content!,
 );
 ```
@@ -96,8 +108,11 @@ const generateSummary = withCycles(
 ### Pattern (Java / Spring)
 
 ```java
-@Cycles(value = "2000000", actionKind = "llm.completion", actionName = "openai:gpt-4o")
-public String generateSummary(String document) {
+@Cycles(value = "2000000",
+        actual = "#result.usage.totalTokens * 8",
+        actionKind = "llm.completion",
+        actionName = "openai:gpt-4o")
+public ChatResponse generateSummary(String document) {
     return openAiClient.chat(document);
 }
 ```
@@ -127,13 +142,29 @@ match result {
 ### Required test (sketch)
 
 ```python
-# pytest — assert OpenAI is not called when Cycles denies
-def test_openai_not_called_on_deny(monkeypatch):
+# pytest — mock Cycles DENY, then assert OpenAI is not called
+import importlib
+from unittest.mock import MagicMock
+
+def test_openai_not_called_on_deny(monkeypatch, httpx_mock):
+    monkeypatch.setenv("CYCLES_BASE_URL", "http://cycles.test")
+    monkeypatch.setenv("CYCLES_API_KEY", "test-key")
+    monkeypatch.setenv("CYCLES_TENANT", "acme-corp")
+    httpx_mock.add_response(
+        method="POST",
+        url="http://cycles.test/v1/reservations",
+        status_code=409,
+        json={"error": "BUDGET_EXCEEDED", "message": "budget exhausted"},
+    )
+
+    import myapp.summary as summary
+    summary = importlib.reload(summary)  # rebuild CyclesConfig.from_env() with test env
     fake_openai = MagicMock()
-    monkeypatch.setattr("myapp.summary.openai", fake_openai)
-    with patch("myapp.summary.generate_summary",
-               side_effect=BudgetExceededError("denied")):
-        result = summarize_or_fallback("doc")
+    monkeypatch.setattr(summary, "openai", fake_openai)
+
+    result = summary.summarize_or_fallback("doc")
+
+    assert "budget limit reached" in result
     fake_openai.chat.completions.create.assert_not_called()
 ```
 

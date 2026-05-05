@@ -131,7 +131,7 @@ The same content is mirrored at <a href="/agents/cycles-integration.md"><code>/a
 
 ## Minimum viable integration by language
 
-The assistant should produce a diff that looks like one of the three blocks below. These are lifted directly from the language quickstarts — there is no new pattern here.
+The assistant should produce a diff that looks like one of the four blocks below. These are lifted directly from the language quickstarts — there is no new pattern here.
 
 ::: code-group
 
@@ -144,8 +144,12 @@ from runcycles import (
 
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 
+def estimate_actual(summary: str) -> int:
+    return max(1, len(summary) * 5)              # USD_MICROCENTS — replace with usage stats
+
 @cycles(
     estimate=2_000_000,                          # USD_MICROCENTS — tune from logs
+    actual=estimate_actual,
     action_kind="llm.completion",
     action_name="openai:gpt-4o",
 )
@@ -176,6 +180,7 @@ setDefaultClient(new CyclesClient(CyclesConfig.fromEnv()));
 const generateSummary = withCycles(
   {
     estimate: 2_000_000,                         // USD_MICROCENTS — tune from logs
+    actual: (summary: string) => Math.max(1, summary.length * 5),
     actionKind: "llm.completion",
     actionName: "openai:gpt-4o",
   },
@@ -211,15 +216,16 @@ import io.runcycles.client.java.spring.model.CyclesProtocolException;
 public class SummaryService {
 
     @Cycles(value = "2000000",
+            actual = "#result.usage.totalTokens * 8",
             actionKind = "llm.completion",
             actionName = "openai:gpt-4o")
-    public String generateSummary(String document) {
+    public ChatResponse generateSummary(String document) {
         return openAiClient.chat(document);
     }
 
     public String summarizeOrFallback(String document) {
         try {
-            return generateSummary(document);
+            return generateSummary(document).text();
         } catch (CyclesProtocolException e) {
             if (e.isBudgetExceeded()) {
                 return "Summary unavailable — budget limit reached.";
@@ -313,37 +319,65 @@ The constant: **the Cycles check is on the same code path as the costly action, 
 
 This is the test the assistant must produce. It is the only thing that proves the integration is doing its job.
 
+Mock Cycles so the guard returns DENY; do **not** mock the wrapped function itself. Replacing `generate_summary` / `generateSummary` bypasses the Cycles guard and only tests fallback handling.
+
 ::: code-group
 
 ```python [Python — pytest]
-from unittest.mock import MagicMock, patch
-from runcycles import BudgetExceededError
+import importlib
+from unittest.mock import MagicMock
 
-def test_openai_not_called_when_budget_denied(monkeypatch):
+def test_openai_not_called_when_budget_denied(monkeypatch, httpx_mock):
+    monkeypatch.setenv("CYCLES_BASE_URL", "http://cycles.test")
+    monkeypatch.setenv("CYCLES_API_KEY", "test-key")
+    monkeypatch.setenv("CYCLES_TENANT", "acme-corp")
+    httpx_mock.add_response(
+        method="POST",
+        url="http://cycles.test/v1/reservations",
+        status_code=409,
+        json={"error": "BUDGET_EXCEEDED", "message": "budget exhausted"},
+    )
+
+    import myapp.summary as summary
+    summary = importlib.reload(summary)  # rebuild CyclesConfig.from_env() with test env
     fake_openai = MagicMock()
-    monkeypatch.setattr("myapp.summary.openai", fake_openai)
+    monkeypatch.setattr(summary, "openai", fake_openai)
 
-    with patch("myapp.summary.generate_summary",
-               side_effect=BudgetExceededError("denied")):
-        from myapp.summary import summarize_or_fallback
-        result = summarize_or_fallback("a document")
+    result = summary.summarize_or_fallback("a document")
 
     assert "budget limit reached" in result
     fake_openai.chat.completions.create.assert_not_called()
 ```
 
 ```typescript [TypeScript — vitest]
-import { describe, it, expect, vi } from "vitest";
-import { BudgetExceededError } from "runcycles";
+import { afterEach, describe, it, expect, vi } from "vitest";
+
+function mockCyclesDeny() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      status: 409,
+      statusText: "Conflict",
+      json: () => Promise.resolve({ error: "BUDGET_EXCEEDED", message: "budget exhausted" }),
+      headers: new Headers(),
+    }),
+  );
+}
 
 describe("summarizeOrFallback", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
   it("does not call OpenAI when budget is denied", async () => {
+    process.env.CYCLES_BASE_URL = "http://cycles.test";
+    process.env.CYCLES_API_KEY = "test-key";
+    process.env.CYCLES_TENANT = "acme-corp";
+    mockCyclesDeny();
+
     const create = vi.fn();
     vi.doMock("./openai-client", () => ({ openai: { chat: { completions: { create } } } }));
-    vi.doMock("./summary", async (importOriginal) => {
-      const mod: any = await importOriginal();
-      return { ...mod, generateSummary: vi.fn().mockRejectedValue(new BudgetExceededError("denied")) };
-    });
 
     const { summarizeOrFallback } = await import("./summary");
     const result = await summarizeOrFallback("a document");
