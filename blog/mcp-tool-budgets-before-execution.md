@@ -8,7 +8,7 @@ tags:
   - budget-control
   - runtime-authority
   - architecture
-description: "MCP makes tools easy to expose. It does not decide whether the next call should still run. A reserve / execute / commit wrapper around every MCP tool call gives agents per-run, per-tenant budget enforcement before the side effect happens."
+description: "MCP makes tools easy to expose, but it does not decide whether the next call should still run. Add a reserve / execute / commit wrapper around MCP tools to enforce tenant and run budgets before side effects happen."
 blog: true
 sidebar: false
 featured: false
@@ -26,7 +26,7 @@ What MCP does not do is decide whether *this specific call*, right now, should s
 
 The first call is fine. The second is fine. The twelfth is the problem — the agent is in a retry loop, fan-out has multiplied the request count, the tenant's budget is gone, and the next `send_email` or `web_search` or `refund.issue` is about to fire anyway. Tracing tells you what happened. The dashboard updates after the fact. Neither stops the call.
 
-Cycles closes that loop with a `reserve → execute → commit` wrapper around every MCP tool. The wrapper asks before each call: *given everything this agent has already done, should this one still run?* If the answer is `DENY`, the tool never executes. If the answer is `ALLOW`, the tool runs and actual usage is committed back. If the tool throws, the reservation is released so the budget isn't double-charged.
+Cycles closes that loop with a `reserve → execute → commit` wrapper around every MCP tool. The wrapper asks before each call: *given everything this agent has already done, should this one still run?* If Cycles denies or rejects the reservation, the tool never executes. If the reservation is allowed, the tool runs and actual usage is committed back. If the tool throws, the reservation is released so the budget isn't double-charged.
 
 This post shows the pattern, the policy it enforces, and the TypeScript code that implements it.
 
@@ -47,7 +47,7 @@ release(reservation_id)                on failure
 
 `reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, when enabled through the v0.1.26 action-governance preview, are enforced at reservation time from the action kind, not at commit.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
 
-If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — same response shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
+If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — similar decision shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
 The MCP server itself doesn't change. The wrapper sits between the MCP transport (STDIO, HTTP, whatever) and the tool's handler. Every approved tool gets the same treatment: same `reserve` call shape, same metadata, same release-on-error behavior.
 
@@ -87,6 +87,9 @@ interface ToolContext {
   workspace: string        // e.g. 'production', 'staging'
   app: string              // e.g. 'mcp', 'web-agent', 'support-bot'
   runId: string            // a stable ID per agent run / conversation
+  toolCallId: string       // stable per proposed MCP tool call within a run;
+                           // distinguishes a legitimate second send_email from
+                           // a network retry of the first one
   toolName: string         // 'send_email', 'web_search', etc.
   actionKind: string       // 'message.email.send', 'web.search', 'llm.completion', ...
   estimateMicrocents: number
@@ -101,10 +104,17 @@ export async function gatedToolCall<T>(
   execute: () => Promise<{ result: T; actualMicrocents: number }>,
 ): Promise<T> {
   // Stable idempotency key so a network retry hits the same reservation
-  // and doesn't double-charge. (tenant + run + tool + action) is usually
-  // enough; add a sequence number if the agent fires the same tool twice
-  // in a single run.
-  const idempotencyKey = `${ctx.tenantId}:${ctx.runId}:${ctx.toolName}:${ctx.actionKind}`
+  // and doesn't double-charge — but a legitimately different tool call
+  // gets a distinct key. The toolCallId is what distinguishes the two:
+  // pass the same ID across retries of one MCP call, a different ID for
+  // the next call.
+  const idempotencyKey = [
+    ctx.tenantId,
+    ctx.runId,
+    ctx.toolCallId,
+    ctx.toolName,
+    ctx.actionKind,
+  ].join(':')
 
   const response = await client.createReservation({
     idempotency_key: idempotencyKey,
@@ -114,8 +124,15 @@ export async function gatedToolCall<T>(
     ttl_ms: 60_000,
     // Cycles' formal scope hierarchy is tenant -> workspace -> app -> workflow
     // -> agent -> toolset; runs don't have a dedicated slot, so we put runId
-    // in metadata so the dashboard's metadata filter picks it up.
-    metadata: { run_id: ctx.runId },
+    // in metadata for dashboard filtering and audit. If you enable v0.1.26
+    // per-run action quotas, pass run_id through the formal subject dimensions
+    // expected by your v0.1.26 server/client surface — metadata alone is not
+    // enough to drive quota evaluation.
+    metadata: {
+      run_id: ctx.runId,
+      tool_call_id: ctx.toolCallId,
+      tool_name: ctx.toolName,
+    },
   })
 
   // Insufficient budget on a non-dry-run reservation surfaces as HTTP 409,
@@ -158,6 +175,8 @@ export async function gatedToolCall<T>(
 Wrapping an MCP tool handler is then a one-liner per tool:
 
 ```typescript
+import { randomUUID } from 'node:crypto'
+
 server.tool('send_email', emailSchema, async (args) => {
   // Real MCP tool calls may have _meta undefined or missing fields —
   // validate before trusting it in production.
@@ -172,6 +191,7 @@ server.tool('send_email', emailSchema, async (args) => {
       workspace: meta.workspace ?? 'production',
       app: 'mcp',
       runId: meta.runId,
+      toolCallId: meta.toolCallId ?? randomUUID(),
       toolName: 'send_email',
       actionKind: 'message.email.send',
       estimateMicrocents: 50_000,  // ~$0.0005 baseline
@@ -183,6 +203,8 @@ server.tool('send_email', emailSchema, async (args) => {
   )
 })
 ```
+
+For production, prefer a stable tool-call ID from your agent runtime or MCP transport over `randomUUID()`. The ID should stay the same across network retries of the same MCP call, but be different for distinct tool calls inside the same run — that's exactly what makes idempotency safe under retry without collapsing two legitimate calls.
 
 A few things this wrapper does deliberately:
 
