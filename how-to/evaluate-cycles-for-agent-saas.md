@@ -39,9 +39,9 @@ The fastest way to know whether Cycles fits is to run the full stack and watch a
 1. **Start the stack** with the published Docker images. See [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack). You'll have the runtime server, admin server, and dashboard running locally on three ports.
 2. **Create a tenant** via the admin server. See [Tenant Creation and Management](/how-to/tenant-creation-and-management-in-cycles).
 3. **Create a budget** scoped to that tenant — a small one, e.g., a few cents.
-4. **Run one allowed reservation.** A `decide` or `reserve` call returns `ALLOW`; the reservation is recorded.
-5. **Run one denied reservation.** Exhaust the tenant budget with a reservation larger than the remaining balance. The next call returns `DENY` *before* the underlying action executes. (If you're evaluating the v0.1.26 action-governance preview, you can also test per-action quotas and allow/deny lists.)
-6. **Open the dashboard.** Watch the reservation, the commit, and the denial show up under the tenant's budget view.
+4. **Run one allowed check.** A `decide` call returns `ALLOW` without creating a reservation, or a `reserve` call returns `ALLOW` and records an active reservation.
+5. **Run one denied check.** Exhaust the tenant budget with a request larger than the remaining balance. A `decide` call returns `DENY`, or a `reserve` call is rejected before the underlying action executes. (If you're evaluating the v0.1.26 action-governance preview, you can also test per-action quotas and allow/deny lists.)
+6. **Open the dashboard.** Watch the reservation, commit, and denial show up under the tenant's budget view. If you used `decide`, expect a decision result but no active reservation.
 
 You should see three things:
 
@@ -74,7 +74,7 @@ That mapping is the design exercise. See [Assigning Risk Points to Agent Tools](
 
 Cycles becomes the **runtime authority layer** between agent intent and external execution: every consequential action passes through `reserve → execute → commit` (or `release` on failure), scoped by tenant / workflow / run / tool.
 
-That's the whole product. Everything else — multi-tenant isolation, per-tier quotas, OTLP metrics, MCP integration — is implementation of that one idea.
+That is the core idea. Multi-tenant isolation, per-tier quotas, OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
 
 ## Send us your flow
 
@@ -95,7 +95,7 @@ Start with one high-signal boundary:
 - one tenant
 - one workflow
 - one risky action kind
-- one small budget or quota
+- one small budget, or one quota if you're evaluating the v0.1.26 preview
 - one visible denial in the dashboard
 
 Good first candidates are email sends, browser actions, coding-agent shell commands, paid search/API calls, or expensive LLM completions. Once that path works, expand to more tools and scopes.
