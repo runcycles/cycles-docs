@@ -49,7 +49,7 @@ release(reservation_id)                on failure
 
 If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — similar decision shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
-The MCP server itself doesn't change. The wrapper sits between the MCP transport (STDIO, HTTP, whatever) and the tool's handler. Every approved tool gets the same treatment: same `reserve` call shape, same metadata, same release-on-error behavior.
+The MCP protocol and transport don't change. The wrapper sits between the MCP transport (STDIO, HTTP, whatever) and the tool's handler — only the handler code is wrapped. Every approved tool gets the same treatment: same `reserve` call shape, same metadata, same release-on-error behavior.
 
 ## The policy this enforces
 
@@ -261,7 +261,7 @@ An MCP gateway answers *can this tool be reached?* — authentication, allowlist
 
 The first question is about access. The second is about [exposure](/glossary#exposure) — the cumulative cost, action count, or blast radius the agent has already accumulated. Two questions, two layers. A gateway without runtime authority is a pass/fail access system; the 201st email goes through if the tool is allowed at all. Runtime authority without a gateway has to trust the tool inventory.
 
-Most production incidents we see are not unknown tools. They are approved tools called too many times, in the wrong scope, after the budget should have run out. That's exactly the gap a per-tool-call reservation closes; when run dimensions are enforced, the same pattern also caps the whole run.
+Many production incidents we see are not unknown tools. They are approved tools called too many times, in the wrong scope, after the budget should have run out. That's exactly the gap a per-tool-call reservation closes; when run dimensions are enforced, the same pattern also caps the whole run.
 
 For the architecture-side detail of where this sits relative to gateways and authorization, see [MCP Gateways Are Not Runtime Authority](/blog/mcp-gateways-are-not-runtime-authority).
 
