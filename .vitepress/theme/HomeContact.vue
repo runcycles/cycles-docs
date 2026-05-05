@@ -15,6 +15,8 @@ const reasons = [
   {
     label: 'Evaluating Cycles for production',
     detail: 'You\'re evaluating Cycles for production — comparing it to rate limiters, LLM gateways, or observability tools. We\'ll walk through the spec, demo the runtime, and answer integration questions.',
+    link: '/how-to/evaluate-cycles-for-agent-saas',
+    linkText: 'Start with the evaluation guide',
   },
 ]
 
@@ -33,6 +35,9 @@ const issuesUrl = 'https://github.com/runcycles/docs/issues'
         <li v-for="item in reasons" :key="item.label" class="reason">
           <span class="reason-label">{{ item.label }}</span>
           <span class="reason-detail">{{ item.detail }}</span>
+          <a v-if="item.link" :href="item.link" class="reason-link">
+            {{ item.linkText }} &rarr;
+          </a>
         </li>
       </ul>
 
@@ -141,6 +146,20 @@ const issuesUrl = 'https://github.com/runcycles/docs/issues'
   font-size: 14px;
   color: var(--vp-c-text-2);
   line-height: 1.55;
+}
+
+.reason-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.reason-link:hover {
+  text-decoration: underline;
 }
 
 .cta-row {
