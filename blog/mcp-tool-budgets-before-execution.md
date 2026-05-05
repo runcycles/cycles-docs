@@ -45,7 +45,7 @@ commit(reservation_id, actual_usage)   on success
 release(reservation_id)                on failure
 ```
 
-`reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, when enabled through the v0.1.26 action-governance preview, are enforced at reservation time from the action kind, not at commit.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
+`reserve` is the gate. It returns a reservation ID and a decision. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, once the v0.1.26 action-governance extensions ship in `cycles-server`, will be enforced at reservation time from the action kind, not at commit. The extension specs are published and SHOULD-level today, but not yet implemented in runcycles' servers — track the [changelog](/changelog) for the release.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
 
 If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — similar decision shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
@@ -59,14 +59,16 @@ Start with spend. That's the stable v0.1.25 baseline and the path most teams sho
 |---|---|---|
 | **Spend** | `$1.00 per run`, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
 
-If you're evaluating the v0.1.26 action-governance preview, the same wrapper can also carry action kinds for two more categories:
+Two more categories will be available once the v0.1.26 action-governance extensions ship in `cycles-server`. The spec is published and SHOULD-level for protocol conformance today, but the runtime enforcement is **not yet implemented in runcycles' servers** — these are illustrative for what's coming, not testable yet:
 
-| Preview category | Example caps | What it stops |
+| Upcoming category | Example caps | What it stops |
 |---|---|---|
 | **Action count** | `max 20 llm.completion`, `max 5 web.search`, `max 2 message.email.send` | Retry storms; "the 12th call" pattern |
 | **Risk class / allow-deny** | `deny code.exec.shell`, `deny deploy.service` unless explicitly allowlisted | Catastrophic side effects from a bad plan |
 
-You don't need any of the preview categories on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. After that path works, layer on a quota or allow-deny rule if you're tracking the preview. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
+The action-kind slugs above (`message.email.send`, `web.search`, `code.exec.shell`, `deploy.service`) are illustrative — the formal v0.1.26 action-kind registry is upcoming, and only `llm.completion` is currently used as a documented action kind across shipped guides. Treat your own slugs as a convention until the registry lands.
+
+Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
 
 The wrapper code below stays the same regardless of which category you enforce — Cycles handles the policy resolution server-side. You just pass tenant, run, tool, action kind, and an estimate.
 
@@ -172,14 +174,15 @@ export async function gatedToolCall<T>(
 }
 ```
 
-Wrapping an MCP tool handler is then a one-liner per tool:
+Wrapping an MCP tool handler is then a one-liner per tool. **Note:** MCP's protocol-level `_meta` field is a free-form bag — there's no standard schema for `tenantId`, `runId`, etc. The example below assumes your agent runtime populates `_meta` with the four fields the wrapper needs. Plumbing them in is your responsibility; once they're there, the wrapper is the same everywhere.
 
 ```typescript
 import { randomUUID } from 'node:crypto'
 
 server.tool('send_email', emailSchema, async (args) => {
-  // Real MCP tool calls may have _meta undefined or missing fields —
-  // validate before trusting it in production.
+  // _meta is invented for this example. Validate before trusting it.
+  // Production callers should populate it from the agent runtime (e.g. via
+  // request-scoped context) and use a typed schema rather than ad-hoc fields.
   const meta = args._meta
   if (!meta?.tenantId || !meta?.runId) {
     throw new Error('send_email requires _meta.tenantId and _meta.runId')
@@ -193,7 +196,7 @@ server.tool('send_email', emailSchema, async (args) => {
       runId: meta.runId,
       toolCallId: meta.toolCallId ?? randomUUID(),
       toolName: 'send_email',
-      actionKind: 'message.email.send',
+      actionKind: 'message.email.send',  // illustrative; see action-kind note above
       estimateMicrocents: 50_000,  // ~$0.0005 baseline
     },
     async () => {
