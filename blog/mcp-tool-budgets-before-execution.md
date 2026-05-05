@@ -88,6 +88,9 @@ interface ToolContext {
   tenantId: string         // your customer's tenant in Cycles
   workspace: string        // e.g. 'production', 'staging'
   app: string              // e.g. 'mcp', 'web-agent', 'support-bot'
+  workflow?: string        // optional — workflow-level budget scope (e.g.
+                           // 'support-triage', 'invoice-processing'). Required
+                           // if you cap budgets at the workflow level.
   toolsetName: string      // category of tool, e.g. 'email', 'refund', 'search'
                            // — matches subject.toolset in the formal scope hierarchy.
                            // Multiple tools share one toolset; do not pass per-tool slugs.
@@ -132,6 +135,7 @@ export async function gatedToolCall<T>(
       tenant: ctx.tenantId,
       workspace: ctx.workspace,
       app: ctx.app,
+      ...(ctx.workflow ? { workflow: ctx.workflow } : {}),
       toolset: ctx.toolsetName,
       // Run is not a standard subject field. Use dimensions.run only after
       // verifying your Cycles deployment derives budget scope from it.
@@ -207,6 +211,7 @@ server.tool('send_email', emailSchema, async (args) => {
       tenantId: meta.tenantId,
       workspace: meta.workspace ?? 'production',
       app: 'mcp',
+      workflow: meta.workflow,  // optional — set to enforce a workflow-level budget
       toolsetName: 'email',  // category — send_email and send_sms would share this
       runId: meta.runId,
       toolCallId: meta.toolCallId ?? randomUUID(),
@@ -253,7 +258,7 @@ A few things this wrapper does deliberately:
 - **Denials throw `DeniedByCyclesError`**, not silent fallthroughs. The agent has to handle them — by stopping, downgrading, or asking for more budget.
 - **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or fail closed so the wrapper releases the reservation.
 - **Release on any throw**, including cancellations. Unused budget goes back to the tenant.
-- **Metadata travels with every call**: tenant, workspace, run, tool, action kind. That's what the dashboard groups by, and what your future audit query will join on.
+- **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in `subject`, action kind and tool name in `action`, run ID in `subject.dimensions.run`, and free-form fields (run_id, tool_call_id, tool_name) in `metadata`. That's what the dashboard groups by, and what your future audit query will join on.
 
 ## Why this matters
 
