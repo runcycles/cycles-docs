@@ -1,9 +1,9 @@
 ---
-title: "Integrating Cycles with AutoGen"
-description: "Add budget governance to Microsoft AutoGen multi-agent workflows by wrapping the model client with Cycles reservations for per-call and per-agent cost control."
+title: "AutoGen Budget Control: Cost Governance for Microsoft AutoGen"
+description: "Budget control for Microsoft AutoGen multi-agent workflows in Python — wrap the model client with Cycles reservations for per-call and per-agent cost enforcement."
 ---
 
-# Integrating Cycles with AutoGen
+# AutoGen Budget Control: Cost Governance for Microsoft AutoGen
 
 This guide shows how to add budget governance to [AutoGen](https://microsoft.github.io/autogen/) multi-agent workflows so that every LLM call is cost-controlled, observable, and automatically stopped when budgets run out.
 
