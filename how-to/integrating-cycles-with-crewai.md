@@ -1,9 +1,9 @@
 ---
-title: "Integrating Cycles with CrewAI"
-description: "Add budget management to CrewAI multi-agent workflows using the Cycles decorator for per-task and per-agent cost control."
+title: "CrewAI Budget Control: Multi-Agent Cost Enforcement"
+description: "Budget control for CrewAI multi-agent workflows in Python — per-task and per-agent cost enforcement with the @cycles decorator and reserve-commit lifecycle."
 ---
 
-# Integrating Cycles with CrewAI
+# CrewAI Budget Control: Multi-Agent Cost Enforcement
 
 This guide shows how to add budget management to CrewAI multi-agent workflows so that every agent task is cost-controlled, observable, and automatically stopped when budgets run out.
 
