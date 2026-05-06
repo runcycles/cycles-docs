@@ -13,7 +13,7 @@ featured: false
 
 You ran `openclaw plugins install @runcycles/openclaw-budget-guard`. You enabled it. You opened `openclaw.json` to fill in the config and stalled out — the typical examples set `failClosed: true` with carefully tuned `toolBaseCosts` and `modelBaseCosts`, and you don't have those numbers yet because you haven't run anything in production. Picking them blind is how teams end up rolling back enforcement on day one.
 
-This post is the day-2 playbook. The earlier OpenClaw posts cover the *why* ([Your OpenClaw Agent Has No Spending Limit](/blog/openclaw-budget-guard-stop-agents-burning-money)), the *what [graceful degradation](/glossary#graceful-degradation) looks like* ([the $5 budget walkthrough](/blog/openclaw-budget-guard-five-dollar-agent)), and the *plugin-author internals* ([Five Lessons](/blog/openclaw-plugin-lessons-learned)). They all stop at the moment of install. This one picks up there: five steps, six days, dry-run to `failClosed`, every config value derived from your own session data instead of guessed.
+This post is the day-2 playbook. The earlier OpenClaw posts cover the *why* ([Your OpenClaw Agent Has No Spending Limit](/blog/openclaw-budget-guard-stop-agents-burning-money)), the *what [graceful degradation](/glossary#graceful-degradation) looks like* ([the $5 budget walkthrough](/blog/openclaw-budget-guard-five-dollar-agent)), and the *plugin-author internals* ([Five Lessons](/blog/openclaw-plugin-lessons-learned)). They all stop at the moment of install. This one picks up there: five steps, six days, simulated dry-run toward `failClosed`, every config value derived from your own session data or provider telemetry instead of guessed.
 
 <!-- more -->
 
@@ -21,7 +21,7 @@ This post is the day-2 playbook. The earlier OpenClaw posts cover the *why* ([Yo
 
 The plugin's `toolBaseCosts`, `modelBaseCosts`, `toolCallLimits`, and `lowBudgetThreshold` aren't independent knobs. They're a fitted curve to your workload. The agent that reads PDFs all day has different `toolCallLimits` than the agent that drafts emails. The team running mostly Sonnet has a different `lowBudgetThreshold` than the team running mostly Opus. A config copied from someone else's blog post is a config copied from someone else's traffic.
 
-The cure is to flip the order. Run in dry-run with the event log on, *then* derive the numbers, *then* turn on enforcement. This is the same pattern the [shadow-to-enforcement decision tree](/blog/shadow-to-enforcement-cutover-decision-tree) applies generally — applied here specifically to the OpenClaw plugin's surface.
+The cure is to flip the order. Run in plugin dry-run with the event log on, *then* derive the numbers, *then* decide whether to turn on hard enforcement. This is the same pattern the [shadow-to-enforcement decision tree](/blog/shadow-to-enforcement-cutover-decision-tree) applies generally — applied here specifically to the OpenClaw plugin's surface.
 
 ## Day 1: Dry-run with the event log on
 
@@ -50,15 +50,15 @@ Start with the smallest config that produces useful data:
 
 Three things matter here:
 
-- **`dryRun: true` with a large `dryRunBudget`.** Budget is tracked in-memory; nothing is enforced. Set the budget high enough that you won't trigger low-budget mode by accident — at this stage, you want to see what *natural* spend looks like, not what degradation looks like.
-- **`enableEventLog: true`.** Every reserve, commit, downgrade, and decision is logged. Without it, the session summary tells you the totals but not the path that produced them.
+- **`dryRun: true` with a large `dryRunBudget`.** This is a serverless simulation path, not a no-op shadow mode. The plugin still classifies budget state, creates simulated reservations, applies fallback and limit logic, and can deny once the simulated budget is exhausted. The high budget is what keeps the observation run from shaping behavior: at this stage, you want to see what *natural* spend looks like, not what degradation looks like.
+- **`enableEventLog: true`.** The session summary includes the reserve, commit, downgrade, and decision path. Without it, the summary tells you the totals but not the path that produced them.
 - **`defaultModelName`.** Per [Lesson 1](/blog/openclaw-plugin-lessons-learned), OpenClaw's `before_model_resolve` event doesn't include the model name. Set `defaultModelName` to whatever your agent actually uses, or every model call shows up unattributed.
 
 Run normally for a day. Don't tune. Don't flip switches. Just collect.
 
 ## Day 2–3: Read the session summary and derive cost estimates
 
-At `agent_end`, the plugin attaches a `SessionSummary` to `ctx.metadata["openclaw-budget-guard"]` and prints it in the log when `enableEventLog` is on. The shape from a representative session looks like:
+At `agent_end`, the plugin builds a `SessionSummary`, attaches the full object to `ctx.metadata["openclaw-budget-guard"]`, and can POST it to `analyticsWebhookUrl` if you configure one. The ordinary log line is compact (`remaining`, `spent`, reservation count); the full JSON comes from metadata, your analytics webhook, or a wrapper that reads the metadata at session end. The shape from a representative session looks like:
 
 ```json
 {
@@ -87,12 +87,12 @@ Two things to do with this:
 | Local file read / format / math | 10,000 – 50,000 |
 | In-process compute, no I/O | 50,000 – 200,000 |
 | External API (search, scrape, single call) | 500,000 – 2,000,000 |
-| Code execution sandbox | 1,000,000 – 10,000,000 |
+| Code execution sandbox | 500,000 – 1,000,000 baseline; 1,000,000 – 10,000,000 for paid or long-running sandboxes |
 | LLM-as-tool (sub-agent, summarizer) | priced like a model call |
 
-The integration guide gives the same band: `"External API tools (web search, code execution) typically cost 500K-1M. Lightweight tools (text formatting, math) cost 10K-50K."` Start at the low end of each band. The plugin's session summaries will tell you over the next couple of days whether you under-estimated.
+The integration guide gives the baseline band: `"External API tools (web search, code execution) typically cost 500K-1M. Lightweight tools (text formatting, math) cost 10K-50K."` Start there unless your sandbox provider, timeout, or container lifecycle makes code execution materially more expensive. The plugin's session summaries will tell you which tools are being used and how often; provider telemetry or a custom estimator tells you whether the unit price is too low.
 
-**Confirm or update `modelBaseCosts`.** The plugin reserves a fixed amount per model call regardless of token count, and the [$5 walkthrough](/blog/openclaw-budget-guard-five-dollar-agent) flagged that this produces ±20% variance. That's fine for budget *enforcement* — you're approximating, not billing — but the estimates need to be in the right ballpark relative to each other or `downgrade_model` won't pick the right fallback. A rough Anthropic-pricing-anchored ratio:
+**Confirm or update `modelBaseCosts`.** The plugin reserves a fixed amount per model call regardless of token count, and the [$5 walkthrough](/blog/openclaw-budget-guard-five-dollar-agent) flagged that this produces ±20% variance. That's fine for budget *enforcement* — you're approximating, not billing — but the estimates need to be in the right ballpark relative to each other or `downgrade_model` won't pick the right fallback. In the JSON-configured OpenClaw path, `costBreakdown.totalCost / count` usually reflects the configured estimate that was committed, not independent provider billing. Use provider token/billing telemetry, an LLM proxy, or a programmatic `modelCostEstimator` when you need measured per-call cost. A rough Anthropic-pricing-anchored ratio:
 
 | Model | Starting estimate (USD_MICROCENTS) |
 |---|---|
@@ -100,7 +100,7 @@ The integration guide gives the same band: `"External API tools (web search, cod
 | Claude Sonnet 4 | 3,000,000 |
 | Claude Haiku 4.5 | 1,000,000 |
 
-These are *per-call* averages, not per-token. Adjust upward if your prompts run long. After a few sessions, divide each model's `totalCost` by `count` from the session summary — that's your observed average — and update `modelBaseCosts` to match.
+These are *per-call* averages, not per-token. Adjust upward if your prompts run long. After a few sessions, use the summary's model `count` values to understand call mix, then compare against external/provider cost data. Only treat `totalCost / count` as an observed average if you have wired in a real estimator; otherwise it is just the estimate you configured being charged back through the summary.
 
 A concrete fitted config after day 3 looks like:
 
@@ -181,18 +181,18 @@ Then pick the strategies. The conservative starting set is:
 
 `downgrade_model` requires `modelFallbacks`. `disable_expensive_tools` requires that `toolBaseCosts` is populated for the tools you might want to disable — the plugin compares against `expensiveToolThreshold`, so an unconfigured tool falling back to the default estimate won't be disabled even if it's actually expensive in reality. This is one more reason day 2–3 has to come before day 5.
 
-## Day 6: Cutover — `failClosed: true`
+## Day 6: Cutover decision — `failClosed: true`
 
 Now apply the [cutover decision tree](/blog/shadow-to-enforcement-cutover-decision-tree) to your collected dry-run data. The OpenClaw-specific reading of its four signal categories:
 
 | Category | OpenClaw-specific check | Green when |
 |---|---|---|
-| **Cost calibration** | Compare per-call observed cost (from `costBreakdown.totalCost / count`) against your configured `toolBaseCosts` and `modelBaseCosts` | Per-call observations within ~20% of estimates for a steady week |
+| **Cost calibration** | Compare configured `toolBaseCosts` and `modelBaseCosts` against provider telemetry, billing logs, or estimator output. Use `costBreakdown.totalCost / count` only when a real estimator is feeding actuals. | Per-call observations within ~20% of estimates for a representative sample; extend to a steady week before high-risk workflows |
 | **Policy coverage** | `unconfiguredTools` list across recent session summaries | List is empty (or only contains tools you've explicitly chosen not to budget) |
-| **Operational readiness** | Has anyone on the team seen `BudgetExhaustedError` or `ToolBudgetDeniedError` in dry-run logs and known what to do? | Yes — at least one rehearsed denial |
+| **Operational readiness** | Has anyone on the team run a denial rehearsal and seen the relevant `BudgetExhaustedError`, `ToolBudgetDeniedError`, or tool block in logs? | Yes — at least one rehearsed denial |
 | **Reversion readiness** | Can you flip `failClosed: false` (or `dryRun: true`) without a deploy? | Yes — config-toggle path tested |
 
-If those are all green, flip to:
+If those are all green for a low-risk canary workflow, flip to:
 
 ```json
 {
@@ -208,10 +208,10 @@ Note the env-var interpolation. Per [Lesson 4](/blog/openclaw-plugin-lessons-lea
 The first 24 hours after cutover, treat any of these as a rollback signal:
 
 - A sustained denial rate noticeably higher than what dry-run predicted. The dry-run data is your baseline; significant deviation means an estimate is wrong, not the policy.
-- Per-call observed cost on any specific tool more than 2× its `toolBaseCosts` estimate. That's [estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) — fix the number, don't tighten the threshold.
+- Per-call observed cost from provider telemetry or estimator output on any specific tool more than 2× its `toolBaseCosts` estimate. That's [estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) — fix the number, don't tighten the threshold.
 - Any `BudgetExhaustedError` on a workflow without a graceful degradation path. Add the path before re-enforcing on that workflow.
 
-The reversion is one toggle: `failClosed: false` keeps the plugin instrumented but turns the hard block back into a warning. It's a softer rollback than `dryRun: true` and preserves your real budget data while you fix the calibration. The general rollback discussion in the cutover post applies — this is just the OpenClaw-shaped version.
+The softest rollback is `failClosed: false` with `dryRun: false`: the plugin stays connected to real Cycles budget data while budget-exhaustion handling becomes warning-oriented where the plugin supports it. If tool reservation denials, `toolCallLimits`, or explicit access-list blocks are interrupting traffic, loosen those controls or move the affected workflow back to high-budget dry-run while you recalibrate. The general rollback discussion in the cutover post applies — this is just the OpenClaw-shaped version.
 
 ## Sidebar: tool call limits as supply-chain protection
 
@@ -221,9 +221,9 @@ A compromised skill can't send 10,000 emails if `toolCallLimits.send_email: 10`.
 
 ## What you now have
 
-After six days, the config in `openclaw.json` is no longer copy-paste. Every number in it is traceable to a session summary line you can point at. `toolBaseCosts` matches what tools actually cost in your traffic. `toolCallLimits` matches your healthy upper bound. `lowBudgetThreshold` is set to where degradation can still do something useful. And the cutover from dry-run to `failClosed` happened on data, not on a calendar.
+After six days, the config in `openclaw.json` is no longer copy-paste. Every number in it is traceable to session data or provider telemetry you can point at. `toolBaseCosts` is tied to what tools actually cost in your traffic. `toolCallLimits` matches your healthy upper bound. `lowBudgetThreshold` is set to where degradation can still do something useful. And the cutover decision from dry-run to `failClosed` happens on data, not on a calendar.
 
-The session summary keeps doing this work after cutover, too. Treat it as a weekly tuning ritual: open the latest one, look for tools where `costBreakdown.totalCost / count` has drifted from your `toolBaseCosts` estimate, look for new tools showing up in `unconfiguredTools`, look for `count` values approaching their `toolCallLimits`. The numbers move as your agents change. The discipline of letting the data set the config is what keeps enforcement healthy past day six.
+The session summary keeps doing this work after cutover, too. Treat it as a weekly tuning ritual: open the latest one, look for new tools showing up in `unconfiguredTools`, look for `count` values approaching their `toolCallLimits`, and compare provider telemetry or estimator output against the configured costs. The numbers move as your agents change. The discipline of letting the data set the config is what keeps enforcement healthy past day six.
 
 ## Resources
 
