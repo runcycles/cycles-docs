@@ -30,7 +30,7 @@ The term covers a family of agent runtimes that share four structural characteri
 - **Runs on the user's machine.** A CLI binary, a VS Code extension, a JetBrains plugin, a terminal-native tool, a desktop app. Not a hosted SaaS. The runtime process is the user's process.
 - **BYOK economics.** The user supplies their own API key for OpenAI, Anthropic, Google, OpenRouter, or a local model. The provider relationship is per-user, not per-organization. Spend hits the user's account.
 - **No managed control plane.** There's no central operator, no admin dashboard above the runtime, no service that sees all users' sessions at once. The runtime is the binary, full stop.
-- **Often, a plugin or skill marketplace.** OpenClaw has [ClawHub](/blog/openclaw-budget-guard-first-week-dry-run-to-production#sidebar-tool-call-limits-as-supply-chain-protection). Cline has the [MCP marketplace](https://github.com/cline/cline). Continue supports both [Hub](https://docs.continue.dev/) and local agent/configuration flows. Cursor has its own MCP catalog. The marketplace is upstream of every individual user's runtime, and once a developer installs a plugin, the local runtime typically treats it as trusted enough to execute inside the workflow.
+- **Often, a plugin or skill marketplace.** OpenClaw has [ClawHub](/blog/openclaw-budget-guard-first-week-dry-run-to-production#sidebar-tool-call-limits-as-supply-chain-protection). Cline has the [MCP marketplace](https://github.com/cline/cline). Continue supports [cloud-managed configuration flows and local YAML configuration](https://docs.continue.dev/guides/understanding-configs). Cursor has its own MCP catalog. The marketplace is upstream of every individual user's runtime, and once a developer installs a plugin, the local runtime can treat it as trusted enough to participate in the workflow.
 
 Representative members of the category:
 
@@ -39,7 +39,7 @@ Representative members of the category:
 | **OpenClaw** | Local agent runtime; plugin lifecycle | Yes — user-supplied keys | ClawHub |
 | **Cline** | VS Code / JetBrains / Cursor / Windsurf / Zed / Neovim sidebar; CLI preview | Supports BYOK across many providers, plus local Ollama / LM Studio; also offers managed setup | MCP Marketplace |
 | **Aider** | Python CLI in the terminal | Yes — Claude / GPT / Gemini / Llama via Ollama / others | None (CLI-only) |
-| **Continue** | VS Code / JetBrains extension and agent/check workflows | Supports local and hosted model configuration | Hub / local agent configuration |
+| **Continue** | VS Code / JetBrains extension and agent/check workflows | Supports local and hosted model configuration | Cloud-managed configs / local YAML |
 
 (Cursor's agent mode and Claude Code sit on the boundary — they support BYOK but route through their respective vendors' infrastructure, which is closer to the MCP-host shape covered in [Budget Limits for Claude Code, Cursor, and Windsurf via MCP](/blog/claude-code-cursor-windsurf-budget-limits-mcp). The post here is about runtimes that route directly to providers from the user's machine.)
 
@@ -81,9 +81,9 @@ For local-first / BYOK runtimes, two structural mismatches keep them in the wron
 
 ### Marketplace blast-radius controls
 
-This is the local-first-specific failure mode that doesn't have a hosted-SaaS equivalent. Plugin and skill marketplaces — ClawHub, Cline's MCP marketplace, Continue's Hub, Cursor's MCP catalog — are upstream of every user's runtime. Once a developer installs a plugin, the local runtime typically treats it as trusted enough to execute inside the workflow.
+This is the local-first-specific failure mode that doesn't have a hosted-SaaS equivalent. Plugin and skill marketplaces — ClawHub, Cline's MCP marketplace, Continue's hosted configs, Cursor's MCP catalog — are upstream of every user's runtime. Once a developer installs a plugin, the local runtime can treat it as trusted enough to participate in the workflow.
 
-This is the npm / PyPI / Docker Hub trajectory, ten years compressed. Public reporting on OpenClaw's ClawHub flagged [1,184 malicious skills in early 2026](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it); the exact number matters less than the pattern. Marketplace operators do what every package registry eventually does — they scan, they delist, they warn — but the controls are detection-after-publish, not blast-radius-at-runtime. A skill that calls `send_email` ten thousand times is still going to call it ten thousand times unless something on the runtime side is willing to say no. Cost limits help here only incidentally; the real defense is action-tier classification — knowing that `send_email`, `deploy`, and `delete_*` belong to risk tiers that warrant tighter caps regardless of how cheap each call is.
+This is the npm / PyPI / Docker Hub trajectory, ten years compressed. Security researchers [reported 1,184 malicious skills](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) circulating on OpenClaw's ClawHub in early 2026; the exact number matters less than the pattern. Marketplace operators do what every package registry eventually does — they scan, they delist, they warn — but the controls are detection-after-publish, not blast-radius-at-runtime. A skill that calls `send_email` ten thousand times is still going to call it ten thousand times unless something on the runtime side is willing to say no. Cost limits help here only incidentally; the real defense is action-tier classification — knowing that `send_email`, `deploy`, and `delete_*` belong to risk tiers that warrant tighter caps regardless of how cheap each call is.
 
 [Agent Skills Are the New Supply Chain](/blog/agent-skills-are-the-new-supply-chain) makes the broader argument. The local-first version is sharper because each user's runtime is independently trusting the same marketplace, and there's no shared service to enforce per-skill caps across the team.
 
