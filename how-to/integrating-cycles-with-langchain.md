@@ -1,9 +1,9 @@
 ---
-title: "Integrating Cycles with LangChain"
-description: "Add budget management to LangChain apps using a custom callback handler that wraps every LLM call with a Cycles reservation."
+title: "LangChain Budget Control via Callback Handlers (Python)"
+description: "Per-call budget control for LangChain agents in Python — install a callback handler that reserves and commits Cycles on every LLM call."
 ---
 
-# Integrating Cycles with LangChain
+# LangChain Budget Control via Callback Handlers (Python)
 
 This guide shows how to add budget management to LangChain applications using a custom callback handler that wraps every LLM call with a Cycles reservation.
 
