@@ -1,6 +1,6 @@
 ---
 title: "Why Local-First Agent Runtimes Need Runtime Authority"
-date: 2026-05-06
+date: 2026-05-07
 author: Albert Mavashev
 tags: [agents, governance, runtime-authority, local-first, byok, budgets, cost-control, comparisons, best-practices, marketplace]
 description: "Local-first, BYOK agent runtimes — OpenClaw, Cline, Aider, Continue — share a cost and action-risk governance gap that no provider cap or local limit closes."
