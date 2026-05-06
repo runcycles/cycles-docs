@@ -15,6 +15,8 @@ head:
 
 # Tracking Tokens and Cost in a Streaming LLM Response
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 Non-streaming LLM calls are the easy case for LLM cost tracking and budget enforcement. You know the max output length, you reserve that many tokens up front, the response comes back, you commit the actual usage from the `usage` field, done. One reserve, one commit, one HTTP request-response on each side.
 
 Streaming — whether an OpenAI chat completion with `stream=True`, an Anthropic SSE response with `message_delta` events, or any provider shipping tokens over Server-Sent Events — breaks that pattern in four specific places, and each one has a wrong answer that looks right until you hit production. This post is about those four failure modes and the pattern that closes all of them: the same pattern the [`runcycles` Python client](https://github.com/runcycles/cycles-client-python) already implements as `StreamReservation`.

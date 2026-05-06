@@ -21,6 +21,8 @@ head:
 
 # Why Multi-Agent Coordination Fails — and What Actually Prevents It
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
 A team ships a three-agent workflow: a researcher that gathers information, a planner that decomposes a task, and an executor that calls the tools. It passes every integration test. It ships to production. Two weeks in, the monthly bill comes back triple what the pilot suggested. Half the excess traces back to a single failure mode: the planner occasionally fans out to sub-tasks that re-invoke the researcher, which re-invokes the planner, and nothing in the system catches the loop until the budget trips.
 
 Multi-agent workflows fail like this so routinely that an industry literature has formed around the pattern. The UC Berkeley MAST study — a NeurIPS 2025 Spotlight paper that annotated 1,600+ traces across seven frameworks — [reported failure rates between 41% and 86.7%](https://arxiv.org/abs/2503.13657) depending on the system (see the paper's Section 4 for the per-framework breakdown). Our earlier post, [Multi-Agent Systems Fail Up to 87% of the Time](/blog/why-multi-agent-systems-fail-87-percent-cost-of-every-coordination-breakdown), walks through the cost model for each failure category. This post is about the architectural choices that actually prevent the failures in the first place.
@@ -138,3 +140,9 @@ The frameworks do good work at one or two of these layers. Holding the third —
 - [SEMAP: structured protocols for multi-agent coordination](https://arxiv.org/abs/2510.12120) — 69.6% failure reduction via explicit contracts
 - [Cloud Security Alliance: Fixing AI Agent Delegation for Secure Chains](https://cloudsecurityalliance.org/articles/control-the-chain-secure-the-system-fixing-ai-agent-delegation) — industry analysis with documented delegation-chain exploit patterns
 - [DeepMind: Towards a Science of Scaling Agent Systems](https://arxiv.org/html/2512.08296v1) — error amplification across unstructured multi-agent networks
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)

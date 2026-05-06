@@ -10,11 +10,17 @@ sidebar: false
 
 # Multi-Tenant AI Cost Control: Budgets and Isolation
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A platform team runs a SaaS product with AI-powered document analysis. Fifty customers share the same infrastructure. One afternoon, a single customer's integration triggers an agent loop — the same 200-page PDF reprocessed 40 times with increasingly long context windows. In three hours, that one [tenant](/glossary#tenant) consumes $4,200 of the platform's $5,000 monthly provider budget.
 
 The other 49 customers start seeing failures. Model calls return rate-limit errors. Jobs queue indefinitely. The platform's shared spending cap — set at the provider level — does not distinguish between customers. It just shuts everything down when the ceiling is reached.
 
 The incident is not a billing surprise for one account. It is a service outage for every account. In multi-tenant AI systems, cost control is not a finance problem. It is an **isolation problem**.
+
+> **Open the noisy-tenant scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJNdWx0aS10ZW5hbnQgU2FhUyDigJQgbm9pc3kgdGVuYW50Iiwid29ya2xvYWREZXNjcmlwdGlvbiI6Ik9uZSB0ZW5hbnQgcnVucyBhdCA1MHggdGhlIGF2ZXJhZ2UgbG9hZC4gU2hhcmVkIGJ1ZGdldDsgdGhlaXIgYnVybiBkcmFpbnMgZXZlcnlvbmUncyBoZWFkcm9vbS4iLCJpbnB1dFRva2VucyI6NDAwMCwib3V0cHV0VG9rZW5zIjoxMDAwLCJjYWxsc1BlckRheSI6NTAwMDB9)
 
 <!-- more -->
 

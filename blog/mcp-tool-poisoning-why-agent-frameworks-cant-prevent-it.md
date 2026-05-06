@@ -10,6 +10,8 @@ sidebar: false
 
 # MCP Tool Poisoning Has an 84% Success Rate — Why Agent Frameworks Still Can't Prevent It
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A poisoned MCP tool doesn't need to be called to compromise your agent. It just needs to be loaded into context.
 
 That's the finding that reframed MCP security in 2026. [Invariant Labs demonstrated](https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks) that malicious instructions hidden in an MCP tool's description field are enough to hijack agent behavior — exfiltrating SSH keys, config files, and credentials — without the tool ever being invoked. Their [open-source proof-of-concept](https://github.com/invariantlabs-ai/mcp-injection-experiments) successfully extracted SSH private keys from Claude Desktop and Cursor in test environments. The model reads the metadata, follows the hidden instructions, and your logs show nothing unusual.
@@ -219,3 +221,9 @@ Research and data referenced in this post:
 - [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — Including recursive loops and cost blowups
 - [Runtime Authority vs. Guardrails vs. Observability](/blog/runtime-authority-vs-guardrails-vs-observability) — Why scanning and monitoring aren't enforcement
 - [What Is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents) — The foundational concept
+
+## Related how-to guides
+
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
+- [API key management](/how-to/api-key-management-in-cycles)

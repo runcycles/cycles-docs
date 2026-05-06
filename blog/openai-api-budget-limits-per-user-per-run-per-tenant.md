@@ -10,6 +10,8 @@ sidebar: false
 
 # OpenAI API Budget Limits: Per-User and Per-Tenant
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 A team runs 30 OpenAI-powered agents across their platform. They set a $5,000/month spending cap in the OpenAI dashboard. On Thursday, one customer's research agent enters a retry loop — expanding its context window on each attempt, calling GPT-4o 200+ times in under an hour. The bill: $1,400 for a single agent run.
 
 The org-level cap? Still at 60%. It does not trigger. The problem is not that the cap was wrong. The problem is that it applies to the entire organization. There is no way to say "this user gets $20 per day" or "this run cannot exceed $5" through OpenAI's billing controls alone.

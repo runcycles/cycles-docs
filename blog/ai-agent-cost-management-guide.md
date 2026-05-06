@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Cost Management: The Complete Guide
 
+> **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
+
 An infrastructure team we work with had monitoring in place. Good monitoring. They had dashboards showing real-time spend per model, per [tenant](/glossary#tenant), per workflow. They had daily cost reports emailed to engineering leads. They caught their first overspend incident within 4 hours and considered it a success. Then the second incident happened — a [retry storm](/glossary#retry-storm) on a Friday evening that burned through $1,800 in 12 minutes. The dashboard showed it clearly. The alert fired on time. The on-call engineer saw it within 15 minutes. But by then, the money was already spent. That's when they realized: monitoring tells you what happened. It doesn't stop it from happening.
 
 <!-- more -->
@@ -238,3 +240,9 @@ The progression from no controls to hard enforcement is predictable. The questio
 - **[AI Agent Budget Patterns: A Practical Guide](/blog/agent-budget-patterns-visual-guide)** — six common patterns with code examples and trade-offs
 
 Start by figuring out which tier you're at today. Then decide whether your current tier's failure modes are ones you can live with.
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Monitoring and alerting](/how-to/monitoring-and-alerting)
+- [Webhook integrations](/how-to/webhook-integrations)

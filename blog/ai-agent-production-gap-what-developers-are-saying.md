@@ -143,3 +143,9 @@ The community has diagnosed the problem. The infrastructure to solve it exists. 
 - [Cycles vs. LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools) — Why dashboards and proxies aren't enough
 - [Multi-Agent Budget Control](/blog/multi-agent-budget-control-crewai-autogen-openai-agents-sdk) — Framework-specific integration guides
 - [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents) — Detailed cost math and failure modes
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)

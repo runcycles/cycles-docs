@@ -10,6 +10,8 @@ sidebar: false
 
 # Multi-Agent Systems Fail Up to 87% of the Time — Here's What Each Failure Actually Costs
 
+> **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
+
 Consider a four-agent research pipeline: Planner, Researcher, Analyst, Writer. In development, it works 90% of the time and costs $3.50 per run. In production, failure rate climbs to 55%. Each failure triggers retries, context regrowth, and cascading delegation — turning a $3.50 run into a $40+ recovery sequence. The monitoring dashboard shows 200 OK on every API call. The invoice shows $12,000 for a week that should have cost $2,800.
 
 The published MAST and SEMAP literature explains how multi-agent systems fail, but does not model per-failure cost in production.

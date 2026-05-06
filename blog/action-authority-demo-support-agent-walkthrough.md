@@ -10,6 +10,8 @@ sidebar: false
 
 # AI Agent Action Authority: Blocking a Customer Email Before Execution
 
+> **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
+
 A support agent handles a billing dispute. Its workflow has four steps: read the case, log an internal note, update the CRM status, and send the customer a reply. Without a runtime decision layer, all four steps execute — including the email. With Cycles, the first three steps proceed normally. The fourth — `send_customer_email` — is blocked before execution because the `send-email` toolset has a zero-dollar budget. The email function never runs. The customer never receives an unauthorized message.
 
 The tools in this demo are mocked. No real CRM, email service, or ticketing system is involved. The [action authority](/glossary#action-authority) is real. This post walks through the [action authority demo](https://github.com/runcycles/cycles-agent-action-authority-demo) step by step: what the agent does, how the unguarded and guarded runs differ, and what the code change looks like.
