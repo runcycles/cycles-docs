@@ -3,7 +3,7 @@ title: "26 Integrations: Every AI Framework, One Budget Protocol"
 date: 2026-04-02
 author: Albert Mavashev
 tags: [announcement, integrations, langchain, langgraph, autogen, openai, anthropic, groq, django, nextjs, flask, anyagent, runtime-authority]
-description: "Cycles now integrates with 27 frameworks across Python, TypeScript, Java, and Rust. One protocol enforces spend limits, action boundaries, and risk controls across every agent stack — before execution."
+description: "Cycles now ships 26 integrations across Python, TypeScript, Java, and Rust. One protocol enforces spend limits, action boundaries, and risk controls across every agent stack — before execution."
 blog: true
 sidebar: false
 ---
@@ -12,7 +12,7 @@ sidebar: false
 
 When we launched Cycles, the question we heard most was: *"Does this work with my stack?"*
 
-Today the answer is yes — for almost every stack. Cycles now integrates with **27 frameworks** across Python, TypeScript, Java, and Rust. Every LLM call, tool invocation, and agent action in your stack can be governed with the same reserve → commit → release protocol — enforcing spend limits, action boundaries, and risk controls before execution.
+Today the answer is yes — for almost every stack. Cycles now ships **26 integrations** across Python, TypeScript, Java, and Rust. Every LLM call, tool invocation, and agent action in your stack can be governed with the same reserve → commit → release protocol — enforcing spend limits, action boundaries, and risk controls before execution.
 
 <!-- more -->
 
