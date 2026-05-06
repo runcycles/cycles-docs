@@ -15,9 +15,9 @@ head:
 
 # A Supply-Chain Playbook for Agent Skill Marketplaces
 
-A platform team is evaluating an agent skill marketplace ahead of a company-wide rollout. The marketplace has thousands of skills, a star rating, a search box, and a publisher field that's an unverified email. The team's security review starts with the question they ask of every other dependency source: *what's the trust model?* The answer comes back as a shrug. There's no signing requirement. There's no Trusted-Publisher-style OIDC path. There's no consumer-pinning enforcement, no capability manifest standard, no malware scan-at-publish that the team can point to. The "trust model" is the marketplace operator's reputation, applied uniformly to every skill regardless of what it does.
+A platform team is evaluating an agent skill marketplace ahead of a company-wide rollout. The marketplace has thousands of skills, a star rating, a search box, and a publisher field that's an unverified email. The team's security review starts with the question they ask of every other dependency source: *what's the trust model?* The answer comes back as a shrug. There's no signing requirement. There's no Trusted-Publisher-style OIDC path. There's no consumer-pinning enforcement, no capability manifest standard, no publish-time malware scanning that the team can point to. The "trust model" is the marketplace operator's reputation, applied uniformly to every skill regardless of what it does.
 
-This is exactly where npm was around 2014, where PyPI was around 2016, and where Docker Hub was around 2017. We know what happens next — the [event-stream incident on npm in 2018](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), the `ctx` package takeover on PyPI in 2022, the typosquatting waves on every registry, the slow grind of getting 2FA mandated, then provenance attestations, then OIDC trusted publishing. Each predecessor took roughly a decade of incidents-then-controls to converge on a working playbook. [Our earlier analysis](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) cited a report of 1,184 malicious skills on OpenClaw's ClawHub in early 2026 — the exact number matters less than the pattern: agent skill marketplaces are already seeing package-registry-style abuse.
+This is exactly where npm was around 2014 and where PyPI was around 2016. We know what happens next — the [event-stream incident on npm in 2018](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), the `ctx` package takeover on PyPI in 2022, the typosquatting waves on every registry, the slow grind of getting 2FA mandated, then provenance attestations, then OIDC trusted publishing. Each predecessor took roughly a decade of incidents-then-controls to converge on a working playbook. [Our earlier analysis](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) cited a report of 1,184 malicious skills on OpenClaw's ClawHub in early 2026 — the exact number matters less than the pattern: agent skill marketplaces are already seeing package-registry-style abuse.
 
 The question this post addresses isn't *whether* agent skill marketplaces will face the same supply-chain risks as the package registries. They will. The question is whether the response cycle has to take another decade, given that the controls that work — Sigstore provenance, OIDC-based trusted publishing, capability manifests, runtime blast-radius limits — already exist in deployable form. This is the playbook for not replaying the detour.
 
@@ -81,7 +81,7 @@ The good news is that none of this requires waiting for the next attack to motiv
 - **Typosquat detection** is a well-understood pattern — Snyk, npm, and others have published their heuristics.
 - **Versioned immutable releases** is a registry-design choice, not a research problem.
 
-The cost of adopting these now, before incidents force them, is small. The cost of waiting is paid in user trust, after.
+The cost of adopting these now is much smaller than adopting them after a trust-breaking incident. The cost of waiting is paid in user trust, after.
 
 ## What's specific to agent skills (and not yet in the predecessor playbook)
 
@@ -158,6 +158,7 @@ The cheapest move for any agent skill marketplace right now is to look at where 
 - [Trusted publishing for npm packages](https://docs.npmjs.com/trusted-publishers/) — OIDC-based publishing reference
 - [PyPI digital attestation support — deps.dev](https://blog.deps.dev/pypi-attestations/) — PyPI's parallel adoption of Sigstore attestations
 - [npm: Threats and Mitigations](https://docs.npmjs.com/threats-and-mitigations/) — current registry-side controls including typosquat detection
+- [GitHub Changelog: npm classic tokens revoked](https://github.blog/changelog/2025-12-09-npm-classic-tokens-revoked-session-based-auth-and-cli-token-management-now-available/) — npm classic token phaseout (Dec 2025) and session-based auth
 - [Sigstore](https://www.sigstore.dev/) — the signing/transparency-log primitive both registries adopted
 
 ## Related reading
