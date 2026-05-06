@@ -1,6 +1,6 @@
 ---
 title: "Python AI Agent Control: Cost, Risk, and Audit by Layer"
-date: 2026-05-08
+date: 2026-05-06
 author: Albert Mavashev
 tags: [agents, governance, runtime-authority, action-control, audit, costs, risk-assessment, python, production]
 description: "Python AI agent tools cover cost OK, risk partially, and audit barely. Six layers of agent control, what each actually does, and where each stops short."
@@ -103,7 +103,7 @@ An external authority service that decides each agent action *before* execution.
 
 - **Cost coverage:** pre-execution. The next action is allowed or denied based on remaining budget, not after the bill arrives.
 - **Risk coverage:** pre-execution. Action-tier classification is a first-class input to the decision. A high-tier action (like `delete_*`) hits a smaller cap than a low-tier action (like `read_file`), regardless of dollar cost. See [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) for the full action-authority framing.
-- **Audit coverage:** structured by-default. Every [reservation](/glossary#reservation), commit, release, and denial produces an audit record with subject (tenant / user / agent / toolset), action (kind / name / tier), amount, decision, reason, and timestamp. The ledger is the byproduct, not a separate instrumentation project.
+- **Audit coverage:** structured by-default. Every [reservation](/glossary#reservation), commit, release, and denial produces an audit record with subject (the canonical scope chain: `tenant` → `workspace` → `app` → `workflow` → `agent` → `toolset`), action (kind / name / tier), amount, decision, reason, and timestamp. Per-user attribution is a derived field via `dimensions` or actor metadata, not a built-in subject scope. The ledger is the byproduct of enforcement, not a separate instrumentation project.
 
 **Where it stops short:** requires a service to operate. Self-hosted or otherwise, it's a real piece of infrastructure with availability requirements, not a single-file Python library you `pip install` and forget. The trade-off is the operational footprint in exchange for pre-execution control on all three axes.
 
