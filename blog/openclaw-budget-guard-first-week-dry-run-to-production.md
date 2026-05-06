@@ -3,7 +3,7 @@ title: "Your First Week with Cycles Budget Guard for OpenClaw"
 date: 2026-05-06
 author: Albert Mavashev
 tags: [openclaw, budgets, agents, production, operations, dry-run, cost-control, best-practices]
-description: "An operator playbook for the first week after installing cycles-openclaw-budget-guard. Five days of dry-run, then a signal-driven cutover to failClosed."
+description: "An operator playbook for the first week after installing cycles-openclaw-budget-guard: simulated dry-run, calibration, then a canary cutover decision."
 blog: true
 sidebar: false
 featured: false
@@ -39,6 +39,7 @@ Start with the smallest config that produces useful data:
           "dryRun": true,
           "dryRunBudget": 1000000000,
           "enableEventLog": true,
+          "analyticsWebhookUrl": "https://analytics.example.com/openclaw-sessions",
           "logLevel": "info",
           "defaultModelName": "anthropic/claude-sonnet-4-20250514"
         }
@@ -51,14 +52,14 @@ Start with the smallest config that produces useful data:
 Three things matter here:
 
 - **`dryRun: true` with a large `dryRunBudget`.** This is a serverless simulation path, not a no-op shadow mode. The plugin still classifies budget state, creates simulated reservations, applies fallback and limit logic, and can deny once the simulated budget is exhausted. The high budget is what keeps the observation run from shaping behavior: at this stage, you want to see what *natural* spend looks like, not what degradation looks like.
-- **`enableEventLog: true`.** The session summary includes the reserve, commit, downgrade, and decision path. Without it, the summary tells you the totals but not the path that produced them.
+- **`enableEventLog: true` plus `analyticsWebhookUrl`.** The full `SessionSummary` is attached to `ctx.metadata["openclaw-budget-guard"]` and POSTed to `analyticsWebhookUrl`; `eventLog` lives inside that summary when enabled. Without a webhook or wrapper that reads the metadata at session end, the ordinary log line only gives you compact totals.
 - **`defaultModelName`.** Per [Lesson 1](/blog/openclaw-plugin-lessons-learned), OpenClaw's `before_model_resolve` event doesn't include the model name. Set `defaultModelName` to whatever your agent actually uses, or every model call shows up unattributed.
 
 Run normally for a day. Don't tune. Don't flip switches. Just collect.
 
 ## Day 2–3: Read the session summary and derive cost estimates
 
-At `agent_end`, the plugin builds a `SessionSummary`, attaches the full object to `ctx.metadata["openclaw-budget-guard"]`, and can POST it to `analyticsWebhookUrl` if you configure one. The ordinary log line is compact (`remaining`, `spent`, reservation count); the full JSON comes from metadata, your analytics webhook, or a wrapper that reads the metadata at session end. The shape from a representative session looks like:
+At `agent_end`, the plugin builds a `SessionSummary`, attaches the full object to `ctx.metadata["openclaw-budget-guard"]`, and POSTs it to `analyticsWebhookUrl` when configured. The ordinary log line is compact (`remaining`, `spent`, reservation count); the full JSON comes from your analytics webhook or a wrapper that reads the metadata at session end. The shape from a representative session looks like:
 
 ```json
 {
@@ -189,7 +190,7 @@ Now apply the [cutover decision tree](/blog/shadow-to-enforcement-cutover-decisi
 |---|---|---|
 | **Cost calibration** | Compare configured `toolBaseCosts` and `modelBaseCosts` against provider telemetry, billing logs, or estimator output. Use `costBreakdown.totalCost / count` only when a real estimator is feeding actuals. | Per-call observations within ~20% of estimates for a representative sample; extend to a steady week before high-risk workflows |
 | **Policy coverage** | `unconfiguredTools` list across recent session summaries | List is empty (or only contains tools you've explicitly chosen not to budget) |
-| **Operational readiness** | Has anyone on the team run a denial rehearsal and seen the relevant `BudgetExhaustedError`, `ToolBudgetDeniedError`, or tool block in logs? | Yes — at least one rehearsed denial |
+| **Operational readiness** | Has anyone on the team run a denial rehearsal and seen the relevant model block, tool reservation denial, call-limit block, or access-list block in OpenClaw logs? | Yes — at least one rehearsed denial |
 | **Reversion readiness** | Can you flip `failClosed: false` (or `dryRun: true`) without a deploy? | Yes — config-toggle path tested |
 
 If those are all green for a low-risk canary workflow, flip to:
@@ -207,9 +208,9 @@ Note the env-var interpolation. Per [Lesson 4](/blog/openclaw-plugin-lessons-lea
 
 The first 24 hours after cutover, treat any of these as a rollback signal:
 
-- A sustained denial rate noticeably higher than what dry-run predicted. The dry-run data is your baseline; significant deviation means an estimate is wrong, not the policy.
+- A sustained denial or block rate outside the canary envelope you expected from observed call mix, provider telemetry, and configured budgets. High-budget plugin dry-run tells you call shape and configuration gaps; it is not a real Cycles-server denial-rate predictor.
 - Per-call observed cost from provider telemetry or estimator output on any specific tool more than 2× its `toolBaseCosts` estimate. That's [estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) — fix the number, don't tighten the threshold.
-- Any `BudgetExhaustedError` on a workflow without a graceful degradation path. Add the path before re-enforcing on that workflow.
+- Any budget-exhaustion model block or provider-side `__cycles_budget_exhausted__` failure on a workflow without a graceful degradation path. Add the path before re-enforcing on that workflow.
 
 The softest rollback is `failClosed: false` with `dryRun: false`: the plugin stays connected to real Cycles budget data while budget-exhaustion handling becomes warning-oriented where the plugin supports it. If tool reservation denials, `toolCallLimits`, or explicit access-list blocks are interrupting traffic, loosen those controls or move the affected workflow back to high-budget dry-run while you recalibrate. The general rollback discussion in the cutover post applies — this is just the OpenClaw-shaped version.
 
