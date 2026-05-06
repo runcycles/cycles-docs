@@ -1,9 +1,9 @@
 ---
-title: "Integrating Cycles with OpenAI Agents SDK"
-description: "Add budget governance to OpenAI Agents SDK workflows with automatic reserve, commit, and release for every LLM call, tool invocation, and agent handoff. Python plugin — no per-function decoration required."
+title: "OpenAI Agents SDK Budget Control (Python)"
+description: "Budget control for OpenAI Agents SDK workflows in Python — automatic reserve, commit, and release for every LLM call, tool invocation, and agent handoff. No per-function decoration."
 ---
 
-# Integrating Cycles with OpenAI Agents SDK
+# OpenAI Agents SDK Budget Control (Python)
 
 [![PyPI](https://img.shields.io/pypi/v/runcycles-openai-agents)](https://pypi.org/project/runcycles-openai-agents/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/runcycles-openai-agents?label=downloads&color=555&style=flat-square)](https://pypi.org/project/runcycles-openai-agents/)

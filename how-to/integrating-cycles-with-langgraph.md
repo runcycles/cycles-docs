@@ -1,9 +1,9 @@
 ---
-title: "Integrating Cycles with LangGraph"
-description: "Add budget management to LangGraph stateful agent workflows using callback handlers and the Cycles decorator for per-node and per-graph cost control."
+title: "LangGraph Budget Control: Per-Node Cost Enforcement"
+description: "Budget control for LangGraph stateful agent workflows in Python — per-node and per-graph cost enforcement with callback handlers and the @cycles decorator."
 ---
 
-# Integrating Cycles with LangGraph
+# LangGraph Budget Control: Per-Node Cost Enforcement
 
 This guide shows how to add budget management to [LangGraph](https://langchain-ai.github.io/langgraph/) stateful agent workflows so that every LLM call within a graph node is cost-controlled, observable, and automatically stopped when budgets run out.
 
