@@ -148,7 +148,7 @@ Every executable supply chain â€” packages, containers, CI actions, OS images â€
 
 The asymmetric thing about the agent layer is that signed-and-scanned isn't enough. A skill is more than its code; the prompts, examples, and context it ships with can change agent behavior in ways static review doesn't catch. Marketplace-side controls reduce the rate of bad skills reaching consumers. Runtime authority bounds the damage when one does anyway. Both layers are necessary, neither is sufficient.
 
-The cheapest move for any agent skill marketplace right now is to look at where npm and PyPI are in 2026 and adopt that destination directly. The longer move is to extend the playbook with capability manifests and runtime-authority assumptions, because skills introduce risks the package registries never had to govern. The expensive move is to wait for the equivalent of event-stream to make the case.
+The lowest-regret move for any agent skill marketplace right now is to look at where npm and PyPI are in 2026 and adopt that destination directly. The longer move is to extend the playbook with capability manifests and runtime-authority assumptions, because skills introduce risks the package registries never had to govern. The expensive move is to wait for the equivalent of event-stream to make the case.
 
 ## Sources
 
