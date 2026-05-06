@@ -36,32 +36,32 @@ We added 9 new integration guides, bringing the total from 17 to 26:
 | Framework | Language | What's new |
 |-----------|----------|------------|
 | [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | **New** — callback handler in graph nodes, per-node scoping, conditional edges with `client.decide()` |
-| [AutoGen](/how-to/integrating-cycles-with-autogen) | Python | **New** — model client wrapper for teams, swarms, and graph flows |
-| [AnyAgent](/how-to/integrating-cycles-with-anyagent) | Python | **New** — single callback covers all 7 supported frameworks |
 | [LangChain](/how-to/integrating-cycles-with-langchain) | Python, [JS](/how-to/integrating-cycles-with-langchain-js) | — |
+| [CrewAI](/how-to/integrating-cycles-with-crewai) | Python | — |
+| [AutoGen](/how-to/integrating-cycles-with-autogen) | Python | **New** — model client wrapper for teams, swarms, and graph flows |
+| [LlamaIndex](/how-to/integrating-cycles-with-llamaindex) | Python | — |
+| [Pydantic AI](/how-to/integrating-cycles-with-pydantic-ai) | Python | — |
+| [AnyAgent](/how-to/integrating-cycles-with-anyagent) | Python | **New** — single callback covers all 7 supported frameworks |
 | [Vercel AI SDK](/how-to/integrating-cycles-with-vercel-ai-sdk) | TypeScript | — |
 | [Spring AI](/how-to/integrating-cycles-with-spring-ai) | Java | — |
-| [LlamaIndex](/how-to/integrating-cycles-with-llamaindex) | Python | — |
-| [CrewAI](/how-to/integrating-cycles-with-crewai) | Python | — |
-| [Pydantic AI](/how-to/integrating-cycles-with-pydantic-ai) | Python | — |
 
 ### Agent Platforms (3)
 
 | Platform | Language |
 |----------|----------|
-| [MCP (Claude, Cursor, Windsurf)](/how-to/integrating-cycles-with-mcp) | TypeScript |
 | [OpenAI Agents SDK](/how-to/integrating-cycles-with-openai-agents) | Python |
+| [MCP (Claude, Cursor, Windsurf)](/how-to/integrating-cycles-with-mcp) | TypeScript |
 | [OpenClaw](/how-to/integrating-cycles-with-openclaw) | TypeScript |
 
 ### Web Frameworks (5)
 
 | Framework | Language | What's new |
 |-----------|----------|------------|
-| [Next.js](/how-to/integrating-cycles-with-nextjs) | TypeScript | **New** — route-level guards, server actions, per-[tenant isolation](/glossary#tenant-isolation) |
 | [Django](/how-to/integrating-cycles-with-django) | Python | **New** — middleware, exception handling, per-[tenant](/glossary#tenant) budget dashboard |
 | [Flask](/how-to/integrating-cycles-with-flask) | Python | **New** — error handlers, `before_request` preflight |
-| [Express](/how-to/integrating-cycles-with-express) | TypeScript | — |
 | [FastAPI](/how-to/integrating-cycles-with-fastapi) | Python | — |
+| [Next.js](/how-to/integrating-cycles-with-nextjs) | TypeScript | **New** — route-level guards, server actions, per-[tenant isolation](/glossary#tenant-isolation) |
+| [Express](/how-to/integrating-cycles-with-express) | TypeScript | — |
 
 ## The patterns that matter
 
@@ -70,6 +70,8 @@ We added 9 new integration guides, bringing the total from 17 to 26:
 Every integration enforces the same principle: **no agent action executes without authorization**. Whether it's an LLM call in LangGraph, a tool invocation in AutoGen, or an API request in a Django endpoint — the [reservation](/glossary#reservation) happens before the action, not after.
 
 This matters beyond cost. The same protocol that prevents a $50 runaway spend also prevents an agent from sending 200 emails, hitting a rate-limited API in a retry loop, or executing a high-risk tool without approval. The [OpenAI Agents guide](/how-to/integrating-cycles-with-openai-agents) maps tool estimates to budget — `send_email` reserves 50 [RISK_POINTS](/glossary#risk-points) per call while `search_knowledge` uses zero. The [budget authority](/glossary#budget-authority) decides which actions are cheap and which are expensive.
+
+For a layer-by-layer view of how the Python integrations above sit relative to wrapper-style libraries, provider-client patches, LLM gateways, and observability tooling — and where each layer covers cost, risk, or audit — see [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers).
 
 ### Graceful degradation with model downgrade
 
