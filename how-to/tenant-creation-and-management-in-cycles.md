@@ -837,3 +837,9 @@ You tried to create a tenant with a `tenant_id` that already exists but with a d
 - [Authentication, Tenancy, and API Keys](/protocol/authentication-tenancy-and-api-keys-in-cycles) — how tenant isolation is enforced at the protocol level
 - [Scope Derivation](/protocol/how-scope-derivation-works-in-cycles) — how tenant scopes fit into the budget hierarchy
 - [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) — set up the Cycles infrastructure from scratch
+
+## Related concepts
+
+- [Tenant lifecycle cascade semantics](/blog/tenant-lifecycle-cascade-semantics-at-scale)
+- [Audit trail as a runtime-authority byproduct](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default)
+- [Agent delegation chains and authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation)

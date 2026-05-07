@@ -556,3 +556,9 @@ For deeper incident analysis, the Incident Patterns section documents common pro
 - [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in-cycles) — complete error code reference
 - [Testing with Cycles](/how-to/testing-with-cycles) — testing strategies and fixtures
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — handling budget denial gracefully
+
+## Related concepts
+
+- [Retry storms and idempotency in agent budgets](/blog/retry-storms-and-idempotency-in-agent-budget-systems)
+- [Tracking tokens in a streaming LLM response](/blog/tracking-tokens-in-a-streaming-llm-response)
+- [Audit trail as a runtime-authority byproduct](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default)
