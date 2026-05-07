@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 /**
  * Refreshes the GitHub-side fields of installs-cache.json + manual-package-counts.json
- * outside of build time, so the homepage clone counter and GHCR pull counts don't go
- * stale during low-deploy weeks.
+ * outside of build time, so the homepage clone counter doesn't go stale during
+ * low-deploy weeks.
  *
  * Updates:
  *   - clones / clonesByRepo  (day-cursor accumulator on /traffic/clones, 14d API window)
  *   - releases / releasesByRepo  (HWM on release-asset download counts)
- *   - ghPackages  (sum of GHCR /orgs/<org>/packages/container/<pkg> download_counts)
+ *   - ghPackages  (attempted via API, but see note below)
+ *
+ * GHCR counts: the GitHub REST API does not actually populate `download_count`
+ * for container packages, even with `read:packages` scope (verified 2026-05-07).
+ * The field exists in the response schema but is always null. Until GitHub
+ * exposes container pull counts programmatically, manual-package-counts.json is
+ * the permanent source of truth and this script only logs a warning rather than
+ * clobbering it. Maintainers refresh that file by peeking at
+ * https://github.com/orgs/runcycles/packages.
  *
  * Mirrors the logic in .vitepress/theme/installs.data.ts so the build-time loader
  * and this scheduled job converge on the same cache state. HWM/cursor semantics
@@ -15,9 +23,6 @@
  *
  * Auth:
  *   - GH_TOKEN with `repo` scope on every public org repo (for /traffic/clones)
- *     and `read:packages` scope (for /orgs/<org>/packages/container/<pkg>)
- *   - If `read:packages` is missing, ghPackages step is skipped with a warning
- *     (clones + releases still update).
  *
  * Run locally:
  *   GH_TOKEN=$(gh auth token) node scripts/update-github-counts.mjs
@@ -183,9 +188,12 @@ async function updateReleases(repos, byRepo) {
 }
 
 // ── GHCR: org packages container download counts ─────────────────────
-// Requires `read:packages` scope on the token. If missing, skips with a
-// warning and leaves manual-package-counts.json untouched (manual file
-// remains the source of truth for ghPackages until the token gains scope).
+// The REST API does not actually populate `download_count` for container
+// packages — the field is always null even with `read:packages` scope
+// (verified 2026-05-07). We still hit the endpoint to detect the day
+// GitHub starts populating it, but skip writing whenever every package
+// returns null so the manual file isn't clobbered with zeros. Manual
+// file remains the permanent source of truth until the API works.
 async function updateGhPackages() {
   let packages
   try {
@@ -193,16 +201,24 @@ async function updateGhPackages() {
   } catch (e) {
     if (e.status === 403) {
       console.warn('  ! GHCR step skipped: token lacks `read:packages` scope.')
-      console.warn('  ! Add the scope to ORG_TRAFFIC_TOKEN to enable automated GHCR refresh.')
+      console.warn('  ! Add the scope to ORG_TRAFFIC_TOKEN to enable the API probe.')
       return null
     }
     throw e
+  }
+  if (!Array.isArray(packages) || packages.length === 0) {
+    console.warn('  ! GHCR step skipped: API returned no packages.')
+    return null
   }
   const byPackage = {}
   for (const pkg of packages) {
     if (typeof pkg.download_count === 'number') {
       byPackage[pkg.name] = pkg.download_count
     }
+  }
+  if (Object.keys(byPackage).length === 0) {
+    console.warn(`  ! GHCR step skipped: API returned ${packages.length} packages but every download_count was null (known limitation — GHCR counts are not exposed via REST). Manual file is the source of truth.`)
+    return null
   }
   const total = Object.values(byPackage).reduce((a, b) => a + b, 0)
   console.log(`ghPackages: ${Object.keys(byPackage).length} containers, total=${total}`)
