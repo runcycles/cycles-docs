@@ -176,3 +176,9 @@ The research for this post draws from discussions and reports published between 
 - [Runtime Authority vs. Guardrails vs. Observability](/blog/runtime-authority-vs-guardrails-vs-observability) — Why enforcement is a distinct layer
 - [AI Agent Runtime Permissions: Control Actions Before Execution](/blog/ai-agent-runtime-permissions-control-actions-before-execution) — The permissions model in detail
 - [Shadow Mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) — Start with zero trust in observe-only mode
+
+## Related how-to guides
+
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
