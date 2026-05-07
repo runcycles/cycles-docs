@@ -79,3 +79,15 @@ features:
     link: /how-to/production-operations-guide
     linkText: View guides
 ---
+
+## Foundational concepts
+
+For the structural arguments behind runtime authority — what it is, why budgets alone aren't enough, and how the cost / action / audit pillars work together:
+
+- [What is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents) — the definition.
+- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — why cost is one axis of three.
+- [The AI Agent Audit Trail You're Already Building](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default) — audit as a runtime-authority byproduct.
+- [Runtime Authority vs Guardrails vs Observability](/blog/runtime-authority-vs-guardrails-vs-observability) — where each layer fits in the lifecycle.
+- [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — why governance has to span providers, tools, tenants, and workers.
+- [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — the local-first / BYOK runtime category.
+- [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers) — six layers of Python AI agent control, what each covers and where each stops short.
