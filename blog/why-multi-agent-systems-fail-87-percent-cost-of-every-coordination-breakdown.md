@@ -226,3 +226,9 @@ All dollar figures in cost tables and scenario models are illustrative. They are
 - [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — Specific failure scenarios with dollar math
 - [Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools) — Why monitoring alone isn't enforcement
 - [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents) — The observability gap and why dashboards fail
+
+## Related how-to guides
+
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
