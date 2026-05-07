@@ -266,3 +266,9 @@ The organizations that don't will show up in next year's incident catalog.
 ---
 
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)

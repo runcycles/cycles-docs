@@ -197,3 +197,9 @@ Static approval says what the agent was allowed to be. Runtime authority decides
 - [Estimate Drift: The Silent Killer of Enforcement](/blog/estimate-drift-silent-killer-of-enforcement) - why estimate accuracy affects enforcement quality
 - [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) - scoring action risk before production
 - [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) - governance signal delivery and audit mechanics
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
+- [Webhook integrations](/how-to/webhook-integrations)

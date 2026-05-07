@@ -174,3 +174,9 @@ The rule: **every write that affects budget or fires a side effect needs an idem
 - [AI Agent Failures That Budget Controls Prevent](/blog/ai-agent-failures-budget-controls-prevent)
 - [Why I'm Building Cycles](/blog/why-i-am-building-cycles)
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)
+- [Integrating with Anthropic](/how-to/integrating-cycles-with-anthropic)

@@ -193,3 +193,9 @@ For the platform team's day-to-day, the dashboard handles the parts of budget ma
 - [Five lessons from building a production OpenClaw plugin](/blog/openclaw-plugin-lessons-learned) — the equivalent field report from a TypeScript plugin integration
 - [LangGraph budget control for durable execution, retries, and fan-out](/blog/langgraph-budget-control-durable-execution-retries-fan-out) — what budget enforcement looks like in a graph runtime
 - [Cycles Java Spring starter on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-client-java-spring) — the dependency used in this post
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

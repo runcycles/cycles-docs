@@ -168,3 +168,9 @@ The code is in the client today; the four failure modes above are what each line
 ---
 
 *Related: [reservation TTL, grace period, and extend in Cycles](/protocol/reservation-ttl-grace-period-and-extend-in-cycles) for the TTL semantics, [retry storms and idempotency](/blog/retry-storms-and-idempotency-in-agent-budget-systems) for the retry layer, [how reserve-commit works in Cycles](/protocol/how-reserve-commit-works-in-cycles) for the non-streaming case.*
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Handling streaming responses](/how-to/handling-streaming-responses-with-cycles)

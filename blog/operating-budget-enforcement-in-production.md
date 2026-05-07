@@ -232,3 +232,9 @@ Budget enforcement works best when budgets are calibrated to actual workloads. H
 - [Monitoring and Alerting](/how-to/monitoring-and-alerting) — Prometheus metrics and Grafana dashboards
 - [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — pricing reference for estimation
 - [Production Operations Guide](/how-to/production-operations-guide) — deployment, Redis HA, [events service](/glossary#events-service)
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Prometheus metrics reference](/how-to/prometheus-metrics-reference)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)

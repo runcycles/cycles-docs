@@ -208,3 +208,9 @@ To see budget enforcement in action: [Runaway Agent Demo walkthrough](/blog/runa
 - [AI Agent Failures That Budget Controls Prevent](/blog/ai-agent-failures-budget-controls-prevent) — catalog of real failure modes and how budget enforcement stops them
 - [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do) — why cost limits alone aren't enough for consequential actions
 - [Runaway Agents, Tool Loops, and Budget Overruns](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) — the incidents this plugin is designed to prevent
+
+## Related how-to guides
+
+- [Prometheus metrics reference](/how-to/prometheus-metrics-reference)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Webhook integrations](/how-to/webhook-integrations)

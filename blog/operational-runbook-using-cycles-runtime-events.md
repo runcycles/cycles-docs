@@ -217,3 +217,9 @@ Your job as an operator is to route each event to the right response: page for c
 - [The State of AI Agent Incidents 2026](/blog/state-of-ai-agent-incidents-2026)
 - [Webhook Integrations Guide (how-to)](/how-to/webhook-integrations)
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

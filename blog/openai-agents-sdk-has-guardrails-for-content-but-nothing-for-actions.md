@@ -228,3 +228,9 @@ Every LLM call, every tool invocation, and every handoff is now governed. If you
 - [Error Handling in Python](/how-to/error-handling-patterns-in-python) — handling `BudgetExceededError` and other Cycles exceptions
 - [runcycles-openai-agents on PyPI](https://pypi.org/project/runcycles-openai-agents/) — package page
 - [Source on GitHub](https://github.com/runcycles/cycles-openai-agents) — full source code and examples
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Handling streaming responses](/how-to/handling-streaming-responses-with-cycles)
