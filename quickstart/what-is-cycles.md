@@ -161,3 +161,14 @@ The **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** takes you from ze
 - [Architecture Overview](/quickstart/architecture-overview-how-cycles-fits-together) — how the runtime, admin, and events components fit together
 - [How Cycles Compares](/concepts/how-cycles-compares-to-rate-limiters-observability-provider-caps-in-app-counters-and-job-schedulers) — vs. rate limiters, observability, provider caps
 
+## Read the foundations
+
+For the structural arguments behind runtime authority and the cost / action / audit pillars:
+
+- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — why budget is one axis of three; risk and audit need their own enforcement.
+- [The AI Agent Audit Trail You're Already Building](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default) — how runtime-authority decisions become a structured audit ledger by default.
+- [Runtime Authority vs Guardrails vs Observability](/blog/runtime-authority-vs-guardrails-vs-observability) — why pre-execution decisions are a different job from post-hoc tracing.
+- [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the layer argument: governance must span providers, tools, tenants, and workers.
+- [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — for teams running OpenClaw, Cline, Aider, Continue.
+- [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers) — Python-specific six-layer view across the three pillars.
+
