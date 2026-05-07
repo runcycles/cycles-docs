@@ -237,3 +237,9 @@ To add Cycles to your own application:
 - [Adding Cycles to an Existing App](/how-to/adding-cycles-to-an-existing-application) — incremental adoption guide
 
 Explore more scenarios on the [Demos](/demos/) page.
+
+## Related how-to guides
+
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

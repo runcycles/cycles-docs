@@ -211,3 +211,9 @@ The observability tools that only see totals aren't wrong. They're answering a d
 ---
 
 *Related reading: [event payloads reference](/protocol/event-payloads-reference) for emission status of every event type, [estimate drift: the silent killer of enforcement](/blog/estimate-drift-silent-killer-of-enforcement) for the `commit_overage` deep-dive, [webhook event delivery protocol](/protocol/webhook-event-delivery-protocol) for subscription mechanics, [real-time budget alerts for AI agents](/blog/real-time-budget-alerts-for-ai-agents) for the alerting side of the same stream.*
+
+## Related how-to guides
+
+- [Choosing the right overage policy](/how-to/choosing-the-right-overage-policy)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Webhook integrations](/how-to/webhook-integrations)

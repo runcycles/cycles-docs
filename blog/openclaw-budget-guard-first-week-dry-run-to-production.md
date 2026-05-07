@@ -241,3 +241,9 @@ The session summary keeps doing this work after cutover, too. Treat it as a week
 - [Estimate Drift: The Silent Killer of Budget Enforcement](/blog/estimate-drift-silent-killer-of-enforcement) — what to do when observed cost diverges from `toolBaseCosts`
 - [When Budget Runs Out: Graceful Degradation Patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents) — the decision matrix for DENY and ALLOW_WITH_CAPS handling
 - [Operating Budget Enforcement in Production](/blog/operating-budget-enforcement-in-production) — what to do when the first denial fires
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Webhook integrations](/how-to/webhook-integrations)

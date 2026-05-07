@@ -172,3 +172,9 @@ Just be honest about what you're trending toward. The v3→v4 transition we almo
 - [Action Authority: Hard Limits on Agent Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects)
 - [Risk Assessment: Score, Classify, and Enforce Tool Risk](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk)
 - [GitHub: runcycles](https://github.com/runcycles)
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Webhook integrations](/how-to/webhook-integrations)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

@@ -159,3 +159,9 @@ The pattern recurs because it's structural. Provider caps are at the wrong granu
 - [Agent Skills Are the New Supply Chain](/blog/agent-skills-are-the-new-supply-chain) — why marketplace ecosystems amplify the supply-chain risk shape.
 - [MCP Tool Poisoning](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — the ClawHub incident and what it implies for the category.
 - [Your First Week with Cycles Budget Guard for OpenClaw](/blog/openclaw-budget-guard-first-week-dry-run-to-production) — the operator playbook this post points at.
+
+## Related how-to guides
+
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

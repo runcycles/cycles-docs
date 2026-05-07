@@ -149,3 +149,9 @@ Shadow mode is the dry-run of a production decision. The cutover to hard enforce
 - [Tenant Lifecycle at Scale: Cascade Semantics](/blog/tenant-lifecycle-cascade-semantics-at-scale) — what safe decommissioning looks like once enforcement is live
 - [Stripe's rate-limiter dark-launch pattern](https://stripe.com/blog/rate-limiters) — the industry precedent for observe-before-enforce rollouts
 - [Google SRE Book: Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/) — broader SRE context for progressive enforcement rollout
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

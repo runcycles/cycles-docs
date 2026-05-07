@@ -180,3 +180,9 @@ Most teams have observability. About half have evals. Far fewer teams have enfor
 - [What Is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents) — The foundational concept behind pre-execution enforcement
 - [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — Concrete incident scenarios with cost math
 - [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects) — Scope-based behavioral boundaries in practice
+
+## Related how-to guides
+
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [Integrating with Anthropic](/how-to/integrating-cycles-with-anthropic)
