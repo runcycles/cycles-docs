@@ -101,17 +101,18 @@ function readCache(): InstallsCache {
 }
 
 // ── GitHub Packages (manual config) ──────────────────────────────────
-// GHCR pull counts ARE exposed via the GitHub API at
-// /orgs/{org}/packages?package_type=container when the token has the
-// `read:packages` scope (download_count field on each package).
-// scripts/update-github-counts.mjs uses that path when scope is present
-// and overwrites manual-package-counts.json with the API values.
+// GHCR pull counts are NOT exposed via the GitHub REST API. The
+// `download_count` field appears in the response schema for both
+// /orgs/{org}/packages?package_type=container and the per-version
+// endpoint, but is always null for container packages even with
+// `read:packages` scope (verified 2026-05-07). The field is only
+// populated for some other registry types, not GHCR.
 //
-// At build time we read the manual file rather than calling the API
-// directly because the docs build doesn't currently pass a token with
-// read:packages scope. The manual file is therefore the source of
-// truth for the homepage counter; the scheduled GitHub-side workflow
-// keeps it in sync when the token has the scope.
+// The only source for GHCR counts is the public web UI at
+// https://github.com/orgs/{org}/packages (rounded for high-traffic
+// packages) and the per-package pages (exact integer for some).
+// This manual file is the permanent source of truth for ghPackages;
+// maintainers refresh it by peeking at the pages.
 function fetchManualPackageCounts(): number {
   try {
     const raw = JSON.parse(readFileSync(MANUAL_PATH, 'utf-8'))
