@@ -334,3 +334,9 @@ Your application code should handle reservation failures gracefully. If the rese
 - [Common Budget Patterns](/how-to/common-budget-patterns) — per-tenant, per-workflow, per-run structures
 - [Assigning RISK_POINTS to Tools](/how-to/assigning-risk-points-to-agent-tools) — add action authority after cost control
 - [Shadow Mode Rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) — detailed shadow mode guide
+
+## Related concepts
+
+- [AI agent action control: hard limits on side effects](/blog/ai-agent-action-control-hard-limits-side-effects)
+- [Agent delegation chains and authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation)
+- [Graceful degradation patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents)

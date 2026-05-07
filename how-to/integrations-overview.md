@@ -131,3 +131,9 @@ For the layer-by-layer view of where these integrations sit relative to other ag
 - [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — why every integration enforces on cost AND action authority, not just dollars.
 - [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — local-first / BYOK category context for OpenClaw, Cline, Aider, Continue, and similar runtimes.
 - [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the structural argument for why agent governance has to span every integration the agent uses.
+
+## Related concepts
+
+- [Tracking tokens in a streaming LLM response](/blog/tracking-tokens-in-a-streaming-llm-response)
+- [What is runtime authority?](/blog/what-is-runtime-authority-for-ai-agents)
+- [AI agent action control: hard limits on side effects](/blog/ai-agent-action-control-hard-limits-side-effects)

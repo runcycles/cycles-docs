@@ -320,3 +320,9 @@ See [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in
 - [Architecture Overview](/quickstart/architecture-overview-how-cycles-fits-together) — how the MCP server fits into the Cycles stack
 - [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — pricing reference for estimates
 - [Troubleshooting and FAQ](/how-to/troubleshooting-and-faq) — common issues and solutions
+
+## Related concepts
+
+- [What is runtime authority?](/blog/what-is-runtime-authority-for-ai-agents)
+- [Graceful degradation patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents)
+- [Multi-agent coordination failure: structural prevention](/blog/multi-agent-coordination-failure-structural-prevention)
