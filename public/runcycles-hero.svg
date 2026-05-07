@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 480" width="620" height="480">
-  <title>CYCLES enforcement flow</title>
-  <desc>Three AI agents submit actions through the CYCLES budget gate. Allowed actions proceed; blocked actions are rejected when budget is exceeded.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 530" width="620" height="530">
+  <title>CYCLES enforcement and audit flow</title>
+  <desc>Three AI agents submit actions through the CYCLES budget gate. Allowed actions proceed; blocked actions are rejected when budget is exceeded. Every decision is appended to a signed audit ledger.</desc>
   <style>
     @media (prefers-reduced-motion: reduce) {
       .flow-dot { display: none; }
@@ -28,7 +28,7 @@
   </defs>
 
   <!-- Subtle background for grounding -->
-  <rect x="0" y="0" width="620" height="480" rx="18" fill="#F8F8FA" stroke="#E8E8EC" stroke-width="1"/>
+  <rect x="0" y="0" width="620" height="530" rx="18" fill="#F8F8FA" stroke="#E8E8EC" stroke-width="1"/>
 
   <!-- Agent A — LLM completion (blue tint) -->
   <rect x="24" y="72" width="120" height="56" rx="12" fill="#E4E8F4" filter="url(#shadow)"/>
@@ -215,9 +215,14 @@
       values="0;0;0.3;0;0" keyTimes="0;0.70;0.74;0.80;1"/>
   </rect>
   <rect x="454" y="96" width="4" height="64" rx="2" fill="#00C9A7"/>
-  <text x="474" y="118" font-size="13" font-weight="800" fill="#00885F" font-family="-apple-system,system-ui,sans-serif">ALLOWED</text>
-  <text x="474" y="135" font-size="11" fill="#1C1C1E" font-family="-apple-system,system-ui,sans-serif">Reserved: 50,000</text>
-  <text x="474" y="150" font-size="11" fill="#3C3C43" font-family="-apple-system,system-ui,sans-serif">&#x2713; proceed</text>
+  <text x="474" y="114" font-size="13" font-weight="800" fill="#00885F" font-family="-apple-system,system-ui,sans-serif">ALLOWED</text>
+  <text x="474" y="128" font-size="11" fill="#1C1C1E" font-family="-apple-system,system-ui,sans-serif">Reserved: 50,000</text>
+  <text x="474" y="142" font-size="11" fill="#3C3C43" font-family="-apple-system,system-ui,sans-serif">&#x2713; proceed</text>
+  <!-- Audit stamp — fades in at decision arrival -->
+  <text x="474" y="154" font-size="10" fill="#48484A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="flow-dot">evt_a8f2 &#xb7; signed
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+      values="0;0;1;1;0;0" keyTimes="0;0.70;0.74;0.95;0.98;1"/>
+  </text>
 
   <!-- Arrow to BLOCKED -->
   <path id="path-blocked" d="M350 272 C380 287, 420 320, 452 335" fill="none" stroke="#FF453A" stroke-width="2" marker-end="url(#arr-red)"/>
@@ -242,8 +247,61 @@
         values="0;0;0.3;0;0" keyTimes="0;0.75;0.79;0.85;1"/>
     </rect>
     <rect x="454" y="320" width="4" height="64" rx="2" fill="#FF453A"/>
-    <text x="474" y="342" font-size="13" font-weight="800" fill="#CC362D" font-family="-apple-system,system-ui,sans-serif">BLOCKED</text>
-    <text x="474" y="359" font-size="11" fill="#1C1C1E" font-family="-apple-system,system-ui,sans-serif">Budget: $0.00</text>
-    <text x="474" y="374" font-size="11" fill="#3C3C43" font-family="-apple-system,system-ui,sans-serif">&#x2717; 409 exceeded</text>
+    <text x="474" y="338" font-size="13" font-weight="800" fill="#CC362D" font-family="-apple-system,system-ui,sans-serif">BLOCKED</text>
+    <text x="474" y="352" font-size="11" fill="#1C1C1E" font-family="-apple-system,system-ui,sans-serif">Budget: $0.00</text>
+    <text x="474" y="366" font-size="11" fill="#3C3C43" font-family="-apple-system,system-ui,sans-serif">&#x2717; 409 exceeded</text>
+    <!-- Audit stamp — fades in at decision arrival -->
+    <text x="474" y="378" font-size="10" fill="#48484A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="flow-dot">evt_b1cd &#xb7; signed
+      <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+        values="0;0;1;1;0;0" keyTimes="0;0.79;0.83;0.95;0.98;1"/>
+    </text>
+  </g>
+
+  <!-- ─── Audit Ledger ─────────────────────────────────────────── -->
+  <!-- Visualizes that every gate decision is appended to a signed,
+       exportable ledger. Prior row is always visible (suggests the
+       log existed before this loop); the two new rows fade in at the
+       same moment as ALLOWED/BLOCKED flash. -->
+  <g>
+    <rect x="24" y="436" width="572" height="78" rx="10" fill="#F2F2F4" stroke="#E0E0E4" stroke-width="1"/>
+
+    <!-- Header -->
+    <text x="38" y="453" font-size="12" font-weight="800" fill="#48484A" font-family="-apple-system,system-ui,sans-serif" letter-spacing="0.10em">AUDIT LOG</text>
+    <text x="118" y="453" font-size="10" fill="#8E8E93" font-family="-apple-system,system-ui,sans-serif">&#xb7; signed &#xb7; exportable &#xb7; queryable</text>
+    <text x="582" y="453" text-anchor="end" font-size="10" fill="#00885F" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">ledger.export() &#x2192;</text>
+
+    <!-- Divider -->
+    <line x1="34" y1="461" x2="586" y2="461" stroke="#E0E0E4" stroke-width="1"/>
+
+    <!-- Row 1 — prior decision (always visible, slightly muted text) -->
+    <g>
+      <text x="38" y="476" font-size="11" font-weight="700" fill="#00885F" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2713;</text>
+      <text x="58" y="476" font-size="11" fill="#48484A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">llm.completion</text>
+      <text x="218" y="476" font-size="11" fill="#48484A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">reserved 35,000</text>
+      <text x="380" y="476" font-size="11" font-style="italic" fill="#636366" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">evt_91ab&#x2026;</text>
+      <text x="510" y="476" font-size="11" fill="#8E8E93" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">17:58:11</text>
+    </g>
+
+    <!-- Row 2 — NEW allowed decision (fades in with ALLOWED flash at 0.70) -->
+    <g opacity="0" class="flow-dot">
+      <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+        values="0;0;1;1;0;0" keyTimes="0;0.70;0.74;0.95;0.98;1"/>
+      <text x="38" y="492" font-size="11" font-weight="700" fill="#00885F" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2713;</text>
+      <text x="58" y="492" font-size="11" fill="#1C1C1E" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">tool.web_search</text>
+      <text x="218" y="492" font-size="11" fill="#1C1C1E" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">reserved 12,000</text>
+      <text x="380" y="492" font-size="11" font-style="italic" fill="#636366" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">evt_d44c&#x2026;</text>
+      <text x="510" y="492" font-size="11" fill="#8E8E93" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">17:58:42</text>
+    </g>
+
+    <!-- Row 3 — NEW blocked decision (fades in with BLOCKED flash at 0.79) -->
+    <g opacity="0" class="flow-dot">
+      <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
+        values="0;0;1;1;0;0" keyTimes="0;0.79;0.83;0.95;0.98;1"/>
+      <text x="38" y="508" font-size="11" font-weight="700" fill="#CC362D" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2717;</text>
+      <text x="58" y="508" font-size="11" fill="#1C1C1E" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">tool.send_email</text>
+      <text x="218" y="508" font-size="11" fill="#CC362D" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">409 exceeded</text>
+      <text x="380" y="508" font-size="11" font-style="italic" fill="#636366" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">evt_b1cd&#x2026;</text>
+      <text x="510" y="508" font-size="11" fill="#8E8E93" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">17:58:43</text>
+    </g>
   </g>
 </svg>
