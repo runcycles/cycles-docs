@@ -298,3 +298,9 @@ For failures where the risk is action rather than cost:
 - **[Action Authority](/concepts/action-authority-controlling-what-agents-do)** — risk-point budgets and toolset-scoped controls
 
 The cheapest incident is the one that never happens. The second cheapest is the one that's capped at $15 instead of $4,200.
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

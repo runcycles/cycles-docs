@@ -162,3 +162,9 @@ The circuit-breaker framing is the front door. The ledger is the back office tha
 - [Where Did My Tokens Go? Debugging Agent Spend](/blog/where-did-my-tokens-go-debugging-agent-spend) — observability companion for the cost-attribution flow
 - [How decide() works in Cycles](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation) — preflight budget checks and the decision API
 - [How scope derivation works in Cycles](/protocol/how-scope-derivation-works-in-cycles) — the six-level subject hierarchy and how it's resolved
+
+## Related how-to guides
+
+- [Webhook integrations](/how-to/webhook-integrations)
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

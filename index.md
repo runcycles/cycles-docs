@@ -8,9 +8,9 @@ hero:
   tagline: >-
     Stop runaway agent spend and risky actions before they execute.<br><span style="font-size: 0.85em; opacity: 0.7;">Self-hosted, no prompt storage. Apache 2.0.</span>
   image:
-    light: /runcycles-hero.svg?v=3
-    dark: /runcycles-hero-dark.svg?v=3
-    alt: Cycles hero image
+    light: /runcycles-hero.svg?v=7
+    dark: /runcycles-hero-dark.svg?v=7
+    alt: Cycles hero — agents → gate → allow/block → signed audit ledger
   actions:
     - theme: brand
       text: "Start with Claude or Codex"

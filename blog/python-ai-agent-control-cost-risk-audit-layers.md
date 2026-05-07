@@ -172,3 +172,9 @@ Most Python AI agent stacks stop short on risk and audit because the layers most
 - [AI Agent Action Control: Hard Limits and Side-Effects](/blog/ai-agent-action-control-hard-limits-side-effects) — what bounded action authority looks like at runtime.
 - [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the same structural argument applied to provider × tool × tenant × worker dimensions.
 - [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — the local-first / BYOK companion category.
+
+## Related how-to guides
+
+- [Budget control for LangChain](/how-to/how-to-add-budget-control-to-a-langchain-agent)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

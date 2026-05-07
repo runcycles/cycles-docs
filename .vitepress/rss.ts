@@ -76,4 +76,12 @@ export async function generateFeed(config: SiteConfig) {
   mkdirSync(outDir, { recursive: true })
   writeFileSync(resolve(outDir, 'feed.xml'), feed.rss2())
   writeFileSync(resolve(outDir, 'feed.atom'), feed.atom1())
+
+  // Also publish at /blog/feed.xml — RSS readers commonly guess this path
+  // since posts live under /blog/. Catches subscriber guesses without
+  // moving the canonical URL.
+  const blogOut = resolve(outDir, 'blog')
+  mkdirSync(blogOut, { recursive: true })
+  writeFileSync(resolve(blogOut, 'feed.xml'), feed.rss2())
+  writeFileSync(resolve(blogOut, 'feed.atom'), feed.atom1())
 }

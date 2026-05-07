@@ -176,3 +176,9 @@ A useful way to reason about a tenant close isn't "I'll turn this customer off."
 - [Shadow Mode to Hard Enforcement: The Cutover Decision Tree](/blog/shadow-to-enforcement-cutover-decision-tree) — readiness signals to evaluate before enforcing against a tenant you'd later need to close
 - [Admin API Guide — Tenant Lifecycle](/admin-api/guide) — operator-facing endpoint reference for close, suspend, and recover
 - [AWS Organizations account closure documentation](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_accounts_close.html) — a reference implementation of tenant-scope cascade in a large SaaS
+
+## Related how-to guides
+
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Webhook integrations](/how-to/webhook-integrations)

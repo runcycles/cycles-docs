@@ -174,3 +174,9 @@ For teams introducing enforcement to an existing system, [shadow mode](/how-to/s
 - **[AI Agent Budget Control: Enforce Hard Spend Limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits)** — how the reserve-commit pattern works under the hood
 - **[AI Agent Cost Management: The Complete Guide](/blog/ai-agent-cost-management-guide)** — the maturity model from no controls to hard enforcement
 - **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — walk through the full reserve-commit lifecycle hands-on
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Integrating with AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)

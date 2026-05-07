@@ -122,3 +122,18 @@ See [Webhook Integrations](/how-to/webhook-integrations) for full examples with 
 - [Webhook Integrations](/how-to/webhook-integrations) — PagerDuty, Slack, ServiceNow webhook examples
 - [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — pricing reference for estimation
 - [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) — handling budget errors across languages
+
+## Read the foundations
+
+For the layer-by-layer view of where these integrations sit relative to other agent control approaches — wrappers, provider-client patches, framework hooks, LLM gateways, observability — and why runtime authority complements them rather than replaces them:
+
+- [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers) — six layers walked through, what each covers across cost / risk / audit, and where each stops short.
+- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — why every integration enforces on cost AND action authority, not just dollars.
+- [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — local-first / BYOK category context for OpenClaw, Cline, Aider, Continue, and similar runtimes.
+- [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the structural argument for why agent governance has to span every integration the agent uses.
+
+## Related concepts
+
+- [Tracking tokens in a streaming LLM response](/blog/tracking-tokens-in-a-streaming-llm-response)
+- [What is runtime authority?](/blog/what-is-runtime-authority-for-ai-agents)
+- [AI agent action control: hard limits on side effects](/blog/ai-agent-action-control-hard-limits-side-effects)

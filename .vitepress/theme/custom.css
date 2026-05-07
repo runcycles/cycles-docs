@@ -159,11 +159,16 @@ samp {
   border: none !important;
 }
 
-/* Enlarge hero image — !important needed to beat VitePress scoped styles */
+/* Enlarge hero image — !important needed to beat VitePress scoped styles.
+   Width-driven sizing with height:auto so non-square SVGs (the
+   enforcement+audit hero is 620×530) render at their natural aspect
+   ratio without getting squashed by a square max-height box. */
 .VPHero .image-container .VPImage.image-src {
   --hero-size: 280px;
+  width: 100% !important;
   max-width: var(--hero-size) !important;
-  max-height: var(--hero-size) !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 @media (min-width: 640px) {

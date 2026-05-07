@@ -193,3 +193,9 @@ Scoped controls let teams contain damage without converting every agent incident
 - [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) - terminal tenant lifecycle behavior and mutation guards
 - [Deploying the Cycles Dashboard](/quickstart/deploying-the-cycles-dashboard) - operational surface for freeze, suspend, revoke, pause, and force-release actions
 - [Shadow Mode in Cycles](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) - rollout pattern for testing enforcement before blocking
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Force-releasing stuck reservations](/how-to/force-releasing-stuck-reservations-as-an-operator)
+- [Webhook integrations](/how-to/webhook-integrations)

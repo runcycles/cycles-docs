@@ -173,3 +173,9 @@ Full integration guide: [Integrating Cycles with OpenClaw](/how-to/integrating-c
 - [We Gave Our OpenClaw Agent a $5 Budget and Watched It Adapt](/blog/openclaw-budget-guard-five-dollar-agent) — what [graceful degradation](/glossary#graceful-degradation) looks like in practice
 - [Your OpenClaw Agent Has No Spending Limit](/blog/openclaw-budget-guard-stop-agents-burning-money) — the five problems the plugin solves
 - [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do) — why cost limits alone aren't enough
+
+## Related how-to guides
+
+- [Webhook integrations](/how-to/webhook-integrations)
+- [API key management](/how-to/api-key-management-in-cycles)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)

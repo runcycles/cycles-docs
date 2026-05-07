@@ -162,3 +162,9 @@ That separation is what makes skills usable in production.
 - [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) - scoring tool risk before production
 - [Shadow Mode to Hard Enforcement](/blog/shadow-to-enforcement-cutover-decision-tree) - signal-driven cutover from observe-only to blocking
 - [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) - event delivery reliability for governance signals
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Shadow Mode rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)
+- [Webhook integrations](/how-to/webhook-integrations)

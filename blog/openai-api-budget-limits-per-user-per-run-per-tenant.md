@@ -188,3 +188,9 @@ For the full degradation strategy guide, see [Degradation Paths: Deny, Downgrade
 - **[Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet)** — OpenAI, Anthropic, and Google pricing in USD_MICROCENTS
 - **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — walk through the reserve-commit lifecycle hands-on
 - **[Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation)** — per-tenant budgets, quotas, and hierarchical isolation for SaaS platforms
+
+## Related how-to guides
+
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [Integrating with Anthropic](/how-to/integrating-cycles-with-anthropic)

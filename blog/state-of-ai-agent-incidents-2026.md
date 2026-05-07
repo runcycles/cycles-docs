@@ -358,3 +358,9 @@ The regulatory frameworks converge on the same conclusion. The [EU AI Act's Arti
 - [Zero Trust for AI Agents](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) — OWASP mapping and policy enforcement
 - [MCP Tool Poisoning](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — supply chain attack analysis
 - [Why Multi-Agent Systems Fail](/blog/why-multi-agent-systems-fail-87-percent-cost-of-every-coordination-breakdown) — UC Berkeley MAST cost model
+
+## Related how-to guides
+
+- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
+- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

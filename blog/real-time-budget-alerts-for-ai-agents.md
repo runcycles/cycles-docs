@@ -193,3 +193,9 @@ These are defined in the [v0.1.25 spec](https://github.com/runcycles/cycles-prot
 - [Webhook Integrations](/how-to/webhook-integrations) — PagerDuty, Slack, Datadog, Teams, Opsgenie, ServiceNow code examples
 - [Webhooks and Events Concepts](/concepts/webhooks-and-events) — architecture, delivery semantics, security model
 - [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) — admin + runtime + events in one command
+
+## Related how-to guides
+
+- [Rolling over billing periods](/how-to/rolling-over-billing-periods-with-reset-spent)
+- [Prometheus metrics reference](/how-to/prometheus-metrics-reference)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)

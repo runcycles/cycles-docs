@@ -139,3 +139,9 @@ Because it is protocol-based, Cycles works across frameworks, languages, and pro
 - [Budget Wrapper vs Runtime Authority for AI Agents](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — why building a prototype is easy but owning a runtime authority is not
 - [How Reserve/Commit Works](/protocol/how-reserve-commit-works-in-cycles) — the protocol mechanics behind the lifecycle
 - [End-to-End Tutorial](/quickstart/end-to-end-tutorial) — set up Cycles with a working agent in under 30 minutes
+
+## Related how-to guides
+
+- [Integrating with AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock)
+- [Integrating with LangGraph](/how-to/integrating-cycles-with-langgraph)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

@@ -163,3 +163,9 @@ If the answer is no, that is exactly why Cycles exists.
 - **[What is Cycles?](/quickstart/what-is-cycles)** — start here if you are new to Cycles
 - **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — see the reserve/commit lifecycle in action
 - **[How Reserve/Commit Works](/protocol/how-reserve-commit-works-in-cycles)** — the protocol mechanics behind runtime authority
+
+## Related how-to guides
+
+- [Multi-agent shared budgets](/how-to/multi-agent-shared-workspace-budget-patterns)
+- [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles)
+- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)

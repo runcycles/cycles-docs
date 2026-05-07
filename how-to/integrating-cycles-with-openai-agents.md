@@ -215,3 +215,9 @@ See the [`examples/`](https://github.com/runcycles/cycles-openai-agents/tree/mai
 - [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — pricing reference for estimation
 - [runcycles-openai-agents on PyPI](https://pypi.org/project/runcycles-openai-agents/) — package page
 - [Source on GitHub](https://github.com/runcycles/cycles-openai-agents) — full source code and examples
+
+## Related concepts
+
+- [Audit trail as a runtime-authority byproduct](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default)
+- [Graceful degradation patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents)
+- [Multi-agent coordination failure: structural prevention](/blog/multi-agent-coordination-failure-structural-prevention)
