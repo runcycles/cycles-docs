@@ -39,7 +39,7 @@ This is a dogfood report from a real internal workflow — a companion piece to 
 
 ## The agent system we governed
 
-The runner now lives on a small Linux VM with systemd, not in a local Codex session.
+The runner now lives on a small Linux VM under systemd, not in a local Codex session.
 
 The production shape is:
 
@@ -68,13 +68,17 @@ LLM-heavy research and synthesis run against a `research-live` toolset. The curr
 
 The second is action authority.
 
-External send is a separate toolset from research. In our runner, the internal toolset is named `send-email` (with `send-email-approved` as the explicit-approval variant), but the governed action is the email-send boundary itself — a real external side effect. In the canonical [Cycles action-kind registry](/protocol/), this maps to `message.email.send`. The default `send-email` path has a `$0.0000` allocation, so the normal answer is DENY unless the explicit approval path is used — the same pattern walked through in [the action authority demo](/blog/action-authority-demo-support-agent-walkthrough), where setting a toolset budget to zero makes the reservation fail at the runtime gate.
+External send is a separate toolset from research. In our runner, the internal toolset is named `send-email` (with `send-email-approved` as the explicit-approval variant), but the governed action is the email-send boundary itself — a real external side effect. In the canonical [Cycles action-kind registry](/protocol/), this maps to `message.email.send`.
+
+Here the dollar amount is being used as an action allowance, not because sending email has a meaningful provider cost. A zero allocation means this path has no authority to perform the side effect.
+
+The default `send-email` path has a `$0.0000` allocation, so the normal answer is DENY unless the explicit approval path is used — the same pattern walked through in [the action authority demo](/blog/action-authority-demo-support-agent-walkthrough), where setting a toolset budget to zero makes the reservation fail at the runtime gate.
 
 That matters because the expensive mistake in outreach is not only cost. It is contacting the wrong person, sending a half-reviewed draft, sending too often, or continuing after someone has replied. Token spend is one exposure. External communication is another. [Cycles lets those exposures be budgeted separately](/blog/ai-agent-action-control-hard-limits-side-effects).
 
-The workflow can be allowed to research while being denied permission to send.
+The workflow can be allowed to research while still being denied permission to send.
 
-That is the useful split.
+That split is the point.
 
 ## What happened in the first live runs
 
