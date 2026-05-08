@@ -32,6 +32,8 @@ That is necessary infrastructure. It is not the same thing as runtime governance
 
 The registry tells you what the agent is supposed to be. Runtime governance decides whether the next action should happen now.
 
+<!-- more -->
+
 ## What a Registry Is Good At
 
 An agent registry is an inventory and lifecycle control point. It helps answer questions that every production governance program eventually asks.

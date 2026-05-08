@@ -28,6 +28,8 @@ This is what at-least-once delivery actually looks like in production. It's not 
 
 This post is about what "hold up their end" looks like. Cycles ships a specific header, a specific signing shape, and a specific retry schedule, and the idempotency story follows cleanly once the contract is visible. Three working receiver patterns — Redis for speed, Postgres for durability, and a minimal Node.js variant — cover most real production shapes.
 
+<!-- more -->
+
 ## What Cycles actually delivers
 
 Every outbound webhook POST Cycles makes carries four headers worth knowing by name:

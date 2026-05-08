@@ -29,6 +29,8 @@ A calendar-driven cutover — "it's been two weeks, flip the switch" — is the 
 
 This post is a decision tree for that call. Four signal categories, suggested threshold ranges, and explicit guidance on what to cut over first, when to stop, and how to reverse course if the signals turn against you.
 
+<!-- more -->
+
 ## Why calendar-driven cutovers fail
 
 The pattern is familiar. A team picks a duration — "run it in shadow for a quarter" — hits the date, flips to enforcement, and discovers the first production weekday produces a denial rate several times what the sampled data suggested. The post-mortem typically lands on "shadow didn't sample enough of the high-traffic path" as the root cause.

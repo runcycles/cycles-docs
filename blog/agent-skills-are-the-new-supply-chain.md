@@ -30,6 +30,8 @@ The software industry learned to treat packages, containers, and CI actions as s
 
 Model-level and MCP-level controls do not cover the whole skill risk surface. The skill layer is where capability turns into workflow.
 
+<!-- more -->
+
 ## Tools Are Capabilities. Skills Are Behavior.
 
 The difference matters:

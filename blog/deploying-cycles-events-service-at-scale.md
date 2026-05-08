@@ -27,6 +27,8 @@ What changed between `.8` and `.10` isn't a bug — it's a deliberate architectu
 
 This post is about running the events service in production. The port split is the entry point; the longer story covers what Prometheus actually scrapes, how liveness and readiness probes should be configured under Kubernetes, and which metric alerts catch the classes of failure an events service can have before an operator notices downstream silence.
 
+<!-- more -->
+
 ## Why the management port lives somewhere else
 
 An events service has two distinct surfaces:
