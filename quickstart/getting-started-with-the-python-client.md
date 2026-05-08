@@ -1,6 +1,6 @@
 ---
 title: "Getting Started with the Python Client"
-description: "Add budget enforcement to Python apps using the runcycles package with the @cycles decorator, async support, and programmatic CyclesClient."
+description: "Add runtime authority to Python AI apps with runcycles: @cycles, async support, reserve-commit lifecycle, caps, and audit records."
 ---
 
 # Getting Started with the Python Client
@@ -15,6 +15,12 @@ The decorator wraps any function in a reserve → execute → commit lifecycle:
 2. **While the function runs:** maintains the reservation with automatic heartbeat extensions
 3. **After the function returns:** commits actual usage and releases any unused remainder
 4. **If the function raises:** releases the reservation to return budget to the pool
+
+::: tip Cycles provides three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
+- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+:::
 
 ## Prerequisites
 
