@@ -3,7 +3,7 @@ title: "OpenAI Agents SDK: Content Guardrails, No Action Control"
 date: 2026-03-30
 author: Albert Mavashev
 tags: [openai, agents, runtime-authority, governance, risk, actions, python, RunHooks]
-description: "The OpenAI Agents SDK has content guardrails but no action controls. RunHooks is the ideal insertion point for runtime authority over tools, cost, and risk."
+description: "OpenAI Agents SDK tool guardrails validate individual function tools. They aren't cross-tenant budget or risk authority — RunHooks is where that fits."
 blog: true
 sidebar: false
 ---
@@ -16,11 +16,11 @@ Two scenarios. Same agent. Very different outcomes.
 
 **Scenario A.** A user asks your support agent to generate instructions for something harmful. The agent's `InputGuardrail` fires, detects the policy violation, and blocks the request before a single token is generated. The system works exactly as designed.
 
-**Scenario B.** The same agent enters a retry loop on a failing API call. It calls `send_email` 200 times. It triggers a staging deployment via `run_deploy`. It burns through $50 in OpenAI API fees. Nothing stops it — because there's nothing _to_ stop it. The SDK has no mechanism for controlling what tools an agent calls, how many times, or at what cost.
+**Scenario B.** The same agent enters a retry loop on a failing API call. It calls `send_email` 200 times. It triggers a staging deployment via `run_deploy`. It burns through $50 in OpenAI API fees. Tool guardrails could validate any one of those calls in isolation — but no SDK primitive tracks cumulative spend, cumulative risk, or cumulative tool counts across the run, across handoffs, or across tenants. The 200th `send_email` looks no different from the 1st.
 
-The OpenAI Agents SDK handles content safety well. It does not handle [action authority](/glossary#action-authority) at all.
+The OpenAI Agents SDK handles content safety well, and tool guardrails handle per-call function-tool validation. What it does not provide is [action authority](/glossary#action-authority) — a cross-cutting, ledger-backed control plane that decides, before each call, whether *this agent* on *this tenant* is allowed to spend more, take more risk, or invoke this tool again.
 
-Once `Runner.run()` starts, every tool call executes with full authority. There's no way to say: "this agent can search freely, but must check authorization before sending emails." There's no spending limit per [tenant](/glossary#tenant) or per session. There's no distinction between a read-only lookup and a destructive side-effect.
+Tool guardrails fire on individual function-tool calls — they don't fire on hosted tools, built-in execution tools, or handoffs, and they don't share state across the run. So once `Runner.run()` starts, there's no central authority that asks: how much has *this tenant* already spent, how many times has *this agent* called *this tool*, has the cumulative risk budget been exhausted? There's no per-tenant spending limit, no first-class risk score, and no shared ledger between a read-only lookup and a destructive side-effect.
 
 The SDK's `RunHooks` interface — designed for observability — turns out to be the exact insertion point for fixing this.
 
@@ -28,19 +28,19 @@ The SDK's `RunHooks` interface — designed for observability — turns out to b
 
 ## Content safety vs action authority
 
-The OpenAI Agents SDK provides a solid foundation for building multi-agent workflows. `Agent` defines behavior. `Runner` orchestrates execution. `Tool` exposes capabilities. `Handoff` enables agent-to-agent delegation. And `InputGuardrail` filters content before the agent starts — blocking harmful prompts, off-topic requests, or policy violations.
+The OpenAI Agents SDK provides a solid foundation for building multi-agent workflows. `Agent` defines behavior. `Runner` orchestrates execution. `Tool` exposes capabilities. `Handoff` enables agent-to-agent delegation. `InputGuardrail` and `OutputGuardrail` filter content at the agent boundary, and tool guardrails wrap individual function-tool invocations and can block, replace, or tripwire a single call before it executes.
 
-What's missing is the other half of governance: runtime authorization for _actions_.
+What none of those primitives provide is cross-cutting [runtime authority](/glossary#runtime-authority) — a single ledger that every LLM round-trip, every tool invocation (function, hosted, or built-in), and every handoff consults before executing. That's the layer this post is about.
 
 The gap has three dimensions:
 
 **Cost.** There are no spending limits. A tenant running a support agent and a tenant running an analytics pipeline share the same unlimited OpenAI budget. If one tenant's agent enters a retry loop, the entire account pays for it. Provider-level spending caps are account-wide and may react too slowly — by the time they trigger, the damage is done.
 
-**Risk.** Every tool call is treated equally. `search_knowledge_base` and `send_email` have the same authorization status: allowed, unconditionally. There's no mechanism to assign different risk levels, require different authorization thresholds, or enforce different policies per tool.
+**Risk.** Tool guardrails let you write a custom validator per function tool, but there's no first-class concept of a risk level or an authorization threshold, and no shared ledger that tallies cumulative risk across the run. `search_knowledge_base` and `send_email` have to be policed by independently maintained guardrail code; nothing tracks "this agent has already burned its risk budget for the session."
 
-**Volume.** There's no cap on how many times an agent invokes a specific tool in a single run. An agent that decides to "be thorough" and calls `update_crm` 50 times is indistinguishable from one that calls it once.
+**Volume.** A tool guardrail sees one call at a time. Counting "how many times has this agent called `update_crm` in this run" requires custom closure state, and the count doesn't survive across runs or tenants. An agent that decides to "be thorough" and calls `update_crm` 50 times in a single run still slips past per-call validation.
 
-This isn't a criticism of the SDK. It's designed for orchestration — defining agents, connecting tools, managing handoffs. Governance is a different layer. But it's the layer that sits between "the agent _can_ do it" and "the agent _should_ do it."
+This isn't a criticism of the SDK. Content guardrails cover prompts and responses; tool guardrails cover per-call function-tool validation. The piece those don't provide is the cross-cutting governance layer — the shared ledger that sits between "the agent _can_ do it" and "the agent _should_ do it" across every call, every tool, every handoff, every tenant.
 
 ## Why RunHooks are the perfect insertion point
 
