@@ -68,7 +68,7 @@ LLM-heavy research and synthesis run against a `research-live` toolset. The curr
 
 The second is action authority.
 
-External send is a separate toolset from research. In our runner, the internal toolset is named `send-email` (with `send-email-approved` as the explicit-approval variant), but the governed action is the email-send boundary itself — a real external side effect. In the canonical [Cycles action-kind registry](/protocol/), this maps to `message.email.send`.
+External send is a separate toolset from research. In our runner, the internal toolset is named `send-email` (with `send-email-approved` as the explicit-approval variant), but the governed action is the email-send boundary itself — a real external side effect. We label that boundary `message.email.send`, following the [Cycles action-kind registry](/protocol/) shape while treating the slug as a local convention until the registry lands.
 
 Here the dollar amount is being used as an action allowance, not because sending email has a meaningful provider cost. A zero allocation means this path has no authority to perform the side effect.
 
