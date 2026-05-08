@@ -14,7 +14,7 @@ Use Cycles when you need to: enforce spend limits on LLM calls, bound tool invoc
 - [End-to-End Tutorial](https://runcycles.io/quickstart/end-to-end-tutorial): Zero to a working budget-guarded LLM call in 10 minutes
 - [Python Client](https://runcycles.io/quickstart/getting-started-with-the-python-client): Add budget enforcement to Python apps using the runcycles package
 - [TypeScript Client](https://runcycles.io/quickstart/getting-started-with-the-typescript-client): Add budget enforcement to Node.js apps using the runcycles package
-- [Rust Client](https://runcycles.io/quickstart/getting-started-with-the-rust-client): Add budget enforcement to Rust apps
+- [Rust Client](https://runcycles.io/quickstart/getting-started-with-the-rust-client): Hard spending limits for AI agents in Rust — Tokio-native async client (runcycles crate) with reserve-commit budget enforcement, RAII guards for streaming, and three integration levels.
 - [Spring Boot Starter](https://runcycles.io/quickstart/getting-started-with-the-cycles-spring-boot-starter): Integrate budget enforcement into Spring Boot apps with the @Cycles annotation
 - [Spring AI Integration](https://runcycles.io/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles): Add hard budget limits to Spring AI applications
 - [Choose a First Rollout](https://runcycles.io/quickstart/how-to-choose-a-first-cycles-rollout-tenant-budgets-run-budgets-or-model-call-guardrails): Decide between tenant budgets, run budgets, or model call guardrails
@@ -58,7 +58,7 @@ Use Cycles when you need to: enforce spend limits on LLM calls, bound tool invoc
 
 ### Runtime SDKs
 
-- [Rust](https://runcycles.io/how-to/integrating-cycles-with-rust): Programmatic budget enforcement for Rust applications
+- [Rust](https://runcycles.io/how-to/integrating-cycles-with-rust): Rust AI agent budget control — async LLM cost limits, Axum / Actix middleware patterns, streaming response handling.
 
 ### Web Frameworks
 

@@ -1,11 +1,17 @@
 ---
-title: "Integrating Cycles with Rust"
-description: "Guard async Rust operations with Cycles budget reservations using with_cycles(), ReservationGuard, and CyclesClient. Includes Axum and Actix middleware patterns."
+title: "Rust AI Agent Budget Control — Cycles Integration Guide"
+description: "Hard budget limits, action authority, and runtime governance for AI agents in Rust. Integration patterns for Tokio async LLM calls, Axum / Actix middleware, streaming responses, and multi-step agent workflows. Covers reserve-commit lifecycle, RAII guards, and the runcycles crate."
+head:
+  - - meta
+    - name: keywords
+      content: "rust ai agent budget, rust llm cost control, rust openai cost limit, rust anthropic budget, rust async llm, rust tokio ai agent, rust ai agent rate limiting, rust llm spending limit, runcycles crate, axum ai agent, actix ai agent"
 ---
 
-# Integrating Cycles with Rust
+# Rust AI Agent Budget Control — Cycles Integration Guide
 
-This guide shows how to guard Rust async operations with Cycles budget reservations — from one-liner wrappers to full manual control.
+If you're building AI agents or LLM-powered services in Rust, hard spending limits and tool-call governance are critical *before* execution, not after. This guide shows how to guard Rust async operations with Cycles budget reservations — from one-liner wrappers to full manual control — covering the patterns Tokio-native applications need: streaming responses, RAII safety, Axum / Actix middleware, and multi-step agent workflows.
+
+Same protocol as the Python, TypeScript, and Spring Boot clients, so the same Cycles server works across polyglot stacks.
 
 ## Prerequisites
 

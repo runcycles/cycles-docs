@@ -1,13 +1,21 @@
 ---
-title: "Getting Started with the Rust Client"
-description: "Add budget enforcement to Rust apps using the runcycles crate with with_cycles(), RAII guards, and programmatic CyclesClient."
+title: "Rust Client Quickstart — Budget Control for AI Agents"
+description: "Add hard spending limits and runtime authority to Rust AI agents. Quickstart for the Cycles Rust client (runcycles crate) — async, Tokio-native, with reserve-commit budget enforcement for LLM calls, tool actions, and multi-step agent workflows."
+head:
+  - - meta
+    - name: keywords
+      content: "rust ai agent, rust llm budget, rust llm cost control, rust openai budget, rust anthropic budget, rust ai agent rate limit, rust async ai agent, runcycles, cycles rust client"
 ---
 
-# Getting Started with the Rust Client
+# Rust Client Quickstart — Budget Control for AI Agents
 
 [![Crates.io downloads](https://img.shields.io/crates/d/runcycles?label=crates.io%20downloads&color=555&style=flat-square)](https://crates.io/crates/runcycles)
 
-The `runcycles` Rust crate provides three levels of budget enforcement for any async Rust application:
+Building AI agents in Rust with Tokio? You need hard limits on LLM spending and tool-call exposure **before** they execute, not after. The Cycles Rust client (`runcycles` crate) gives any async Rust application a reserve-commit budget enforcement layer with three integration levels — from a one-line `with_cycles()` wrapper to RAII guards to a low-level programmatic client.
+
+Same wire protocol as the [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), and [Spring Boot](/quickstart/getting-started-with-the-cycles-spring-boot-starter) clients — switch languages without changing your Cycles server.
+
+The `runcycles` crate provides three levels of budget enforcement for any async Rust application:
 
 1. **`with_cycles()`** — automatic reserve → execute → commit/release (like Python's `@cycles` decorator)
 2. **`ReservationGuard`** — RAII guard for manual control (streaming, multi-step workflows)
