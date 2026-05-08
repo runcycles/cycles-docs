@@ -26,6 +26,8 @@ At that point, a single-object admin API is not enough. You do not want an opera
 
 Bulk operations are not a [dashboard](/glossary#dashboard) convenience. They are incident response infrastructure.
 
+<!-- more -->
+
 ## Why shell loops fail under pressure
 
 The first version of bulk response in many platforms is a script:

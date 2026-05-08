@@ -30,6 +30,8 @@ Cycles closes that loop with a `reserve → execute → commit` wrapper around e
 
 This post shows the pattern, the policy it enforces, and the TypeScript code that implements it.
 
+<!-- more -->
+
 ## The pattern
 
 Every MCP tool call passes through three states:

@@ -34,6 +34,8 @@ Policy drift happens when the approved governance envelope and the live behavior
 
 The fix is not to stop changing agents. The fix is to make policy a runtime property, not only an approval artifact.
 
+<!-- more -->
+
 ## Why Agents Drift Faster Than Applications
 
 Traditional applications drift too. Dependencies update. Config changes. Feature flags move. Permissions expand.

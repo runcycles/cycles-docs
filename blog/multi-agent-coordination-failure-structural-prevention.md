@@ -29,6 +29,8 @@ Multi-agent workflows fail like this so routinely that an industry literature ha
 
 The short version: most multi-agent failures aren't prompt problems, and the fixes teams reach for — better system prompts, stricter role descriptions, explicit handoff instructions — don't prevent the failures because the failures don't live at the prompt layer. They live in how the system models coordination and authority across agents.
 
+<!-- more -->
+
 ## Three failure categories, three prevention layers
 
 MAST grouped 14 observed failure modes into three categories, with distinct distributions (roughly 44 / 32 / 24% — see the paper's Section 4 breakdown for the precise per-mode counts):

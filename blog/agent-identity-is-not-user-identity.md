@@ -29,6 +29,8 @@ An AI agent acting on Alice's behalf is not Alice. It is also not the support ap
 
 Agent identity is becoming its own control plane problem. Microsoft is positioning Agent 365 as an enterprise control plane for observing, governing, and securing agents, including lifecycle management, access control, compliance, and audit. OWASP's 2026 agentic risk taxonomy calls out identity and privilege abuse as a distinct risk category. That separation matters: user identity answers who initiated the work. Agent identity answers which autonomous actor performed each step.
 
+<!-- more -->
+
 ## The Three Principals in Every Agent Action
 
 Many production agent actions involve three different principals:

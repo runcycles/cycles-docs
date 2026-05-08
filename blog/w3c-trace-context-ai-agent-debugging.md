@@ -29,6 +29,8 @@ Thirty minutes of `jq` later, you have a theory. Forty-five minutes in, you have
 
 This post is about what that debugging loop looks like when every plane shares a W3C Trace Context identifier, and what it takes to get there. The short version: Cycles treats `trace_id` as a first-class correlation key on every response header, every emitted event, every webhook delivery, and every audit row. A single 32-character hex string is enough to pull the whole causal picture out of a running stack — without a new agent, a new SDK, or a bespoke schema.
 
+<!-- more -->
+
 ## Observability alone hits a wall on multi-plane systems
 
 Most LLM observability tools — Langfuse, LangSmith, Helicone, and their cousins — live in one slice of the stack: they proxy the LLM call, capture prompt and response, and surface cost and latency. That's real value for a single-agent workload. It falls short the moment your system has more than one plane of decision-making.

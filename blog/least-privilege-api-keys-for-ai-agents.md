@@ -32,6 +32,8 @@ For many agent stacks, the answer is uncomfortable: the key can do whatever the 
 
 Least privilege for AI agents starts with a narrower question: which tenant, which environment, and which operations should this specific agent worker be allowed to perform right now?
 
+<!-- more -->
+
 ## The mistake: one key per application
 
 The tempting setup is one key per service:

@@ -28,6 +28,8 @@ Webhooks become production control signals only when delivery behavior is boring
 
 This is the contract Cycles exposes for AI agent budget and governance events.
 
+<!-- more -->
+
 ## The minimum trustworthy delivery contract
 
 An operator-trustworthy webhook system needs more than "we POST JSON to your endpoint."

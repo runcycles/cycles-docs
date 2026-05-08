@@ -29,6 +29,8 @@ Nothing was deleted. The problem is subtler than that: the tenant was marked clo
 
 Multi-tenant platforms that have lived long enough to face this problem — Stripe Connect, AWS Organizations, Okta tenant deletion, Slack workspace archival — have converged on the same pattern: terminal states must *cascade*, and the cascade must be enforceable against concurrent mutations. This post is about what that pattern looks like when the owned objects are AI-agent budgets and reservations, and what Cycles ships to make it safe by default.
 
+<!-- more -->
+
 ## The zombie-budget problem
 
 The category name for the failure at the top of this post is a *zombie object*: a child whose parent has entered a terminal state, but which the system still treats as live. The zombie keeps authorizing operations, emitting events, drawing cost, or exposing surface area until something else notices and manually cleans it up.

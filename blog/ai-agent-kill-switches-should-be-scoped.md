@@ -31,6 +31,8 @@ Production agent systems need emergency controls. They also need scope.
 
 A useful kill switch should answer: stop what, for whom, at which boundary, for how long, and with what audit trail?
 
+<!-- more -->
+
 ## Global Stops Are Sometimes Necessary
 
 There are cases where a global stop is justified.

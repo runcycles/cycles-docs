@@ -28,6 +28,8 @@ Nothing about that incident means the MCP gateway failed. It did its job: mediat
 
 MCP gateways are useful. They are not the same thing as [runtime authority](/glossary#runtime-authority).
 
+<!-- more -->
+
 ## What an MCP Gateway Is Good At
 
 An MCP gateway is a control point for the tool connectivity layer. Depending on the implementation, it may help with:
