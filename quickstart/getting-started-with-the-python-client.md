@@ -1,6 +1,6 @@
 ---
 title: "Getting Started with the Python Client"
-description: "Add runtime authority — spend, action, and audit controls — to Python AI apps using the runcycles package. Quickstart for the @cycles decorator, async support, and the programmatic CyclesClient."
+description: "Add runtime authority to Python AI apps with runcycles: @cycles, async support, reserve-commit lifecycle, caps, and audit records."
 ---
 
 # Getting Started with the Python Client
@@ -18,8 +18,8 @@ The decorator wraps any function in a reserve → execute → commit lifecycle:
 
 ::: tip Cycles enforces three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
-- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
-- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+- **Risky actions** — three-way decisions (`ALLOW` / `ALLOW_WITH_CAPS` / `DENY`) with caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — reservations, commits, releases, and decisions produce structured records for compliance and incident review
 :::
 
 ## Prerequisites

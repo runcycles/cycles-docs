@@ -1,6 +1,6 @@
 ---
 title: "Rust Client Quickstart — Budget Control for AI Agents"
-description: "Add runtime authority — spend, risky tool actions, and audit gaps — to Rust AI agents. Quickstart for the Cycles Rust client (runcycles crate) — async, Tokio-native, with reserve-commit budget enforcement, RAII-safe caps, and signed audit events."
+description: "Add runtime authority to Rust AI agents with the runcycles crate: async reserve-commit enforcement, RAII guards, caps, and audit records."
 head:
   - - meta
     - name: keywords
@@ -17,8 +17,8 @@ Same wire protocol as the [Python](/quickstart/getting-started-with-the-python-c
 
 ::: tip Cycles enforces three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
-- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
-- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+- **Risky actions** — three-way decisions (`ALLOW` / `ALLOW_WITH_CAPS` / `DENY`) with caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — reservations, commits, releases, and decisions produce structured records for compliance and incident review
 :::
 
 The `runcycles` crate provides three levels of budget enforcement for any async Rust application:

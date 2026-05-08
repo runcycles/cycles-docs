@@ -1,6 +1,6 @@
 ---
 title: "Getting Started with the Cycles MCP Server"
-description: "Expose Cycles runtime-authority tools — reserve, commit, release, decide, balance, signed audit events — to Claude Desktop, Claude Code, Cursor, Windsurf, and any MCP-compatible AI agent. No SDK code changes."
+description: "Expose Cycles runtime-authority tools — reserve, commit, release, decide, balance, and events — to Claude, Cursor, Windsurf, and MCP agents."
 ---
 
 # Getting Started with the Cycles MCP Server
@@ -24,8 +24,8 @@ For deterministic production enforcement, make the Cycles check part of the tool
 
 ::: tip Cycles enforces three runtime-authority pillars
 - **Spend** — `cycles_reserve` / `cycles_commit` / `cycles_release` enforce budget before the agent's expensive tool actions
-- **Risky actions** — `cycles_decide` returns `Allow` / `AllowWithCaps` / `Deny` with caps for tool denylists, max tokens, max steps, and cooldowns
-- **Audit** — `cycles_create_event` and every reserve/commit/release call drop signed events into an exportable ledger for compliance and incident review
+- **Risky actions** — `cycles_decide` returns `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` with caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — `cycles_create_event` and reserve/commit/release calls create structured records for export, compliance, and incident review
 :::
 
 ## Prerequisites

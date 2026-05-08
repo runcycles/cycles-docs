@@ -1,6 +1,6 @@
 ---
 title: "Getting Started with the TypeScript Client"
-description: "Add runtime authority — spend, action, and audit controls — to Node.js AI apps using the runcycles TypeScript package. Quickstart for the withCycles HOF, streaming support, and the programmatic client."
+description: "Add runtime authority to Node.js AI apps with runcycles: withCycles, streaming support, reserve-commit enforcement, caps, and audit records."
 ---
 
 # Getting Started with the TypeScript Client
@@ -18,8 +18,8 @@ The `withCycles` HOF wraps any async function in a reserve → execute → commi
 
 ::: tip Cycles enforces three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
-- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
-- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+- **Risky actions** — three-way decisions (`ALLOW` / `ALLOW_WITH_CAPS` / `DENY`) with caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — reservations, commits, releases, and decisions produce structured records for compliance and incident review
 :::
 
 ## Prerequisites
