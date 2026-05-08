@@ -2,8 +2,8 @@
 title: "How to Add Budget and Action Guardrails to Rust AI Agents with Cycles"
 date: 2026-03-31
 author: Albert Mavashev
-tags: [rust, agents, engineering, costs, governance, guide]
-description: "Add budget and action authority to Rust AI agents — control spend, tool access, token limits, and step counts with compile-time safety."
+tags: [rust, agents, engineering, costs, governance, audit, guide]
+description: "Add budget, action, and audit authority to Rust AI agents — control spend, tool access, token limits, step counts, and produce signed audit events for compliance and incident review, with compile-time safety."
 blog: true
 sidebar: false
 featured: false
@@ -15,12 +15,13 @@ A retry loop on a Rust agent service hit a transient 503 from the LLM provider. 
 
 <!-- more -->
 
-This is the gap that Cycles fills. It's not just a billing meter — it's a **[runtime authority](/glossary#runtime-authority)** for both **budget** and **action control**. Before an agent calls an LLM, Cycles answers two questions:
+This is the gap that Cycles fills. It's not just a billing meter — it's a **[runtime authority](/glossary#runtime-authority)** for **budget, action control, and audit**. Before an agent calls an LLM and after every decision settles, Cycles answers three questions:
 
 1. **Budget:** Does this agent have enough budget for this operation?
 2. **Action:** Is this agent *allowed* to take this action right now? (Which tools? How many [tokens](/glossary#tokens)? How many steps remaining? Is there a cooldown?)
+3. **Audit:** Is every decision, cap, and outcome recorded as a signed event — so compliance, incident review, and per-agent attribution come for free, not as a separate logging project?
 
-The server returns either ALLOW, ALLOW_WITH_CAPS (proceed but with constraints), or DENY — and the client enforces it before the expensive call happens.
+The server returns either ALLOW, ALLOW_WITH_CAPS (proceed but with constraints), or DENY — and the client enforces it before the expensive call happens. Every reservation, commit, release, and decision drops into an append-only event log that the events service streams to webhooks for downstream audit pipelines.
 
 The `runcycles` crate brings this to Rust with an API designed around ownership semantics and compile-time safety. This post shows how to integrate it into existing Rust agent code at three levels of control.
 
