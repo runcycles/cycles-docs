@@ -161,7 +161,20 @@ export default defineConfig({
     theme: {
       light: 'github-light',
       dark: 'github-dark'
-    }
+    },
+    // Map fence labels Shiki doesn't bundle to the closest reasonable
+    // bundled grammar. Without this, Shiki logs a "language X not loaded,
+    // falling back to txt" warning on every build for these fences.
+    // Targets must be Shiki-bundled languages (text/plaintext aren't).
+    //   promql  — observability-setup.md Prometheus queries. Map to bash
+    //             so `#` comments and identifiers/parens highlight cleanly.
+    //   conf    — security-hardening.md / production-operations-guide.md
+    //             redis.conf snippets. Map to ini for generic-config feel
+    //             (comments and structure read OK).
+    languageAlias: {
+      promql: 'bash',
+      conf: 'ini',
+    },
   },
   lastUpdated: true,
   themeConfig: {
