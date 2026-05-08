@@ -39,9 +39,13 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # NOTE: persist-credentials defaults to true on purpose. The "Open PR"
+      # step's git push uses an x-access-token URL with ORG_TRAFFIC_TOKEN, but
+      # ORG_TRAFFIC_TOKEN lacks write scope on runcycles/docs. With creds
+      # persisted, git falls back to the persisted GITHUB_TOKEN (which has
+      # contents:write from the job's permissions block) and the push succeeds.
+      # This matches the pattern in update-installs.yml, which already works.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          persist-credentials: false
 
       - uses: actions/setup-node@v6
         with:
