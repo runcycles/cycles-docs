@@ -12,7 +12,7 @@ sidebar: false
 
 When we launched Cycles, the question we heard most was: *"Does this work with my stack?"*
 
-Today the answer is yes — for almost every stack. Cycles now ships **26 integrations** across Python, TypeScript, Java, and Rust. Every LLM call, tool invocation, and agent action in your stack can be governed with the same reserve → commit → release protocol — enforcing spend limits, action boundaries, and risk controls before execution.
+Today the answer is yes — for almost every stack. As of this post (2026-04-02), Cycles ships **26 integrations** across Python, TypeScript, Java, and Rust; see the [integrations overview](/how-to/integrations-overview) for the current list. Every LLM call, tool invocation, and agent action in your stack can be governed with the same reserve → commit → release protocol — enforcing spend limits, action boundaries, and risk controls before execution.
 
 <!-- more -->
 

@@ -33,7 +33,9 @@ Every response — error or success — also carries an `X-Cycles-Trace-Id` HTTP
 
 ## The error codes
 
-Cycles defines 16 error codes, each with a specific HTTP status code and meaning.
+The runtime protocol defines 15 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec). This page documents those 15 plus the admin-plane `TENANT_CLOSED` lifecycle error — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — totalling 16 codes covered here. The admin-plane error enum has additional codes that aren't part of the runtime wire contract; see the admin OpenAPI spec for the full set.
+
+Each code has a specific HTTP status code and meaning.
 
 ### INVALID_REQUEST (400)
 
@@ -116,6 +118,7 @@ The budget scope has been permanently closed. No further budget operations are a
 
 **What to do:** create a new budget scope or contact the operator. Not retryable against this scope.
 
+<a id="tenant-closed-409"></a>
 ### TENANT_CLOSED (409)
 
 The owning tenant has been permanently closed. Every mutating admin-plane operation on any object owned by a closed tenant — budgets, reservations, API keys, webhook subscriptions, policies — is rejected with this code. GET endpoints remain available for post-mortem audit reads.

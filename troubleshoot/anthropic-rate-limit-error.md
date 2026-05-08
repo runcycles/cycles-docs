@@ -58,7 +58,7 @@ Response headers expose the current state:
 
 5. **Reduce input tokens before the call.** Truncate, summarize, or use prompt caching for repeated context. On current supported models, cache hits reduce effective ITPM pressure and bill cached input at a fraction of the standard rate; older models may handle cached tokens differently, so verify against the [current rate-limits documentation](https://platform.claude.com/docs/en/api/rate-limits).
 
-6. **Cap `max_tokens` for cost and safety, not OTPM headroom.** Anthropic evaluates OTPM as output tokens are produced; `max_tokens` does not reserve OTPM capacity up front. Still, keeping `max_tokens` close to realistic output length limits worst-case cost and runaway responses.
+6. **Cap `max_tokens` close to realistic output length.** Anthropic estimates OTPM consumption from `max_tokens` at the start of each request and reconciles against actual output tokens when the request finishes. A loose `max_tokens` therefore reserves more OTPM headroom than the request will use and can push you into rate-limit errors prematurely. Tightening `max_tokens` improves OTPM utilization, limits worst-case cost, and bounds runaway responses.
 
 7. **Shard across keys for batch workloads.** Background jobs (evaluation, batch summarization) should use a separate API key with its own quota so they do not starve user-facing traffic.
 
