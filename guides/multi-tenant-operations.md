@@ -1,6 +1,6 @@
 ---
-title: "Multi-Tenant AI Agent Operations: A Production Reference"
-description: "A reference map of running multi-tenant AI agent infrastructure — scope hierarchy, per-tenant budget isolation, tenant lifecycle, identity and keys, and the failure modes specific to shared infrastructure."
+title: "Multi-Tenant AI Agent Operations: A Reference"
+description: "A reference map of multi-tenant AI agent infrastructure: scope hierarchy, per-tenant budget isolation, tenant lifecycle, identity, keys, failure modes."
 ---
 
 # Multi-Tenant AI Agent Operations: A Production Reference

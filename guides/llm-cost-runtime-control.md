@@ -1,6 +1,6 @@
 ---
 title: "LLM Cost Runtime Control: A Production Reference"
-description: "A reference map of bounding LLM and AI agent spend in production via runtime authority — what blows up, why dashboards do not stop it, the patterns that do, with links to deep coverage of every subtopic."
+description: "A reference map of bounding LLM and AI agent spend in production: what blows up, why dashboards don't stop it, and the runtime-authority patterns that do."
 ---
 
 # LLM Cost Runtime Control: A Production Reference

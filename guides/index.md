@@ -1,6 +1,6 @@
 ---
 title: "Cycles Guides"
-description: "In-depth guides on the enforcement dimensions of runtime authority for AI agents: cost (what they spend), action (what they do), and multi-tenant ops (who owns which budget). Each guide is a map across blog posts, how-tos, and protocol reference."
+description: "In-depth guides on runtime authority for AI agents: cost, action, and multi-tenant ops. Each maps across blog posts, how-tos, and protocol reference."
 ---
 
 # Cycles Guides
