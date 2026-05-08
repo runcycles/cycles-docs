@@ -24,10 +24,10 @@ The starter wraps any annotated method in a reserve → execute → commit lifec
 3. **After the method returns:** commits actual usage and releases any unused remainder
 4. **If the method throws:** releases the reservation to return budget to the pool
 
-::: tip Cycles enforces three runtime-authority pillars
-- **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
-- **Risky actions** — three-way decisions (`ALLOW` / `ALLOW_WITH_CAPS` / `DENY`) with caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions produce structured records for compliance and incident review
+::: tip Cycles provides three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
+- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
 :::
 
 All of this happens transparently through Spring AOP.
