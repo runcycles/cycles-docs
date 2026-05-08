@@ -33,7 +33,9 @@ Every response — error or success — also carries an `X-Cycles-Trace-Id` HTTP
 
 ## The error codes
 
-Cycles defines 16 error codes, each with a specific HTTP status code and meaning.
+The runtime protocol defines 15 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec). This page documents those 15 plus the admin-plane `TENANT_CLOSED` lifecycle error — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — totalling 16 codes covered here. The admin-plane error enum has additional codes that aren't part of the runtime wire contract; see the admin OpenAPI spec for the full set.
+
+Each code has a specific HTTP status code and meaning.
 
 ### INVALID_REQUEST (400)
 
