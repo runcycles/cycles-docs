@@ -16,24 +16,26 @@ featured: false
 head:
   - - meta
     - name: keywords
-      content: "Cycles dogfood, autonomous outreach agent, runtime authority case study, action authority, budget enforcement, Gmail drafts, Slack review, agent operations, AI agent governance, BUDGET_EXCEEDED"
+      content: "AI agent governance, autonomous outreach agent, agent budget control, action authority, Gmail agent, Slack review workflow, runtime authority, pre-execution guardrails, BUDGET_EXCEEDED, Cycles dogfood"
 ---
 
 # We Put Cycles in Front of Our Own Outreach Agent
 
 The outreach workflow looked small on paper.
 
-Find public signals from founders and maintainers building agent products. Decide which ones are worth reaching out to. Draft a short email. Put it in Gmail. Mirror the draft to Slack for review. Track the person in Attio. Watch for replies. Follow up if there is no response.
+Find public signals from founders and maintainers building agent products. Decide who is worth contacting. Draft a short email. Put it in Gmail. Mirror it to Slack. Track the person in Attio. Watch for replies. Follow up later.
 
-That is not a complicated product. It is, however, an agent system with real side effects.
+That is not a complicated product.
+
+It is, however, an agent system with real side effects. It can spend LLM budget. It can write CRM state. It can create external-facing drafts. If the send boundary is wrong, it can contact people without approval.
 
 So we put Cycles in front of it.
 
 <!-- more -->
 
-It uses GitHub search, LLM synthesis, reviewer passes, Gmail drafts, Slack messages, Attio writes, reply detection, budget accounting, and a small Linux VM with systemd that keeps running when the laptop is closed. It can spend money. It can create external-facing drafts. If the send boundary is wrong, it can contact people. If the loop is wrong, it can keep researching until the budget is gone.
+The result we cared about was not that the agent created six drafts. It was that when the normal external-send path tried to run, [Cycles](/blog/what-is-runtime-authority-for-ai-agents) returned `409 BUDGET_EXCEEDED`, left the draft for review, and blocked the side effect.
 
-This is not a polished customer case study. It is a dogfood report from a real internal workflow — a companion piece to [how scalerX wired Cycles into a Java agent runtime](/blog/how-scalerx-wired-cycles-into-a-java-agent-runtime), but from inside our own runner. What we wrapped, what Cycles blocked, what the ledger showed, and what still needs work.
+This is a dogfood report from a real internal workflow — a companion piece to [how scalerX wired Cycles into a Java agent runtime](/blog/how-scalerx-wired-cycles-into-a-java-agent-runtime), but from inside our own runner. What we wrapped, what Cycles blocked, what the ledger showed, and what still needs work.
 
 ## The agent system we governed
 
@@ -58,7 +60,7 @@ That boundary is intentional. The first version of an outreach agent should not 
 
 ## The authority boundaries
 
-[Cycles](/blog/what-is-runtime-authority-for-ai-agents) governs two different things in this workflow.
+Cycles governs two different things in this workflow.
 
 The first is spend.
 
@@ -66,7 +68,7 @@ LLM-heavy research and synthesis run against a `research-live` toolset. The curr
 
 The second is action authority.
 
-External send is a separate toolset from research. The default `send-email` path has a `$0.0000` allocation. That means the default answer is DENY — the same pattern walked through in [the action authority demo](/blog/action-authority-demo-support-agent-walkthrough), where setting a toolset budget to zero makes the reservation fail at the runtime gate.
+External send is a separate toolset from research. In our runner, the internal toolset is named `send-email` (with `send-email-approved` as the explicit-approval variant), but the governed action is the email-send boundary itself — a real external side effect. In the canonical [Cycles action-kind registry](/protocol/), this maps to `message.email.send`. The default `send-email` path has a `$0.0000` allocation, so the normal answer is DENY unless the explicit approval path is used — the same pattern walked through in [the action authority demo](/blog/action-authority-demo-support-agent-walkthrough), where setting a toolset budget to zero makes the reservation fail at the runtime gate.
 
 That matters because the expensive mistake in outreach is not only cost. It is contacting the wrong person, sending a half-reviewed draft, sending too often, or continuing after someone has replied. Token spend is one exposure. External communication is another. [Cycles lets those exposures be budgeted separately](/blog/ai-agent-action-control-hard-limits-side-effects).
 
@@ -76,23 +78,7 @@ That is the useful split.
 
 ## What happened in the first live runs
 
-The first high-traction sourcer run targeted agent products and infrastructure projects with visible adoption: coding agents, browser agents, multi-agent frameworks, agent workflow systems, and runtime surfaces where budget or action authority is an obvious pain.
-
-One run fetched 18 artifacts:
-
-| Result | Count |
-|---|---:|
-| `research_now` | 16 |
-| `skip` | 2 |
-| errors | 0 |
-
-After the broader queue was loaded, the daily audit showed:
-
-| Triage bucket | Count |
-|---|---:|
-| `research_now` | 123 |
-| `queue` | 35 |
-| `skip` | 194 |
+The first high-traction sourcer run targeted agent products and infrastructure projects with visible adoption: coding agents, browser agents, multi-agent frameworks, agent workflow systems, and runtime surfaces where budget or action authority is an obvious pain. After triage, the queue settled at 123 signals to research now, 35 queued, and 194 skipped.
 
 The first production-style pass created six Gmail drafts and six Slack review posts. It also left two contacts in `needs_email` because the system could not verify a direct email address.
 
@@ -169,11 +155,11 @@ The first was underfunding.
 
 The initial budget setup was 10x smaller than intended because of a microcent conversion mistake. That turned out to be useful for the demo because it forced real denials quickly. It was less useful for a production runner. The fix was to create a new `research-live` toolset with a fresh `$50.0000` allocation and keep the daily cap at `$11.0000`.
 
-The second was budget mutation.
+The second was admin-plane mutation hardening.
 
-The running Cycles 0.1.25.x stack returned HTTP 500 on `PATCH`, `DELETE`, and `fund` operations against existing budgets, while recreating the same scope returned `409 Conflict` (a different 409 from the runtime `409 BUDGET_EXCEEDED` — same code, different layer). The workaround was to provision a new scope instead of mutating the old one.
+The runtime path did what mattered: reserve, commit, release, and deny worked. Budget create and lookup worked too. But mutation operations against existing budgets in the running 0.1.25.x stack were not boring enough yet. Some `PATCH`, `DELETE`, and `fund` paths returned HTTP 500, while recreating the same scope returned `409 Conflict` (a different 409 from the runtime `409 BUDGET_EXCEEDED` — same code, different layer). The workaround was to provision a new scope instead of mutating the old one.
 
-That is not the final operator experience we want. The field lesson is straightforward: budget create worked, budget lookup worked, reserve/commit/deny worked, but budget mutation needs hardening.
+That is not the operator experience we want. It is now a hardening item.
 
 The third was Slack delivery.
 
