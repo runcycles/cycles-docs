@@ -1,11 +1,15 @@
 ---
-title: "Error Handling Patterns in Rust"
-description: "Practical patterns for handling Cycles errors in Rust using with_cycles(), ReservationGuard, and the programmatic CyclesClient. Covers retries, RAII safety, and degradation."
+title: "Rust Error Handling for AI Agent Budget Failures"
+description: "Idiomatic Rust patterns for handling Cycles budget errors in async AI agent applications — retries, RAII safety, graceful degradation, and budget-exceeded handling with with_cycles(), ReservationGuard, and the programmatic CyclesClient."
+head:
+  - - meta
+    - name: keywords
+      content: "rust error handling ai agent, rust async error handling, rust budget exceeded, rust llm retry, rust raii safety, runcycles error patterns"
 ---
 
-# Error Handling Patterns in Rust
+# Rust Error Handling for AI Agent Budget Failures
 
-This guide covers practical patterns for handling Cycles errors in Rust applications — with `with_cycles()`, `ReservationGuard`, and the programmatic `CyclesClient`.
+When your Rust async AI agent hits a budget limit, runs out of tokens, or sees a transient network failure mid-reservation — what should it do? This guide covers idiomatic Rust patterns for handling Cycles errors in async applications: retries, RAII-driven cleanup, graceful degradation, and the `BUDGET_EXCEEDED` / `RESERVATION_EXPIRED` decision points. Patterns work with `with_cycles()`, `ReservationGuard`, and the programmatic `CyclesClient`.
 
 ::: tip Also available
 See [Error Handling in Python](/how-to/error-handling-patterns-in-python) or [TypeScript](/how-to/error-handling-patterns-in-typescript) for equivalent patterns, or the [general Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) for language-agnostic concepts.

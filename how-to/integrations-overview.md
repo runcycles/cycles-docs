@@ -36,7 +36,7 @@ Cycles integrates with LLM providers, agent frameworks, and web servers. Each in
 | [OpenAI Agents](/how-to/integrating-cycles-with-openai-agents) | Python | — | RunHooks (lifecycle hooks) |
 | [OpenClaw](/how-to/integrating-cycles-with-openclaw) | TypeScript | Yes | Plugin (lifecycle hooks) |
 | **Runtime SDKs** | | | |
-| [Rust](/how-to/integrating-cycles-with-rust) | Rust | — | Programmatic client |
+| [Rust](/how-to/integrating-cycles-with-rust) | Rust | Yes | Tokio async client + RAII guards |
 | **Web Frameworks** | | | |
 | [Next.js](/how-to/integrating-cycles-with-nextjs) | TypeScript | Yes | `withCycles` / Middleware |
 | [Express](/how-to/integrating-cycles-with-express) | TypeScript | Yes | Middleware / `withCycles` |
