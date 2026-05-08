@@ -77,6 +77,7 @@ Configures what happens when the actual cost committed exceeds the original esti
 
 ## Units
 
+<a id="usd-microcents"></a>
 ### USD_MICROCENTS
 
 One hundred-millionth of a dollar (10^-8 USD). This is the default monetary unit in Cycles, chosen for integer-precision arithmetic at sub-cent granularity. See [Understanding Units](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
@@ -89,6 +90,7 @@ A raw token count unit, typically used to track LLM input and output tokens dire
 
 An abstract credit unit that lets teams define their own internal currency. Useful when monetary cost is not the right abstraction for a given budget. See [Understanding Units](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
 
+<a id="risk-points"></a>
 ### RISK_POINTS
 
 An abstract risk-scoring unit for budgeting non-monetary concerns such as safety risk, compliance exposure, or action severity. See [Understanding Units](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
