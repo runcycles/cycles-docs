@@ -2,9 +2,12 @@
 // Generate llms-full.txt from all documentation markdown files.
 // Runs at build time to produce a single file optimized for LLM ingestion.
 //
-// Node port of generate-llms-full.sh. Output is byte-for-byte identical
-// to the bash version under POSIX-style sort (LF line endings, lex sort
-// of filenames, awk-style frontmatter strip).
+// Node port of generate-llms-full.sh. The frontmatter-strip and file-walk
+// behavior match the original bash version; one intentional divergence is
+// stripDuplicateSectionH1, which drops a body H1 that exactly matches the
+// section label so the generated file does not emit two consecutive
+// `# Quickstart` (or `# How-To Guides`, etc.) markers when an `index.md`
+// landing page happens to use the section label as its own H1.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -54,6 +57,24 @@ function stripFrontmatter(content) {
   return out.join('\n')
 }
 
+// If the first non-blank line of `content` is an H1 that matches
+// `# ${sectionLabel}`, drop that line (and one trailing blank line if
+// present) so the generated file does not show two consecutive H1s with
+// the same text — once from the section header the script emits, and
+// again from a landing-page H1 inside the file.
+function stripDuplicateSectionH1(content, sectionLabel) {
+  const lines = content.split('\n')
+  let i = 0
+  while (i < lines.length && lines[i].trim() === '') i++
+  if (i < lines.length && lines[i] === `# ${sectionLabel}`) {
+    lines.splice(i, 1)
+    if (i < lines.length && lines[i].trim() === '') {
+      lines.splice(i, 1)
+    }
+  }
+  return lines.join('\n')
+}
+
 function findMarkdownFiles(dir) {
   const out = []
   const stack = [dir]
@@ -94,7 +115,10 @@ for (const { dir, label } of SECTIONS) {
 
   for (const file of findMarkdownFiles(dirPath)) {
     output += '\n'
-    output += stripFrontmatter(fs.readFileSync(file, 'utf8'))
+    output += stripDuplicateSectionH1(
+      stripFrontmatter(fs.readFileSync(file, 'utf8')),
+      label,
+    )
     output += '\n'
   }
 }
