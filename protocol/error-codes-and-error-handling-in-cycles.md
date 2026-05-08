@@ -116,6 +116,7 @@ The budget scope has been permanently closed. No further budget operations are a
 
 **What to do:** create a new budget scope or contact the operator. Not retryable against this scope.
 
+<a id="tenant-closed-409"></a>
 ### TENANT_CLOSED (409)
 
 The owning tenant has been permanently closed. Every mutating admin-plane operation on any object owned by a closed tenant — budgets, reservations, API keys, webhook subscriptions, policies — is rejected with this code. GET endpoints remain available for post-mortem audit reads.
