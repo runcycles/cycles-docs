@@ -1,6 +1,6 @@
 ---
 title: "Getting Started with the Cycles Spring Boot Starter"
-description: "Integrate budget enforcement into Spring Boot apps using the @Cycles annotation for automatic reserve, commit, and release lifecycle management."
+description: "Integrate runtime authority — spend, action, and audit controls — into Spring Boot AI apps using the @Cycles annotation for automatic reserve, commit, and release lifecycle management."
 ---
 
 # Getting Started with the Cycles Spring Boot Starter
@@ -23,6 +23,12 @@ The starter wraps any annotated method in a reserve → execute → commit lifec
 2. **While the method runs:** maintains the reservation with automatic heartbeat extensions
 3. **After the method returns:** commits actual usage and releases any unused remainder
 4. **If the method throws:** releases the reservation to return budget to the pool
+
+::: tip Cycles enforces three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
+- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
+- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+:::
 
 All of this happens transparently through Spring AOP.
 

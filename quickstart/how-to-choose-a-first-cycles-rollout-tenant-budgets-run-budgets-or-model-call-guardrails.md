@@ -1,6 +1,6 @@
 ---
 title: "Your First Cycles Rollout: Budgets vs Guardrails"
-description: "Decide where to start with Cycles: tenant budgets for cost isolation, run budgets for runaway prevention, or model-call guardrails for low-friction adoption."
+description: "Decide where to start with Cycles. Tenant budgets isolate cost; run budgets bound risky agent loops; model-call guardrails add per-call action authority. All three rollouts produce a signed audit trail by default."
 ---
 
 # How to Choose a First Cycles Rollout: Tenant Budgets, Run Budgets, or Model-Call Guardrails?
@@ -25,6 +25,14 @@ They need one of three practical starting points:
 Each is valid.  
 Each solves a different problem.  
 The best choice depends on the failure mode you are trying to prevent first.
+
+::: tip Cycles enforces three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
+- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
+- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+
+All three rollouts on this page produce a signed audit trail by default. Tenant budgets and run budgets primarily address spend; run budgets also bound risky agent loops; model-call guardrails are the per-call action-authority option.
+:::
 
 ## The wrong way to start
 

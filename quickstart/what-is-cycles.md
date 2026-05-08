@@ -1,11 +1,17 @@
 ---
 title: "What is Cycles?"
-description: "Cycles is a runtime authority for autonomous agents that enforces hard spend limits on AI agents and workflows before expensive actions happen."
+description: "Cycles is a runtime authority for autonomous agents — it enforces hard limits on agent spend, risky tool actions, and audit gaps before they happen."
 ---
 
 # What is Cycles?
 
-Cycles is a **runtime authority for autonomous agents**. It enforces hard limits on agent spend and actions — **before they happen, not after**.
+Cycles is a **runtime authority for autonomous agents**. It enforces hard limits on agent spend and risky actions — **before they happen, not after** — and produces a signed audit trail of every decision.
+
+::: tip Cycles enforces three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
+- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
+- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+:::
 
 ## Choose your path
 

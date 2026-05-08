@@ -1,6 +1,6 @@
 ---
 title: "How to Add Hard Budget Limits to Spring AI with Cycles"
-description: "Add pre-execution budget enforcement to Spring AI applications using the Cycles reserve-commit lifecycle for model calls, tools, and agent loops."
+description: "Add pre-execution runtime authority — spend, action, and audit controls — to Spring AI applications. Cycles reserve-commit lifecycle for model calls, tools, and agent loops, plus caps-based action constraints and signed audit events."
 ---
 
 # How to Add Hard Budget Limits to Spring AI with Cycles
@@ -19,6 +19,12 @@ But once your system starts running autonomous workflows, tool-calling loops, re
 At that point, you need a control layer that can decide **before execution** whether work is allowed to proceed.
 
 That is where Cycles fits.
+
+::: tip Cycles enforces three runtime-authority pillars
+- **Spend** — reserve-commit budget enforcement before LLM calls and tool actions
+- **Risky actions** — three-way decisions (`Allow` / `AllowWithCaps` / `Deny`) with caps for tool denylists, max tokens, max steps, and cooldowns
+- **Audit** — every reservation, commit, release, and decision is a signed event for compliance and incident review
+:::
 
 ## The problem
 
