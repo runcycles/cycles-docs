@@ -1,6 +1,6 @@
 ---
 title: "Why Cycles"
-description: "For teams shipping AI agents — to customers or inside the enterprise. Blast radius containment, auditable event trails, bounded unit economics, and governance you can prove to an auditor."
+description: "For teams shipping AI agents to customers or internally — blast-radius containment, audit trails, bounded unit economics, and provable governance."
 ---
 
 # Why Cycles

@@ -1,6 +1,6 @@
 ---
 title: "Design Partners"
-description: "Cycles is in design-partner mode. We partner with a small, focused set of teams running real agent workloads — multi-tenant or concurrent — with founder access, roadmap influence, and free self-hosted OSS in exchange for one real workload, monthly syncs, and honest feedback."
+description: "Design-partner mode: a small set of teams running real multi-tenant agent workloads, with founder access, roadmap influence, and free self-hosted OSS."
 ---
 
 # Design Partners

@@ -1,6 +1,6 @@
 ---
-title: "AI Agent Risk & Blast Radius: A Production Reference"
-description: "A reference map of bounding what an AI agent can do — risk scoring, action authority, blast-radius containment, degradation paths, and the runtime patterns that keep a single mistake from becoming an incident."
+title: "AI Agent Risk & Blast Radius: A Reference"
+description: "A reference map of bounding what an AI agent can do: risk scoring, action authority, blast-radius containment, degradation paths, and runtime patterns."
 ---
 
 # AI Agent Risk & Blast Radius: A Production Reference
