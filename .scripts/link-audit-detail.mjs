@@ -35,7 +35,16 @@ const keywordMap = [
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-const blogs = fs.readdirSync('blog').filter((f) => f.endsWith('.md') && f !== 'index.md')
+// Mirror blog/posts.data.ts's filter: only files with frontmatter
+// `blog: true`. Excludes index.md, README.md, and any future non-post files.
+function isBlogPost(filename) {
+  if (!filename.endsWith('.md') || filename === 'index.md') return false
+  const c = fs.readFileSync(path.join('blog', filename), 'utf8')
+  const fm = c.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  return !!fm && /^blog:\s*true\b/m.test(fm[1])
+}
+
+const blogs = fs.readdirSync('blog').filter(isBlogPost)
 
 let n = 0
 for (const blog of blogs) {
