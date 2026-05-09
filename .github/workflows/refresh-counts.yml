@@ -72,8 +72,13 @@ jobs:
           node-version: '20'
 
       - name: Refresh registry counts (npm / PyPI / crates)
+        # Intentionally NO `set -e`/`-o pipefail` here — matches the original
+        # update-installs.yml behavior. Single-package curl failures fall
+        # through (curl exits non-zero, jq emits nothing, `$(())` treats the
+        # empty capture as 0, NPM_TOTAL just doesn't grow that iteration),
+        # and per-source HWM logic ensures we never regress. With pipefail,
+        # one transient registry blip would abort the whole daily refresh.
         run: |
-          set -euo pipefail
           CACHE_FILE=".vitepress/theme/installs-cache.json"
           TODAY=$(date +%Y-%m-%d)
 
