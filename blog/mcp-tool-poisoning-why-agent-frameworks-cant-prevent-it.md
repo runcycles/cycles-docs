@@ -1,5 +1,5 @@
 ---
-title: "MCP Tool Poisoning Has an 84% Success Rate — Why Agent Frameworks Still Can't Prevent It"
+title: "MCP Tool Poisoning: 84% Success Rate"
 date: 2026-03-27
 author: Albert Mavashev
 tags: [security, MCP, tool-poisoning, agents, production, OWASP, runtime-authority, supply-chain]

@@ -73,7 +73,7 @@ Every tool your agent can call has a risk profile. Classifying tools by tier is 
 
 | Tier | Class | Examples | Reversibility | Blast Radius | Enforcement Pattern |
 |:----:|-------|---------|---------------|-------------|-------------------|
-| 0 | **Read-only** | Search, retrieve, summarize, vector lookup | No state change | None (side-effect risk only; sensitive-read risk may be [budgeted separately](#a-note-on-reads-in-regulated-environments)) | [Event](/protocol/how-events-work-in-cycles-direct-debit-without-reservation) (post-hoc accounting) |
+| 0 | **Read-only** | Search, retrieve, summarize, vector lookup | No state change | None (side-effect risk only; sensitive-read risk may be budgeted separately) | [Event](/protocol/how-events-work-in-cycles-direct-debit-without-reservation) (post-hoc accounting) |
 | 1 | **Write-local** | Save draft, write log, update cache, create temp file | Easy to reverse | Internal only | Event or reserve-commit depending on volume |
 | 2 | **Write-external** | API call to third party, webhook trigger, external query | Possible but not guaranteed | Partner systems affected | [Reserve-commit](/protocol/how-reserve-commit-works-in-cycles) (always) |
 | 3 | **Mutation** | DB write/update/delete, send email, post to Slack, create ticket | Difficult or impossible | Customer-facing | Reserve-commit with caps |

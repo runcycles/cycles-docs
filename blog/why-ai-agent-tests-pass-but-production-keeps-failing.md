@@ -1,9 +1,9 @@
 ---
-title: "Why Your AI Agent Tests Pass but Production Keeps Failing"
+title: "Why AI Agent Tests Pass but Production Fails"
 date: 2026-03-30
 author: Cycles Team
 tags: [agents, testing, evaluation, production, reliability, CI-CD, engineering]
-description: "Only 52% of teams run agent evals, yet 89% have observability. The gap between passing tests and production reliability is an architectural problem — here's what's actually breaking and the enforcement pattern that closes the gap."
+description: "Only 52% of teams run agent evals, yet 89% have observability. The gap between passing tests and production is architectural — here's what closes it."
 blog: true
 sidebar: false
 ---

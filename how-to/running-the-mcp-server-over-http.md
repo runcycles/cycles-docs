@@ -1,6 +1,6 @@
 ---
-title: "Running the Cycles MCP Server over Streamable HTTP / SSE"
-description: "When to use Streamable HTTP / SSE instead of STDIO for the Cycles MCP server, and how to deploy it as a shared remote MCP gateway. Includes Dockerfile, docker-compose, MCP Inspector verification, and auth notes."
+title: "Running the Cycles MCP Server over HTTP / SSE"
+description: "When to use Streamable HTTP/SSE instead of STDIO for the Cycles MCP server, and how to deploy it as a shared remote MCP gateway."
 ---
 
 # Running the Cycles MCP Server over Streamable HTTP / SSE
