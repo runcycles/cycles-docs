@@ -168,10 +168,33 @@ jobs:
           GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN }}
         run: |
           set -euo pipefail
-          if git diff --quiet .vitepress/theme/installs-cache.json .vitepress/theme/manual-package-counts.json; then
+
+          # Skip the PR when the only diff is a freshness-timestamp bump.
+          # Step 2's update-github-counts.mjs unconditionally writes
+          # `fetchedAt` (and `lastVerifiedAt` in manual-package-counts.json
+          # whenever the GHCR sub-step succeeds), so a no-op refresh — fresh
+          # data fetched, but no count actually moved — still produces a
+          # 1-line diff. Without this filter that would open a PR every day
+          # whose only change is a timestamp; PR #605 (2026-05-09) closed
+          # without merging for exactly this reason.
+          DIFF=$(git diff --no-color -- \
+            .vitepress/theme/installs-cache.json \
+            .vitepress/theme/manual-package-counts.json)
+          if [ -z "$DIFF" ]; then
             echo "No changes to counts — skipping PR."
             exit 0
           fi
+          # `^[+-][^+-]` keeps real change lines and excludes the +++/---
+          # file-header lines. Then drop any change lines that touch only
+          # the freshness-timestamp fields.
+          MATERIAL=$(echo "$DIFF" | grep -E '^[+-][^+-]' | grep -vE '"(fetchedAt|lastVerifiedAt)"' || true)
+          if [ -z "$MATERIAL" ]; then
+            echo "Only freshness timestamps changed (fetchedAt / lastVerifiedAt) — no material count updates, skipping PR."
+            exit 0
+          fi
+          echo "Material changes detected — opening PR. Sample lines:"
+          echo "$MATERIAL" | head -10
+
           BRANCH="chore/refresh-counts-$(date -u +%Y%m%d)"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
