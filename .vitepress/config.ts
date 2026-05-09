@@ -662,19 +662,58 @@ export default defineConfig({
     if (pageData.frontmatter.blog) {
       /* Blog-specific: override og:type and add article metadata. og:image / twitter:image
          were already pushed above by the universal resolver. */
+
+      // Author: named individuals are schema.org Person; the catch-all
+      // "Cycles Team" byline is the Organization. Treating Albert
+      // Mavashev / Brenton Williams as Organization (the previous
+      // behavior) was a structured-data error — Google's rich-results
+      // tooling flags it.
+      const authorName = pageData.frontmatter.author || "Cycles Team"
+      const isOrgAuthor = authorName === "Cycles Team"
+
+      // dateModified: prefer explicit frontmatter override, fall back
+      // to VitePress's git-derived lastUpdated, then datePublished as
+      // a last resort (so the field is always present — Google ranks
+      // BlogPosting structured data more strictly when dateModified
+      // is missing).
+      //
+      // Normalize every signal to ISO date-only strings ("YYYY-MM-DD")
+      // before comparing. pageData.frontmatter.date is a Date object
+      // (YAML auto-parses bare ISO dates), pageData.lastUpdated is a
+      // unix timestamp number, and an explicit frontmatter override
+      // could be either — `new Date(...)` handles all three.
+      //
+      // Floor at datePublished. A post committed to the repo on day N
+      // but frontmatter-dated for day N+1 (scheduled publication) has
+      // pageData.lastUpdated < frontmatter.date, which would emit a
+      // BlogPosting with dateModified preceding datePublished — that
+      // looks broken to Google's structured-data validator.
+      const toDateStr = (d) => new Date(d).toISOString().slice(0, 10)
+      const datePublishedStr = toDateStr(pageData.frontmatter.date)
+      const lastUpdatedStr = pageData.lastUpdated
+        ? toDateStr(pageData.lastUpdated)
+        : null
+      const explicitModStr = pageData.frontmatter.dateModified
+        ? toDateStr(pageData.frontmatter.dateModified)
+        : null
+      let dateModifiedStr = explicitModStr || lastUpdatedStr || datePublishedStr
+      if (dateModifiedStr < datePublishedStr) dateModifiedStr = datePublishedStr
+
       pageData.frontmatter.head.push(
         ['meta', { property: 'og:type', content: 'article' }],
-        ['meta', { property: 'article:published_time', content: pageData.frontmatter.date }],
+        ['meta', { property: 'article:published_time', content: datePublishedStr }],
+        ['meta', { property: 'article:modified_time', content: dateModifiedStr }],
         ['script', { type: 'application/ld+json' }, JSON.stringify({
           "@context": "https://schema.org",
           "@type": "BlogPosting",
           "headline": pageData.frontmatter.title,
           "description": pageData.frontmatter.description,
-          "datePublished": pageData.frontmatter.date,
+          "datePublished": datePublishedStr,
+          "dateModified": dateModifiedStr,
           "image": ogImage,
           "author": {
-            "@type": "Organization",
-            "name": pageData.frontmatter.author || "Cycles Team"
+            "@type": isOrgAuthor ? "Organization" : "Person",
+            "name": authorName,
           },
           "publisher": {
             "@type": "Organization",
