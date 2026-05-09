@@ -1,0 +1,186 @@
+name: Refresh install + GitHub counts
+
+# Daily refresh of installs-cache.json (and manual-package-counts.json).
+# Combines the two halves of the count update into a single job so they
+# share a checkout and produce a single PR per day.
+#
+# Step 1 — registry counters (bash + curl + jq):
+#   npm    (api.npmjs.org)
+#   PyPI   (pypistats.org)
+#   crates (crates.io/api)
+#   Writes the per-source HWMs (npm, pypi, crates) into the cache.
+#   Does NOT write `total` or `fetchedAt` — step 2 owns those.
+#
+# Step 2 — GitHub-side counters (Node script):
+#   clones / clonesByRepo  (day-cursor accumulator on /traffic/clones, 14d API window)
+#   releases / releasesByRepo  (HWM on release-asset download counts; currently always 0)
+#   ghPackages  (best-effort; manual-package-counts.json is the live source of truth
+#                because GitHub's REST API does not populate container download_count)
+#   Reads the cache (now containing the freshly-written registry HWMs from step 1)
+#   and writes the canonical `total` + `fetchedAt` based on the installs.data.ts
+#   formula. This makes step 2 the single writer for the displayed total, which
+#   eliminates the dual-writer race that the previous split workflow had.
+#
+# Step 3 — open one PR if anything actually changed.
+#
+# History: replaces update-installs.yml + update-github-counts.yml. Those two
+# workflows wrote the same file (installs-cache.json) on staggered crons (06:00
+# and 06:30 UTC). Both wrote `total` and `fetchedAt` from different inputs, so
+# the second workflow's PR conflicted with the first whenever the first PR
+# wasn't yet merged — which was almost always, since merges took 1–2 hours.
+# Two days running (2026-05-08 and 2026-05-09) ended with the second PR closed
+# without merging, replaced by a manual or duplicate run.
+#
+# Tokens:
+#   ORG_TRAFFIC_TOKEN  (PAT) needs scopes:
+#     - repo            (for /traffic/clones on each org repo)
+#     - read:packages   (for /orgs/<org>/packages/container/<pkg>; if missing,
+#                        the GHCR step is skipped with a warning and the
+#                        manual-package-counts.json file remains the source
+#                        of truth)
+#
+# Schema preservation: step 1's bash uses `jq '. + { ... }'` to MERGE updates
+# into the existing cache, leaving every other field intact. Step 2's Node
+# script writes through readCache()/writeCache() with HWM/cursor semantics.
+# Both are idempotent and safe to interleave with the build's installs.data.ts
+# loader, which uses the same formulas.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 6 AM UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # persist-credentials defaults to true on purpose. The PR-open step's
+      # git push uses an x-access-token URL with ORG_TRAFFIC_TOKEN, but
+      # ORG_TRAFFIC_TOKEN lacks write scope on runcycles/docs. With creds
+      # persisted, git falls back to the persisted GITHUB_TOKEN (which has
+      # contents:write from the job's permissions block) and the push succeeds.
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Refresh registry counts (npm / PyPI / crates)
+        # Intentionally NO `set -e`/`-o pipefail` here — matches the original
+        # update-installs.yml behavior. Single-package curl failures fall
+        # through (curl exits non-zero, jq emits nothing, `$(())` treats the
+        # empty capture as 0, NPM_TOTAL just doesn't grow that iteration),
+        # and per-source HWM logic ensures we never regress. With pipefail,
+        # one transient registry blip would abort the whole daily refresh.
+        run: |
+          CACHE_FILE=".vitepress/theme/installs-cache.json"
+          TODAY=$(date +%Y-%m-%d)
+
+          # ── Fetch fresh registry counts ──
+          NPM_TOTAL=0
+          for pkg in runcycles @runcycles/mcp-server @runcycles/openclaw-budget-guard; do
+            COUNT=$(curl -sf "https://api.npmjs.org/downloads/point/2020-01-01:${TODAY}/${pkg}" | jq '.downloads // 0')
+            NPM_TOTAL=$((NPM_TOTAL + COUNT))
+          done
+          echo "npm=$NPM_TOTAL"
+
+          # PyPI: cumulative non-mirror downloads. /overall returns a daily
+          # series; sum it. Previously /recent .data.last_month was used, which
+          # is rolling and broke HWM semantics (a quiet month silently froze
+          # the displayed count above actual cumulative installs).
+          PYPI_TOTAL=0
+          for pkg in runcycles runcycles-openai-agents; do
+            COUNT=$(curl -sf "https://pypistats.org/api/packages/${pkg}/overall?mirrors=false" | jq '[.data[].downloads] | add // 0')
+            PYPI_TOTAL=$((PYPI_TOTAL + COUNT))
+          done
+          echo "pypi=$PYPI_TOTAL"
+
+          CRATES_TOTAL=0
+          for pkg in runcycles; do
+            COUNT=$(curl -sf -H 'User-Agent: runcycles-docs (https://github.com/runcycles/docs)' "https://crates.io/api/v1/crates/${pkg}" | jq '.crate.downloads // 0')
+            CRATES_TOTAL=$((CRATES_TOTAL + COUNT))
+          done
+          echo "crates=$CRATES_TOTAL"
+
+          # ── Read existing cache ──
+          if [ -f "$CACHE_FILE" ]; then
+            CACHED=$(cat "$CACHE_FILE")
+          else
+            # Cold start with the current schema — empty everything.
+            CACHED='{"npm":0,"pypi":0,"crates":0,"clones":0,"clonesByRepo":{},"releases":0,"releasesByRepo":{},"ghPackages":0,"maven":0,"total":0,"fetchedAt":""}'
+          fi
+
+          # ── Schema-regression guard: refuse to operate on a pre-PR-#515 cache. ──
+          # If the file is missing `clones` / `clonesByRepo` AND has the legacy
+          # `ghcr` field, this workflow would silently propagate the wipe by
+          # merging registry updates over the top. Fail loudly instead.
+          HAS_CLONES=$(echo "$CACHED" | jq 'has("clones") and has("clonesByRepo")')
+          HAS_GHCR=$(echo "$CACHED" | jq 'has("ghcr")')
+          if [ "$HAS_CLONES" = "false" ] && [ "$HAS_GHCR" = "true" ]; then
+            echo "::error::cache schema regression at $CACHE_FILE: pre-PR-#515 shape detected."
+            echo "Re-seed via 'GITHUB_TOKEN=... npm run build' locally and commit. See .outreach/installs-cache-runbook.md."
+            exit 1
+          fi
+
+          CACHED_NPM=$(echo "$CACHED" | jq '.npm // 0')
+          CACHED_PYPI=$(echo "$CACHED" | jq '.pypi // 0')
+          CACHED_CRATES=$(echo "$CACHED" | jq '.crates // 0')
+          echo "cached: npm=$CACHED_NPM pypi=$CACHED_PYPI crates=$CACHED_CRATES"
+
+          # ── Per-source HWMs (registry sources only) ──
+          NPM_HWM=$(( NPM_TOTAL > CACHED_NPM ? NPM_TOTAL : CACHED_NPM ))
+          PYPI_HWM=$(( PYPI_TOTAL > CACHED_PYPI ? PYPI_TOTAL : CACHED_PYPI ))
+          CRATES_HWM=$(( CRATES_TOTAL > CACHED_CRATES ? CRATES_TOTAL : CACHED_CRATES ))
+          echo "hwm: npm=$NPM_HWM pypi=$PYPI_HWM crates=$CRATES_HWM"
+
+          # ── Merge fresh registry HWMs into the cache. `total` and `fetchedAt`
+          # are intentionally NOT written here — the Node step that follows
+          # owns those fields, so there is a single canonical writer for the
+          # displayed total (matching the installs.data.ts loader formula).
+          NEW=$(echo "$CACHED" | jq --indent 2 \
+            --argjson npm "$NPM_HWM" \
+            --argjson pypi "$PYPI_HWM" \
+            --argjson crates "$CRATES_HWM" \
+            '. + { npm: $npm, pypi: $pypi, crates: $crates }')
+          # Preserve trailing newline to match installs.data.ts's writeFileSync
+          # (`JSON.stringify(...) + '\n'`); avoids a one-line cosmetic diff
+          # whenever the build runs after this workflow.
+          printf '%s\n' "$NEW" > "$CACHE_FILE"
+
+      - name: Refresh GitHub-side counts (clones / releases / ghPackages)
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
+        run: node scripts/update-github-counts.mjs
+
+      - name: Open PR with refreshed counts
+        # Uses ORG_TRAFFIC_TOKEN for `gh pr create` (the default GITHUB_TOKEN
+        # cannot create PRs unless "Allow Actions to create PRs" is enabled,
+        # which it isn't on this repo). The `git push` falls back to the
+        # persisted GITHUB_TOKEN — see the actions/checkout note at the top
+        # of this job.
+        env:
+          GH_TOKEN: ${{ secrets.ORG_TRAFFIC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet .vitepress/theme/installs-cache.json .vitepress/theme/manual-package-counts.json; then
+            echo "No changes to counts — skipping PR."
+            exit 0
+          fi
+          BRANCH="chore/refresh-counts-$(date -u +%Y%m%d)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add .vitepress/theme/installs-cache.json .vitepress/theme/manual-package-counts.json
+          git commit -m "chore: refresh install + GitHub counts"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
+          gh pr create \
+            --title "chore: refresh counts $(date -u +%Y-%m-%d)" \
+            --body "Automated daily refresh of registry counts (npm / PyPI / crates) and GitHub-side counts (clones / releases / ghPackages). One PR per day from the unified refresh-counts.yml workflow." \
+            --head "$BRANCH" \
+            --base main
