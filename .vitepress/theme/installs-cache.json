@@ -91,5 +91,17 @@
   "ghPackages": 2959,
   "maven": 1477,
   "total": 11209,
-  "fetchedAt": "2026-05-09T10:23:06.174Z"
+  "fetchedAt": "2026-05-09T11:19:59.740Z",
+  "npmByPackage": {
+    "runcycles": 1256,
+    "@runcycles/mcp-server": 740,
+    "@runcycles/openclaw-budget-guard": 2643
+  },
+  "pypiByPackage": {
+    "runcycles": 1620,
+    "runcycles-openai-agents": 447
+  },
+  "cratesByPackage": {
+    "runcycles": 67
+  }
 }
