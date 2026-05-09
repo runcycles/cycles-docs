@@ -34,7 +34,7 @@ jobs:
             libgbm1 libpango-1.0-0 libcairo2
           sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
       - run: npm install
-      - run: npm run build:with-pdfs
+      - run: npm run build
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .vitepress/dist

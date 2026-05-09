@@ -19,6 +19,18 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 20
+      - name: Install Chrome dependencies for Puppeteer
+        # `npm run build` now invokes generate-pdfs.js, which uses Puppeteer
+        # to render featured-post PDFs. Chrome runtime libs aren't in the
+        # default ubuntu-latest image. Same step as deploy.yml.
+        run: |
+          sudo apt-get update
+          # libasound2 is renamed to libasound2t64 in Ubuntu 24.04 — try both
+          sudo apt-get install -y \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libpango-1.0-0 libcairo2
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
       - run: npm install
       - run: npm test
       - run: npm run build
