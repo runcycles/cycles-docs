@@ -176,3 +176,102 @@ describe('clones day-cursor accumulator', () => {
     expect(result.lastSeenDay).toBe('2026-04-17')
   })
 })
+
+// ── Per-package HWM (registry counts) ────────────────────────────────
+//
+// Mirrors hwmPerPackage in installs.data.ts and scripts/update-registry-counts.mjs.
+// Per-package HWMs solve the failure mode where one package's API call
+// fails on the same run as another's legit growth — aggregate-only HWMs
+// would mask that growth; per-package HWMs preserve each independently.
+function hwmPerPackage(
+  packages: readonly string[],
+  fetched: Record<string, number | null>,
+  cachedByPackage: Record<string, number>,
+): { byPackage: Record<string, number>; aggregate: number } {
+  const updated: Record<string, number> = { ...cachedByPackage }
+  for (const pkg of packages) {
+    const fresh = fetched[pkg]
+    const cached = updated[pkg] ?? 0
+    updated[pkg] = fresh != null ? Math.max(fresh, cached) : cached
+  }
+  const aggregate = Object.values(updated).reduce(
+    (sum, v) => sum + (typeof v === 'number' ? v : 0),
+    0,
+  )
+  return { byPackage: updated, aggregate }
+}
+
+describe('per-package HWM', () => {
+  const PACKAGES = ['runcycles', 'runcycles-openai-agents'] as const
+
+  it('cold start: empty cached map, all fetched values become per-package HWMs', () => {
+    const result = hwmPerPackage(PACKAGES, { 'runcycles': 1620, 'runcycles-openai-agents': 447 }, {})
+    expect(result.byPackage).toEqual({ 'runcycles': 1620, 'runcycles-openai-agents': 447 })
+    expect(result.aggregate).toBe(2067)
+  })
+
+  it('all packages succeed and grow: each package HWMs to its new value', () => {
+    const cached = { 'runcycles': 1620, 'runcycles-openai-agents': 447 }
+    const fetched = { 'runcycles': 1700, 'runcycles-openai-agents': 500 }
+    const result = hwmPerPackage(PACKAGES, fetched, cached)
+    expect(result.byPackage).toEqual({ 'runcycles': 1700, 'runcycles-openai-agents': 500 })
+    expect(result.aggregate).toBe(2200)
+  })
+
+  it('one package API fails (null), other succeeds and grows: failed package preserved, growth captured', () => {
+    // The exact scenario from 2026-05-09: pypistats CDN flakiness
+    // returned data for one package but errored on the other. With
+    // aggregate-only HWMs, the surviving package's growth would have
+    // been masked by an aggregate-HWM "regression" check.
+    const cached = { 'runcycles': 1620, 'runcycles-openai-agents': 447 }
+    const fetched = { 'runcycles': 1700, 'runcycles-openai-agents': null }
+    const result = hwmPerPackage(PACKAGES, fetched, cached)
+    expect(result.byPackage).toEqual({ 'runcycles': 1700, 'runcycles-openai-agents': 447 })
+    expect(result.aggregate).toBe(2147) // captured the +80 growth
+  })
+
+  it('all packages fail (all null): aggregate frozen at cached values', () => {
+    const cached = { 'runcycles': 1620, 'runcycles-openai-agents': 447 }
+    const fetched = { 'runcycles': null, 'runcycles-openai-agents': null }
+    const result = hwmPerPackage(PACKAGES, fetched, cached)
+    expect(result.byPackage).toEqual({ 'runcycles': 1620, 'runcycles-openai-agents': 447 })
+    expect(result.aggregate).toBe(2067)
+  })
+
+  it('one package returns lower than cached (rolling-window blip): preserved at cached HWM', () => {
+    // PyPI Stats /overall sometimes returns a truncated daily series;
+    // today's sum can be less than the cached HWM. Per-package HWM keeps
+    // the cached value, just like the aggregate-only version did.
+    const cached = { 'runcycles': 1620, 'runcycles-openai-agents': 447 }
+    const fetched = { 'runcycles': 1620, 'runcycles-openai-agents': 100 } // dropped from 447
+    const result = hwmPerPackage(PACKAGES, fetched, cached)
+    expect(result.byPackage).toEqual({ 'runcycles': 1620, 'runcycles-openai-agents': 447 })
+    expect(result.aggregate).toBe(2067)
+  })
+
+  it('successful zero is treated as a real value, not a failure', () => {
+    // A brand-new package on PyPI may legitimately have 0 downloads in
+    // its window. fetched=0 (number) is distinct from fetched=null
+    // (failure). Both result in cached value being preserved when cached
+    // is higher, but only null preserves cached when fetched is lower.
+    const cached = { 'pkg-a': 100 }
+    // Successful 0 + cached 100 → max(0, 100) = 100 (HWM holds)
+    expect(hwmPerPackage(['pkg-a'], { 'pkg-a': 0 }, cached).byPackage).toEqual({ 'pkg-a': 100 })
+    // null + cached 100 → preserved 100 (same outcome here)
+    expect(hwmPerPackage(['pkg-a'], { 'pkg-a': null }, cached).byPackage).toEqual({ 'pkg-a': 100 })
+    // Cold start with successful 0 → 0 (real value, no HWM to fall back on)
+    expect(hwmPerPackage(['pkg-a'], { 'pkg-a': 0 }, {}).byPackage).toEqual({ 'pkg-a': 0 })
+    // Cold start with null → 0 (no fresh, no cached)
+    expect(hwmPerPackage(['pkg-a'], { 'pkg-a': null }, {}).byPackage).toEqual({ 'pkg-a': 0 })
+  })
+
+  it('package removed from declared list but present in cached map: preserved', () => {
+    // A package was un-declared in the source list, but its prior count
+    // stays in the cached map so the aggregate doesn't regress.
+    const cached = { 'runcycles': 1620, 'old-package': 999 }
+    const fetched = { 'runcycles': 1700 } // 'old-package' not in fetched
+    const result = hwmPerPackage(['runcycles'], fetched, cached)
+    expect(result.byPackage).toEqual({ 'runcycles': 1700, 'old-package': 999 })
+    expect(result.aggregate).toBe(2699)
+  })
+})
