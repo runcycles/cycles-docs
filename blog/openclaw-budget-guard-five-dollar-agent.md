@@ -175,7 +175,7 @@ Three things we learned the hard way:
 openclaw plugins install @runcycles/openclaw-budget-guard
 ```
 
-Start with [dry-run mode](/how-to/integrating-cycles-with-openclaw#try-it-without-a-server) to see degradation without a [Cycles server](/glossary#cycles-server). Then [deploy the full stack](/quickstart/deploying-the-full-cycles-stack) and watch your agent adapt instead of crash. Full documentation: [Integrating Cycles with OpenClaw](/how-to/integrating-cycles-with-openclaw). Source: [github.com/runcycles/cycles-openclaw-budget-guard](https://github.com/runcycles/cycles-openclaw-budget-guard).
+Start with [dry-run mode](/how-to/integrating-cycles-with-openclaw#dry-run-mode) to see degradation without a [Cycles server](/glossary#cycles-server). Then [deploy the full stack](/quickstart/deploying-the-full-cycles-stack) and watch your agent adapt instead of crash. Full documentation: [Integrating Cycles with OpenClaw](/how-to/integrating-cycles-with-openclaw). Source: [github.com/runcycles/cycles-openclaw-budget-guard](https://github.com/runcycles/cycles-openclaw-budget-guard).
 
 ## Related reading
 

@@ -1,6 +1,6 @@
 ---
-title: "AI Agent Blast Radius Risk Calculator"
-description: "Free interactive calculator quantifying AI agent action risk exposure by reversibility and visibility, with an editable runtime-authority containment factor."
+title: "AI Agent Blast Radius Calculator (Full Screen)"
+description: "Full-screen interactive calculator for AI agent blast radius — reversibility, visibility, audience size, with an editable runtime-authority containment factor."
 og:
   preview:
     value: "$342K"

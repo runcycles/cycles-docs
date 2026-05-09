@@ -155,7 +155,7 @@ Any result means at least one document hit 5+ retries.
 Use these Prometheus-style rules to detect retry storms before they drain budgets.
 
 ::: warning Derived from Spring Boot default metrics
-The server builds shipping at time of writing (runtime 0.1.25.8) don't register custom `cycles_reservations_*` counters yet. The rules below use Spring Boot's default `http_server_requests_seconds*` histogram (labels `method`, `uri`, `status`, `application`), which `/actuator/prometheus` exposes out of the box. Ratio-style rules tagged "requires sidecar" depend on gauges pushed by a balance-polling sidecar (see [Monitoring and Alerting](/how-to/monitoring-and-alerting#balance-polling-alerts-no-custom-metric-required)).
+The server builds shipping at time of writing (runtime 0.1.25.8) don't register custom `cycles_reservations_*` counters yet. The rules below use Spring Boot's default `http_server_requests_seconds*` histogram (labels `method`, `uri`, `status`, `application`), which `/actuator/prometheus` exposes out of the box. Ratio-style rules tagged "requires sidecar" depend on gauges pushed by a balance-polling sidecar (see [Monitoring and Alerting](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter)).
 :::
 
 ```yaml

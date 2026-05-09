@@ -241,7 +241,7 @@ See [`examples/streaming_usage.py`](https://github.com/runcycles/cycles-client-p
 
 ## Java / Spring Boot
 
-The Spring Boot starter's `@Cycles` annotation does not support streaming responses. For streaming in Java, use the programmatic `CyclesClient` directly with the same reserve → stream → commit pattern shown above for Python. See the [Spring Boot Starter — Programmatic client](/quickstart/getting-started-with-the-cycles-spring-boot-starter#programmatic-cycleslient) section for `CyclesClient` usage.
+The Spring Boot starter's `@Cycles` annotation does not support streaming responses. For streaming in Java, use the programmatic `CyclesClient` directly with the same reserve → stream → commit pattern shown above for Python. See the [Spring Boot starter overview](/quickstart/getting-started-with-the-cycles-spring-boot-starter) for the broader integration model.
 
 ## Next steps
 

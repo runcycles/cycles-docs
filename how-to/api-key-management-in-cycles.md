@@ -50,6 +50,7 @@ curl -X POST http://localhost:7979/v1/admin/api-keys \
   }'
 ```
 
+<a id="available-permissions"></a>
 ### Available permissions (27 total)
 
 **Tenant-scoped permissions** (used with `X-Cycles-API-Key` for runtime and tenant operations):
