@@ -122,7 +122,12 @@ jobs:
           echo "Material changes detected — opening PR. Sample lines:"
           echo "$MATERIAL" | head -10
 
-          BRANCH="chore/refresh-counts-$(date -u +%Y%m%d)"
+          # Append the run number so re-dispatches in the same UTC day
+          # don't collide with a previous run's branch (which may still
+          # exist on the remote if its PR was closed without merging,
+          # as PR #605 was on 2026-05-09 — the trigger that surfaced
+          # this bug). Each run gets its own branch and PR.
+          BRANCH="chore/refresh-counts-$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
