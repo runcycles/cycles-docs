@@ -2,6 +2,7 @@
 layout: home
 title: "Cycles — Runtime authority for autonomous agents"
 titleTemplate: false
+description: "Runtime authority for autonomous AI agents — pre-execution gating on cost, risk, and tool actions. Open protocol, self-hosted, Apache 2.0."
 hero:
   name: "Cycles"
   text: "Runtime authority for autonomous agents"

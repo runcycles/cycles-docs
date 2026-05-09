@@ -243,6 +243,7 @@ The most common cause is **self-invocation**: calling a `@Cycles` method from an
 
 **Fix:** Extract the `@Cycles` method into a separate `@Service`, or self-inject the proxy with `@Lazy @Autowired`. See [Self-Invocation](/quickstart/getting-started-with-the-cycles-spring-boot-starter#self-invocation-internal-method-calls) for full workarounds.
 
+<a id="spring-boot-illegalstateexception-nested-cycles"></a>
 ### Spring Boot: IllegalStateException — nested @Cycles
 
 **Symptom:** `IllegalStateException("Nested @Cycles not supported")` thrown at runtime.
@@ -268,7 +269,7 @@ By design. Cycles uses **status-based lifecycle management** instead of hard del
 Instead, use the cleanup mechanism for each object type:
 
 - **Tenants:** `PATCH status → CLOSED` — blocks all operations, retains data. See [Tenant Lifecycle](/how-to/tenant-creation-and-management-in-cycles#tenant-status-lifecycle).
-- **Budgets:** `POST fund` with `RESET` to zero — sets allocated to 0 to block new reservations; retains ledger history. See [Resizing a budget](/how-to/budget-allocation-and-management-in-cycles#resizing-a-budget-reset). (For clearing spent at billing-period boundaries, use `RESET_SPENT` — [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset_spent).)
+- **Budgets:** `POST fund` with `RESET` to zero — sets allocated to 0 to block new reservations; retains ledger history. See [Resizing a budget](/how-to/budget-allocation-and-management-in-cycles#resizing-a-budget-reset). (For clearing spent at billing-period boundaries, use `RESET_SPENT` — [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset-spent).)
 - **API Keys:** `DELETE` revokes the key (ACTIVE → REVOKED) but retains the record. See [Revoking API Keys](/how-to/api-key-management-in-cycles#revoking-api-keys).
 
 ### Can I use Cycles without Docker?
@@ -308,7 +309,7 @@ curl -s -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-c
   -d '{"operation": "RESET_SPENT", "amount": {"amount": 1000000000, "unit": "USD_MICROCENTS"}, "idempotency_key": "reset-001", "reason": "Monthly billing period reset"}' | jq .
 ```
 
-See [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset_spent) for more detail including the optional `spent` override for migrations, prorated signups, and corrections.
+See [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset-spent) for more detail including the optional `spent` override for migrations, prorated signups, and corrections.
 
 ### How do I see what's using my budget?
 
@@ -380,7 +381,7 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 **Checklist:**
 
 1. **Scope path mismatch.** The scope in the fund request must exactly match the budget scope. `tenant:acme-corp` is not the same as `tenant:acme-corp/workspace:prod`.
-2. **Wrong operation.** The `operation` field must be one of `CREDIT`, `DEBIT`, `RESET`, `RESET_SPENT`, or `REPAY_DEBT`. Common confusion: `RESET` with the same amount as the current allocation is a **no-op by design** — it resizes the allocated ceiling but preserves spent, so `remaining` stays at its current value. If you wanted to clear spent for a new billing period, use `RESET_SPENT`. See [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset_spent).
+2. **Wrong operation.** The `operation` field must be one of `CREDIT`, `DEBIT`, `RESET`, `RESET_SPENT`, or `REPAY_DEBT`. Common confusion: `RESET` with the same amount as the current allocation is a **no-op by design** — it resizes the allocated ceiling but preserves spent, so `remaining` stays at its current value. If you wanted to clear spent for a new billing period, use `RESET_SPENT`. See [Starting a new billing period](/how-to/budget-allocation-and-management-in-cycles#starting-a-new-billing-period-reset-spent).
 3. **Check the response.** The fund endpoint returns the updated balance. Verify the response body confirms the change.
 
 ### Fund endpoint returns 404 for workspace budget

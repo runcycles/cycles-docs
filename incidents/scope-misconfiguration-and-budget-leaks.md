@@ -215,7 +215,7 @@ if (gaps.length > 0) {
 ### Alerting for scope mismatches
 
 ::: warning Planned metrics — requires balance-polling sidecar
-`cycles_reservations_created_total{scope=...}` and `cycles_scope_spent_total{level=...}` are on the roadmap but not emitted by the current server builds (runtime 0.1.25.8). Because the `/actuator/prometheus` endpoint only exposes Spring Boot default metrics (no scope label is available on `http_server_requests_seconds*`), scope-aware alerts require a sidecar that polls `GET /v1/balances` and `GET /v1/reservations` and pushes labelled gauges (`cycles_scope_spent`, `cycles_scope_allocated`, `cycles_reservations_created`) into your metrics pipeline. See [Balance-polling alerts](/how-to/monitoring-and-alerting#balance-polling-alerts-no-custom-metric-required). Once those gauges exist, the rules below apply as-is.
+`cycles_reservations_created_total{scope=...}` and `cycles_scope_spent_total{level=...}` are on the roadmap but not emitted by the current server builds (runtime 0.1.25.8). Because the `/actuator/prometheus` endpoint only exposes Spring Boot default metrics (no scope label is available on `http_server_requests_seconds*`), scope-aware alerts require a sidecar that polls `GET /v1/balances` and `GET /v1/reservations` and pushes labelled gauges (`cycles_scope_spent`, `cycles_scope_allocated`, `cycles_reservations_created`) into your metrics pipeline. See [Balance-polling alerts](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter). Once those gauges exist, the rules below apply as-is.
 :::
 
 ```yaml

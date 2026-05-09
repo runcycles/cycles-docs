@@ -46,7 +46,7 @@ In a multi-[tenant](/glossary#tenant) platform or a team with shared API keys, o
 
 The agent session ends. You know it cost *something*, but you don't know which tools were expensive, which models it chose, or how many calls it made. Debugging a cost spike means digging through API provider dashboards and correlating timestamps.
 
-**What the plugin does:** Every session produces a [cost breakdown](/how-to/integrating-cycles-with-openclaw#session-analytics-and-cost-breakdown) — per-tool cost, per-model cost, invocation counts, and remaining budget. Attached to context metadata and optionally sent to a webhook. For real-time visibility, pipe 12 metrics into Datadog, Prometheus, or any OTLP collector via the built-in [`metricsEmitter`](/how-to/integrating-cycles-with-openclaw#observability-with-metricsemitter-v050). Enable `enableEventLog` for a full audit trail of every budget decision — useful for debugging why an agent ran out of budget or why a tool was blocked.
+**What the plugin does:** Every session produces a [cost breakdown](/how-to/integrating-cycles-with-openclaw#session-analytics-and-cost-breakdown) — per-tool cost, per-model cost, invocation counts, and remaining budget. Attached to context metadata and optionally sent to a webhook. For real-time visibility, pipe 12 metrics into Datadog, Prometheus, or any OTLP collector via the built-in [`metricsEmitter`](/how-to/integrating-cycles-with-openclaw#observability-with-otlp-metrics-v0-5-0). Enable `enableEventLog` for a full audit trail of every budget decision — useful for debugging why an agent ran out of budget or why a tool was blocked.
 
 ### 5. Abrupt failure
 

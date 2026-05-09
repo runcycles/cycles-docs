@@ -101,7 +101,7 @@ Webhook URLs are validated on creation and update to prevent Server-Side Request
 
 Default blocked CIDRs: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1/128`, `fc00::/7`
 
-Configuration is managed via `GET/PUT /v1/admin/config/webhook-security`. See the [Admin API Guide](/admin-api/guide#pillar-4-events--webhooks-v0125) for examples.
+Configuration is managed via `GET/PUT /v1/admin/config/webhook-security`. See the [Admin API Guide](/admin-api/guide#pillar-4-events-webhooks-v0-1-25) for examples.
 
 ### Signing secret encryption at rest
 
