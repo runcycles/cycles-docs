@@ -23,7 +23,7 @@ head:
 
 It's 2 AM. Your agent stack just tripped a spend alert. The monthly bill on one tenant is climbing at 4× the usual rate, and the incident channel wants to know which agent, which workflow, and which tool call is responsible — in time to intervene before the budget actually runs out.
 
-You have four log sources to stitch together. The admin plane recorded the budget reservations. The runtime plane authorized the calls. The events service fanned webhooks to your on-call hooks. Your audit store captured the approvals. Each one has timestamps and tenant IDs, and each one captured its own request ID. None of them agree on which rows belong to the same operation.
+You have four log sources to stitch together. The admin plane recorded the budget reservations. The runtime plane authorized the calls. The events service fanned [webhooks](/how-to/webhook-integrations) to your on-call hooks. Your audit store captured the approvals. Each one has timestamps and tenant IDs, and each one captured its own request ID. None of them agree on which rows belong to the same operation.
 
 Thirty minutes of `jq` later, you have a theory. Forty-five minutes in, you have a second theory. By then, the budget has leaked another $400.
 

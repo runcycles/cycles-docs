@@ -26,7 +26,7 @@ This is the story of `BudgetExhaustionConcurrentPropertyTest` — what it tests,
 Before this test existed, Cycles' concurrency coverage was two shapes:
 
 - `CyclesProtocolConcurrentBenchmarkTest` drove concurrent reserve→commit lifecycles at 8, 16, and 32 threads. It measured latency and throughput. It **asserted nothing about correctness**. A budget could have silently gone negative and the benchmark would still pass with green numbers.
-- `OverdraftIntegrationTest` covered the three overage policies (REJECT, ALLOW_IF_AVAILABLE, ALLOW_WITH_OVERDRAFT) in isolation, sequentially. It proved each policy's happy path. It never exercised any of them under contention.
+- `OverdraftIntegrationTest` covered the three [overage policies](/how-to/choosing-the-right-overage-policy) (REJECT, ALLOW_IF_AVAILABLE, ALLOW_WITH_OVERDRAFT) in isolation, sequentially. It proved each policy's happy path. It never exercised any of them under contention.
 
 Both are useful. Neither can fail the way a real concurrency bug would. A unit test that drives N threads with a fixed schedule is still running one specific interleaving — the one the test author thought to write. The interleaving that breaks atomicity is almost never the one the author imagined.
 

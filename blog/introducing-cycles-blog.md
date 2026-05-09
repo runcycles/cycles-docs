@@ -18,7 +18,7 @@ We're excited to launch the Cycles blog — a space for engineering deep-dives, 
 
 - **Engineering deep-dives** on budget enforcement patterns, concurrency handling, and system design
 - **Product updates** covering new features, SDK releases, and protocol changes
-- **Best practices** for integrating Cycles into your stack — from shadow mode rollouts to production hardening
+- **Best practices** for integrating Cycles into your stack — from [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) rollouts to production hardening
 - **Community stories** from teams using Cycles to keep their agents in check
 
 ## Why a Blog?
