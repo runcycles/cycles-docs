@@ -1,6 +1,6 @@
 ---
 title: "Implement the Cycles Protocol"
-description: "Build a conformant Cycles Protocol server. Minimum implementation surface, the four invariants, error semantics, and conformance criteria for framework maintainers, infra teams, and OSS contributors who want Cycles-compatible budget logic."
+description: "Build a conformant Cycles Protocol server: minimum surface, four invariants, error semantics, and conformance criteria for OSS contributors and infra teams."
 ---
 
 # Implement the Cycles Protocol

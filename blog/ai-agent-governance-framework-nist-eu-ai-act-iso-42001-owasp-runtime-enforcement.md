@@ -1,9 +1,9 @@
 ---
-title: "AI Agent Governance: NIST, EU AI Act, ISO 42001, OWASP"
+title: "AI Agents: EU AI Act, NIST, ISO 42001, OWASP Map"
 date: 2026-04-02
 author: Cycles Team
 tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime authority, agents]
-description: "Map specific regulatory requirements from the EU AI Act, NIST AI RMF, ISO 42001, and OWASP to runtime enforcement controls. A practical governance framework for teams deploying AI agents in production."
+description: "Map EU AI Act, NIST AI RMF, ISO 42001, and OWASP regulatory requirements to runtime enforcement controls — a practical governance framework for AI agents."
 blog: true
 sidebar: false
 featured: true

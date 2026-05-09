@@ -1,9 +1,9 @@
 ---
-title: "AI Agent Governance: Runtime Enforcement for Security, Cost, and Compliance"
+title: "AI Agent Runtime Enforcement: Security and Cost"
 date: 2026-03-25
 author: Cycles Team
 tags: [governance, security, compliance, agents, production, MCP, multi-agent]
-description: "Most enterprises deploying AI agents lack runtime governance. Learn why pre-execution enforcement — not dashboards — is the missing layer for agent security, cost, and compliance."
+description: "Most AI agent deployments lack runtime governance. Pre-execution enforcement — not dashboards — is the missing layer for agent security, cost, and compliance."
 blog: true
 sidebar: false
 featured: true

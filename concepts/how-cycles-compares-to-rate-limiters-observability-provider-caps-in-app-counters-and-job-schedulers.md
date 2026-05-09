@@ -1,5 +1,5 @@
 ---
-title: "How Cycles Compares to Rate Limiters, Observability, Provider Caps, In-App Counters, and Job Schedulers"
+title: "Cycles vs Rate Limiters, Caps, and Counters"
 description: "See how Cycles differs from rate limiters, observability tools, provider caps, in-app counters, and job schedulers for budget governance."
 ---
 

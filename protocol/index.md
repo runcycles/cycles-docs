@@ -1,6 +1,6 @@
 ---
 title: "Cycles Protocol"
-description: "An open specification for runtime budget authority over AI agents. Authorization grants access; authority meters and bounds the action. Reserve-commit semantics, hierarchical scopes, three-way decisions, and explicit conformance criteria."
+description: "Open specification for runtime budget authority over AI agents — reserve-commit semantics, hierarchical scopes, three-way decisions, and conformance criteria."
 ---
 
 # Cycles Protocol

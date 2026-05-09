@@ -1,5 +1,5 @@
 ---
-title: "What Cycles Is Not: Billing, Rate Limiting, Orchestration, and Other Category Confusion"
+title: "What Cycles Is Not: Billing, Rate Limiting, Etc."
 description: "Understand what Cycles is not — it is not billing, rate limiting, orchestration, or observability, but a runtime authority for autonomous agents."
 ---
 

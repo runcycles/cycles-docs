@@ -1,6 +1,6 @@
 ---
 title: "Runtime Authority vs Runtime Authorization"
-description: "Identity-based authorization controls which agent can call a tool. Runtime authority controls whether this agent still has bounded permission — budget, risk, action exposure — to take this specific next step right now. They're different layers, and a production agent stack needs both."
+description: "Authorization decides which agent may call a tool; authority decides if the next step is still allowed. Different layers — production agent stacks need both."
 ---
 
 # Runtime Authority vs Runtime Authorization
