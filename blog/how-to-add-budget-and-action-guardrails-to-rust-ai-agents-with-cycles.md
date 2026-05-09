@@ -21,7 +21,7 @@ This is the gap that Cycles fills. It's not just a billing meter — it's a **[r
 2. **Action:** Is this agent *allowed* to take this action right now? (Which tools? How many [tokens](/glossary#tokens)? How many steps remaining? Is there a cooldown?)
 3. **Audit:** Is every decision, cap, and outcome recorded as a signed event — so compliance, incident review, and per-agent attribution come for free, not as a separate logging project?
 
-The server returns either ALLOW, ALLOW_WITH_CAPS (proceed but with constraints), or DENY — and the client enforces it before the expensive call happens. Every reservation, commit, release, and decision drops into an append-only event log that the events service streams to webhooks for downstream audit pipelines.
+The server returns either ALLOW, ALLOW_WITH_CAPS (proceed but with constraints), or DENY — and the client enforces it before the expensive call happens. Every reservation, commit, release, and decision drops into an append-only event log that the events service streams to [webhooks](/how-to/webhook-integrations) for downstream audit pipelines.
 
 The `runcycles` crate brings this to Rust with an API designed around ownership semantics and compile-time safety. This post shows how to integrate it into existing Rust agent code at three levels of control.
 

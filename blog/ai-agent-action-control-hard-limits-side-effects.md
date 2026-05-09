@@ -88,7 +88,7 @@ A workflow capped at 100 risk points can make dozens of reads and searches (1-2 
 
 The specific point values are subjective and team-defined. The table above is an example schedule — your team's will differ. A team that sends transactional emails as a core workflow might assign 5 points per email instead of 20, because a misrouted transactional email is recoverable. A team with strict compliance requirements might assign 100 points to any external communication, because the blast radius of a wrong message is regulatory, not just reputational. The value is not in the absolute numbers but in the **relative weighting** and the **hard cap**. What matters is that the cap exists and is enforced before execution.
 
-For the full unit system including [USD_MICROCENTS](/glossary#usd-microcents), TOKENS, [CREDITS](/glossary#credits), and RISK_POINTS, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
+For per-tool point assignment, see [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools). For the full unit system including [USD_MICROCENTS](/glossary#usd-microcents), TOKENS, [CREDITS](/glossary#credits), and RISK_POINTS, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
 
 ## Tool Allowlists and Denylists — Capability Control Under Pressure
 

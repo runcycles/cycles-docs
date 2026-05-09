@@ -24,7 +24,7 @@ These five patterns come up across teams deploying agents with tool-calling capa
 
 [Action authority](/glossary#action-authority) uses the same reserve-commit lifecycle as [budget authority](/glossary#budget-authority), but with a different unit: **[RISK_POINTS](/glossary#risk-points)** instead of dollars. Teams assign point values to each action class based on blast radius — a read costs 1 point, an email costs 20, a deploy costs 50. A workflow gets a fixed risk-point budget. Every consequential action deducts from it. When the budget is exhausted, the agent can still read and reason, but it cannot act.
 
-For the full mechanism, see [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do). For the unit system, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
+For the full mechanism, see [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do). For per-tool point assignment, see [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools). For the unit system, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
 
 ## Failure 1: The Wrong Email Template — $1.40 in Tokens, $50K+ in Pipeline
 
