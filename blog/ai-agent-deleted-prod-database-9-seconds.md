@@ -1,5 +1,5 @@
 ---
-title: "Cursor AI Agent Reportedly Deleted a Production Database in 9 Seconds"
+title: "Cursor Agent Deleted a Prod Database in 9 Seconds"
 date: 2026-04-28
 author: Albert Mavashev
 tags: [incidents, runtime-authority, governance, audit, action-authority, agents]

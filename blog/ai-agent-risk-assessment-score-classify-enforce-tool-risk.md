@@ -1,9 +1,9 @@
 ---
-title: "AI Agent Risk Assessment: How to Score, Classify, and Enforce Tool Risk Before Production"
+title: "AI Agent Risk Assessment: Score, Classify, Enforce"
 date: 2026-04-03
 author: Albert Mavashev
 tags: [risk-assessment, risk-scoring, action-control, RISK_POINTS, agents, production, governance]
-description: "A practical guide to assessing AI agent risk at the tool level. Classify actions by blast radius, assign risk scores, and convert assessments into enforceable runtime budgets."
+description: "Practical guide to AI agent risk: classify actions by blast radius, assign risk scores, and convert assessments into enforceable runtime budgets."
 blog: true
 sidebar: false
 featured: true

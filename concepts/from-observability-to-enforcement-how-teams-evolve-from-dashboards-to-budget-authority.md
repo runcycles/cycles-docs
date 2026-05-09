@@ -1,5 +1,5 @@
 ---
-title: "From Observability to Enforcement: How Teams Evolve from Dashboards to Runtime Authority"
+title: "From Observability to Enforcement"
 description: "How teams progress from dashboards and alerts to runtime budget enforcement as autonomous systems mature. A four-stage maturity model for agent governance."
 ---
 

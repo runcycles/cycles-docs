@@ -1,5 +1,5 @@
 ---
-title: "Runaway Agents, Tool Loops, and Budget Overruns: The Incidents Cycles Is Designed to Prevent"
+title: "Runaway Agents, Tool Loops, and Budget Overruns"
 description: "Overview of the real-world incidents Cycles prevents: runaway agents, tool loops, retry storms, and uncontrolled budget overruns."
 ---
 

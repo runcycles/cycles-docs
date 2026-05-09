@@ -1,6 +1,6 @@
 ---
-title: "Prove to an Auditor That Your Agents Are Under Control"
-description: "An auditor asks how you control your AI agents. You show a dashboard. They ask what prevents the agent from acting before the dashboard updates. Cycles provides the answer: pre-execution enforcement with a structured audit trail."
+title: "Prove to Auditors Your Agents Are Under Control"
+description: "Auditors ask how you control your AI agents. Dashboards show what happened. Cycles answers: pre-execution enforcement with a structured audit trail."
 ---
 
 # Prove to an Auditor That Your Agents Are Under Control

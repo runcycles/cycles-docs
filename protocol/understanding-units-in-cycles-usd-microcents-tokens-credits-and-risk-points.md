@@ -1,5 +1,5 @@
 ---
-title: "Understanding Units in Cycles: USD_MICROCENTS, TOKENS, CREDITS, and RISK_POINTS"
+title: "Cycles Units: USD, Tokens, Credits, Risk Points"
 description: "Reference for the four standard unit types in Cycles and how they affect budget expression, estimation, and ledger interpretation."
 ---
 
