@@ -35,6 +35,13 @@ interface InstallsCache {
   npm: number
   pypi: number
   crates: number
+  // Per-package HWMs. Aggregate fields above are derived from these
+  // (with the aggregate value floored by its previous high during the
+  // cold-start migration window). Per-package storage means a transient
+  // failure on one package can't mask legitimate growth in another.
+  npmByPackage: Record<string, number>
+  pypiByPackage: Record<string, number>
+  cratesByPackage: Record<string, number>
   clones: number
   clonesByRepo: Record<string, ClonesPerRepo>
   releases: number
@@ -60,6 +67,7 @@ function readCache(): InstallsCache {
     // File missing or unparseable — cold start, allowed.
     return {
       npm: 0, pypi: 0, crates: 0,
+      npmByPackage: {}, pypiByPackage: {}, cratesByPackage: {},
       clones: 0, clonesByRepo: {},
       releases: 0, releasesByRepo: {},
       ghPackages: 0,
@@ -86,17 +94,20 @@ function readCache(): InstallsCache {
   }
 
   return {
-    npm:           raw.npm ?? 0,
-    pypi:          raw.pypi ?? 0,
-    crates:        raw.crates ?? 0,
-    clones:        raw.clones ?? 0,
-    clonesByRepo:  raw.clonesByRepo ?? {},
-    releases:      raw.releases ?? 0,
-    releasesByRepo: raw.releasesByRepo ?? {},
-    ghPackages:    raw.ghPackages ?? 0,
-    maven:         raw.maven ?? 0,
-    total:         raw.total ?? 0,
-    fetchedAt:     raw.fetchedAt ?? '',
+    npm:             raw.npm ?? 0,
+    pypi:            raw.pypi ?? 0,
+    crates:          raw.crates ?? 0,
+    npmByPackage:    raw.npmByPackage    ?? {},
+    pypiByPackage:   raw.pypiByPackage   ?? {},
+    cratesByPackage: raw.cratesByPackage ?? {},
+    clones:          raw.clones ?? 0,
+    clonesByRepo:    raw.clonesByRepo ?? {},
+    releases:        raw.releases ?? 0,
+    releasesByRepo:  raw.releasesByRepo ?? {},
+    ghPackages:      raw.ghPackages ?? 0,
+    maven:           raw.maven ?? 0,
+    total:           raw.total ?? 0,
+    fetchedAt:       raw.fetchedAt ?? '',
   }
 }
 
@@ -174,77 +185,118 @@ function ghHeaders(): Record<string, string> {
   return h
 }
 
+// Per-package count fetchers. Return a map keyed by package name; the
+// value is the fetched count, or `null` if the API call failed. The
+// `null` distinction matters for HWM: a successful 0 (brand-new
+// package) is treated as a real value, but a failure preserves the
+// cached value instead of comparing against 0.
+//
+// Package lists are duplicated in scripts/update-registry-counts.mjs
+// (the daily refresh workflow). Keep them in sync by convention.
+
 // ── npm ──────────────────────────────────────────────────────────────
 const NPM_PACKAGES = [
   'runcycles',
   '@runcycles/mcp-server',
   '@runcycles/openclaw-budget-guard',
-]
+] as const
 
-async function fetchNpmDownloads(): Promise<number> {
+async function fetchNpmDownloads(): Promise<Record<string, number | null>> {
   const today = new Date().toISOString().slice(0, 10)
-  const totals = await Promise.all(
-    NPM_PACKAGES.map(async (pkg) => {
+  const entries = await Promise.all(
+    NPM_PACKAGES.map(async (pkg): Promise<[string, number | null]> => {
       try {
         const res = await fetch(
           `https://api.npmjs.org/downloads/point/2020-01-01:${today}/${pkg}`
         )
-        if (!res.ok) return 0
+        if (!res.ok) return [pkg, null]
         const json = await res.json() as { downloads?: number }
-        return json.downloads ?? 0
+        return [pkg, typeof json.downloads === 'number' ? json.downloads : null]
       } catch {
-        return 0
+        return [pkg, null]
       }
     })
   )
-  return totals.reduce((a, b) => a + b, 0)
+  return Object.fromEntries(entries)
 }
 
 // ── PyPI ─────────────────────────────────────────────────────────────
 const PYPI_PACKAGES = [
   'runcycles',
   'runcycles-openai-agents',
-]
+] as const
 
 // /overall returns a daily series of non-mirror downloads; summing it
 // yields a cumulative total compatible with the per-source HWM used
 // downstream. /recent .last_month was rolling and broke HWM semantics.
-async function fetchPypiDownloads(): Promise<number> {
-  const totals = await Promise.all(
-    PYPI_PACKAGES.map(async (pkg) => {
+async function fetchPypiDownloads(): Promise<Record<string, number | null>> {
+  const entries = await Promise.all(
+    PYPI_PACKAGES.map(async (pkg): Promise<[string, number | null]> => {
       try {
         const res = await fetch(`https://pypistats.org/api/packages/${pkg}/overall?mirrors=false`)
-        if (!res.ok) return 0
+        if (!res.ok) return [pkg, null]
         const json = await res.json() as { data?: Array<{ downloads?: number }> }
-        return (json.data ?? []).reduce((sum, row) => sum + (row.downloads ?? 0), 0)
+        if (!Array.isArray(json.data)) return [pkg, null]
+        return [pkg, json.data.reduce((sum, row) => sum + (row.downloads ?? 0), 0)]
       } catch {
-        return 0
+        return [pkg, null]
       }
     })
   )
-  return totals.reduce((a, b) => a + b, 0)
+  return Object.fromEntries(entries)
 }
 
 // ── crates.io ────────────────────────────────────────────────────────
-const CRATES_PACKAGES = ['runcycles']
+const CRATES_PACKAGES = ['runcycles'] as const
 
-async function fetchCratesDownloads(): Promise<number> {
-  const totals = await Promise.all(
-    CRATES_PACKAGES.map(async (pkg) => {
+async function fetchCratesDownloads(): Promise<Record<string, number | null>> {
+  const entries = await Promise.all(
+    CRATES_PACKAGES.map(async (pkg): Promise<[string, number | null]> => {
       try {
         const res = await fetch(
           `https://crates.io/api/v1/crates/${pkg}`,
           { headers: { 'User-Agent': 'runcycles-docs (https://github.com/runcycles/docs)' } }
         )
-        if (!res.ok) return 0
+        if (!res.ok) return [pkg, null]
         const json = await res.json() as { crate?: { downloads?: number } }
-        return json.crate?.downloads ?? 0
+        return [pkg, typeof json.crate?.downloads === 'number' ? json.crate.downloads : null]
       } catch {
-        return 0
+        return [pkg, null]
       }
     })
   )
-  return totals.reduce((a, b) => a + b, 0)
+  return Object.fromEntries(entries)
+}
+
+/**
+ * Apply per-package HWM and return both the updated map and the aggregate.
+ *
+ * For each declared package:
+ *   - if the API call succeeded: HWM = max(fresh, cached_for_this_package)
+ *   - if it failed (fresh is null): preserve the cached value
+ *
+ * Packages NOT in the declared list but present in the cached map are
+ * preserved (e.g., a package was removed from the source list — its
+ * prior count stays in the aggregate so removal doesn't regress the
+ * displayed total). The aggregate is sum of the resulting per-package
+ * map.
+ */
+function hwmPerPackage(
+  packages: readonly string[],
+  fetched: Record<string, number | null>,
+  cachedByPackage: Record<string, number>,
+): { byPackage: Record<string, number>; aggregate: number } {
+  const updated: Record<string, number> = { ...cachedByPackage }
+  for (const pkg of packages) {
+    const fresh = fetched[pkg]
+    const cached = updated[pkg] ?? 0
+    updated[pkg] = fresh != null ? Math.max(fresh, cached) : cached
+  }
+  const aggregate = Object.values(updated).reduce(
+    (sum, v) => sum + (typeof v === 'number' ? v : 0),
+    0,
+  )
+  return { byPackage: updated, aggregate }
 }
 
 // ── GitHub: list org repos ───────────────────────────────────────────
@@ -420,11 +472,17 @@ export default {
       Promise.resolve(fetchMavenDownloads()),
     ])
 
-    // Per-source high-water marks: each source never decreases independently.
-    const npm    = Math.max(npmFetched,    cached.npm)
-    const pypi   = Math.max(pypiFetched,   cached.pypi)
-    const crates = Math.max(cratesFetched, cached.crates)
-    const maven  = Math.max(mavenFetched,  cached.maven)
+    // Per-package HWM: each package's count never decreases independently.
+    // Aggregate is the sum of the per-package map, floored by the previous
+    // aggregate (cold-start migration safety net — once the per-package
+    // map is fully populated, this floor becomes redundant).
+    const npmHwm    = hwmPerPackage(NPM_PACKAGES,    npmFetched,    cached.npmByPackage)
+    const pypiHwm   = hwmPerPackage(PYPI_PACKAGES,   pypiFetched,   cached.pypiByPackage)
+    const cratesHwm = hwmPerPackage(CRATES_PACKAGES, cratesFetched, cached.cratesByPackage)
+    const npm    = Math.max(npmHwm.aggregate,    cached.npm)
+    const pypi   = Math.max(pypiHwm.aggregate,   cached.pypi)
+    const crates = Math.max(cratesHwm.aggregate, cached.crates)
+    const maven  = Math.max(mavenFetched,        cached.maven)
 
     // Clones: cumulative via day-cursor; sum of per-repo counts.
     const clones = Object.values(clonesResult.updatedByRepo).reduce((a, b) => a + b.count, 0)
@@ -451,8 +509,8 @@ export default {
     const total = npm + pypi + crates + releases + ghPackages + maven
 
     console.log(
-      `[installs] npm=${npmFetched}(hwm:${npm}) pypi=${pypiFetched}(hwm:${pypi})` +
-      ` crates=${cratesFetched}(hwm:${crates})` +
+      `[installs] npm=${npmHwm.aggregate}(hwm:${npm}) pypi=${pypiHwm.aggregate}(hwm:${pypi})` +
+      ` crates=${cratesHwm.aggregate}(hwm:${crates})` +
       ` clones+${clonesResult.totalAdded}(cache:${clones}, NOT in displayed total)` +
       ` releases=${releases}` +
       ` ghPackages=${ghPackages}` +
@@ -462,6 +520,9 @@ export default {
     const now = new Date().toISOString()
     const newCache: InstallsCache = {
       npm, pypi, crates,
+      npmByPackage:    npmHwm.byPackage,
+      pypiByPackage:   pypiHwm.byPackage,
+      cratesByPackage: cratesHwm.byPackage,
       clones, clonesByRepo: clonesResult.updatedByRepo,
       releases, releasesByRepo: releasesResult.updatedByRepo,
       ghPackages,
