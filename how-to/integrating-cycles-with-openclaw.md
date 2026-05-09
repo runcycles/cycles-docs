@@ -146,7 +146,7 @@ The plugin hooks into five OpenClaw lifecycle events to enforce budget boundarie
 
 | Hook | What happens |
 |------|-------------|
-| `before_model_resolve` | Fetches balance, reserves budget for the model call, downgrades the model if budget is low, blocks if exhausted (via [model override workaround](#model-blocking-workaround-v073)). The reservation is held open for later commit (see [Model cost reconciliation](#model-cost-reconciliation-v050)). |
+| `before_model_resolve` | Fetches balance, reserves budget for the model call, downgrades the model if budget is low, blocks if exhausted (via [model override workaround](#model-blocking-workaround-v0-7-3)). The reservation is held open for later commit (see [Model cost reconciliation](#model-cost-reconciliation-v0-5-0)). |
 | `before_prompt_build` | Commits any pending model reservation from the previous turn at the reserved estimate. Injects a budget-awareness hint into the system prompt, including forecast projections and pool balances. |
 | `before_tool_call` | Checks tool permissions (allowlist/blocklist), applies degradation strategies, creates a Cycles reservation. Optionally retries on denial. |
 | `after_tool_call` | Commits the reservation with the estimated cost from `toolBaseCosts` (or the default). |

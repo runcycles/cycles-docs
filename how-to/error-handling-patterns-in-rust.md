@@ -1,6 +1,6 @@
 ---
 title: "Rust Error Handling for AI Agent Budget Failures"
-description: "Idiomatic Rust patterns for handling Cycles budget errors in async AI agent applications — retries, RAII safety, graceful degradation, and budget-exceeded handling with with_cycles(), ReservationGuard, and the programmatic CyclesClient."
+description: "Idiomatic Rust patterns for Cycles budget errors in async AI agents — retries, RAII safety, graceful degradation, with_cycles, ReservationGuard, CyclesClient."
 head:
   - - meta
     - name: keywords

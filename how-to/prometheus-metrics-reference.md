@@ -1,6 +1,6 @@
 ---
 title: "Prometheus Metrics Reference"
-description: "Complete reference for every Prometheus counter and timer exposed by cycles-server, cycles-server-events, and cycles-server-admin, including tag definitions, cardinality guidance, and a sample scrape config."
+description: "Reference for every Prometheus counter and timer in cycles-server, events, and admin — tag definitions, cardinality, scrape config."
 ---
 
 # Prometheus Metrics Reference

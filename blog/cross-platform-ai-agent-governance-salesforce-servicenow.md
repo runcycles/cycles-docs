@@ -1,9 +1,9 @@
 ---
-title: "Salesforce and ServiceNow Govern Their Own Agents. Who Governs the Whole System?"
+title: "Salesforce, ServiceNow, and the Cross-Platform Gap"
 date: 2026-03-27
 author: Albert Mavashev
 tags: [governance, enterprise, salesforce, servicenow, agentforce, cross-platform, action-authority]
-description: "Both platforms have invested heavily in AI agent governance. But neither acts as a neutral, shared pre-execution control plane across Salesforce, ServiceNow, and custom runtimes. That gap is where cross-platform agent governance lives."
+description: "Salesforce and ServiceNow have invested in AI agent governance. Neither acts as a neutral, shared pre-execution control plane across both — and custom runtimes."
 blog: true
 sidebar: false
 ---

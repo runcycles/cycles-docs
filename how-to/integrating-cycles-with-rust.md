@@ -1,6 +1,6 @@
 ---
-title: "Rust AI Agent Budget Control — Cycles Integration Guide"
-description: "Hard budget limits, action authority, and runtime governance for AI agents in Rust. Integration patterns for Tokio async LLM calls, Axum / Actix middleware, streaming responses, and multi-step agent workflows. Covers reserve-commit lifecycle, RAII guards, and the runcycles crate."
+title: "Rust AI Agent Budget Control: Cycles Guide"
+description: "Hard budget limits and action authority for Rust AI agents — Tokio async LLM calls, Axum/Actix middleware, reserve-commit, RAII guards, runcycles crate."
 head:
   - - meta
     - name: keywords
