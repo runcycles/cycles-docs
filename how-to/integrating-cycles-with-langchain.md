@@ -9,10 +9,10 @@ LangChain offers two integration surfaces for Cycles, depending on how you use L
 
 | Surface | When to use | Cycles tool |
 |---|---|---|
-| **Agent middleware** ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) | LangChain 1.x agents using `langchain.agents.create_agent` | The `langchain-runcycles` package, shipping `CyclesToolGate` + `CyclesFanOutGate` |
+| **Agent middleware** ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) | LangChain 1.x agents using `langchain.agents.create_agent` | The `langchain-runcycles` package, shipping `CyclesModelGate` + `CyclesToolGate` + `CyclesFanOutGate` |
 | **Callback handler** | Bare `ChatOpenAI` / chains / RAG / non-agent LangChain code | Custom `BaseCallbackHandler` (recipe below; also bundled in [`cycles-client-python`](https://github.com/runcycles/cycles-client-python/blob/main/examples/langchain_integration.py)) |
 
-The **middleware path is dramatically better for `create_agent` users**: tool calls are gated *before* execution (denial returns a `ToolMessage` so the agent recovers gracefully), fan-out is capped at the model-turn level, and idempotency keys are deterministic and optionally namespace-scoped for retry-safe replay across runs. The callback handler is still the right fit for everything else.
+The **middleware path is dramatically better for `create_agent` users**: model calls reserve budget *before* the LLM is invoked (v0.1.5+), tool calls are gated *before* execution (denial returns a `ToolMessage` so the agent recovers gracefully), fan-out is capped at the model-turn level, and idempotency keys are deterministic and optionally namespace-scoped for retry-safe replay across runs. The callback handler is still the right fit for non-agent LangChain code.
 
 > **Need an API key?** Create one via the Admin Server — see [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key) or [API Key Management](/how-to/api-key-management-in-cycles).
 
@@ -20,10 +20,13 @@ The **middleware path is dramatically better for `create_agent` users**: tool ca
 
 ## Agent middleware via langchain-runcycles
 
-The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides two `AgentMiddleware` subclasses that plug into `langchain.agents.create_agent`:
+The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides three `AgentMiddleware` subclasses that plug into `langchain.agents.create_agent`:
 
+- **`CyclesModelGate`** (v0.1.5+) — runs before every LLM call (`wrap_model_call`). Authorizes via `client.decide()` and/or reserves budget. Returns a `ModelResponse` carrying the denial reason on deny so the agent terminates naturally.
 - **`CyclesToolGate`** — intercepts every tool call (`wrap_tool_call`). Authorizes via `client.decide()` and/or reserves budget. Returns a `ToolMessage` on denial so the model can recover gracefully.
 - **`CyclesFanOutGate`** — runs before every model turn (`before_model`). Halts the agent (with `jump_to: "end"`) when a turn cap is reached or an external policy says stop.
+
+Compose them in a single `middleware=[...]` list. The natural ordering is **fan-out → model → tool**: runaway loops halt before model spend, model spend reserves before tool side effects.
 
 ### Install
 
@@ -76,12 +79,14 @@ agent.invoke({"messages": [{"role": "user", "content": "Email alice."}]})
 
 If `client.decide()` denies the call, `send_email` is never invoked — the model receives a `ToolMessage` with the denial reason and can choose another path.
 
-### Three modes for `CyclesToolGate`
+### Three modes (`CyclesToolGate` and `CyclesModelGate`)
+
+Both `CyclesToolGate` and `CyclesModelGate` (v0.1.5+) share the same three modes:
 
 | Mode | Behavior |
 |---|---|
-| `"decide"` | Calls `client.decide()`. Denies the tool call on a non-allow decision. No reservation. |
-| `"reserve"` | Creates a reservation, runs the tool, commits on success (at the configured `estimate`), releases on exception. |
+| `"decide"` | Calls `client.decide()`. Denies the call on a non-allow decision. No reservation. |
+| `"reserve"` | Creates a reservation, runs the model/tool, commits on success (at the configured `estimate`), releases on exception. |
 | `"decide+reserve"` | Authorizes via `decide()` first, then reserves and commits. Most strict. |
 
 ### Settlement-failure policy (v0.1.2+)
@@ -116,9 +121,78 @@ gate = CyclesToolGate(
 )
 ```
 
+### `CyclesModelGate` (v0.1.5+)
+
+`CyclesModelGate` overrides `wrap_model_call` to gate every LLM invocation. Same three modes as above. On denial in `decide` mode, returns a `ModelResponse` whose `AIMessage` carries the denial reason: the agent terminates naturally because the AIMessage has no `tool_calls`.
+
+```python
+from langchain_runcycles import CyclesModelGate
+from runcycles import Action, Amount, Subject, Unit
+
+model_gate = CyclesModelGate(
+    client,
+    subject=Subject(tenant="acme", agent="researcher"),
+    action=Action(kind="llm.completion", name="claude-sonnet-4-6"),
+    mode="reserve",
+    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),  # $0.02 per call
+)
+```
+
+::: tip v0.1.5 commits at the configured `estimate`
+Per-call actual-cost extraction (token counts from provider response metadata) and streaming integration land in v0.2.0. For precise per-call token cost capture today, use the [`CyclesBudgetHandler` callback handler](#callback-handler-for-non-agent-runnables) below. The two approaches compose: `CyclesModelGate` for budget reservation, callback handler for token-accurate accounting.
+:::
+
+### Composing all three gates
+
+The full LangChain agent governance triad in one `middleware=[...]` list:
+
+```python
+from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_runcycles import CyclesFanOutGate, CyclesModelGate, CyclesToolGate
+from runcycles import Action, Amount, CyclesClient, CyclesConfig, Subject, Unit
+
+client = CyclesClient(CyclesConfig.from_env())
+
+@tool
+def send_email(to: str, body: str) -> str:
+    """Send an email."""
+    return f"Sent to {to}"
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[send_email],
+    middleware=[
+        CyclesFanOutGate(
+            max_turns=20,
+            client=client,
+            subject=Subject(tenant="acme"),
+            action=Action(kind="model.turn", name="research"),
+        ),
+        CyclesModelGate(
+            client,
+            subject=Subject(tenant="acme", agent="researcher"),
+            action=Action(kind="llm.completion", name="claude-sonnet-4-6"),
+            mode="reserve",
+            estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),
+        ),
+        CyclesToolGate(
+            client,
+            subject=Subject(tenant="acme", agent="researcher"),
+            action={"send_email": Action(kind="tool.call", name="send_email")},
+            mode="decide+reserve",
+        ),
+    ],
+)
+
+agent.invoke({"messages": [{"role": "user", "content": "Email alice@example.com to confirm."}]})
+```
+
+This is what *"pre-execution budget authority for LangChain agents"* looks like: model spend reserved before the LLM runs, tool side effects authorized before execution, runaway loops halted before another turn.
+
 ### Async support
 
-Use `AsyncCyclesClient` and invoke the agent with `.ainvoke()`. The middleware automatically uses async hooks (`awrap_tool_call`, `abefore_model`):
+Use `AsyncCyclesClient` and invoke the agent with `.ainvoke()`. The middleware automatically uses async hooks (`awrap_model_call`, `awrap_tool_call`, `abefore_model`):
 
 ```python
 from runcycles import AsyncCyclesClient

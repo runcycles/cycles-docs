@@ -21,7 +21,7 @@ Cycles integrates with LLM providers, agent frameworks, and web servers. Each in
 | [Groq](/how-to/integrating-cycles-with-groq) | Python / TypeScript | — | Decorator / `withCycles` |
 | [Ollama / Local LLMs](/how-to/integrating-cycles-with-ollama) | Python / TypeScript | — | Decorator / `withCycles` |
 | **AI Frameworks** | | | |
-| [LangChain](/how-to/integrating-cycles-with-langchain) | Python | Yes | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) for `create_agent`; callback handler for non-agent runnables |
+| [LangChain](/how-to/integrating-cycles-with-langchain) | Python | Yes | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) — `CyclesModelGate` + `CyclesToolGate` + `CyclesFanOutGate` for `create_agent`; callback handler for non-agent runnables |
 | [LangChain.js](/how-to/integrating-cycles-with-langchain-js) | TypeScript | Yes | Callback handler |
 | [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | — | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) for `create_agent` nodes; callback handler / decorator for raw `StateGraph` |
 | [Vercel AI SDK](/how-to/integrating-cycles-with-vercel-ai-sdk) | TypeScript | Yes | `reserveForStream` |
