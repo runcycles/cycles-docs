@@ -57,9 +57,13 @@ Budget governance for Groq's LPU-accelerated inference. Uses the OpenAI-compatib
 
 ### LangChain (Python)
 
-Build budget-aware LangChain agents in Python. Cycles integrates with LangChain's tool and callback system to enforce spending limits throughout chain execution.
+[![PyPI downloads](https://img.shields.io/pypi/dm/langchain-runcycles?label=downloads&color=555&style=flat-square)](https://pypi.org/project/langchain-runcycles/)
 
+Build budget-aware LangChain agents in Python. The `langchain-runcycles` package ships three `AgentMiddleware` classes — `CyclesModelGate`, `CyclesToolGate`, and `CyclesFanOutGate` — that gate model calls, tool calls, and runaway agent loops in `create_agent` workflows. A callback handler in the parent `runcycles` SDK covers bare-runnable LangChain usage (chains, RAG) for non-agent surfaces.
+
+- [langchain-runcycles on PyPI](https://pypi.org/project/langchain-runcycles/)
 - [LangChain integration guide](/how-to/integrating-cycles-with-langchain)
+- [Source on GitHub](https://github.com/runcycles/langchain-runcycles)
 - [python.langchain.com](https://python.langchain.com)
 
 ### LangChain.js
