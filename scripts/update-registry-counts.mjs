@@ -40,6 +40,7 @@ const NPM_PACKAGES = [
 const PYPI_PACKAGES = [
   'runcycles',
   'runcycles-openai-agents',
+  'langchain-runcycles',
 ]
 const CRATES_PACKAGES = [
   'runcycles',
