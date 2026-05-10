@@ -7,7 +7,16 @@ description: "Budget control for LangGraph stateful agent workflows in Python �
 
 This guide shows how to add budget management to [LangGraph](https://langchain-ai.github.io/langgraph/) stateful agent workflows so that every LLM call within a graph node is cost-controlled, observable, and automatically stopped when budgets run out.
 
-LangGraph builds on LangChain, so the same `CyclesBudgetHandler` callback handler from the [LangChain integration](/how-to/integrating-cycles-with-langchain) works inside graph nodes. This guide also covers per-node budget scoping using the `@cycles` decorator for full graph-level cost visibility.
+LangGraph builds on LangChain, so two integration paths apply depending on how your nodes call the model:
+
+| Node style | Cycles tool |
+|---|---|
+| `langchain.agents.create_agent` (LangChain 1.x agent inside a node) | [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware (`CyclesToolGate`, `CyclesFanOutGate`) — see the [agent middleware section of the LangChain guide](/how-to/integrating-cycles-with-langchain#agent-middleware-langchain-runcycles-recommended-for-create-agent) |
+| Raw `StateGraph` node calling an LLM directly | The `CyclesBudgetHandler` callback handler from the [LangChain guide](/how-to/integrating-cycles-with-langchain#callback-handler-for-bare-runnables-chains-and-rag) — covered below |
+
+This guide focuses on the callback-handler path because it's the right fit for raw `StateGraph` workflows. For nodes built around `create_agent`, the middleware in `langchain-runcycles` gives you per-tool authorization and fan-out caps that the callback handler can't see.
+
+This guide also covers per-node budget scoping using the `@cycles` decorator for full graph-level cost visibility.
 
 ## Prerequisites
 
