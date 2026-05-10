@@ -224,6 +224,7 @@ async function fetchNpmDownloads(): Promise<Record<string, number | null>> {
 const PYPI_PACKAGES = [
   'runcycles',
   'runcycles-openai-agents',
+  'langchain-runcycles',
 ] as const
 
 // /overall returns a daily series of non-mirror downloads; summing it

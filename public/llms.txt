@@ -39,7 +39,7 @@ Use Cycles when you need to: enforce spend limits on LLM calls, bound tool invoc
 
 ### AI Frameworks
 
-- [LangChain (Python)](https://runcycles.io/how-to/integrating-cycles-with-langchain): Callback handler for LangChain Python apps
+- [LangChain (Python)](https://runcycles.io/how-to/integrating-cycles-with-langchain): Agent middleware (langchain-runcycles, AgentMiddleware) — CyclesModelGate + CyclesToolGate + CyclesFanOutGate — for create_agent workflows + callback handler for bare ChatOpenAI / chains / RAG
 - [LangChain (JS)](https://runcycles.io/how-to/integrating-cycles-with-langchain-js): Callback handler for LangChain JavaScript apps
 - [LangGraph](https://runcycles.io/how-to/integrating-cycles-with-langgraph): Budget governance for stateful LangGraph workflows with per-node scoping
 - [AutoGen](https://runcycles.io/how-to/integrating-cycles-with-autogen): Model client wrapper for Microsoft AutoGen multi-agent teams

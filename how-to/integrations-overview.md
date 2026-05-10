@@ -21,9 +21,9 @@ Cycles integrates with LLM providers, agent frameworks, and web servers. Each in
 | [Groq](/how-to/integrating-cycles-with-groq) | Python / TypeScript | — | Decorator / `withCycles` |
 | [Ollama / Local LLMs](/how-to/integrating-cycles-with-ollama) | Python / TypeScript | — | Decorator / `withCycles` |
 | **AI Frameworks** | | | |
-| [LangChain](/how-to/integrating-cycles-with-langchain) | Python | Yes | Callback handler |
+| [LangChain](/how-to/integrating-cycles-with-langchain) | Python | Yes | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) — `CyclesModelGate` + `CyclesToolGate` + `CyclesFanOutGate` for `create_agent`; callback handler for non-agent runnables |
 | [LangChain.js](/how-to/integrating-cycles-with-langchain-js) | TypeScript | Yes | Callback handler |
-| [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | — | Callback handler / Decorator |
+| [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | — | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) for `create_agent` nodes; callback handler / decorator for raw `StateGraph` |
 | [Vercel AI SDK](/how-to/integrating-cycles-with-vercel-ai-sdk) | TypeScript | Yes | `reserveForStream` |
 | [Spring AI](/how-to/integrating-cycles-with-spring-ai) | Java | Yes | `@Cycles` annotation |
 | [LlamaIndex](/how-to/integrating-cycles-with-llamaindex) | Python | — | Decorator |
@@ -72,11 +72,17 @@ For agent frameworks that expose lifecycle hooks. A plugin implements the framew
 
 Best for: multi-agent workflows, tool governance, agent handoff tracking.
 
+### Agent middleware (LangChain 1.x)
+
+For LangChain agents built with `langchain.agents.create_agent`. The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides `AgentMiddleware` subclasses (`CyclesToolGate`, `CyclesFanOutGate`) that intercept tool calls and model turns *before* execution — denial returns a `ToolMessage` so the agent recovers gracefully, and fan-out can be capped at the model-turn level.
+
+Best for: production LangChain agents, anything using `create_agent`, agent-style LangGraph nodes.
+
 ### Callback handler
 
 For agent frameworks like LangChain that fire events on every LLM call. A custom callback handler creates reservations on `llm_start` and commits on `llm_end`.
 
-Best for: multi-turn agents, tool-calling chains, LangChain/LangGraph pipelines.
+Best for: bare LangChain runnables (`ChatOpenAI` / chains / RAG), non-agent LangGraph nodes, multi-turn agents on the legacy `bind_tools` flow without `create_agent`.
 
 ### `reserveForStream`
 
