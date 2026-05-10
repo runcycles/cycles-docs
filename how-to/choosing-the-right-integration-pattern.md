@@ -52,6 +52,28 @@ See [Getting Started with the MCP Server](/quickstart/getting-started-with-the-m
 
 For agent frameworks that expose lifecycle hooks, a plugin implements the framework's hook interface to create reservations on start and commit on end — covering the entire agent run automatically with no per-function decoration.
 
+| Framework | Plugin / package | Hook surface |
+|---|---|---|
+| OpenAI Agents SDK | `runcycles_openai_agents.CyclesRunHooks` | `RunHooks` interface |
+| OpenClaw | Plugin hooks | `before_model_resolve`, `before_tool_call`, etc. |
+| **LangChain 1.x** (`langchain.agents.create_agent`) | [**`langchain-runcycles`**](https://pypi.org/project/langchain-runcycles/) — `CyclesToolGate`, `CyclesFanOutGate` | `wrap_tool_call`, `before_model` (`AgentMiddleware` API) |
+
+```python
+# LangChain 1.x agent middleware
+from langchain.agents import create_agent
+from langchain_runcycles import CyclesFanOutGate, CyclesToolGate
+from runcycles import Action, Subject
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[...],
+    middleware=[
+        CyclesFanOutGate(max_turns=20, client=client, subject=Subject(tenant="acme"), action=Action(kind="model.turn", name="research")),
+        CyclesToolGate(client, subject=Subject(tenant="acme"), action={"send_email": Action(kind="tool.call", name="send_email")}, mode="decide"),
+    ],
+)
+```
+
 ```python
 # OpenAI Agents SDK
 from agents import Agent, Runner
@@ -65,7 +87,7 @@ result = await Runner.run(agent, input="...", hooks=hooks)
 ```
 
 **Use when:**
-- You're using an agent framework with lifecycle hooks (OpenAI Agents SDK, OpenClaw)
+- You're using an agent framework with lifecycle hooks (OpenAI Agents SDK, OpenClaw, LangChain 1.x `create_agent`)
 - You want budget governance on every LLM call, tool invocation, and handoff automatically
 - You need tool-level risk mapping (different costs per tool)
 - You want agent handoff tracking in the Cycles ledger
@@ -73,8 +95,9 @@ result = await Runner.run(agent, input="...", hooks=hooks)
 **Don't use when:**
 - You're not using an agent framework (use `@cycles` decorator instead)
 - You need per-function control over estimation and commit (use programmatic client)
+- You're using bare LangChain (`ChatOpenAI`, chains, RAG) without `create_agent` — use the [LangChain callback handler](/how-to/integrating-cycles-with-langchain#callback-handler-for-non-agent-runnables) instead
 
-See [Integrating with OpenAI Agents](/how-to/integrating-cycles-with-openai-agents) or [Integrating with OpenClaw](/how-to/integrating-cycles-with-openclaw).
+See [Integrating with LangChain](/how-to/integrating-cycles-with-langchain) (Python agent middleware), [OpenAI Agents](/how-to/integrating-cycles-with-openai-agents), or [OpenClaw](/how-to/integrating-cycles-with-openclaw).
 
 ## Pattern 1: Decorator / Higher-Order Function
 
