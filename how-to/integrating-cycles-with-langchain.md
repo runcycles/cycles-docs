@@ -107,12 +107,12 @@ gate = CyclesToolGate(
     idempotency_namespace="run_2026_05_10_abc",  # static
 )
 
-# Or callable — extract per call from your runtime's run-id source
+# Or callable — pulls the run id off the LangChain ToolCallRequest each call
 gate = CyclesToolGate(
     client,
     subject=Subject(tenant="acme"),
     action=Action(kind="tool.call", name="send_email"),
-    idempotency_namespace=lambda req: get_current_run_id(),
+    idempotency_namespace=lambda request: request.state["run_id"],
 )
 ```
 
