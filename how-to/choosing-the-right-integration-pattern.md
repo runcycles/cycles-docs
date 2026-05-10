@@ -95,7 +95,7 @@ result = await Runner.run(agent, input="...", hooks=hooks)
 **Don't use when:**
 - You're not using an agent framework (use `@cycles` decorator instead)
 - You need per-function control over estimation and commit (use programmatic client)
-- You're using bare LangChain (`ChatOpenAI`, chains, RAG) without `create_agent` — use the [LangChain callback handler](/how-to/integrating-cycles-with-langchain#callback-handler-for-bare-runnables-chains-and-rag) instead
+- You're using bare LangChain (`ChatOpenAI`, chains, RAG) without `create_agent` — use the [LangChain callback handler](/how-to/integrating-cycles-with-langchain#callback-handler-for-non-agent-runnables) instead
 
 See [Integrating with LangChain](/how-to/integrating-cycles-with-langchain) (Python agent middleware), [OpenAI Agents](/how-to/integrating-cycles-with-openai-agents), or [OpenClaw](/how-to/integrating-cycles-with-openclaw).
 

@@ -18,7 +18,7 @@ The **middleware path is dramatically better for `create_agent` users**: tool ca
 
 ---
 
-## Agent middleware (`langchain-runcycles`) — recommended for `create_agent`
+## Agent middleware via langchain-runcycles
 
 The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides two `AgentMiddleware` subclasses that plug into `langchain.agents.create_agent`:
 
@@ -134,7 +134,7 @@ See the [`langchain-runcycles` README](https://github.com/runcycles/langchain-ru
 
 ---
 
-## Callback handler — for bare runnables, chains, and RAG
+## Callback handler for non-agent runnables
 
 For code that doesn't use `create_agent` — bare `ChatOpenAI` invocations, chains, RAG pipelines, anything on the older callback-based LangChain API — use a custom `BaseCallbackHandler` to wrap each LLM call with a Cycles reservation.
 

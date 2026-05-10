@@ -11,8 +11,8 @@ LangGraph builds on LangChain, so two integration paths apply depending on how y
 
 | Node style | Cycles tool |
 |---|---|
-| `langchain.agents.create_agent` (LangChain 1.x agent inside a node) | [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware (`CyclesToolGate`, `CyclesFanOutGate`) — see the [agent middleware section of the LangChain guide](/how-to/integrating-cycles-with-langchain#agent-middleware-langchain-runcycles-recommended-for-create-agent) |
-| Raw `StateGraph` node calling an LLM directly | The `CyclesBudgetHandler` callback handler from the [LangChain guide](/how-to/integrating-cycles-with-langchain#callback-handler-for-bare-runnables-chains-and-rag) — covered below |
+| `langchain.agents.create_agent` (LangChain 1.x agent inside a node) | [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware (`CyclesToolGate`, `CyclesFanOutGate`) — see the [agent middleware section of the LangChain guide](/how-to/integrating-cycles-with-langchain#agent-middleware-via-langchain-runcycles) |
+| Raw `StateGraph` node calling an LLM directly | The `CyclesBudgetHandler` callback handler from the [LangChain guide](/how-to/integrating-cycles-with-langchain#callback-handler-for-non-agent-runnables) — covered below |
 
 This guide focuses on the callback-handler path because it's the right fit for raw `StateGraph` workflows. For nodes built around `create_agent`, the middleware in `langchain-runcycles` gives you per-tool authorization and fan-out caps that the callback handler can't see.
 

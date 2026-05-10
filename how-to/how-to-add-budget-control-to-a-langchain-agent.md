@@ -15,8 +15,8 @@ This guide shows how to add per-run budget control to a LangChain agent using [C
 
 Three patterns, three different scopes — pick based on what you actually want to budget.
 
-- **Building with `create_agent` (LangChain 1.x agents)?** Use [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware. `CyclesToolGate` gates tool calls *before* they execute (denial returns a `ToolMessage` so the agent recovers); `CyclesFanOutGate` caps model turns. See [the agent middleware section](/how-to/integrating-cycles-with-langchain#agent-middleware-langchain-runcycles-recommended-for-create-agent).
-- **Want per-LLM-call tracking** (reservation around every model invocation)? Install [`CyclesBudgetHandler`](/how-to/integrating-cycles-with-langchain#callback-handler-for-bare-runnables-chains-and-rag) — works on any LangChain runnable.
+- **Building with `create_agent` (LangChain 1.x agents)?** Use [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware. `CyclesToolGate` gates tool calls *before* they execute (denial returns a `ToolMessage` so the agent recovers); `CyclesFanOutGate` caps model turns. See [the agent middleware section](/how-to/integrating-cycles-with-langchain#agent-middleware-via-langchain-runcycles).
+- **Want per-LLM-call tracking** (reservation around every model invocation)? Install [`CyclesBudgetHandler`](/how-to/integrating-cycles-with-langchain#callback-handler-for-non-agent-runnables) — works on any LangChain runnable.
 - **This page** covers a third pattern: a **single reservation around the entire agent run**, plus optional tool-level checks. Best when you want one cap per run regardless of how many LLM/tool calls happen inside.
 :::
 
