@@ -127,6 +127,7 @@ gate = CyclesToolGate(
 
 ```python
 from langchain_runcycles import CyclesModelGate
+from langchain_runcycles.extractors import anthropic_cost
 from runcycles import Action, Amount, Subject, Unit
 
 model_gate = CyclesModelGate(
@@ -134,12 +135,23 @@ model_gate = CyclesModelGate(
     subject=Subject(tenant="acme", agent="researcher"),
     action=Action(kind="llm.completion", name="claude-sonnet-4-6"),
     mode="reserve",
-    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),  # $0.02 per call
+    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_500_000),  # worst-case headroom
+    cost_fn=anthropic_cost(
+        # claude-sonnet-4-6 pricing (2026-05): $3.00/M input, $15.00/M output.
+        input_per_million_usd=3.00,
+        output_per_million_usd=15.00,
+    ),
 )
 ```
 
-::: tip v0.1.5 commits at the configured `estimate`
-Per-call actual-cost extraction (token counts from provider response metadata) and streaming integration land in v0.2.0. For precise per-call token cost capture today, use the [`CyclesBudgetHandler` callback handler](#callback-handler-for-non-agent-runnables) below. The two approaches compose: `CyclesModelGate` for budget reservation, callback handler for token-accurate accounting.
+::: tip Actual-cost extraction (v0.2.0+)
+Pass a `cost_fn` to commit at provider-reported actual token usage instead of the configured `estimate`. `langchain_runcycles.extractors` ships `openai_cost(prompt_per_million_usd=..., completion_per_million_usd=...)` and `anthropic_cost(input_per_million_usd=..., output_per_million_usd=...)` factories — both read `AIMessage.usage_metadata` (LangChain's normalized usage shape across providers) and convert to `USD_MICROCENTS`. Custom extractors are supported too: any `Callable[[ModelResponse], Amount]` works.
+
+If `cost_fn` raises or returns a non-`Amount`, the gate logs a warning and falls back to `estimate` so a costing bug never erases a successful model result. The reservation always uses `estimate` (denials happen before the model runs, so the reservation amount has to be a worst-case number); only the commit uses the extracted actual.
+:::
+
+::: tip Streaming (v0.2.1+)
+`agent.astream(...)` and `agent.astream_events(...)` work without code changes. LangChain's `BaseChatModel.ainvoke` consumes the model's streaming generator internally and merges per-chunk `usage_metadata` into the final `AIMessage` before our `awrap_model_call` ever sees it. `CyclesModelGate.cost_fn` fires exactly once per turn — on the aggregated total — and `commit_reservation` debits the actual cost in one shot, not per-chunk.
 :::
 
 ### Composing all three gates
@@ -150,6 +162,7 @@ The full LangChain agent governance triad in one `middleware=[...]` list:
 from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain_runcycles import CyclesFanOutGate, CyclesModelGate, CyclesToolGate
+from langchain_runcycles.extractors import anthropic_cost
 from runcycles import Action, Amount, CyclesClient, CyclesConfig, Subject, Unit
 
 client = CyclesClient(CyclesConfig.from_env())
@@ -173,8 +186,9 @@ agent = create_agent(
             client,
             subject=Subject(tenant="acme", agent="researcher"),
             action=Action(kind="llm.completion", name="claude-sonnet-4-6"),
-            mode="reserve",
-            estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),
+            mode="decide+reserve",
+            estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_500_000),
+            cost_fn=anthropic_cost(input_per_million_usd=3.00, output_per_million_usd=15.00),
         ),
         CyclesToolGate(
             client,
@@ -187,6 +201,8 @@ agent = create_agent(
 
 agent.invoke({"messages": [{"role": "user", "content": "Email alice@example.com to confirm."}]})
 ```
+
+For a fully worked multi-tenant example with HITL on a risky tool, see [`examples/multi_agent_fanout.py`](https://github.com/runcycles/langchain-runcycles/blob/main/examples/multi_agent_fanout.py) and its [pattern walkthrough](https://github.com/runcycles/langchain-runcycles/blob/main/examples/multi_agent_fanout_writeup.md).
 
 This is what *"pre-execution budget authority for LangChain agents"* looks like: model spend reserved before the LLM runs, tool side effects authorized before execution, runaway loops halted before another turn.
 
