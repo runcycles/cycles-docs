@@ -10,9 +10,9 @@
   },
   "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. The portal reports at the namespace level (groupId), so we key by groupId here rather than groupId:artifactId. Update manually after each release (typical cadence: monthly).",
   "_mavenSource": "https://central.sonatype.com/ → Statistics → Downloads",
-  "_mavenBreakdown": "Last 3 months as of 2026-05-05: March 754, April 677, May 46 (so far). Unique sources: 205. Companies: 52.",
-  "mavenLastVerifiedAt": "2026-05-05",
+  "_mavenBreakdown": "As of 2026-05-12: Unique sources 225. Companies 55. (No monthly split captured this refresh.)",
+  "mavenLastVerifiedAt": "2026-05-12",
   "maven": {
-    "io.runcycles": 1477
+    "io.runcycles": 1589
   }
 }
