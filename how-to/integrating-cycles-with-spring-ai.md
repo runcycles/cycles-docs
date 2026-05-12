@@ -1,6 +1,6 @@
 ---
 title: "Integrating Cycles with Spring AI for Budget Control"
-description: "Guard Spring AI chat completions and tool calls with Cycles budget reservations using the @Cycles annotation. Includes cost estimation, caps awareness, streaming, and error handling."
+description: "Guard Spring AI ChatClient invocations with Cycles budget reservations. Choose between auto-wired advisor (cycles-spring-ai-starter) or @Cycles annotation (cycles-client-java-spring)."
 ---
 
 # Integrating Cycles with Spring AI
@@ -8,6 +8,116 @@ description: "Guard Spring AI chat completions and tool calls with Cycles budget
 This guide shows how to guard Spring AI chat completions and tool calls with Cycles budget reservations so that every LLM interaction is cost-controlled, caps-aware, and observable.
 
 For strategic guidance on where to integrate, see [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles).
+
+## Two integration paths
+
+Cycles ships two complementary Java starters. Pick based on your call surface:
+
+| Aspect | [`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter) | [`cycles-spring-boot-starter`](https://github.com/runcycles/cycles-spring-boot-starter) |
+|---|---|---|
+| Maven artifact | `io.runcycles:cycles-spring-ai-starter` | `io.runcycles:cycles-client-java-spring` |
+| Mechanism | Spring AI `CallAdvisor` + `ChatClientCustomizer` (auto-wired) | Spring AOP via `@Cycles` annotation |
+| Where it intercepts | Every `chatClient.prompt(...).call()` invocation | Any Java method you annotate |
+| Call-site changes | **No** — transparent wiring | Yes — add `@Cycles` annotation |
+| Estimate computation | Fixed constant (v0.1.0); per-call derivation in v0.2 | SpEL expression: `@Cycles("#tokens * 25")` |
+| Knows about LLMs? | Yes — Spring AI ChatClient specific | No — generic for any cost-incurring code |
+
+**Use [`cycles-spring-ai-starter`](#path-1-auto-wired-advisor-cycles-spring-ai-starter)** if your LLM calls go through Spring AI's `ChatClient`.
+
+**Use [`cycles-spring-boot-starter`](#path-2-cycles-annotation-cycles-client-java-spring)** for non-Spring-AI code paths (custom HTTP clients, LangChain4j, vector store queries, etc.) — or when you need SpEL-driven per-method estimates.
+
+::: warning Don't double-charge
+Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#%EF%B8%8F-the-double-charge-gotcha).
+:::
+
+---
+
+## Path 1: Auto-wired advisor (`cycles-spring-ai-starter`)
+
+The simplest path for Spring AI apps — add the dependency, set 6 properties, and every `ChatClient.call()` is auto-gated.
+
+### 1. Add the dependency
+
+::: code-group
+```xml [Maven]
+<dependency>
+    <groupId>io.runcycles</groupId>
+    <artifactId>cycles-spring-ai-starter</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+```groovy [Gradle]
+implementation 'io.runcycles:cycles-spring-ai-starter:0.1.0'
+```
+:::
+
+This transitively pulls in `cycles-client-java-spring` for the HTTP client to the Cycles server.
+
+### 2. Configure
+
+```yaml
+cycles:
+  base-url: http://localhost:7878
+  api-key:  ${CYCLES_API_KEY}
+  tenant:   acme
+  app:      my-spring-ai-app
+
+cycles:
+  spring-ai:
+    enabled: true
+    default-estimate: 1000          # micro-cents per call (v0.2 will derive from prompt size)
+    estimate-unit: USD_MICROCENTS
+    action-kind: llm.chat
+    action-name: spring-ai-chat
+    fail-open: false                # true = log + proceed on Cycles errors
+```
+
+### 3. Use ChatClient normally
+
+```java
+@Service
+public class OrderAgent {
+    private final ChatClient chatClient;
+
+    public OrderAgent(ChatClient.Builder builder) {
+        this.chatClient = builder.build();
+    }
+
+    public String summarize(String order) {
+        // Cycles reserves budget BEFORE this call hits the LLM.
+        // If the budget is exhausted, CyclesBudgetDeniedException is thrown
+        // and the LLM call never happens.
+        return chatClient.prompt()
+                .user("Summarize: " + order)
+                .call()
+                .content();
+    }
+}
+```
+
+No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient` built from the auto-configured `ChatClient.Builder` via a `ChatClientCustomizer`.
+
+### What v0.1.0 covers — and doesn't
+
+✅ **Covered:** Non-streaming `.call()` invocations with full reserve → call → commit (on success) / release (on exception) lifecycle. Deny throws `CyclesBudgetDeniedException` before the LLM is contacted.
+
+⚠️ **Not yet (v0.2 roadmap):**
+- Streaming chat (`StreamAdvisor`) — non-streaming only in v0.1.0.
+- Per-call estimate from prompt token count — fixed constant for now.
+- Real `ChatResponse.Usage` extraction on commit — commits the estimate as actual.
+- `ToolCallback` decorator (tool-level action authority gates).
+- `ObservationConvention` (richer audit-trail attribution).
+
+See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#known-limitations-v010) for the full known-limitations matrix.
+
+---
+
+## Path 2: `@Cycles` annotation (`cycles-client-java-spring`)
+
+Use this path when:
+- Your LLM calls go through code that is **not** Spring AI's `ChatClient` (custom HTTP, LangChain4j, in-house wrappers).
+- You need **dynamic per-call estimates** via SpEL expressions.
+- You want **explicit control** over which methods are gated.
 
 ## Prerequisites
 
