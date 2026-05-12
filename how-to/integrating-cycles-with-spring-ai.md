@@ -43,11 +43,11 @@ The simplest path for Spring AI apps — add the dependency, set 6 properties, a
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.1.0'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.2.0'
 ```
 :::
 
@@ -97,18 +97,26 @@ public class OrderAgent {
 
 No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient` built from the auto-configured `ChatClient.Builder` via a `ChatClientCustomizer`.
 
-### What v0.1.0 covers — and doesn't
+### What v0.2.0 covers
 
-✅ **Covered:** Non-streaming `.call()` invocations with full reserve → call → commit (on success) / release (on exception) lifecycle. Deny throws `CyclesBudgetDeniedException` before the LLM is contacted.
+✅ **Non-streaming `.call()`** — full reserve → call → commit (on success) / release (on exception) lifecycle. Deny throws `CyclesBudgetDeniedException` before the LLM is contacted.
 
-⚠️ **Not yet (v0.2 roadmap):**
-- Streaming chat (`StreamAdvisor`) — non-streaming only in v0.1.0.
-- Per-call estimate from prompt token count — fixed constant for now.
-- Real `ChatResponse.Usage` extraction on commit — commits the estimate as actual.
-- `ToolCallback` decorator (tool-level action authority gates).
-- `ObservationConvention` (richer audit-trail attribution).
+✅ **Streaming `.stream()`** — `CyclesBudgetStreamAdvisor` mirrors the lifecycle for `chatClient.prompt(...).stream()` invocations. Per-subscription reservation (wrapped in `Flux.defer`); commits on successful completion using usage from the last chunk; releases on stream error or subscriber cancellation. Reserve and commit failures surface as `onError` to the subscriber, matching reactive-idiomatic shape and the fail-fast contract of the non-streaming advisor.
 
-See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#known-limitations-v010) for the full known-limitations matrix.
+✅ **Real `ChatResponse.Usage` extraction on commit** — when the LLM provider returns usage:
+- `cycles.spring-ai.estimate-unit=TOKENS`: commits `Usage.getTotalTokens()` directly.
+- `input-cost-per-token` and/or `output-cost-per-token` set: commits `(promptTokens × inputRate) + (completionTokens × outputRate)`.
+- Otherwise (no rates, no TOKENS unit): commits the estimate as actual (v0.1.0-compatible fallback).
+
+When both token breakdowns are null (provider returned a placeholder `Usage` with no breakdown), falls back to the estimate rather than under-billing with a zero commit.
+
+✅ **Prompt-based per-call estimate** — `cycles.spring-ai.estimate-from-prompt=true` with at least one cost-per-token rate set derives the pre-call reservation amount from `prompt-chars / 4 × (inputRate + outputRate)`. Falls back to `default-estimate` when the prompt is empty or rates are zero. Applies to both the call and stream advisors.
+
+✅ **Tool-level gating via `CyclesToolGate`** — auto-configured factory bean. Wrap any Spring AI `ToolCallback` with `cyclesToolGate.wrap(myTool)` to gate per-tool invocations through Cycles. Tool reservations report distinct action labels (`tool.call` / `spring-ai-tool:<tool-name>` by default — configurable) so they're separable from chat reservations in audit history. Opt-in: Spring AI doesn't provide a hook to auto-decorate every registered tool.
+
+✅ **`CyclesChatClientObservationConvention`** — extends Spring AI's `DefaultChatClientObservationConvention` and appends low-cardinality Cycles attribution tags to every chat-client trace: `cycles.tenant`, `cycles.workspace`, `cycles.app`, `cycles.action_kind`, `cycles.action_name`. Auto-configured as a bean but **not auto-attached** to the `ChatClient.Builder` — apply explicitly via `builder.observationConvention(cyclesConvention)`.
+
+See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-020) for the full 0.2.0 feature surface, configuration reference, and code examples.
 
 ---
 
