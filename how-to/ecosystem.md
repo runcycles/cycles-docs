@@ -89,7 +89,12 @@ Add Cycles runtime authority to applications built with the Vercel AI SDK for se
 
 ### Spring AI
 
-Integrate Cycles with Spring AI to bring runtime authority to Java and Kotlin AI applications.
+Integrate Cycles with Spring AI to bring runtime authority to Java and Kotlin AI applications. Two paths:
+
+- **Auto-wired advisor** ([`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter)) — zero-code gating of every `ChatClient.call()`. Recommended for pure Spring AI apps.
+- **`@Cycles` annotation** ([`cycles-client-java-spring`](https://github.com/runcycles/cycles-spring-boot-starter)) — method-level gating with SpEL-driven estimates. Use for non-Spring-AI code paths.
+
+See the [integration guide](/how-to/integrating-cycles-with-spring-ai) for the comparison + when to use each.
 
 - [Spring AI integration guide](/how-to/integrating-cycles-with-spring-ai)
 - [Spring AI strategic quickstart](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles)
@@ -224,14 +229,23 @@ The Cycles MCP server exposes runtime authority as tools for Claude Desktop, Cla
 - [@runcycles/mcp-server on npm](https://www.npmjs.com/package/@runcycles/mcp-server)
 - [MCP quickstart](/quickstart/getting-started-with-the-mcp-server)
 
-### Spring Boot Starter
+### Spring Boot Starter (generic `@Cycles` AOP)
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.runcycles/cycles-client-java-spring?label=Maven%20Central&color=555&style=flat-square)](https://central.sonatype.com/artifact/io.runcycles/cycles-client-java-spring)
 
-Auto-configured Cycles integration for Spring Boot applications, available on Maven Central.
+Auto-configured Cycles integration for Spring Boot applications using the `@Cycles` annotation with SpEL-driven cost estimates. Available on Maven Central.
 
 - [cycles-client-java-spring on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-client-java-spring)
 - [Spring Boot quickstart](/quickstart/getting-started-with-the-cycles-spring-boot-starter)
+
+### Spring AI Starter (advisor-based)
+
+[![Maven Central](https://img.shields.io/maven-central/v/io.runcycles/cycles-spring-ai-starter?label=Maven%20Central&color=555&style=flat-square)](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
+
+Spring AI-specific starter that auto-wires a `CallAdvisor` onto every `ChatClient`, gating LLM invocations through Cycles without code changes at call sites. Companion to the generic Spring Boot starter — depend on this for Spring AI apps.
+
+- [cycles-spring-ai-starter on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
+- [Spring AI integration guide](/how-to/integrating-cycles-with-spring-ai)
 
 ## Protocol & Standards
 
