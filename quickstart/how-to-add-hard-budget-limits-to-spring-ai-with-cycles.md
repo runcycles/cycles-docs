@@ -219,17 +219,17 @@ One of the best first integrations is:
 
 Why start there?
 
-Because it gives you immediate value with minimal architecture change.
+Because it gives you immediate value with minimal architecture change. With [`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter), this is literally a Maven dependency plus a few `cycles.spring-ai.*` properties — the `CallAdvisor` and `StreamAdvisor` auto-wire onto every `ChatClient` you build through the auto-configured `ChatClient.Builder`. No call-site changes.
 
 You can begin by enforcing:
 
-- per-tenant budget
+- per-tenant budget (set the tenant on `CyclesProperties`, or supply a `SubjectResolver` bean that pulls tenant from your authenticated principal)
 - per-workflow budget
 - optional per-run budget
 
 Then expand to:
 
-- tool invocations
+- tool invocations (opt in with `cyclesToolGate.wrap(myTool)`)
 - retrieval steps
 - external side-effecting actions
 
@@ -359,11 +359,15 @@ That is how Spring AI systems move from useful prototypes to governed production
 
 ## Next steps
 
-To explore the Cycles stack:
+For the Spring AI integration specifically:
+
+- **Start here:** [Integrating Cycles with Spring AI](/how-to/integrating-cycles-with-spring-ai) — concrete Maven/Gradle setup, configuration reference, code examples for the auto-wired chat advisor, per-tool gating, observation convention, and the v0.3.0 extension points (`SubjectResolver` for per-request attribution, `PromptTokenEstimator` for real BPE token counts).
+- **Starter on GitHub:** [`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter) — Spring AI-specific advisors auto-wired onto every `ChatClient`. Companion to `cycles-spring-boot-starter` (used for non-Spring-AI Spring Boot code paths via the `@Cycles` annotation).
+
+To explore the broader Cycles stack:
 
 - Read the [Cycles Protocol](https://github.com/runcycles/cycles-protocol)
 - Run the [Cycles Server](https://github.com/runcycles/cycles-server)
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
