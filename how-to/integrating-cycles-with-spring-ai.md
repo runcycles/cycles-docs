@@ -16,10 +16,11 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 | Aspect | [`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter) | [`cycles-spring-boot-starter`](https://github.com/runcycles/cycles-spring-boot-starter) |
 |---|---|---|
 | Maven artifact | `io.runcycles:cycles-spring-ai-starter` | `io.runcycles:cycles-client-java-spring` |
-| Mechanism | Spring AI `CallAdvisor` + `ChatClientCustomizer` (auto-wired) | Spring AOP via `@Cycles` annotation |
-| Where it intercepts | Every `chatClient.prompt(...).call()` invocation | Any Java method you annotate |
-| Call-site changes | **No** — transparent wiring | Yes — add `@Cycles` annotation |
-| Estimate computation | Fixed constant (v0.1.0); per-call derivation in v0.2 | SpEL expression: `@Cycles("#tokens * 25")` |
+| Mechanism | Spring AI `CallAdvisor` + `StreamAdvisor` + `ChatClientCustomizer` (auto-wired); `CyclesToolGate` for per-tool gating | Spring AOP via `@Cycles` annotation |
+| Where it intercepts | Every `chatClient.prompt(...).call()` and `.stream()` invocation; per-tool when wrapped via `cyclesToolGate.wrap(...)` | Any Java method you annotate |
+| Call-site changes | **No** — transparent wiring for chat (tool wrapping is opt-in) | Yes — add `@Cycles` annotation |
+| Estimate computation | Pluggable `PromptTokenEstimator`: chars/4 heuristic by default, real BPE via jtokkit (opt-in) or custom bean | SpEL expression: `@Cycles("#tokens * 25")` |
+| Subject routing | Pluggable `SubjectResolver`: property defaults, or per-call (e.g. tenant from `SecurityContextHolder`) via custom bean | SpEL: can pull tenant from method args |
 | Knows about LLMs? | Yes — Spring AI ChatClient specific | No — generic for any cost-incurring code |
 
 **Use [`cycles-spring-ai-starter`](#path-1-auto-wired-advisor-cycles-spring-ai-starter)** if your LLM calls go through Spring AI's `ChatClient`.
@@ -27,14 +28,14 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 **Use [`cycles-spring-boot-starter`](#path-2-cycles-annotation-cycles-client-java-spring)** for non-Spring-AI code paths (custom HTTP clients, LangChain4j, vector store queries, etc.) — or when you need SpEL-driven per-method estimates.
 
 ::: warning Don't double-charge
-Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#%EF%B8%8F-the-double-charge-gotcha).
+Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#the-double-charge-gotcha).
 :::
 
 ---
 
 ## Path 1: Auto-wired advisor (`cycles-spring-ai-starter`)
 
-The simplest path for Spring AI apps — add the dependency, set 6 properties, and every `ChatClient.call()` is auto-gated.
+The simplest path for Spring AI apps — add the dependency, configure a few `cycles.*` properties, and every `ChatClient.call()` and `.stream()` invocation is auto-gated.
 
 ### 1. Add the dependency
 
@@ -180,11 +181,11 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.3.0</version>
+    <version>0.2.2</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.0'
+implementation 'io.runcycles:cycles-client-java-spring:0.2.2'
 ```
 :::
 

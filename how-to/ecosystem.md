@@ -242,7 +242,7 @@ Auto-configured Cycles integration for Spring Boot applications using the `@Cycl
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.runcycles/cycles-spring-ai-starter?label=Maven%20Central&color=555&style=flat-square)](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
 
-Spring AI-specific starter that auto-wires a `CallAdvisor` onto every `ChatClient`, gating LLM invocations through Cycles without code changes at call sites. Companion to the generic Spring Boot starter — depend on this for Spring AI apps.
+Spring AI-specific starter that auto-wires Cycles `CallAdvisor` + `StreamAdvisor` onto every `ChatClient`, gating non-streaming and streaming LLM invocations through Cycles without code changes at call sites. Also ships `CyclesToolGate` (opt-in per-tool gating), a pluggable `SubjectResolver` for per-request tenant attribution, and an `ObservationConvention` that emits Cycles attribution + `cycles.reservation_id` on chat-client traces. Companion to the generic Spring Boot starter — depend on this for Spring AI apps.
 
 - [cycles-spring-ai-starter on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
 - [Spring AI integration guide](/how-to/integrating-cycles-with-spring-ai)
