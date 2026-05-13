@@ -24,7 +24,7 @@ const links = [
         </template>
       </nav>
       <p class="copyright">
-        Copyright &copy; 2025&ndash;present RunCycles.io &middot; Released under the Apache 2.0 License.
+        Copyright &copy; 2025&ndash;present runcycles.io &middot; Released under the Apache 2.0 License.
       </p>
     </div>
   </footer>
