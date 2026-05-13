@@ -17,7 +17,7 @@ head:
 
 An autonomous shopping agent holds a signed open mandate. The first checkout succeeds. Then the orchestrator restarts mid-flow, the user clicks "try again," or a parallel worker re-runs the flow against the same mandate.
 
-Both attempts can produce a fresh `transaction_id`. Both can carry a valid mandate. Both can reach the PSP.
+Both attempts can produce a fresh `transaction_id`. Both can carry a valid mandate. The PSP accepts both attempts.
 
 The result is two pending authorizations against one user intent.
 
@@ -27,7 +27,7 @@ The signature did what it was supposed to do — proved the mandate was valid. I
 
 > *"A shopping agent must avoid presenting subsequent open mandates without a rejection receipt to prevent multiple checkouts using the same open mandate."*
 
-This post is about what "must avoid" looks like as actual infrastructure — and why the answer is an [idempotency key](/glossary#idempotency-key), keyed correctly.
+To be clear about scope: I am not arguing this belongs inside AP2 verification itself. I am arguing AP2 builders need a runtime gate *beside* it. This post is about what "must avoid" looks like as actual infrastructure — and why the answer is an [idempotency key](/glossary#idempotency-key), keyed correctly.
 
 <!-- more -->
 
@@ -39,7 +39,7 @@ The defense has the same shape as any other [runtime authority](/glossary#runtim
 
 ## Keying the lock on open_mandate_hash, not transaction_id
 
-The wrong default is `transaction_id`. Two checkouts derived from one open mandate naturally produce two distinct transaction IDs — that is the *intended* identity of a single payment attempt, not the boundary of the mandate's use. Keying idempotency on `transaction_id` lets the AP2 §6 risk through unchanged.
+For this AP2 §6 risk, the wrong default is `transaction_id`. Two checkouts derived from one open mandate can naturally produce two distinct transaction IDs. That is the identity of a payment attempt, not the boundary of the mandate's use. Keying idempotency on `transaction_id` lets the §6 risk through unchanged.
 
 The right default is `open_mandate_hash` when one is present. Both attempts then collide on the same `(tenant, endpoint, idempotency_key)` tuple. The server's reserve dedup sees them as the same bucket. Cycles' idempotency contract follows the broad shape familiar from payment-system idempotency:
 
@@ -75,13 +75,13 @@ The reserve happens before the PSP call; clean exit commits; exceptions release;
 
 ### A note on hash canonicalization
 
-In v0.1, `open_mandate_hash` is caller-supplied. The important property is *stability*: every checkout derived from the same open mandate must produce the same value, or the bucket fragments and the defense fails. We have an [open question on the AP2 discussion](https://github.com/google-agentic-commerce/AP2/discussions/262) about whether the spec recommends a canonicalization — JCS-style, the same form the mandate signature is computed over, or something else. An AP2-native convention here would make this cleaner than every implementor picking their own opinion.
+In v0.1, `open_mandate_hash` is caller-supplied. The important property is *stability*: every checkout derived from the same open mandate must produce the same value, or the bucket fragments and the defense fails. We have an [open question on the AP2 discussion](https://github.com/google-agentic-commerce/AP2/discussions/262) about whether the spec recommends a canonicalization — JSON Canonicalization Scheme ([JCS, RFC 8785](https://datatracker.ietf.org/doc/html/rfc8785)) over the open mandate, the same form the mandate signature is computed over, or something else. An AP2-native convention here would make this cleaner than every implementor picking their own opinion.
 
 ## Edge cases harder than the AP2 idempotency keying decision
 
 Most of the v0.1 work was not the keying decision itself. It was the failure modes around it.
 
-**Post-PSP commit uncertainty.** Once the PSP call inside the `with` block has run, any failure on the Cycles commit POST is a reconciliation event. Transport errors, 5xx responses, terminal reservation statuses (`RESERVATION_FINALIZED` / `RESERVATION_EXPIRED` / `IDEMPOTENCY_MISMATCH`), and uncaught exceptions all share one property: the commit may have reached the server and settled the budget before the failure was observed. Auto-releasing could undo a real charge. The guard raises `AP2GuardCommitUncertain` with no release; the caller has to reconcile. This is the same principle covered in [why a 200 OK is the most dangerous response](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response): silent recovery in payments paths is how money is lost.
+**Post-PSP commit uncertainty.** Once the PSP call inside the `with` block has run, any failure on the Cycles commit POST is a reconciliation event. Transport errors, 5xx responses, terminal reservation statuses (`RESERVATION_FINALIZED` / `RESERVATION_EXPIRED` / `IDEMPOTENCY_MISMATCH`), and uncaught exceptions all share one property: the commit may have reached the server and settled the budget before the failure was observed. Auto-releasing could undo a real charge. The guard raises `AP2GuardCommitUncertain` with no release; the caller has to reconcile. This is the same principle behind [silent-success failure modes in agent systems](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response) — recovery logic that hides uncertainty is dangerous in payment paths.
 
 **Amount conversion.** USD amounts arrive as decimal strings. Converting to int64 micro-cents through `Decimal` arithmetic uses the default 28-digit context and silently rounds large values. We compute exactly from `Decimal.as_tuple()` digits, reject NaN/±Infinity/sub-micro/over-int64, and bound the input digit count *before* any `10**shift` math — otherwise a string like `"1E+1000000000000"` survives validation and tries to allocate a trillion-digit scaling factor.
 
