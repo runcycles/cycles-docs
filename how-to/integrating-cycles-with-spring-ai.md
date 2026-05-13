@@ -1,6 +1,6 @@
 ---
 title: "Integrating Cycles with Spring AI for Budget Control"
-description: "Guard Spring AI ChatClient invocations with Cycles budget reservations. Choose between auto-wired advisor (cycles-spring-ai-starter) or @Cycles annotation (cycles-client-java-spring)."
+description: "Guard Spring AI ChatClient invocations with Cycles budget reservations. v0.3.0 adds pluggable subject routing and jtokkit-based BPE token estimation. Choose between auto-wired advisor (cycles-spring-ai-starter) or @Cycles annotation (cycles-client-java-spring)."
 ---
 
 # Integrating Cycles with Spring AI
@@ -43,11 +43,11 @@ The simplest path for Spring AI apps — add the dependency, set 6 properties, a
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.2.0'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.3.0'
 ```
 :::
 
@@ -65,7 +65,7 @@ cycles:
 cycles:
   spring-ai:
     enabled: true
-    default-estimate: 1000          # micro-cents per call (v0.2 will derive from prompt size)
+    default-estimate: 1000          # micro-cents per call; set estimate-from-prompt=true to derive from prompt size
     estimate-unit: USD_MICROCENTS
     action-kind: llm.chat
     action-name: spring-ai-chat
@@ -97,7 +97,9 @@ public class OrderAgent {
 
 No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient` built from the auto-configured `ChatClient.Builder` via a `ChatClientCustomizer`.
 
-### What v0.2.0 covers
+### What v0.3.0 covers
+
+Everything v0.2.0 shipped is still here — drop-in compatible — plus three new extension points and a trace-correlation tag.
 
 ✅ **Non-streaming `.call()`** — full reserve → call → commit (on success) / release (on exception) lifecycle. Deny throws `CyclesBudgetDeniedException` before the LLM is contacted.
 
@@ -110,13 +112,55 @@ No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient`
 
 When both token breakdowns are null (provider returned a placeholder `Usage` with no breakdown), falls back to the estimate rather than under-billing with a zero commit.
 
-✅ **Prompt-based per-call estimate** — `cycles.spring-ai.estimate-from-prompt=true` with at least one cost-per-token rate set derives the pre-call reservation amount from `prompt-chars / 4 × (inputRate + outputRate)`. Falls back to `default-estimate` when the prompt is empty or rates are zero. Applies to both the call and stream advisors.
+✅ **Prompt-based per-call estimate** — `cycles.spring-ai.estimate-from-prompt=true` with at least one cost-per-token rate set derives the pre-call reservation amount from the configured `PromptTokenEstimator`. Default is a `chars / 4` heuristic; set `cycles.spring-ai.token-estimator-encoding=cl100k_base` (or `o200k_base`) + add the jtokkit dep to opt into real BPE encoding (see below). Falls back to `default-estimate` when the prompt is empty or rates are zero. Applies to both the call and stream advisors.
 
 ✅ **Tool-level gating via `CyclesToolGate`** — auto-configured factory bean. Wrap any Spring AI `ToolCallback` with `cyclesToolGate.wrap(myTool)` to gate per-tool invocations through Cycles. Tool reservations report distinct action labels (`tool.call` / `spring-ai-tool:<tool-name>` by default — configurable) so they're separable from chat reservations in audit history. Opt-in: Spring AI doesn't provide a hook to auto-decorate every registered tool.
 
-✅ **`CyclesChatClientObservationConvention`** — extends Spring AI's `DefaultChatClientObservationConvention` and appends low-cardinality Cycles attribution tags to every chat-client trace: `cycles.tenant`, `cycles.workspace`, `cycles.app`, `cycles.action_kind`, `cycles.action_name`. Auto-configured as a bean but **not auto-attached** to the `ChatClient.Builder` — apply explicitly via `builder.observationConvention(cyclesConvention)`.
+✅ **`CyclesChatClientObservationConvention`** — extends Spring AI's `DefaultChatClientObservationConvention` and appends low-cardinality Cycles attribution tags to every chat-client trace: `cycles.tenant`, `cycles.workspace`, `cycles.app`, `cycles.action_kind`, `cycles.action_name`. **New in 0.3.0:** also emits `cycles.reservation_id` as a high-cardinality `KeyValue` for trace ↔ reservation correlation in your tracing backend. Auto-configured as a bean but not auto-attached — apply explicitly via `builder.observationConvention(cyclesConvention)`. Disable the high-cardinality tag with `cycles.spring-ai.emit-reservation-id-on-trace=false` if your tracing backend charges by unique tag-value combinations.
 
-See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-020) for the full 0.2.0 feature surface, configuration reference, and code examples.
+#### New extension points in v0.3.0
+
+**Pluggable `SubjectResolver`** — multi-tenant agents need per-request attribution. By default the starter reads tenant/workspace/app from `CyclesProperties` on every call (every reservation is attributed to the same subject). Register a `SubjectResolver` bean for per-call routing:
+
+```java
+@Bean
+public SubjectResolver tenantAwareSubjectResolver(CyclesProperties defaults) {
+    return request -> {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        String tenant = (auth != null && auth.isAuthenticated()) ? auth.getName() : defaults.getTenant();
+        return Subject.builder()
+                .tenant(tenant)
+                .workspace(defaults.getWorkspace())
+                .app(defaults.getApp())
+                .build();
+    };
+}
+```
+
+`@ConditionalOnMissingBean` ensures your bean wins over the property-derived default. The `request` parameter is `null` on the tool-gating path (tool callbacks don't carry a `ChatClientRequest`); implementations should handle `null` defensively.
+
+**Pluggable `PromptTokenEstimator` with jtokkit** — v0.2.0 hard-coded prompt-token estimation as `chars / 4`. v0.3.0 makes it pluggable and ships a real BPE impl via [jtokkit](https://github.com/knuddelsgmbh/jtokkit). Opt in:
+
+```yaml
+cycles:
+  spring-ai:
+    estimate-from-prompt: true
+    input-cost-per-token: 25
+    output-cost-per-token: 100
+    token-estimator-encoding: o200k_base   # gpt-4o family; cl100k_base for gpt-4 / gpt-3.5-turbo
+```
+
+```xml
+<dependency>
+    <groupId>com.knuddels</groupId>
+    <artifactId>jtokkit</artifactId>
+    <version>1.1.0</version>
+</dependency>
+```
+
+The jtokkit dep is `optional=true` on the starter — only opt-in users pay the size cost. Setting the property without the dep on the classpath logs a WARN at app startup and falls back to chars/4. For provider-specific tokenizers, register your own `PromptTokenEstimator` bean.
+
+See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-030) for the full 0.3.0 feature surface, the Extension Points section with longer examples, and the full configuration reference.
 
 ---
 
@@ -136,7 +180,7 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 ```groovy [Gradle]
