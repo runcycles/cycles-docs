@@ -3,7 +3,7 @@ title: "Preventing AP2 Open-Mandate Overuse with Runtime Idempotency"
 date: 2026-05-13
 author: Albert Mavashev
 tags: [engineering, runtime-authority, idempotency, payments, integrations, ap2]
-description: "AP2 spec §6 warns against open-mandate overuse. We keyed runtime idempotency on open_mandate_hash so duplicate checkouts collide in one bucket."
+description: "AP2 spec §6 warns against open-mandate overuse. A runtime idempotency gate keyed on open_mandate_hash prevents a second valid reservation."
 blog: true
 sidebar: false
 featured: false
@@ -17,11 +17,11 @@ head:
 
 An autonomous shopping agent holds a signed open mandate. The first checkout succeeds. Then the orchestrator restarts mid-flow, the user clicks "try again," or a parallel worker re-runs the flow against the same mandate.
 
-Both attempts can produce a fresh `transaction_id`. Both can carry a valid mandate. The PSP accepts both attempts.
+Both attempts can produce a fresh `transaction_id`. Both can carry a valid mandate. Both can reach the PSP as valid payment attempts.
 
 The result is two pending authorizations against one user intent.
 
-The signature did what it was supposed to do — proved the mandate was valid. It did not prove the mandate had not already been exercised. Consumption is runtime state, and runtime state needs a separate gate.
+The signature does what it is supposed to do — proves the mandate is valid. It does not prove the mandate has not already been exercised. Consumption is runtime state, and runtime state needs a separate gate.
 
 [Google's Agent Payments Protocol (AP2)](https://github.com/google-agentic-commerce/AP2) calls this out directly in [specification §6](https://ap2-protocol.org/ap2/specification/):
 
@@ -75,7 +75,7 @@ The reserve happens before the PSP call; clean exit commits; exceptions release;
 
 ### A note on hash canonicalization
 
-In v0.1, `open_mandate_hash` is caller-supplied. The important property is *stability*: every checkout derived from the same open mandate must produce the same value, or the bucket fragments and the defense fails. We have an [open question on the AP2 discussion](https://github.com/google-agentic-commerce/AP2/discussions/262) about whether the spec recommends a canonicalization — JSON Canonicalization Scheme ([JCS, RFC 8785](https://datatracker.ietf.org/doc/html/rfc8785)) over the open mandate, the same form the mandate signature is computed over, or something else. An AP2-native convention here would make this cleaner than every implementor picking their own opinion.
+In v0.1, `open_mandate_hash` is caller-supplied. The important property is *stability*: every checkout derived from the same open mandate must produce the same value, or the bucket fragments and the defense fails. We have an [open question on the AP2 discussion](https://github.com/google-agentic-commerce/AP2/discussions/262) about whether the spec recommends a canonicalization — JSON Canonicalization Scheme ([JCS, RFC 8785](https://datatracker.ietf.org/doc/html/rfc8785)) over the open mandate, the same form the mandate signature is computed over, or something else. An AP2-native convention here would be cleaner than every implementer choosing a different hashing convention.
 
 ## Edge cases harder than the AP2 idempotency keying decision
 
