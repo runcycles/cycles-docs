@@ -1,5 +1,5 @@
 {
-  "npm": 4753,
+  "npm": 4756,
   "pypi": 3500,
   "crates": 67,
   "clones": 67500,
@@ -75,6 +75,10 @@
     "cycles-spring-ai-starter": {
       "count": 3572,
       "lastSeenDay": "2026-05-12"
+    },
+    "cycles-ap2-python": {
+      "count": 0,
+      "lastSeenDay": "2026-05-13"
     }
   },
   "releases": 0,
@@ -96,21 +100,23 @@
     "cycles-server-admin": 0,
     "cycles-dashboard": 0,
     "langchain-runcycles": 0,
-    "cycles-spring-ai-starter": 0
+    "cycles-spring-ai-starter": 0,
+    "cycles-ap2-python": 0
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 12756,
-  "fetchedAt": "2026-05-13T08:34:16.870Z",
+  "total": 12759,
+  "fetchedAt": "2026-05-13T22:00:58.535Z",
   "npmByPackage": {
     "runcycles": 1315,
     "@runcycles/mcp-server": 764,
-    "@runcycles/openclaw-budget-guard": 2674
+    "@runcycles/openclaw-budget-guard": 2677
   },
   "pypiByPackage": {
     "runcycles": 2124,
     "runcycles-openai-agents": 476,
-    "langchain-runcycles": 900
+    "langchain-runcycles": 900,
+    "runcycles-ap2": 0
   },
   "cratesByPackage": {
     "runcycles": 67
