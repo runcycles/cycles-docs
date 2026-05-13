@@ -39,6 +39,7 @@ const NPM_PACKAGES = [
 ]
 const PYPI_PACKAGES = [
   'runcycles',
+  'runcycles-ap2',
   'runcycles-openai-agents',
   'langchain-runcycles',
 ]

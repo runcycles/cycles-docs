@@ -223,6 +223,7 @@ async function fetchNpmDownloads(): Promise<Record<string, number | null>> {
 // ── PyPI ─────────────────────────────────────────────────────────────
 const PYPI_PACKAGES = [
   'runcycles',
+  'runcycles-ap2',
   'runcycles-openai-agents',
   'langchain-runcycles',
 ] as const
