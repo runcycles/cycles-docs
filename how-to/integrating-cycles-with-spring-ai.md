@@ -62,8 +62,6 @@ cycles:
   api-key:  ${CYCLES_API_KEY}
   tenant:   acme
   app:      my-spring-ai-app
-
-cycles:
   spring-ai:
     enabled: true
     default-estimate: 1000          # micro-cents per call; set estimate-from-prompt=true to derive from prompt size
@@ -602,8 +600,15 @@ public class AgentOrchestrator {
 
 ## Next steps
 
+For **Path 1 (`cycles-spring-ai-starter`):**
+
+- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#cycles-spring-ai-starter--runtime-authority-for-spring-ai-agents) — full Quick Start, Extension Points, Configuration reference, and the "Don't double-charge" gotcha section
+- [`cycles-spring-ai-starter` on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
+- [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance on where to put the gates
+
+For **Path 2 (`@Cycles` annotation / `cycles-client-java-spring`):**
+
 - [Spring Boot Starter Quickstart](/quickstart/getting-started-with-the-cycles-spring-boot-starter) — demo app, annotation reference, full walkthrough
 - [Spring Client Configuration](/configuration/client-configuration-reference-for-cycles-spring-boot-starter) — all `cycles.*` properties
 - [SpEL Expression Reference](/configuration/spel-expression-reference-for-cycles) — estimate and actual expressions
 - [Choosing the Right Overage Policy](/how-to/choosing-the-right-overage-policy) — REJECT vs ALLOW_IF_AVAILABLE vs ALLOW_WITH_OVERDRAFT
-- [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance
