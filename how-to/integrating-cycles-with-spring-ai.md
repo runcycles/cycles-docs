@@ -1,6 +1,6 @@
 ---
 title: "Integrating Cycles with Spring AI for Budget Control"
-description: "Guard Spring AI ChatClient invocations with Cycles budget reservations. Choose between auto-wired advisor (cycles-spring-ai-starter) or @Cycles annotation (cycles-client-java-spring)."
+description: "Guard Spring AI ChatClient invocations with Cycles budget reservations. v0.3.0 adds pluggable subject routing and jtokkit-based BPE token estimation. Choose between auto-wired advisor (cycles-spring-ai-starter) or @Cycles annotation (cycles-client-java-spring)."
 ---
 
 # Integrating Cycles with Spring AI
@@ -16,10 +16,11 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 | Aspect | [`cycles-spring-ai-starter`](https://github.com/runcycles/cycles-spring-ai-starter) | [`cycles-spring-boot-starter`](https://github.com/runcycles/cycles-spring-boot-starter) |
 |---|---|---|
 | Maven artifact | `io.runcycles:cycles-spring-ai-starter` | `io.runcycles:cycles-client-java-spring` |
-| Mechanism | Spring AI `CallAdvisor` + `ChatClientCustomizer` (auto-wired) | Spring AOP via `@Cycles` annotation |
-| Where it intercepts | Every `chatClient.prompt(...).call()` invocation | Any Java method you annotate |
-| Call-site changes | **No** — transparent wiring | Yes — add `@Cycles` annotation |
-| Estimate computation | Fixed constant (v0.1.0); per-call derivation in v0.2 | SpEL expression: `@Cycles("#tokens * 25")` |
+| Mechanism | Spring AI `CallAdvisor` + `StreamAdvisor` + `ChatClientCustomizer` (auto-wired); `CyclesToolGate` for per-tool gating | Spring AOP via `@Cycles` annotation |
+| Where it intercepts | Every `chatClient.prompt(...).call()` and `.stream()` invocation; per-tool when wrapped via `cyclesToolGate.wrap(...)` | Any Java method you annotate |
+| Call-site changes | **No** — transparent wiring for chat (tool wrapping is opt-in) | Yes — add `@Cycles` annotation |
+| Estimate computation | Pluggable `PromptTokenEstimator`: chars/4 heuristic by default, real BPE via jtokkit (opt-in) or custom bean | SpEL expression: `@Cycles("#tokens * 250")` |
+| Subject routing | Pluggable `SubjectResolver`: property defaults, or per-call (e.g. tenant from `SecurityContextHolder`) via custom bean | SpEL: can pull tenant from method args |
 | Knows about LLMs? | Yes — Spring AI ChatClient specific | No — generic for any cost-incurring code |
 
 **Use [`cycles-spring-ai-starter`](#path-1-auto-wired-advisor-cycles-spring-ai-starter)** if your LLM calls go through Spring AI's `ChatClient`.
@@ -27,14 +28,14 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 **Use [`cycles-spring-boot-starter`](#path-2-cycles-annotation-cycles-client-java-spring)** for non-Spring-AI code paths (custom HTTP clients, LangChain4j, vector store queries, etc.) — or when you need SpEL-driven per-method estimates.
 
 ::: warning Don't double-charge
-Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#%EF%B8%8F-the-double-charge-gotcha).
+Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#the-double-charge-gotcha).
 :::
 
 ---
 
 ## Path 1: Auto-wired advisor (`cycles-spring-ai-starter`)
 
-The simplest path for Spring AI apps — add the dependency, set 6 properties, and every `ChatClient.call()` is auto-gated.
+The simplest path for Spring AI apps — add the dependency, configure a few `cycles.*` properties, and every `ChatClient.call()` and `.stream()` invocation is auto-gated.
 
 ### 1. Add the dependency
 
@@ -43,11 +44,11 @@ The simplest path for Spring AI apps — add the dependency, set 6 properties, a
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.2.0'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.3.0'
 ```
 :::
 
@@ -61,11 +62,9 @@ cycles:
   api-key:  ${CYCLES_API_KEY}
   tenant:   acme
   app:      my-spring-ai-app
-
-cycles:
   spring-ai:
     enabled: true
-    default-estimate: 1000          # micro-cents per call (v0.2 will derive from prompt size)
+    default-estimate: 1000          # micro-cents per call; set estimate-from-prompt=true to derive from prompt size
     estimate-unit: USD_MICROCENTS
     action-kind: llm.chat
     action-name: spring-ai-chat
@@ -97,7 +96,9 @@ public class OrderAgent {
 
 No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient` built from the auto-configured `ChatClient.Builder` via a `ChatClientCustomizer`.
 
-### What v0.2.0 covers
+### What v0.3.0 covers
+
+Everything v0.2.0 shipped is still here — drop-in compatible — plus three new extension points and a trace-correlation tag.
 
 ✅ **Non-streaming `.call()`** — full reserve → call → commit (on success) / release (on exception) lifecycle. Deny throws `CyclesBudgetDeniedException` before the LLM is contacted.
 
@@ -110,13 +111,55 @@ No annotations. No `@Cycles`. The advisor is auto-attached to every `ChatClient`
 
 When both token breakdowns are null (provider returned a placeholder `Usage` with no breakdown), falls back to the estimate rather than under-billing with a zero commit.
 
-✅ **Prompt-based per-call estimate** — `cycles.spring-ai.estimate-from-prompt=true` with at least one cost-per-token rate set derives the pre-call reservation amount from `prompt-chars / 4 × (inputRate + outputRate)`. Falls back to `default-estimate` when the prompt is empty or rates are zero. Applies to both the call and stream advisors.
+✅ **Prompt-based per-call estimate** — `cycles.spring-ai.estimate-from-prompt=true` with at least one cost-per-token rate set derives the pre-call reservation amount from the configured `PromptTokenEstimator`. Default is a `chars / 4` heuristic; set `cycles.spring-ai.token-estimator-encoding=cl100k_base` (or `o200k_base`) + add the jtokkit dep to opt into real BPE encoding (see below). Falls back to `default-estimate` when the prompt is empty or rates are zero. Applies to both the call and stream advisors.
 
 ✅ **Tool-level gating via `CyclesToolGate`** — auto-configured factory bean. Wrap any Spring AI `ToolCallback` with `cyclesToolGate.wrap(myTool)` to gate per-tool invocations through Cycles. Tool reservations report distinct action labels (`tool.call` / `spring-ai-tool:<tool-name>` by default — configurable) so they're separable from chat reservations in audit history. Opt-in: Spring AI doesn't provide a hook to auto-decorate every registered tool.
 
-✅ **`CyclesChatClientObservationConvention`** — extends Spring AI's `DefaultChatClientObservationConvention` and appends low-cardinality Cycles attribution tags to every chat-client trace: `cycles.tenant`, `cycles.workspace`, `cycles.app`, `cycles.action_kind`, `cycles.action_name`. Auto-configured as a bean but **not auto-attached** to the `ChatClient.Builder` — apply explicitly via `builder.observationConvention(cyclesConvention)`.
+✅ **`CyclesChatClientObservationConvention`** — extends Spring AI's `DefaultChatClientObservationConvention` and appends low-cardinality Cycles attribution tags to every chat-client trace: `cycles.tenant`, `cycles.workspace`, `cycles.app`, `cycles.action_kind`, `cycles.action_name`. **New in 0.3.0:** also emits `cycles.reservation_id` as a high-cardinality `KeyValue` for trace ↔ reservation correlation in your tracing backend. Auto-configured as a bean but not auto-attached — apply explicitly via `builder.observationConvention(cyclesConvention)`. Disable the high-cardinality tag with `cycles.spring-ai.emit-reservation-id-on-trace=false` if your tracing backend charges by unique tag-value combinations.
 
-See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-020) for the full 0.2.0 feature surface, configuration reference, and code examples.
+#### New extension points in v0.3.0
+
+**Pluggable `SubjectResolver`** — multi-tenant agents need per-request attribution. By default the starter reads tenant/workspace/app from `CyclesProperties` on every call (every reservation is attributed to the same subject). Register a `SubjectResolver` bean for per-call routing:
+
+```java
+@Bean
+public SubjectResolver tenantAwareSubjectResolver(CyclesProperties defaults) {
+    return request -> {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        String tenant = (auth != null && auth.isAuthenticated()) ? auth.getName() : defaults.getTenant();
+        return Subject.builder()
+                .tenant(tenant)
+                .workspace(defaults.getWorkspace())
+                .app(defaults.getApp())
+                .build();
+    };
+}
+```
+
+`@ConditionalOnMissingBean` ensures your bean wins over the property-derived default. The `request` parameter is `null` on the tool-gating path (tool callbacks don't carry a `ChatClientRequest`); implementations should handle `null` defensively.
+
+**Pluggable `PromptTokenEstimator` with jtokkit** — v0.2.0 hard-coded prompt-token estimation as `chars / 4`. v0.3.0 makes it pluggable and ships a real BPE impl via [jtokkit](https://github.com/knuddelsgmbh/jtokkit). Opt in:
+
+```yaml
+cycles:
+  spring-ai:
+    estimate-from-prompt: true
+    input-cost-per-token: 250                  # 1 USD = 100,000,000 USD_MICROCENTS, so $2.50/1M tokens = 250 microcents/token
+    output-cost-per-token: 1000                # $10.00/1M tokens = 1000 microcents/token
+    token-estimator-encoding: o200k_base   # gpt-4o family; cl100k_base for gpt-4 / gpt-3.5-turbo
+```
+
+```xml
+<dependency>
+    <groupId>com.knuddels</groupId>
+    <artifactId>jtokkit</artifactId>
+    <version>1.1.0</version>
+</dependency>
+```
+
+The jtokkit dep is `optional=true` on the starter — only opt-in users pay the size cost. Setting the property without the dep on the classpath logs a WARN at app startup and falls back to chars/4. For provider-specific tokenizers, register your own `PromptTokenEstimator` bean.
+
+See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-030) for the full 0.3.0 feature surface, the Extension Points section with longer examples, and the full configuration reference.
 
 ---
 
@@ -136,11 +179,11 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.2</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.0'
+implementation 'io.runcycles:cycles-client-java-spring:0.2.2'
 ```
 :::
 
@@ -171,8 +214,8 @@ public class ChatService {
         this.chatClient = builder.build();
     }
 
-    // GPT-4o: ~$2.50/1M input tokens ≈ 25 microcents/token
-    @Cycles(value = "#maxTokens * 25",
+    // GPT-4o: ~$2.50/1M input tokens = 250 microcents/token
+    @Cycles(value = "#maxTokens * 250",
             actionKind = "llm.completion",
             actionName = "gpt-4o")
     public String chat(String prompt, int maxTokens) {
@@ -192,8 +235,8 @@ Use SpEL expressions to estimate cost from method parameters. The `value` (or `e
 
 ```java
 // Estimate based on max tokens × price per token (in USD_MICROCENTS)
-// GPT-4o: ~$2.50/1M input tokens = 25 microcents/token
-@Cycles(value = "#maxTokens * 25",
+// GPT-4o: ~$2.50/1M input tokens = 250 microcents/token
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generate(String prompt, int maxTokens) {
@@ -203,7 +246,7 @@ public String generate(String prompt, int maxTokens) {
 }
 
 // Estimate from prompt length (rough token approximation: ~4 chars per token)
-@Cycles(value = "#prompt.length() / 4 * 25",
+@Cycles(value = "#prompt.length() / 4 * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String summarize(String prompt) {
@@ -220,8 +263,8 @@ See [SpEL Expression Reference](/configuration/spel-expression-reference-for-cyc
 The `actual` attribute is evaluated after the method returns, using `#result` to reference the return value. This lets Cycles commit the real cost instead of the estimate:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
-        actual = "#result.length() / 4 * 25",
+@Cycles(value = "#maxTokens * 250",
+        actual = "#result.length() / 4 * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generate(String prompt, int maxTokens) {
@@ -239,7 +282,7 @@ import io.runcycles.client.java.spring.context.CyclesContextHolder;
 import io.runcycles.client.java.spring.context.CyclesReservationContext;
 import io.runcycles.client.java.spring.model.CyclesMetrics;
 
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generateWithMetrics(String prompt, int maxTokens) {
@@ -274,7 +317,7 @@ The `actual` SpEL attribute on `@Cycles` handles cost calculation. Use `CyclesMe
 When budget is running low, Cycles may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell you how to constrain the operation — for example, reducing max tokens to conserve budget. Read them from the reservation context:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String capsAwareChat(String prompt, int maxTokens) {
@@ -412,7 +455,7 @@ public class StreamingChatService {
             "idempotency_key", UUID.randomUUID().toString(),
             "subject", Map.of("tenant", "acme"),
             "action", Map.of("kind", "llm.completion", "name", "gpt-4o"),
-            "estimate", Map.of("unit", "USD_MICROCENTS", "amount", maxTokens * 25L),
+            "estimate", Map.of("unit", "USD_MICROCENTS", "amount", maxTokens * 250L),
             "ttl_ms", 120000
         );
 
@@ -434,7 +477,7 @@ public class StreamingChatService {
                 cyclesClient.commitReservation(reservationId, Map.of(
                     "idempotency_key", UUID.randomUUID().toString(),
                     "actual", Map.of("unit", "USD_MICROCENTS",
-                                     "amount", tokenCount.get() * 25L)
+                                     "amount", tokenCount.get() * 250L)
                 ));
             })
             .doOnError(err -> {
@@ -487,7 +530,7 @@ public class AgentService {
 Start in shadow mode to measure budget impact before enforcing:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o",
         dryRun = true)
@@ -505,7 +548,7 @@ When `dryRun = true`, the guarded method does **not** execute. The annotation ev
 Resolve tenant from the method parameters:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         tenant = "#tenantId",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
@@ -528,7 +571,7 @@ public class GuardedLlmService {
         this.chatClient = builder.build();
     }
 
-    @Cycles(value = "#maxTokens * 25", actionKind = "llm.completion", actionName = "gpt-4o")
+    @Cycles(value = "#maxTokens * 250", actionKind = "llm.completion", actionName = "gpt-4o")
     public String generate(String prompt, int maxTokens) {
         return chatClient.prompt(prompt).call().content();
     }
@@ -557,8 +600,15 @@ public class AgentOrchestrator {
 
 ## Next steps
 
+For **Path 1 (`cycles-spring-ai-starter`):**
+
+- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#cycles-spring-ai-starter--runtime-authority-for-spring-ai-agents) — full Quick Start, Extension Points, Configuration reference, and the "Don't double-charge" gotcha section
+- [`cycles-spring-ai-starter` on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
+- [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance on where to put the gates
+
+For **Path 2 (`@Cycles` annotation / `cycles-client-java-spring`):**
+
 - [Spring Boot Starter Quickstart](/quickstart/getting-started-with-the-cycles-spring-boot-starter) — demo app, annotation reference, full walkthrough
 - [Spring Client Configuration](/configuration/client-configuration-reference-for-cycles-spring-boot-starter) — all `cycles.*` properties
 - [SpEL Expression Reference](/configuration/spel-expression-reference-for-cycles) — estimate and actual expressions
 - [Choosing the Right Overage Policy](/how-to/choosing-the-right-overage-policy) — REJECT vs ALLOW_IF_AVAILABLE vs ALLOW_WITH_OVERDRAFT
-- [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance
