@@ -19,7 +19,7 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 | Mechanism | Spring AI `CallAdvisor` + `StreamAdvisor` + `ChatClientCustomizer` (auto-wired); `CyclesToolGate` for per-tool gating | Spring AOP via `@Cycles` annotation |
 | Where it intercepts | Every `chatClient.prompt(...).call()` and `.stream()` invocation; per-tool when wrapped via `cyclesToolGate.wrap(...)` | Any Java method you annotate |
 | Call-site changes | **No** — transparent wiring for chat (tool wrapping is opt-in) | Yes — add `@Cycles` annotation |
-| Estimate computation | Pluggable `PromptTokenEstimator`: chars/4 heuristic by default, real BPE via jtokkit (opt-in) or custom bean | SpEL expression: `@Cycles("#tokens * 25")` |
+| Estimate computation | Pluggable `PromptTokenEstimator`: chars/4 heuristic by default, real BPE via jtokkit (opt-in) or custom bean | SpEL expression: `@Cycles("#tokens * 250")` |
 | Subject routing | Pluggable `SubjectResolver`: property defaults, or per-call (e.g. tenant from `SecurityContextHolder`) via custom bean | SpEL: can pull tenant from method args |
 | Knows about LLMs? | Yes — Spring AI ChatClient specific | No — generic for any cost-incurring code |
 
@@ -144,8 +144,8 @@ public SubjectResolver tenantAwareSubjectResolver(CyclesProperties defaults) {
 cycles:
   spring-ai:
     estimate-from-prompt: true
-    input-cost-per-token: 25
-    output-cost-per-token: 100
+    input-cost-per-token: 250                  # 1 USD = 100,000,000 USD_MICROCENTS, so $2.50/1M tokens = 250 microcents/token
+    output-cost-per-token: 1000                # $10.00/1M tokens = 1000 microcents/token
     token-estimator-encoding: o200k_base   # gpt-4o family; cl100k_base for gpt-4 / gpt-3.5-turbo
 ```
 
@@ -214,8 +214,8 @@ public class ChatService {
         this.chatClient = builder.build();
     }
 
-    // GPT-4o: ~$2.50/1M input tokens ≈ 25 microcents/token
-    @Cycles(value = "#maxTokens * 25",
+    // GPT-4o: ~$2.50/1M input tokens = 250 microcents/token
+    @Cycles(value = "#maxTokens * 250",
             actionKind = "llm.completion",
             actionName = "gpt-4o")
     public String chat(String prompt, int maxTokens) {
@@ -235,8 +235,8 @@ Use SpEL expressions to estimate cost from method parameters. The `value` (or `e
 
 ```java
 // Estimate based on max tokens × price per token (in USD_MICROCENTS)
-// GPT-4o: ~$2.50/1M input tokens = 25 microcents/token
-@Cycles(value = "#maxTokens * 25",
+// GPT-4o: ~$2.50/1M input tokens = 250 microcents/token
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generate(String prompt, int maxTokens) {
@@ -246,7 +246,7 @@ public String generate(String prompt, int maxTokens) {
 }
 
 // Estimate from prompt length (rough token approximation: ~4 chars per token)
-@Cycles(value = "#prompt.length() / 4 * 25",
+@Cycles(value = "#prompt.length() / 4 * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String summarize(String prompt) {
@@ -263,8 +263,8 @@ See [SpEL Expression Reference](/configuration/spel-expression-reference-for-cyc
 The `actual` attribute is evaluated after the method returns, using `#result` to reference the return value. This lets Cycles commit the real cost instead of the estimate:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
-        actual = "#result.length() / 4 * 25",
+@Cycles(value = "#maxTokens * 250",
+        actual = "#result.length() / 4 * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generate(String prompt, int maxTokens) {
@@ -282,7 +282,7 @@ import io.runcycles.client.java.spring.context.CyclesContextHolder;
 import io.runcycles.client.java.spring.context.CyclesReservationContext;
 import io.runcycles.client.java.spring.model.CyclesMetrics;
 
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String generateWithMetrics(String prompt, int maxTokens) {
@@ -317,7 +317,7 @@ The `actual` SpEL attribute on `@Cycles` handles cost calculation. Use `CyclesMe
 When budget is running low, Cycles may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell you how to constrain the operation — for example, reducing max tokens to conserve budget. Read them from the reservation context:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
 public String capsAwareChat(String prompt, int maxTokens) {
@@ -455,7 +455,7 @@ public class StreamingChatService {
             "idempotency_key", UUID.randomUUID().toString(),
             "subject", Map.of("tenant", "acme"),
             "action", Map.of("kind", "llm.completion", "name", "gpt-4o"),
-            "estimate", Map.of("unit", "USD_MICROCENTS", "amount", maxTokens * 25L),
+            "estimate", Map.of("unit", "USD_MICROCENTS", "amount", maxTokens * 250L),
             "ttl_ms", 120000
         );
 
@@ -477,7 +477,7 @@ public class StreamingChatService {
                 cyclesClient.commitReservation(reservationId, Map.of(
                     "idempotency_key", UUID.randomUUID().toString(),
                     "actual", Map.of("unit", "USD_MICROCENTS",
-                                     "amount", tokenCount.get() * 25L)
+                                     "amount", tokenCount.get() * 250L)
                 ));
             })
             .doOnError(err -> {
@@ -530,7 +530,7 @@ public class AgentService {
 Start in shadow mode to measure budget impact before enforcing:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         actionKind = "llm.completion",
         actionName = "gpt-4o",
         dryRun = true)
@@ -548,7 +548,7 @@ When `dryRun = true`, the guarded method does **not** execute. The annotation ev
 Resolve tenant from the method parameters:
 
 ```java
-@Cycles(value = "#maxTokens * 25",
+@Cycles(value = "#maxTokens * 250",
         tenant = "#tenantId",
         actionKind = "llm.completion",
         actionName = "gpt-4o")
@@ -571,7 +571,7 @@ public class GuardedLlmService {
         this.chatClient = builder.build();
     }
 
-    @Cycles(value = "#maxTokens * 25", actionKind = "llm.completion", actionName = "gpt-4o")
+    @Cycles(value = "#maxTokens * 250", actionKind = "llm.completion", actionName = "gpt-4o")
     public String generate(String prompt, int maxTokens) {
         return chatClient.prompt(prompt).call().content();
     }
