@@ -57,10 +57,39 @@ When the user invokes `/blog "topic"` or asks to write a blog post, follow this 
 24. This auto-links first-use glossary terms to `/glossary#anchor` canonical definitions
 25. Review the diff — the script is conservative but may need manual adjustment for edge cases
 
-## Phase 9: User Review Loop
-26. Present the post to the user for review
-27. User will send external reviewer feedback — apply it precisely
-28. Repeat until feedback says "publishable"
+## Phase 9: External Reviewer Loop
+
+External reviewer feedback is **input, not directive**. For every point: evaluate against source-of-truth (existing posts, upstream READMEs, spec files, framework docs), then decide **apply / modify / skip** with a one-line reason BEFORE touching the file. Push back when warranted — reviewers sometimes soften spec-backed claims, miss cross-links already present in the post, or contradict prior reviewer rounds. Both the conversation reply and the commit message should carry the apply/modify/skip table so the reasoning trail is preserved.
+
+### Phase 9a: codex external review (when `codex` is on PATH)
+
+If `codex --version` works, run codex-cli as the first external reviewer pass. Round 1 starts a fresh session:
+
+```bash
+codex exec --sandbox read-only --cd <repo-root> --skip-git-repo-check \
+  -o /tmp/codex-review/round1.txt \
+  "<reviewer-role prompt: point at the file, give blog tone rules, explicitly say
+   NOT to edit files (read-only sandbox enforces this anyway), ask for output
+   bucketed by FACTUAL / OVERCLAIM / CLARITY / STRUCTURE / CODE / TONE / OPEN QUESTIONS
+   plus an OVERALL: SHIP / REVISE-MINOR / REVISE-MAJOR verdict>"
+```
+
+For round 2+, resume the same session — codex picks up the prior context from `~/.codex/sessions/`. **In 0.130.0, `codex exec resume` does NOT accept `--sandbox` or `--cd`** — those inherit from the original session and passing them errors out:
+
+```bash
+codex exec resume --last --skip-git-repo-check \
+  -o /tmp/codex-review/round<N>.txt \
+  "<apply/modify/skip report on round N-1 + answers to open questions
+   + ask for next pass. Tell codex to return SHIP if nothing substantive remains.>"
+```
+
+Loop until codex returns `SHIP` or until findings are stylistic-only. Typical convergence is 2-3 rounds; cap at 4. Codex generally accepts well-reasoned push-back without re-litigation, so be explicit when skipping a finding ("upstream README uses this shorthand, staying consistent with source-of-truth"; "out of scope, covered by other-post.md"; "verified against framework docs, claim stands").
+
+Commit each applied round with `blog: apply codex round-<N> review to <slug>` and include the apply/modify/skip tally + notable changes in the body.
+
+### Phase 9b: human external reviewer
+
+When the user sends external reviewer feedback (typically from a human reader they relayed through), apply the same evaluate-on-merit rule. Repeat until the user says "publishable."
 
 ## Phase 10: Publish
 29. Commit with message: `blog: add <descriptive summary>`
