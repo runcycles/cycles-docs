@@ -25,7 +25,7 @@ This post walks through how `cycles-spring-ai-starter` (currently 0.3.1) inserts
 
 ## Why an advisor, not an annotation
 
-Spring AI's `ChatClient` already runs every prompt through an ordered chain of `CallAdvisor` (non-streaming) and `StreamAdvisor` (streaming) participants. Each advisor sees the `ChatClientRequest`, can short-circuit, can mutate, or can delegate to `chain.nextCall(request)` / `chain.nextStream(request)`. That chain is where Spring AI itself implements retry, logging, memory, and tool resolution.
+Spring AI's `ChatClient` already runs every prompt through an ordered chain of `CallAdvisor` (non-streaming) and `StreamAdvisor` (streaming) participants. Each advisor sees the `ChatClientRequest`, can short-circuit, can mutate, or can delegate to `chain.nextCall(request)` / `chain.nextStream(request)`. That chain is where Spring AI itself implements logging, memory, and tool resolution.
 
 For [runtime authority](/glossary#runtime-authority) over agent spend, an advisor is the natural shape: it runs *before* the provider call and gets to surface a denial as a thrown exception that the rest of the chain already knows how to handle. (Spring AI's own `spring.ai.retry.*` retries wrap the underlying `ChatModel`, below the advisor, so the advisor sees one logical call per `ChatClient` invocation regardless of whether the model retries internally.) Annotations sit one level too high — they bind to the calling method, not to the abstraction the framework is built around.
 
@@ -90,7 +90,7 @@ Flux.defer(() -> {
 });
 ```
 
-`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. The commit step composed via `concatWith` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal — that is the fail-closed property. If the commit fails, the subscriber gets `onError` instead of `onComplete`, matching the non-streaming advisor's contract; the `doOnError` path then releases the reservation rather than leaving it stranded, which trades a small amount of cost-side accuracy (the model work happened but is not committed) for a clean reservation-state invariant. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
+`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. The commit step composed via `concatWith` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal — that is the fail-closed property. If the commit fails, the subscriber gets `onError` instead of `onComplete`, matching the non-streaming advisor's contract; the `doOnError` path then releases the reservation rather than leaving it stranded, which trades cost-side accuracy (the model work happened but is not committed — for a long streamed response, that can be the whole cost) for a clean reservation-state invariant. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
 
 Reservation failures (denial, transport) surface as `onError` to the subscriber rather than synchronous throws. That is the reactive-idiomatic shape; callers handle it with `.onErrorResume(...)` like any other reactive failure.
 
@@ -159,13 +159,15 @@ Chat reservations cover prompt cost, but agents that call tools incur cost *and*
 @Configuration
 class ToolWiring {
     @Bean
-    ToolCallback getWeatherTool(CyclesToolGate cyclesToolGate) {
-        // Illustrative — the real builder also needs the reflected
-        // Method, the target instance via toolObject(...), and any
-        // input-schema bits the tool needs.
+    ToolCallback getWeatherTool(CyclesToolGate cyclesToolGate,
+                                Method reflectedMethod,            // your real Method
+                                WeatherService weatherTarget) {     // your tool target
+        // Illustrative — the real builder also needs schema bits
+        // and any other ToolDefinition fields your tool requires.
         ToolCallback raw = MethodToolCallback.builder()
                 .toolDefinition(ToolDefinition.builder().name("get_weather").build())
-                .toolMethod(/* reflect.Method instance */ null)
+                .toolMethod(reflectedMethod)
+                .toolObject(weatherTarget)
                 .build();
         return cyclesToolGate.wrap(raw);
     }
