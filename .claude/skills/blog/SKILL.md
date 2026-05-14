@@ -33,9 +33,17 @@ When the user invokes `/blog "topic"` or asks to write a blog post, follow this 
 
 ## Phase 4: Review Cycle 1 (parallel agents)
 11. **Link verification:** Check every internal link resolves to an existing .md file
-12. **Fact-check:** Verify all claims, dollar figures, and terminology against source posts
-13. **SEO audit:** Title length, description length, keyword coverage (guardrails, production, security, risk, graceful degradation as relevant), heading structure, tag alignment
-14. Apply all fixes from cycle 1
+12. **Fact-check (text claims):** Verify all prose claims, dollar figures, and terminology against source posts, upstream READMEs, and release notes.
+13. **Source-code audit (when the post contains code or makes code-level claims):** Fetch the actual source files from the referenced upstream repo (e.g. `gh api repos/<org>/<repo>/contents/<path> --jq .content | base64 -d`) and verify, per claim:
+    - **Operator order in reactive/async code** — e.g. `doOnError` attached before vs. after `concatWith` changes whether commit-Mono failures trigger upstream cleanup. Reactor / RxJava / Project Reactor claims are particularly easy to get wrong from prose alone.
+    - **Method signatures and return types** — does `chatClient.prompt().stream()` actually return `Flux<ChatResponse>`, or a stream-spec on which `.chatResponse()` yields it?
+    - **Field names, action labels, header names** — anything quoted in backticks should be searchable in source.
+    - **Behavior of fluent builders** — what fields are required, what defaults exist, what throws on missing input.
+    - **Error / failure paths** — does the source actually release on the path the prose describes, or rely on TTL expiry, or do nothing?
+    - **Annotation behavior** — `@ConditionalOnMissingBean`, `@Order`, advisor precedence values — verify against source, not memory.
+    Do NOT trust the post's own pseudocode as ground truth: pseudocode that ships in a draft is the very thing being audited.
+14. **SEO audit:** Title length, description length, keyword coverage (guardrails, production, security, risk, graceful degradation as relevant), heading structure, tag alignment
+15. Apply all fixes from cycle 1
 
 ## Phase 5: Review Cycle 2
 15. Full re-read for flow, consistency, and anything edits may have broken
@@ -68,11 +76,24 @@ If `codex --version` works, run codex-cli as the first external reviewer pass. R
 ```bash
 codex exec --sandbox read-only --cd <repo-root> --skip-git-repo-check \
   -o /tmp/codex-review/round1.txt \
-  "<reviewer-role prompt: point at the file, give blog tone rules, explicitly say
-   NOT to edit files (read-only sandbox enforces this anyway), ask for output
-   bucketed by FACTUAL / OVERCLAIM / CLARITY / STRUCTURE / CODE / TONE / OPEN QUESTIONS
-   plus an OVERALL: SHIP / REVISE-MINOR / REVISE-MAJOR verdict>"
+  "<reviewer-role prompt — must include all of:
+   1. Point at the file.
+   2. Give blog tone rules (technical, no hype, no marketing, no emoji).
+   3. Explicitly say NOT to edit files (read-only sandbox enforces this anyway).
+   4. NAME THE UPSTREAM SOURCE REPOS and tell codex to fetch and read the
+      relevant source files (e.g. via 'gh api repos/<org>/<repo>/contents/...
+      --jq .content | base64 -d') before judging code-level claims. Give
+      example file paths if known. Tell codex explicitly to verify operator
+      order in any reactive/async pseudocode, method signatures of framework
+      abstractions cited, error/release paths, fluent-builder requirements,
+      and any quoted identifier (field, action label, header) against the
+      actual source. Do not trust the post's own pseudocode as ground truth.
+   5. Ask for output bucketed by FACTUAL / OVERCLAIM / CLARITY / STRUCTURE /
+      CODE / TONE / OPEN QUESTIONS plus an OVERALL: SHIP / REVISE-MINOR /
+      REVISE-MAJOR verdict.>"
 ```
+
+**Why the source-verification clause is mandatory:** without it, codex tends to audit the prose against itself and the upstream README — which misses bugs where the prose matches the README's surface description but contradicts the actual source code. A real example from PR #642: a sibling codex session with a broader prompt caught a Reactor `doOnError`/`concatWith` operator-order bug that this session's narrower codex prompt missed.
 
 For round 2+, resume the same session — codex picks up the prior context from `~/.codex/sessions/`. **In 0.130.0, `codex exec resume` does NOT accept `--sandbox` or `--cd`** — those inherit from the original session and passing them errors out:
 
