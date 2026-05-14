@@ -1,6 +1,6 @@
 ---
 title: "Why a Delete-Delay Isn't the PocketOS Fix"
-date: 2026-05-14
+date: 2026-05-15
 author: Albert Mavashev
 tags: [incidents, runtime-authority, governance, security, agents, production]
 description: "Railway slowed destructive deletes after the 9-second wipe. The legacy account-token model is unchanged. The structural fix is scoped tokens + runtime gates."
@@ -15,7 +15,7 @@ head:
 
 # Why a Delete-Delay Isn't the PocketOS Fix
 
-Two weeks ago, an IDE-hosted agent — Cursor running Claude Opus 4.6 — deleted a PocketOS production database and its volume-level backups in nine seconds through a single Railway API call. The data came back; the structural problem stayed. We covered the immediate runtime-authority gap in [Cursor Agent Deleted a Prod Database in 9 Seconds](/blog/ai-agent-deleted-prod-database-9-seconds) and the framing debate that followed in [AI Agent Kill Switches Should Be Scoped](/blog/ai-agent-kill-switches-should-be-scoped).
+Late last month, an IDE-hosted agent — Cursor running Claude Opus 4.6 — deleted a PocketOS production database and its volume-level backups in nine seconds through a single Railway API call. The data came back; the structural problem stayed. We covered the immediate runtime-authority gap in [Cursor Agent Deleted a Prod Database in 9 Seconds](/blog/ai-agent-deleted-prod-database-9-seconds) and the framing debate that followed in [AI Agent Kill Switches Should Be Scoped](/blog/ai-agent-kill-switches-should-be-scoped).
 
 What landed since then is worth a separate post, because it splits cleanly into two threads: what Railway actually shipped to its API, and what the rest of the security industry argued the fix should be. The two threads disagree about which layer of the stack to fix.
 
@@ -105,7 +105,7 @@ If you are running agents against production infrastructure:
 
 ## Closing
 
-Two weeks after the 9-second wipe, PocketOS recovered its data. The pattern that produced the incident has not been restructured. An account token of the type the agent held can still issue `volumeDelete` against the environments in its scope. The patch slows the consequence; it does not narrow the authority. The "kill switch" framing some vendors adopted in the following weeks is the wrong layer of the stack to argue about — that debate is covered in [AI Agent Kill Switches Should Be Scoped](/blog/ai-agent-kill-switches-should-be-scoped). The argument worth having is one layer down: token scopes on the provider side, runtime gates on the agent side, both shipping, neither sufficient alone.
+In the weeks after the 9-second wipe, PocketOS recovered its data. The pattern that produced the incident has not been restructured. An account token of the type the agent held can still issue `volumeDelete` against the environments in its scope. The patch slows the consequence; it does not narrow the authority. The "kill switch" framing some vendors adopted in the following weeks is the wrong layer of the stack to argue about — that debate is covered in [AI Agent Kill Switches Should Be Scoped](/blog/ai-agent-kill-switches-should-be-scoped). The argument worth having is one layer down: token scopes on the provider side, runtime gates on the agent side, both shipping, neither sufficient alone.
 
 The post-mortem you do not want to write a year from now is the one where the token was technically narrower than PocketOS's but still wide enough to delete the wrong thing — because there was no second layer to catch it.
 
