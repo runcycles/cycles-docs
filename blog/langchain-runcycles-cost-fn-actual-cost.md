@@ -81,7 +81,7 @@ Writing a `cost_fn` from scratch every time would invite the same off-by-10x uni
 ```python
 from langchain_runcycles.extractors import openai_cost, anthropic_cost
 
-# Factory keyword arg names match each provider's pricing-page vocabulary.
+# Factory kwargs follow each provider's historical pricing vocabulary.
 # Both extractors read LangChain's normalized usage_metadata fields
 # (`input_tokens` / `output_tokens`) under the hood.
 openai = openai_cost(
@@ -97,7 +97,7 @@ anthropic = anthropic_cost(
 
 Both factories use keyword-only pricing args. That is a deliberate choice — `openai_cost(2.50, 10.00)` would TypeError, which is exactly the kind of error a developer wants at construction time rather than after a quarter of skewed accounting. The asymmetry between input/prompt cost and output/completion cost is real and persistent; the API surface should not let a caller accidentally swap them. The OpenAI factory uses `prompt` / `completion` and the Anthropic factory uses `input` / `output` to match each vendor's historical pricing vocabulary; under the hood, both extractors read the same normalized LangChain `usage_metadata` fields (`input_tokens` / `output_tokens`), so the kwarg naming is purely a developer-facing affordance.
 
-Both extractors return `Amount` in `USD_MICROCENTS` so the commit path doesn't need a unit translation. For provider-specific tokenizers or custom pricing, write your own `cost_fn` — the type signature `Callable[[ModelResponse], Amount]` is the whole contract.
+Both extractors return `Amount` in `USD_MICROCENTS` so the commit path doesn't need a unit translation. For provider-specific tokenizers or custom pricing, write your own `cost_fn` — the contract is just a callable that receives the model response and returns an `Amount` (the exported `CostFn` alias is `Callable[[Any], Amount]`).
 
 ## When cost_fn fails
 
