@@ -52,7 +52,7 @@ Spawn agents in parallel — each covers a subset of the eight dimensions, joint
 
 11. **Link verification (dim 3):** Check every internal link resolves to an existing .md file; flag any link in a list rather than contextual prose; check link count is in the 5–8 range for pillar posts.
 12. **Fact-check on prose (dims 1, 2):** Verify all prose claims, dollar figures, version numbers, and named features against source posts, upstream READMEs, and release notes; flag overclaims, hype phrases, unverifiable absolutes.
-13. **Source-code audit (dims 1, 5) — when the post contains code or makes code-level claims:** Fetch the actual source files from the referenced upstream repo (e.g. `gh api repos/<org>/<repo>/contents/<path> --jq .content | base64 -d`) and verify, per claim:
+13. **Source-code audit (dims 1, 5) — when the post contains code or makes code-level claims:** Fetch the actual source files from the referenced upstream repo and verify, per claim. Discover the repo layout first (`gh api repos/<org>/<repo>/git/trees/main?recursive=1 --jq '.tree[] | select(.path | endswith(\".java\") or endswith(\".py\") or ...) | .path'`) before assuming any path — example paths in this skill or in prior prompts may be stale against the current package layout (e.g., `langchain_runcycles/...` vs `src/langchain_runcycles/...`). Then fetch and verify, per claim:
     - **Operator order in reactive/async code** — e.g. `doOnError` attached before vs. after `concatWith` changes whether commit-Mono failures trigger upstream cleanup. Reactor / RxJava / Project Reactor claims are particularly easy to get wrong from prose alone.
     - **Method signatures and return types** — does `chatClient.prompt().stream()` actually return `Flux<ChatResponse>`, or a stream-spec on which `.chatResponse()` yields it?
     - **Field names, action labels, header names** — anything quoted in backticks should be searchable in source.
@@ -110,11 +110,16 @@ codex exec --sandbox read-only --cd <repo-root> --skip-git-repo-check \
       before critique). No dimension is skippable.
    3. Explicitly say NOT to edit files (read-only sandbox enforces this anyway).
    4. NAME THE UPSTREAM SOURCE REPOS and tell codex to fetch and read the
-      relevant source files (e.g. via 'gh api repos/<org>/<repo>/contents/...
-      --jq .content | base64 -d') before judging code-level claims. Give
-      example file paths if known. Tell codex explicitly to verify operator
-      order in any reactive/async pseudocode, method signatures of framework
-      abstractions cited, error/release paths, fluent-builder requirements,
+      relevant source files before judging code-level claims. **Do not pin
+      file paths in the prompt** — codex's read-only sandbox typically
+      blocks shell `gh` calls, so codex will route through its GitHub
+      connector, and example paths in this template (or in your prompt) may
+      be stale against the current package layout. Instruct codex to
+      **discover the repo layout first** (list the tree), then locate
+      relevant files by name pattern. Tell codex explicitly to verify
+      operator order in any reactive/async pseudocode, method signatures of
+      framework abstractions cited, error/release paths, fluent-builder
+      requirements, type aliases against their actual source definitions,
       and any quoted identifier (field, action label, header) against the
       actual source. Do not trust the post's own pseudocode as ground truth.
    5. Ask for output bucketed by FACTUAL / OVERCLAIM / CROSS-LINKS / SEO /
