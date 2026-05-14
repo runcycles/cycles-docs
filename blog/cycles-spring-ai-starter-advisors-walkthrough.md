@@ -27,13 +27,13 @@ This post walks through how `cycles-spring-ai-starter` (currently 0.3.1) inserts
 
 Spring AI's `ChatClient` already runs every prompt through an ordered chain of `CallAdvisor` (non-streaming) and `StreamAdvisor` (streaming) participants. Each advisor sees the `ChatClientRequest`, can short-circuit, can mutate, or can delegate to `chain.nextCall(request)` / `chain.nextStream(request)`. That chain is where Spring AI itself implements retry, logging, memory, and tool resolution.
 
-For [runtime authority](/glossary#runtime-authority) over agent spend, an advisor is the natural shape: it runs *before* the provider call, sees every retry the framework decides to issue, and gets to surface a denial as a thrown exception that the rest of the chain already knows how to handle. Annotations sit one level too high — they bind to the calling method, not to the abstraction the framework is built around.
+For [runtime authority](/glossary#runtime-authority) over agent spend, an advisor is the natural shape: it runs *before* the provider call and gets to surface a denial as a thrown exception that the rest of the chain already knows how to handle. (Spring AI's own `spring.ai.retry.*` retries wrap the underlying `ChatModel`, below the advisor, so the advisor sees one logical call per `ChatClient` invocation regardless of whether the model retries internally.) Annotations sit one level too high — they bind to the calling method, not to the abstraction the framework is built around.
 
 There is one wiring detail that matters in Spring AI 1.0+: simply exposing a `CallAdvisor` as a bean is not enough. The auto-configured `ChatClient.Builder` only picks up advisors via a `ChatClientCustomizer` bean. The starter ships that customizer and attaches both advisors at `HIGHEST_PRECEDENCE + 100` — early enough that a denial short-circuits before any other advisor does meaningful work, late enough that any earlier advisor a user adds gets to inspect the request first.
 
 ## The non-streaming advisor: reserve, call, commit, release
 
-The whole `CyclesBudgetCallAdvisor` lifecycle is four wire calls and one delegation:
+The whole `CyclesBudgetCallAdvisor` lifecycle is three wire calls (reserve, commit *or* release) and one delegation:
 
 | Step | Cycles wire call | Spring AI hook |
 |---|---|---|
@@ -70,26 +70,27 @@ That is the entire integration for the simple case. No annotations, no proxies, 
 
 ## The streaming advisor: per-subscription reservation, fail-closed commit
 
-Streaming changes the shape because the lifecycle is no longer scoped to a method return. `chatClient.prompt(...).stream()` returns a `Flux<ChatResponse>`. The reservation has to start when something subscribes, the commit has to fire when the upstream completes, and the release has to fire on cancellation, error, or assembly failure. There are several places where naive code leaks reservations:
+Streaming changes the shape because the lifecycle is no longer scoped to a method return. `chatClient.prompt(...).stream()` returns a stream-spec on which `.chatResponse()` yields a `Flux<ChatResponse>` (or `.chatClientResponse()` yields a `Flux<ChatClientResponse>`). The reservation has to start when something subscribes, the commit has to fire when the upstream completes, and the release has to fire on cancellation, error, or assembly failure. There are several places where naive code leaks reservations:
 
 - **Assembled but not subscribed.** Code that builds a `Flux` and then never subscribes — common in conditional pipelines — would otherwise create an orphan reservation.
 - **Resubscribed.** A `Flux` that gets retried with `.retry(...)` would otherwise re-use the original reservation against a new attempt.
 - **Commit failure.** If the commit call fails after the stream emits `onComplete`, the subscriber has already seen completion — but the budget side is in an inconsistent state.
 
-`CyclesBudgetStreamAdvisor` handles each:
+`CyclesBudgetStreamAdvisor` handles each. The pseudocode below is illustrative — the production code adapts the commit `Mono` to the upstream element type so the composition type-checks:
 
 ```text
+// Illustrative — element-type adaptation around concatWith elided.
 Flux.defer(() -> {
     var reservationId = reserveSync(request);                        // per-subscription
     return chain.nextStream(request)
         .doOnNext(lastResponse::set)
-        .concatWith(Mono.defer(() -> commit(reservationId)))         // commit *before* onComplete
+        .concatWith(commitThenEmpty(reservationId))                  // commit before terminal signal
         .doOnError(e -> release(reservationId, "stream_error"))
         .doOnCancel(()  -> release(reservationId, "cancelled"));
 });
 ```
 
-`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. `concatWith(Mono.defer(...))` is the fail-closed commit — the commit `Mono` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal. If the commit fails, the subscriber gets `onError` instead of `onComplete`, which matches the non-streaming advisor's fail-closed contract. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
+`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. The commit step composed via `concatWith` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal — that is the fail-closed property. If the commit fails, the subscriber gets `onError` instead of `onComplete`, matching the non-streaming advisor's contract; the `doOnError` path then releases the reservation rather than leaving it stranded, which trades a small amount of cost-side accuracy (the model work happened but is not committed) for a clean reservation-state invariant. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
 
 Reservation failures (denial, transport) surface as `onError` to the subscriber rather than synchronous throws. That is the reactive-idiomatic shape; callers handle it with `.onErrorResume(...)` like any other reactive failure.
 
@@ -121,7 +122,7 @@ This is the [per-tenant isolation](/blog/multi-tenant-ai-cost-control-per-tenant
 
 The cleanest case for a pre-call estimate is `prompt-chars / 4`. It is roughly correct for English text on OpenAI BPE tokenizers, and it costs nothing. It is also wrong in several common situations:
 
-- **CJK content.** A character is often one token, not a quarter. The estimate is 4x low.
+- **CJK content.** A character is often one token, not a quarter — the estimate can run several times low.
 - **Code and JSON.** Token density differs from natural text. Estimate drifts in either direction.
 - **Non-BPE tokenizers.** Anthropic and Gemini use different tokenizers; `chars / 4` is a guess about OpenAI applied to a different model.
 
@@ -144,11 +145,11 @@ cycles:
 </dependency>
 ```
 
-Two failure modes worth calling out: setting `token-estimator-encoding` without jtokkit on the classpath logs a WARN at startup and falls back to chars/4 — the misconfig is visible at boot, not at first call. An unknown encoding name fails bean initialization at startup. Both behaviors trade explicitness for the kind of silent under-billing that creates [estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) you can't audit out later.
+Two failure modes worth calling out: setting `token-estimator-encoding` without jtokkit on the classpath logs a WARN at startup and falls back to chars/4 — the misconfig is visible at boot, not at first call. An unknown encoding name fails bean initialization at startup. Both behaviors choose explicit startup signal over the kind of silent under-billing that creates [estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) you can't audit out later.
 
 For Anthropic, Gemini, or anything else that doesn't speak OpenAI BPE, register your own `PromptTokenEstimator` bean and the jtokkit default backs off.
 
-A note on the math, since this bit a release. `Unit.java` defines `1 USD = 100,000,000 USD_MICROCENTS`. So $2.50 per 1M tokens is `2.50 × 100,000,000 / 1,000,000 = 250` microcents per token, not 25. The starter's v0.3.0 README example was off by 10x and was corrected in v0.3.1; the formula above is the canonical conversion.
+A note on the math: `Unit.java` defines `1 USD = 100,000,000 USD_MICROCENTS`. So $2.50 per 1M tokens is `2.50 × 100,000,000 / 1,000,000 = 250` microcents per token, not 25. The starter's v0.3.0 README example was off by 10x and was corrected in v0.3.1 (a documentation-only patch release); the formula above is the canonical conversion.
 
 ## Tool gating: opt-in, separable in audit
 
@@ -159,9 +160,12 @@ Chat reservations cover prompt cost, but agents that call tools incur cost *and*
 class ToolWiring {
     @Bean
     ToolCallback getWeatherTool(CyclesToolGate cyclesToolGate) {
+        // Illustrative — the real builder also needs the reflected
+        // Method, the target instance via toolObject(...), and any
+        // input-schema bits the tool needs.
         ToolCallback raw = MethodToolCallback.builder()
                 .toolDefinition(ToolDefinition.builder().name("get_weather").build())
-                .toolMethod(...)
+                .toolMethod(/* reflect.Method instance */ null)
                 .build();
         return cyclesToolGate.wrap(raw);
     }
@@ -170,7 +174,7 @@ class ToolWiring {
 
 `CyclesToolGate.wrap(...)` returns a `CyclesToolCallback` that runs the reserve/commit/release lifecycle around the wrapped tool's `call`. Tool reservations report `tool.call` as `action.kind` and `spring-ai-tool:<tool-name>` as `action.name` — distinct from chat's `llm.chat` / `spring-ai-chat`, so they're separable in audit history. A platform operator looking at a tenant's reservation log can answer "how much of this tenant's spend was tool calls vs. chat" without parsing free-text.
 
-One honest limitation: tool callbacks don't expose token usage to the gate, so the current commit uses `default-estimate` as actual. For tools whose cost is dominated by a downstream API and not by LLM tokens, that's fine. For tools that internally call an LLM, the LLM call itself goes through the chat advisor — so the cost ends up on the right scope through a different path.
+One honest limitation: tool callbacks don't expose token usage to the gate, so the current commit uses `default-estimate` as actual. For tools whose cost is fixed-price or close enough to be approximated with one number, that is fine. For tools that wrap a variable-cost downstream API, the commit is a placeholder and the per-call accuracy needs to come from elsewhere (a dedicated metering call, or a future starter extension point). For tools that internally call an LLM, the LLM call itself goes through the chat advisor — so the cost ends up on the right scope through a different path.
 
 ## Trace correlation: reservation IDs on chat-client observations
 
@@ -197,9 +201,9 @@ If your tracing backend bills by unique tag-value combinations, set `cycles.spri
 
 ## What you get, end to end
 
-Connecting the pieces: a `ChatClient` autowired from the Spring-AI-configured builder gets the call and stream advisors automatically. Per-request `Subject` routing comes from a `SubjectResolver` bean. Pre-call estimates come from jtokkit (or your own estimator). Tool calls are gated by wrapping the `ToolCallback`. Reservation IDs show up on the observation that the rest of your stack already collects.
+Connecting the pieces: a `ChatClient` autowired from the Spring-AI-configured builder gets the call and stream advisors automatically. Per-request `Subject` routing comes from a `SubjectResolver` bean. Pre-call estimates come from jtokkit (or your own estimator). Tool calls are gated when you wrap the `ToolCallback`. Reservation IDs appear on chat-client observations once the `CyclesChatClientObservationConvention` is applied and `emit-reservation-id-on-trace` is left enabled.
 
-No call-site code changes, one `application.yml` block, optional opt-ins for tool gating and trace correlation. The same pattern the [scalerX integration](/blog/how-scalerx-wired-cycles-into-a-java-agent-runtime) applied to raw OpenAI calls in plain Spring Boot, now sitting one layer higher in the Spring AI advisor chain — where Spring AI itself wants it.
+Chat call sites need no code changes — building from the auto-configured `ChatClient.Builder` is enough. Tool gating and trace-convention attachment are deliberate opt-ins that touch the wiring layer but not the call sites themselves. The same pattern the [scalerX integration](/blog/how-scalerx-wired-cycles-into-a-java-agent-runtime) applied to raw OpenAI calls in plain Spring Boot, now sitting one layer higher in the Spring AI advisor chain — at the framework's own advisor extension point.
 
 For the broader picture of where this fits — why pre-execution authority differs from observability layers, and why [governance lives at the runtime](/blog/what-is-runtime-authority-for-ai-agents) rather than the framework — the runtime-authority pillar covers it.
 
