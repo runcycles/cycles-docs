@@ -15,7 +15,13 @@ head:
 
 # Closing the Estimate-Actual Gap with cost_fn
 
-When [`langchain-runcycles` 0.1.5](https://github.com/runcycles/langchain-runcycles/releases/tag/v0.1.5) shipped `CyclesModelGate` last week, the release notes called out the known limitation directly: *"Commits at the configured `estimate`, not actual token cost."* That sentence describes the most common silent bug in runtime-authority middleware. A [reservation](/glossary#reservation) lifecycle gets the reserve right — pre-execution authorization, budget pre-debit, the whole pre-call story — and then commits the configured estimate on the way out, even though the model just reported exactly what the call cost.
+When [`langchain-runcycles` 0.1.5](https://github.com/runcycles/langchain-runcycles/releases/tag/v0.1.5) shipped `CyclesModelGate` last week, the release notes called out the known limitation directly:
+
+> Commits at the configured `estimate`, not actual token cost.
+
+That is one of the easiest silent bugs to ship in reserve / commit middleware.
+
+The reserve path is correct: authorize before the model call, pre-debit the budget, block if the [tenant](/glossary#tenant) is out of room. But if the commit path blindly settles at the configured estimate, the ledger stops tracking what the model actually cost — even when the provider just reported the exact number on the way out.
 
 [`langchain-runcycles` 0.2.0](https://github.com/runcycles/langchain-runcycles/releases/tag/v0.2.0) closes that gap with `cost_fn`. This post is about why the gap exists at all, what closing it looks like in `AgentMiddleware`, and why a separate v0.2.3 correctness patch on settlement HTTP failures matters for the same reason.
 
@@ -45,7 +51,7 @@ The integration looks like this:
 from langchain.agents import create_agent
 from langchain_runcycles import CyclesModelGate
 from langchain_runcycles.extractors import openai_cost
-from runcycles import Action, CyclesClient, CyclesConfig, Subject
+from runcycles import Action, Amount, CyclesClient, CyclesConfig, Subject, Unit
 
 client = CyclesClient(CyclesConfig(base_url="http://localhost:7878", api_key="..."))
 
@@ -65,6 +71,8 @@ agent = create_agent(model="gpt-4o", tools=[...], middleware=[model_gate])
 ```
 
 The pre-call [reservation](/glossary#reservation) still books `$0.02` (the estimate). After the model returns, `openai_cost` reads `AIMessage.usage_metadata`, multiplies [tokens](/glossary#tokens) by the configured rates, and produces an `Amount`. The commit goes out at that real number — usually a fraction of the estimate, sometimes more if the prompt was unusually long.
+
+If the actual exceeds the reserved estimate, normal Cycles commit-overage policy applies — `cost_fn` is not a way to bypass the pre-call envelope, just a way to settle the reservation with the provider-reported number. The reserve still has to be sized large enough to cover the call's realistic worst case.
 
 ## The extractors module
 
@@ -93,11 +101,11 @@ Both extractors return `Amount` in `USD_MICROCENTS` so the commit path doesn't n
 
 ## When cost_fn fails
 
-Anything that runs between the model returning and the agent receiving the result is a potential way to break the agent. The release notes for 0.2.0 are explicit about this: *"cost_fn errors never erase the model result."* When `cost_fn(result)` raises, returns a non-`Amount`, or panics in any other way, `CyclesModelGate` logs a warning and falls back to the configured `estimate` for the commit. The model result is still returned to the agent. Locked down by `tests/test_model_gate.py::test_cost_fn_exception_falls_back_to_estimate`, `::test_cost_fn_invalid_return_falls_back_to_estimate`, and the async siblings.
+Anything that runs between the model returning and the agent receiving the result is a potential way to break the agent. The release notes for 0.2.0 are explicit about this: *"cost_fn errors never erase the model result."* When `cost_fn(result)` raises or returns a non-`Amount`, `CyclesModelGate` logs a warning and falls back to the configured `estimate` for the commit. The model result is still returned to the agent. Locked down by `tests/test_model_gate.py::test_cost_fn_exception_falls_back_to_estimate`, `::test_cost_fn_invalid_return_falls_back_to_estimate`, and the async siblings.
 
-The implication for operators is that a stale extractor — pricing changed on the provider side, the configured rates are now wrong — degrades the debit accuracy (estimate vs. actual) but never breaks the agent loop. The cost of a wrong `cost_fn` is the same as having no `cost_fn`: you fall back to commit-at-estimate. That is the right tradeoff for middleware that has to survive a deploy where someone forgot to update a price.
+That fallback only catches *structural* failures — an exception or an invalid return type. A `cost_fn` that runs to completion and returns a perfectly valid `Amount` based on stale provider pricing will not be caught. The extractor produces a wrong number, the commit lands at the wrong number, and the budget side drifts silently. This is the same drift covered in [Estimate Drift: The Silent Killer of Budget Enforcement](/blog/estimate-drift-silent-killer-of-enforcement), just at a different layer. The operational implication is that pricing functions should be versioned, tested against the provider's published pricing page, and treated as policy configuration — not throwaway glue code. The middleware fallback is structural insurance, not a substitute for keeping the rates current.
 
-## The orthogonal honesty fix in v0.2.3
+## v0.2.3: failed commits must not look successful
 
 The 0.2.0 cost_fn work is half the actuals story. The other half is whether commit and release calls actually report their outcomes — and through v0.2.2, they did not. The runcycles SDK returns `CyclesResponse.http_error(...)` on HTTP failures *without raising*. The middleware in 0.2.0–0.2.2 only caught raised exceptions, so a failed commit silently looked like a successful commit, and the documented `settlement_error_policy` contract was bypassed.
 
@@ -130,7 +138,7 @@ The contrast worth being honest about is with `langchain-runcycles`' sibling pos
 
 ## Closing
 
-The estimate-as-actual gap is the most common silent failure mode in reserve / commit middleware, and it is fixable with the same shape across frameworks: a callback that reads the provider's reported usage and produces an `Amount` for commit. `cost_fn` is the LangChain implementation. The same pattern lives behind `cycles-spring-ai-starter`'s `Usage` extraction and behind every honest implementation of [runtime authority](/glossary#runtime-authority) that wants to bill agents at what they actually cost.
+The estimate-as-actual gap is one of the easiest silent failure modes to ship in reserve / commit middleware, and it is fixable with the same shape across frameworks: a callback that reads the provider's reported usage and produces an `Amount` for commit. `cost_fn` is the LangChain implementation. The same pattern lives behind `cycles-spring-ai-starter`'s `Usage` extraction and behind every honest implementation of [runtime authority](/glossary#runtime-authority) that wants to bill agents at what they actually cost.
 
 The release-by-release rhythm is also worth being honest about. 0.1.5 had a known limitation. 0.2.0 fixed it. 0.2.3 caught a separate silent-success bug in settlement reporting that would have made the 0.2.0 fix less useful than it should be. That is what good middleware iteration looks like — each release closes one gap and reveals the next.
 
