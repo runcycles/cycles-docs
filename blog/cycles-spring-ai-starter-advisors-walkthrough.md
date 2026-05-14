@@ -76,7 +76,7 @@ Streaming changes the shape because the lifecycle is no longer scoped to a metho
 - **Resubscribed.** A `Flux` that gets retried with `.retry(...)` would otherwise re-use the original reservation against a new attempt.
 - **Commit failure.** If the commit call fails after the stream emits `onComplete`, the subscriber has already seen completion — but the budget side is in an inconsistent state.
 
-`CyclesBudgetStreamAdvisor` handles each. The pseudocode below is illustrative — the production code adapts the commit `Mono` to the upstream element type so the composition type-checks:
+`CyclesBudgetStreamAdvisor` handles each. The pseudocode below mirrors the operator order in the production source — `doOnError` and `doOnCancel` attach to the upstream *before* the commit `Mono` is concatenated, and that ordering matters for the failure semantics described below:
 
 ```text
 // Illustrative — element-type adaptation around concatWith elided.
@@ -84,13 +84,13 @@ Flux.defer(() -> {
     var reservationId = reserveSync(request);                        // per-subscription
     return chain.nextStream(request)
         .doOnNext(lastResponse::set)
-        .concatWith(commitThenEmpty(reservationId))                  // commit before terminal signal
-        .doOnError(e -> release(reservationId, "stream_error"))
-        .doOnCancel(()  -> release(reservationId, "cancelled"));
+        .doOnError(e -> release(reservationId, "stream_error"))      // upstream errors only
+        .doOnCancel(()  -> release(reservationId, "cancelled"))
+        .concatWith(commitThenEmptyOrError(reservationId));          // commit, or propagate commit failure as onError
 });
 ```
 
-`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. The commit step composed via `concatWith` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal — that is the fail-closed property. If the commit fails, the subscriber gets `onError` instead of `onComplete`, matching the non-streaming advisor's contract; the `doOnError` path then releases the reservation rather than leaving it stranded, which trades cost-side accuracy (the model work happened but is not committed — for a long streamed response, that can be the whole cost) for a clean reservation-state invariant. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
+`Flux.defer` is the per-subscription gate: nothing reserves until something subscribes, and a resubscribe produces a fresh reservation. The commit step composed via `concatWith` runs after the upstream emits `onComplete` but *before* the subscriber sees the terminal signal — that is the fail-closed property. If the commit fails, the subscriber gets `onError` instead of `onComplete`, matching the non-streaming advisor's contract on the caller-facing signal. The commit failure does *not* fire the upstream `doOnError` handler — that handler is attached before the commit `Mono` is concatenated, so it observes only upstream errors. Commit-failure cleanup therefore relies on server-side reservation TTL expiry rather than an explicit `release` call. The tradeoff is deliberate: the subscriber sees the failure correctly, the reservation is left to expire, and the alternative — wiring an extra `doOnError` *after* `concatWith` to release on commit failure — would couple the release path to a signal the production advisor has chosen not to handle. If `chain.nextStream` itself throws during assembly after the reservation succeeded, the advisor releases and re-throws.
 
 Reservation failures (denial, transport) surface as `onError` to the subscriber rather than synchronous throws. That is the reactive-idiomatic shape; callers handle it with `.onErrorResume(...)` like any other reactive failure.
 
@@ -176,7 +176,7 @@ class ToolWiring {
 
 `CyclesToolGate.wrap(...)` returns a `CyclesToolCallback` that runs the reserve/commit/release lifecycle around the wrapped tool's `call`. Tool reservations report `tool.call` as `action.kind` and `spring-ai-tool:<tool-name>` as `action.name` — distinct from chat's `llm.chat` / `spring-ai-chat`, so they're separable in audit history. A platform operator looking at a tenant's reservation log can answer "how much of this tenant's spend was tool calls vs. chat" without parsing free-text.
 
-One honest limitation: tool callbacks don't expose token usage to the gate, so the current commit uses `default-estimate` as actual. For tools whose cost is fixed-price or close enough to be approximated with one number, that is fine. For tools that wrap a variable-cost downstream API, the commit is a placeholder and the per-call accuracy needs to come from elsewhere (a dedicated metering call, or a future starter extension point). For tools that internally call an LLM, the LLM call itself goes through the chat advisor — so the cost ends up on the right scope through a different path.
+One honest limitation: tool callbacks don't expose token usage to the gate, so the current commit uses `default-estimate` as actual. For tools whose cost is fixed-price or close enough to be approximated with one number, that is fine. For tools that wrap a variable-cost downstream API, the commit is a placeholder and the per-call accuracy needs to come from elsewhere (a dedicated metering call, or a future starter extension point). If a tool internally calls an LLM via the auto-configured `ChatClient`, that call goes through the chat advisor and the LLM cost lands on the right scope through a different path — but only via the auto-configured `ChatClient`. Tools that bypass it (raw provider SDKs, hand-built `ChatClient.Builder` instances that omit the starter's `ChatClientCustomizer`) get neither the tool-gate commit nor the chat-advisor reservation, and their LLM cost is invisible to Cycles.
 
 ## Trace correlation: reservation IDs on chat-client observations
 
