@@ -11,7 +11,7 @@ tags:
   - runtime-authority
   - security
   - RISK_POINTS
-description: "Devin, Codex Cloud, and Claude Code yolo mode now merge PRs and trigger deploys unsupervised. Treat merge and deploy as tiered actions under runtime authority."
+description: "Devin, Codex Cloud, Claude Code yolo mode now reach the merge button — direct call or auto-merge via branch protection. Treat merge as a tiered action."
 blog: true
 sidebar: false
 featured: false
@@ -27,9 +27,9 @@ A team is running Devin against their backend repo. Over the course of an aftern
 
 No human reviewed any of those changes before they reached production. The diff was approved, the CI was green, the branch rule said one approval was enough, and the agent's review of the agent's PR counted as the one. The chain is legal end-to-end. The agent's merge is a routine action under the team's own governance.
 
-The earlier generation of coding-agent incidents — [Cursor wiping a Railway database in nine seconds](/blog/ai-agent-deleted-prod-database-9-seconds), the [PocketOS aftermath](/blog/pocketos-aftermath-delete-delay-vs-scoped-tokens), and the recurring `rm -rf` / `~/` class of incidents that Anthropic's own [Auto Mode launch](https://www.anthropic.com/engineering/claude-code-auto-mode) cites as motivation — all share a shape: a credentialed agent issued a destructive call against a system API, with no pre-execution gate. They are file-write incidents, shell-exec incidents, database-call incidents.
+The earlier generation of coding-agent incidents — [Cursor wiping a Railway database in nine seconds](/blog/ai-agent-deleted-prod-database-9-seconds), the [PocketOS aftermath](/blog/pocketos-aftermath-delete-delay-vs-scoped-tokens), and the kinds of destructive shell, branch-deletion, and migration incidents that Anthropic's own [Auto Mode launch](https://www.anthropic.com/engineering/claude-code-auto-mode) cites as motivation — all share a shape: a credentialed agent issued a destructive call against a system API, with no pre-execution gate. They are file-write incidents, shell-exec incidents, database-call incidents.
 
-The merge button is a different shape. Coding agents now sit one layer above the file write: they open PRs, request reviews, run CI, merge to `main`, and trigger deploys. That layer has its own action surface, with its own blast radius, and most teams' governance was designed for human contributors holding the merge button — not for an agent holding it on their behalf.
+The merge button is a different shape. Coding agents now sit one layer above the file write: they open PRs, request reviews, run CI, and — in some configurations — press the merge button or satisfy the conditions that auto-press it. That layer has its own action surface, with its own blast radius, and most teams' governance was designed for human contributors holding the merge button — not for an agent holding it on their behalf.
 
 <!-- more -->
 
@@ -45,7 +45,7 @@ Two years ago, "coding agent" meant something that edited files in your IDE. By 
 | Claude Code (Auto mode) | Same surface; a Sonnet-based classifier blocks dangerous tool calls | Merge calls are subject to classifier judgment per call |
 | GitHub Copilot Coding Agent | Open PRs against assigned issues; push iterative commits | Merges through repo policies once a maintainer (or a bot) approves |
 
-Cognition has reported that its own team merged [659 Devin-generated PRs in a single week](https://cognition.ai/blog/how-cognition-uses-devin-to-build-devin) in early 2026, up from a best week of 154 the year before. Separately, in its [2025 performance review](https://cognition.ai/blog/devin-annual-performance-review-2025), Cognition reported Devin's PR merge rate rising from 34% to 67% over the year. Codex Cloud's design assumption is asynchronous parallelism — multiple PRs in flight at once, each task in its own cloud environment, each landing as a separate review request. The shift is structural: the agent is no longer the contributor handing a diff to a human. The agent is closer to a team of contributors, and the team's governance bottleneck — the merge button — gets pressed at the same cadence the agent ships work.
+Cognition has reported that its own team merged [659 Devin-generated PRs in a single week](https://cognition.ai/blog/how-cognition-uses-devin-to-build-devin) in early 2026, up from a best week of 154 the year before. Separately, in its [2025 performance review](https://cognition.ai/blog/devin-annual-performance-review-2025), Cognition reported Devin's PR merge rate rising from 34% to 67% over the year. Codex Cloud's design assumption is asynchronous parallelism — multiple PRs in flight at once, each task in its own cloud environment, each landing as a separate review request that the team merges through its normal flow. The merge button itself is still the team's, but the cadence at which it gets pressed is increasingly set by the agent's output. The shift is structural: the agent is no longer the contributor handing a diff to a human. The agent is closer to a team of contributors funneling work into the same merge bottleneck.
 
 That is a different control problem than the IDE-file-write era. The corpus has covered the agent's spending surface ([Budget Limits for Claude Code, Cursor, and Windsurf via MCP](/blog/claude-code-cursor-windsurf-budget-limits-mcp)) and the credential surface ([Coding Agents Need Runtime Authority](/concepts/coding-agents-need-runtime-budget-authority), [Least-Privilege API Keys for AI Agents](/blog/least-privilege-api-keys-for-ai-agents)). The merge surface has not had its own treatment.
 
@@ -83,7 +83,7 @@ A useful first pass, conceptually similar to the schedules in [AI Agent Action C
 
 The tier rises when the action *promotes* state into a less-reversible system. The same `git` operation can sit at different tiers depending on the branch and the wiring — a merge that lands in a trunk wired to auto-deploy is a different action than a merge into a parking branch.
 
-Approval is in the table for a reason. When a team uses a bot to auto-approve agent PRs (a pattern that exists in production today), the bot's approval is a Tier 3 mutation against the team's audit trail, even if the commit it approves looks innocuous. The opener scenario hinges on this — the approval action by the reviewer bot was itself an agent action that nobody had treated as one.
+Approval is in the table for a reason. When a team configures a bot to auto-approve agent PRs — a pattern teams have reported using to clear small-style or lint-pass checks — the bot's approval is a Tier 3 mutation against the team's audit trail, even if the commit it approves looks innocuous. The opener scenario hinges on this: the approval action by the reviewer bot was itself an agent action that nobody had treated as one.
 
 ## Why Existing Controls Don't Cover the Merge Surface
 
@@ -152,7 +152,7 @@ The PocketOS post-mortem split cleanly into two layers: [scoped infrastructure t
 
 **Provider-layer fixes (the merge equivalent of scoped [tokens](/glossary#tokens)):**
 
-- Branch protection rules that distinguish bot reviews from human reviews. GitHub's `required_pull_request_reviews.bypass_pull_request_allowances` already enables some of this; the next step is policies that explicitly disallow bot-authored PRs from being approved by bot-authored reviews.
+- Branch protection rules that distinguish bot reviews from human reviews. GitHub's `required_pull_request_reviews.bypass_pull_request_allowances` lets specific apps and teams bypass review requirements, which is adjacent but not the same thing; what is still missing is a first-class policy that disallows bot-authored PRs from being approved by bot-authored reviews.
 - `CODEOWNERS` patterns that require a human reviewer for changes touching protected paths, regardless of who authored the PR.
 - Deploy pipelines with explicit human-gate steps for auto-merge-triggered runs, separate from human-merge-triggered runs.
 - Agent-issued credentials scoped to "can push to feature/agent-*" but not "can merge to `main`."
@@ -189,7 +189,7 @@ For each agent the team runs against production repos:
 5. **Does the audit trail record the agent identity that pressed the merge button, separate from the Git author and approver?** If not, post-incident attribution is incomplete.
 6. **Are bot-authored PRs subject to a different rule than human-authored PRs?** They should be — the assumption that a PR's existence implies human intent does not hold for agents.
 
-A team that can answer "yes" to all six is running merge-as-an-action governance. Many teams today are likely to answer "no" to at least three, even when they have thoughtful branch protection, CI gates, and credential scoping in place.
+A team that can answer "yes" to all six is running merge-as-an-action governance. In our experience, teams that have invested heavily in branch protection, CI gates, and credential scoping still tend to answer "no" to at least a few of these — the merge-as-an-action lens is recent enough that most existing governance was not designed against it.
 
 ## What Changes When Merge Is Treated as an Action
 
