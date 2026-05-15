@@ -26,7 +26,7 @@ Running a real agent workload and evaluating Cycles for production? See the [Des
 
 ## Found a bug or concrete technical issue?
 
-[Open a GitHub issue](https://github.com/runcycles/docs/issues) instead — it's faster for everyone, and it puts the fix in the public record.
+[Open a GitHub issue](https://github.com/runcycles/cycles-docs/issues) instead — it's faster for everyone, and it puts the fix in the public record.
 
 ## Other channels
 

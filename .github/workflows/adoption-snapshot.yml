@@ -91,7 +91,7 @@ jobs:
 
           CRATES=0
           for pkg in runcycles; do
-            COUNT=$(curl -sf -H 'User-Agent: runcycles-docs (https://github.com/runcycles/docs)' "https://crates.io/api/v1/crates/${pkg}" | jq '.crate.downloads // 0' || echo 0)
+            COUNT=$(curl -sf -H 'User-Agent: runcycles-docs (https://github.com/runcycles/cycles-docs)' "https://crates.io/api/v1/crates/${pkg}" | jq '.crate.downloads // 0' || echo 0)
             CRATES=$((CRATES + COUNT))
           done
 
