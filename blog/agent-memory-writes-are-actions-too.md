@@ -73,8 +73,8 @@ A useful first pass:
 |---|---|---|---|
 | `add` to per-user scope | One user | 2 (Write-external, contained) | Affects future runs for one principal |
 | `add` to per-tenant scope | One tenant | 3 (Mutation) | Affects every agent run for the tenant |
-| `add` to shared / global scope | All tenants | 4 (Mutation, broad blast) | Cross-tenant contamination if misclassified |
-| `update` of a pinned core memory | Always-in-context | 4 (Mutation) | Loaded on every run regardless of retrieval |
+| `add` to shared / global scope | All tenants | 4 (Execution-equivalent) | Cross-tenant contamination if misclassified |
+| `update` of a pinned core memory | Always-in-context | 4 (Execution-equivalent) | Loaded on every run regardless of retrieval |
 | `delete` of a verified fact | Any | 3 (Mutation) | Irreversible without backup; affects future retrieval |
 | `archive` (move out of hot context) | Any | 1 (Write-local) | Reversible via `recall`; affects retrieval visibility but not stored content |
 
@@ -184,7 +184,7 @@ And the model of what an "agent action" is gets a little closer to the real shap
 
 ## Next Steps
 
-- **[AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects)** — the parent tier model this post extends
+- **[AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects)** — the parent action-control framing this post extends
 - **[AI Agent Risk Assessment: Score, Classify, Enforce](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk)** — how to build a risk schedule for your own tool set
 - **[Policy Drift in AI Agents](/blog/policy-drift-in-ai-agents)** — the broader drift surface memory writes belong to
 - **[Agent Identity Is Not User Identity](/blog/agent-identity-is-not-user-identity)** — why per-write provenance has to name the agent, not the user
