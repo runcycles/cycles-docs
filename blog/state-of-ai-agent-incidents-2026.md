@@ -346,7 +346,7 @@ The regulatory frameworks converge on the same conclusion. The [EU AI Act's Arti
 
 **Limitations.** This report has survivorship bias — only incidents that were publicly disclosed or studied are included. The actual incidence rate is higher. Cost estimates for pattern-based scenarios use documented pricing models but may not match specific deployment configurations. The "prevention" column represents which control category addresses the root cause — not a guarantee that any specific implementation would have caught the exact scenario.
 
-**Updates.** This report will be updated quarterly as new incidents are documented. If you have an incident to report, contact the Cycles team or open an issue on the [docs repository](https://github.com/runcycles/docs).
+**Updates.** This report will be updated quarterly as new incidents are documented. If you have an incident to report, contact the Cycles team or open an issue on the [docs repository](https://github.com/runcycles/cycles-docs).
 
 ## Further reading
 

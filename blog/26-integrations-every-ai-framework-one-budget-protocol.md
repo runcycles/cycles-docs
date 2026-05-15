@@ -106,7 +106,7 @@ Each customer gets independent spend limits, action boundaries, and risk control
 
 Pick your framework from the [integration overview](/how-to/integrations-overview), follow the guide, and have budget governance running in under 10 minutes.
 
-If your stack isn't covered, [open an issue](https://github.com/runcycles/docs/issues). We're prioritizing based on real user requests.
+If your stack isn't covered, [open an issue](https://github.com/runcycles/cycles-docs/issues). We're prioritizing based on real user requests.
 
 ## Related how-to guides
 

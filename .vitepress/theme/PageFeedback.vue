@@ -51,7 +51,7 @@ function vote(value) {
     </div>
     <div v-else class="feedback-thanks">
       <span>Thanks for the feedback!</span>
-      <a v-if="feedback === 'no'" href="https://github.com/runcycles/docs/issues/new" target="_blank" rel="noopener" class="feedback-issue-link">Open an issue</a>
+      <a v-if="feedback === 'no'" href="https://github.com/runcycles/cycles-docs/issues/new" target="_blank" rel="noopener" class="feedback-issue-link">Open an issue</a>
     </div>
   </div>
 </template>

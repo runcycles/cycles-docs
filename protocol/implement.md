@@ -118,7 +118,7 @@ The protocol is small but has subtle behavioral requirements. If you're implemen
 
 - **Email a maintainer** — [founder@runcycles.io](mailto:founder@runcycles.io) for protocol design / clarification questions
 - **Open a spec issue** — [`runcycles/cycles-protocol/issues`](https://github.com/runcycles/cycles-protocol/issues) for ambiguity, contradiction, or proposed clarifications
-- **Open a docs issue** — [`runcycles/docs/issues`](https://github.com/runcycles/docs/issues) for documentation gaps
+- **Open a docs issue** — [`runcycles/cycles-docs/issues`](https://github.com/runcycles/cycles-docs/issues) for documentation gaps
 - **Reference implementation issues** — [`runcycles/cycles-server/issues`](https://github.com/runcycles/cycles-server/issues) for behavior that disagrees with the spec
 
 A founder reads every email and issue.

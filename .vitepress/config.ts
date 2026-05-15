@@ -213,7 +213,7 @@ export default defineConfig({
     logo: { src: '/runcycles-logo.svg', alt: 'Cycles' },
     externalLinkIcon: true,
     editLink: {
-      pattern: 'https://github.com/runcycles/docs/edit/main/:path',
+      pattern: 'https://github.com/runcycles/cycles-docs/edit/main/:path',
       text: 'Edit this page on GitHub'
     },
     lastUpdated: {
@@ -604,7 +604,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/runcycles/docs' }
+      { icon: 'github', link: 'https://github.com/runcycles/cycles-docs' }
     ]
   },
   transformPageData(pageData) {

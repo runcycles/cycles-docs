@@ -62,7 +62,7 @@ jobs:
     steps:
       # persist-credentials defaults to true on purpose. The PR-open step's
       # git push uses an x-access-token URL with ORG_TRAFFIC_TOKEN, but
-      # ORG_TRAFFIC_TOKEN lacks write scope on runcycles/docs. With creds
+      # ORG_TRAFFIC_TOKEN lacks write scope on runcycles/cycles-docs. With creds
       # persisted, git falls back to the persisted GITHUB_TOKEN (which has
       # contents:write from the job's permissions block) and the push succeeds.
       - uses: actions/checkout@v6

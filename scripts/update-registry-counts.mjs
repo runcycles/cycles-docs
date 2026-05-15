@@ -101,7 +101,7 @@ async function fetchPypi(pkg) {
 async function fetchCrates(pkg) {
   try {
     const res = await fetch(`https://crates.io/api/v1/crates/${pkg}`, {
-      headers: { 'User-Agent': 'runcycles-docs (https://github.com/runcycles/docs)' },
+      headers: { 'User-Agent': 'runcycles-docs (https://github.com/runcycles/cycles-docs)' },
     })
     if (!res.ok) return null
     const j = await res.json()

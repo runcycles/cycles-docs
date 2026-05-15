@@ -179,7 +179,7 @@ function ghHeaders(): Record<string, string> {
   const h: Record<string, string> = {
     'Accept': 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'runcycles-docs (https://github.com/runcycles/docs)',
+    'User-Agent': 'runcycles-docs (https://github.com/runcycles/cycles-docs)',
   }
   if (GITHUB_TOKEN) h['Authorization'] = `Bearer ${GITHUB_TOKEN}`
   return h
@@ -257,7 +257,7 @@ async function fetchCratesDownloads(): Promise<Record<string, number | null>> {
       try {
         const res = await fetch(
           `https://crates.io/api/v1/crates/${pkg}`,
-          { headers: { 'User-Agent': 'runcycles-docs (https://github.com/runcycles/docs)' } }
+          { headers: { 'User-Agent': 'runcycles-docs (https://github.com/runcycles/cycles-docs)' } }
         )
         if (!res.ok) return [pkg, null]
         const json = await res.json() as { crate?: { downloads?: number } }
