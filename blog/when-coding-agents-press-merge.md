@@ -1,6 +1,6 @@
 ---
 title: "When Coding Agents Press Merge"
-date: 2026-05-16
+date: 2026-05-17
 author: Albert Mavashev
 tags:
   - action-authority
