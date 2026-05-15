@@ -33,7 +33,7 @@ This post is the operational answer. It is shorter on theory and longer on artif
 
 ## Why a Phased Rollout, Per Surface
 
-The reasons that make calendar-driven cutovers fail for budget enforcement apply unchanged to the new surfaces. The healthy pattern is the same: instrument first, observe, calibrate, then enforce — per surface, not in one big bang. The [synthesis post](/blog/what-four-new-surfaces-taught-us) called this out as a corollary of "the lifecycle is the stable layer": every surface gets the same shape of rollout, with different specifics in the middle.
+The reasons that make calendar-driven cutovers fail for budget enforcement apply unchanged to the new surfaces. The healthy pattern is the same: instrument first, observe, calibrate, then enforce — per surface, not in one big bang. The [synthesis post](/blog/what-four-new-surfaces-taught-us) framed reserve-commit as the stable layer the four surfaces preserved at their boundaries: every surface gets the same shape of rollout, with different specifics in the middle.
 
 The four-week structure that fits most teams:
 
@@ -42,7 +42,7 @@ The four-week structure that fits most teams:
 | 1 | Inventory the agent fleet's action surfaces | Surface-by-surface list with current gate state |
 | 2 | Shadow-mode instrumentation, per surface | Dry-run decisions flowing for every surface |
 | 3 | Per-surface gate primitives + calibration | Surface-specific caps tuned against shadow data |
-| 4 | Cutover, surface by surface, in risk order | Hard enforcement on the lowest-risk surface first; remaining surfaces on a planned schedule |
+| 4 | Cutover, surface by surface, in false-positive-cost order | Hard enforcement on the surface where a wrongful denial costs least first; remaining surfaces on a planned schedule |
 
 The schedule is illustrative. Teams with mature shadow-mode tooling and a single surface in scope can move faster; teams adopting all four surfaces simultaneously will usually want two weeks per surface, not one. The structure is the load-bearing piece, not the calendar.
 
@@ -100,7 +100,7 @@ With shadow data flowing, week 3 is where the per-surface specifics enter the pi
 | Per-write provenance | Run ID + agent identity + risk-budget context attached to every write | Existing audit trail — fields you already log |
 | Scope isolation enforcement | Reject cross-tenant writes unless explicitly allowed | Shadow events showing cross-tenant attempts |
 
-Calibration target: when shadow mode is evaluating the proposed quotas, the would-be denial rate on memory writes should sit in the 1–5% band after the calibration data has stabilized — which typically takes at least a week of representative production traffic. Higher than that and the quota is wrong; lower than that and you're not actually constraining anything. (Calibrating four surfaces in parallel typically requires extending Week 3 to 2–3 weeks; the table above is the single-surface schedule.)
+Calibration target (starting heuristic): when shadow mode is evaluating the proposed quotas, the would-be denial rate on memory writes typically sits in the 1–5% band once the calibration data has stabilized — which usually takes at least a week of representative production traffic. Substantially higher rates suggest the quota is too tight; substantially lower rates suggest the quota isn't constraining anything in practice. Tune from the shadow data, not from this band alone. (Calibrating four surfaces in parallel typically requires extending Week 3 to 2–3 weeks; the table above is the single-surface schedule.)
 
 ### Merge buttons
 
@@ -122,7 +122,7 @@ Calibration target: shadow data should show clean separation between routine PR 
 | Target-intent risk schedule | Risk-score clicks by (URL pattern, DOM target, action verb) | Shadow data on which (target, intent) tuples actually fire in production |
 | Session budget denominated in risk, not count | Per the click sibling: a session that can do 800 read-clicks should not get to do 800 destructive clicks for the same authority | Distribution of high-risk-tier vs low-risk-tier clicks per session |
 
-Calibration target: the would-be denial rate on clicks should distinguish the routine path (fill form → submit) from the runaway/escalation path. Most shadow weeks produce a clean bimodal distribution; the cap belongs in the gap.
+Calibration target: the would-be denial rate on clicks should distinguish the routine path (fill form → submit) from the runaway/escalation path. When the shadow data produces a clearly bimodal distribution, the cap belongs in the gap; when it does not, the schedule needs more (target, intent) features before the cap can be tuned reliably.
 
 ### Voice frames
 
@@ -135,9 +135,9 @@ Calibration target: the would-be denial rate on clicks should distinguish the ro
 
 Calibration target: the reserve-to-commit ratio (per the [estimate-drift framework](/blog/estimate-drift-silent-killer-of-enforcement)) should sit between 0.8 and 1.2 on call-level reservations after the first week of shadow data. If it's drifting, recalibrate before cutover.
 
-Across all four surfaces, the calibration signals are the same shape as the [shadow-to-enforcement decision tree](/blog/shadow-to-enforcement-cutover-decision-tree): false-positive denial rate, reserve-to-commit ratio, instrumentation coverage, operational readiness. The thresholds may vary by surface, but the questions don't.
+Across all four surfaces, the calibration signals echo the [shadow-to-enforcement decision tree](/blog/shadow-to-enforcement-cutover-decision-tree): false-positive denial rate, calibration accuracy (where it can be defined — voice has a true reserve-to-commit ratio; the others use cap-fire rate vs shadow baseline as the analogue), instrumentation coverage, and operational readiness. The thresholds vary by surface; the questions don't.
 
-## Week 4: Cutover, Lowest-Risk Surface First
+## Week 4: Cutover, Lowest-False-Positive-Cost Surface First
 
 The cutover decision is per-surface, not all-or-nothing. The order below is ranked by *cost of a false-positive denial* — what happens if the gate denies an action the team meant to allow — not by the action's own blast radius (which the four siblings address). Lowest-cost-of-false-positive first:
 
@@ -149,7 +149,7 @@ The cutover decision is per-surface, not all-or-nothing. The order below is rank
 Each cutover follows the same per-surface checklist:
 
 - Shadow data shows the calibration targets met for at least the last 7 days
-- The team has classified a sample of would-be denials and confirmed >85% are the intended class
+- The team has classified a sample of would-be denials. >85% in the intended class is a minimum triage bar before cutover; substantially higher fractions are the target for sensitive surfaces (merge, voice mid-conversation)
 - An on-call rotation knows what to do when the first denial fires (per the [operating-budget-enforcement guide](/blog/operating-budget-enforcement-in-production))
 - The kill switch is wired and tested — flipping the gate back to shadow mode should take seconds, not a deploy
 - The rollback decision tree (below) is reviewed and signed off
@@ -184,7 +184,7 @@ The metrics that matter day-1 are not the same as the metrics that matter month-
 
 **First month:**
 
-- Reserve-to-actual ratio per surface, trending
+- Voice reserve-to-commit ratio, trending; for the other three surfaces, cap-fire rates vs the shadow-mode baseline
 - Drift in (target, intent) distribution for clicks — A/B tests, new admin features, agent prompt updates all show up here first
 - Memory store growth + write-quota utilization per tenant
 - Per-session promotion budget consumption vs cap
@@ -222,7 +222,7 @@ A few patterns to avoid, drawn from teams that have done this before:
 
 ## What Action Authority Adoption Is
 
-A minimum bar: the inventory from week 1, the shadow data from week 2, the per-surface caps tuned in week 3, and the per-surface cutover in week 4 (or weeks 4–N for multi-surface adoption) in risk order with a tested kill switch, runbook entries committed before the cutover, and the discipline of treating each new surface as its own rollout on its own schedule.
+A minimum bar: the inventory from week 1, the shadow data from week 2, the per-surface caps tuned in week 3, and the per-surface cutover in week 4 (or weeks 4–N for multi-surface adoption) in false-positive-cost order with a tested kill switch, runbook entries committed before the cutover, and the discipline of treating each new surface as its own rollout on its own schedule.
 
 The framework is the cheap part. The rollout is the work.
 
