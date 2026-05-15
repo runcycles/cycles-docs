@@ -1,6 +1,6 @@
 ---
 title: "Computer-Use Agents Have No Tool Boundary"
-date: 2026-05-19
+date: 2026-05-30
 author: Albert Mavashev
 tags:
   - action-authority
