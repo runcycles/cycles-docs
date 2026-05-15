@@ -1,6 +1,6 @@
 ---
 title: "What Four New Surfaces Taught Us"
-date: 2026-05-21
+date: 2026-06-13
 author: Albert Mavashev
 tags:
   - action-authority
@@ -21,11 +21,11 @@ head:
 
 # What Four New Surfaces Taught Us
 
-The last week of posts went deep on four agent surfaces the corpus had not treated as first-class action classes: [memory writes](/blog/agent-memory-writes-are-actions-too), [merge buttons](/blog/when-coding-agents-press-merge), [computer-use clicks](/blog/computer-use-agents-have-no-tool-boundary), and [voice frames](/blog/voice-agent-budgets-when-you-cant-pause-to-reserve). Each had its own shape, its own blast radius, its own opener-scenario disaster. Each ended up running through the same [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) the rest of the corpus uses for outbound side effects.
+The recent run of posts went deep on four agent surfaces the corpus had not treated as first-class action classes: [memory writes](/blog/agent-memory-writes-are-actions-too), [merge buttons](/blog/when-coding-agents-press-merge), [computer-use clicks](/blog/computer-use-agents-have-no-tool-boundary), and [voice frames](/blog/voice-agent-budgets-when-you-cant-pause-to-reserve). Each had its own shape, its own blast radius, its own opener-scenario disaster. Each ended up running through the same [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) the rest of the corpus uses for outbound side effects.
 
 That was not the starting assumption. Memory writes looked like background state; the merge button looked like a CI/CD concern; clicks looked like UI automation; voice frames looked like a billing problem. The thesis that they were all *actions* — bound by the same authority lifecycle, just with different feature vectors — was the conclusion the posts argued for, not the premise.
 
-A week later, the conclusion is firmer than I expected. The lifecycle generalized. The patterns are recognizably the same family. What changed across the surfaces was not the *primitives* — it was the *binding* of those primitives to the agent's actual shape.
+A month on, the conclusion is firmer than I expected. The lifecycle generalized. The patterns are recognizably the same family. What changed across the surfaces was not the *primitives* — it was the *binding* of those primitives to the agent's actual shape.
 
 <!-- more -->
 
