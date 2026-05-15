@@ -11,7 +11,7 @@ tags:
   - agents
   - engineering
   - RISK_POINTS
-description: "OpenAI Realtime, Vapi, Retell AI — voice agents can't wait 300ms for ALLOW. Patterns for budget authority when reserve-commit can't sit synchronously in the path."
+description: "OpenAI Realtime, Vapi, Retell AI: voice agents can't wait 300ms for ALLOW. Patterns for budget authority when reserve-commit can't sync on the hot path."
 blog: true
 sidebar: false
 featured: false
@@ -51,11 +51,11 @@ The cost shape is also different. A single conversation costs real money in a wa
 | Stack | Typical all-in cost | Notes |
 |---|---|---|
 | OpenAI Realtime API | ~$0.18–$0.46/min uncached, $0.05–$0.10/min with prompt caching | Per [recent pricing analysis](https://callsphere.ai/blog/vw2c-openai-realtime-cost-per-minute-math-2026) |
-| ElevenLabs Agents | $0.08–$0.24/min all-in | Hosting + premium TTS bundled |
+| ElevenLabs Agents | $0.08/min hosting flat (or $0.16/min burst), plus LLM and telephony at cost — typically $0.08–$0.24/min end-to-end depending on those add-ons | Hosting + premium TTS bundled |
 | Retell AI | $0.07–$0.31/min depending on configuration | Single price for the assembled pipeline; lower end for a basic single-pipeline setup, higher with premium LLM and voice add-ons |
-| Vapi | $0.05/min orchestration + BYOK provider stack ≈ $0.115–$0.42/min real-world | Customer wires their own ASR / LLM / TTS |
+| Vapi | $0.05/min orchestration plus BYOK provider stack at cost; derived all-in typically estimated in the $0.115–$0.42/min range depending on choices | Customer wires their own ASR / LLM / TTS |
 
-A 17-minute conversation at premium settings lands between roughly $1.50 and $8.00 of model spend alone, before any tool calls, carrier minutes, or compliance overhead. A runaway loop with repeated tool look-ups, premium TTS, and a premium model can multiply that several-fold. The opener's $90 figure assumes a session that has been triggering an expensive lookup tool on every turn — well within what an unattended loop can produce in under twenty minutes.
+A 17-minute conversation at premium settings lands somewhere between roughly $1.50 and $8.00 against the per-minute stack rates above, before any tool-call surcharges, carrier minutes, or compliance overhead. A runaway loop with repeated tool look-ups on every turn, premium TTS, and a premium model can multiply that several-fold. The opener's $90 figure assumes a session triggering an expensive lookup tool on every turn — well within what an unattended loop can produce in under twenty minutes.
 
 The conventional treatment in the corpus — [enforce a dollar cap, reserve before each model call](/blog/ai-agent-budget-control-enforce-hard-spend-limits) — does not directly fit. There is no discrete "model call" in a voice session. There is a continuous stream of audio frames, each of which has been billed by the time the next one ships.
 
@@ -97,10 +97,10 @@ The re-reservation step is where most voice teams get the user-visible latency w
 The fast-path audio cannot sync-gate. The slow-path tool calls can. Pattern 2 makes that explicit:
 
 - Audio frames draw from a *predicted reservation* (Pattern 1).
-- Tool calls go through standard [reserve-commit](/glossary#reservation).
+- Tool calls go through standard [reserve-commit](/protocol/how-reserve-commit-works-in-cycles).
 - Premium-tier escalations (mid-call) get their own sync gate.
 
-The implementation lives in the agent harness, not in the runtime authority. The harness routes each proposed action to the appropriate gate. For OpenAI Realtime, that means wrapping the WebSocket so that tool-call events (function-call messages from the model) get a sync gate before being relayed, while audio events do not. For Vapi, where the orchestrator already mediates tool dispatch, the gate plugs into the orchestrator's tool-call layer.
+The implementation lives in the agent harness, not in the runtime authority. The harness routes each proposed action to the appropriate gate. For OpenAI Realtime, that means wrapping the WebSocket so that function-call output items and their `response.function_call_arguments.*` events get a sync gate before the tool call dispatches, while audio events do not. For Vapi, where the orchestrator already mediates tool dispatch, the gate plugs into the orchestrator's tool-call layer.
 
 The corpus has a parallel argument in [Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools): the position of the gate determines what kinds of actions it can govern. For voice, the gate has two positions — one in the per-call reservation lifecycle (slow path) and one at the audio buffer (fast path). They are different gates with different latency budgets, both enforcing the same authority.
 
@@ -127,7 +127,7 @@ The most aggressive pattern, for systems where even a turn-boundary check is too
 
 The catch is that audio is *unrecoverable*. By the time the cancel arrives, the previous half-second of speech has already reached the customer's ear. The pattern is acceptable for parts of the surface where rollback is meaningful (a tool call that has not yet been observed externally, a write-back that has not yet been persisted) and dangerous for parts where it is not (audio out).
 
-Most production voice teams use this only on the slow-path tool layer, layered on top of pattern 2. It is named here mostly to be explicit about what it does not solve — fast-path audio cannot be sped up by going asynchronous if the action itself is irreversible.
+This pattern is usually safer on the slow-path tool layer, layered on top of pattern 2 — it is named here mostly to be explicit about what it does not solve. Fast-path audio cannot be sped up by going asynchronous if the action itself is irreversible.
 
 ## Where Each Voice Stack Lets the Gate Sit
 
@@ -135,7 +135,7 @@ A practical view of where a Cycles-style runtime authority gate can be inserted 
 
 | Stack | Slow-path gate (tool calls) | Fast-path gate (audio frames) | Mediation point |
 |---|---|---|---|
-| OpenAI Realtime API | Custom WebSocket relay intercepting `response.function_call` events | Reservation at call start; the customer's relay tracks consumption | Customer's relay server (typically an 80–150 ms hop, the band production voice relays usually target) |
+| OpenAI Realtime API | Custom WebSocket relay intercepting function-call output items / `response.function_call_arguments.*` events | Reservation at call start; the customer's relay tracks consumption | Customer's relay server (a forwarding hop sized to fit inside the conversation's latency budget) |
 | Vapi | Plug into Vapi's tool-server layer | Reservation against Vapi's per-minute billing surface; orchestration fee tracked separately | Vapi server-side webhook + per-minute polling |
 | Retell AI | Custom function endpoints registered with Retell | Reservation against assembled-pipeline price; provider chain tracked through Retell's webhooks | Retell webhook layer |
 | ElevenLabs Agents | Tool calls dispatched to the customer's backend | Reservation against ElevenLabs' all-in per-minute price | ElevenLabs webhook + tool dispatcher |
@@ -166,7 +166,7 @@ The [two-layer fix from PocketOS](/blog/pocketos-aftermath-delete-delay-vs-scope
 
 **Provider-layer fixes (the voice equivalent of scoped tokens):**
 
-- Per-call hard caps at the provider billing layer — OpenAI, Vapi, Retell AI, and ElevenLabs all expose per-call or per-session limits in some form. Use them as the outer envelope.
+- Per-call or per-session caps at the provider billing layer, to whatever degree each provider exposes them — typically through per-session budget headers, dashboard caps, or programmatic limits. Use whatever the provider offers as the outer envelope.
 - Carrier-minute caps at the SIP / Twilio / telephony layer — independent of the agent's authority, scoped to the call.
 - Premium-feature flags that require per-call enablement rather than session-wide grants.
 
