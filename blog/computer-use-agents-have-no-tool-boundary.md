@@ -24,11 +24,11 @@ head:
 
 # Computer-Use Agents Have No Tool Boundary
 
-A team is running a Browser-Use agent against an internal admin console to migrate ten thousand legacy customer records. The agent navigates by screenshots, clicks the row, clicks the "Edit" button, types the new value, clicks "Save," moves on. By the eighth hundred record, the admin console rolls out an A/B test that swaps the position of the "Save" and "Delete Customer" buttons. The next click lands on the new button position. The button label has moved with it, but the agent's last screenshot was taken nine seconds earlier — the model saw "Save" at those coordinates. The next 200 records are deleted before anyone notices.
+A team is running a pixel-based computer-use agent against an internal admin console to migrate ten thousand legacy customer records. The agent navigates by screenshot, clicks the row, clicks the "Edit" button, types the new value, clicks "Save," moves on. By the eighth hundred record, the admin console rolls out an A/B test that swaps the position of the "Save" and "Delete Customer" buttons. The next click lands on the new button position. The button label has moved with it, but the agent's last screenshot was taken nine seconds earlier — the model saw "Save" at those coordinates. The next 200 records are deleted before anyone notices.
 
 The agent did not violate its instructions. It did not exceed its budget. It clicked exactly where the workflow said to click. The instruction was *click "Save"*; the model resolved that to *click at (840, 612)*; the resolution was correct nine seconds ago and wrong now. There is no destructive API call to gate, no risky tool name to deny — the only tool the agent has is `click` and the only argument is a pair of coordinates.
 
-The [recent](/blog/agent-memory-writes-are-actions-too) [extensions](/blog/when-coding-agents-press-merge) of [action authority](/glossary#action-authority) to memory writes and merge buttons each found that an existing model of "agent action" needed widening. Computer-use agents — OpenAI's CUA (the model that powered Operator and now powers ChatGPT agent mode), Anthropic's Claude Computer Use, the open-source Browser-Use library — push that widening further. When the agent's entire tool surface is "click" and "type", the unit of enforcement cannot be the tool name anymore. It has to be what the click is *for*, where it lands, and what it changes.
+The recent extensions of [action authority](/glossary#action-authority) to [memory writes](/blog/agent-memory-writes-are-actions-too) and [merge buttons](/blog/when-coding-agents-press-merge) each found that an existing model of "agent action" needed widening. Computer-use agents — OpenAI's CUA (the model behind Operator and a member of the OpenAI computer-use lineage that now ships under ChatGPT agent), Anthropic's Claude Computer Use, and the open-source Browser-Use library — push that widening further. When the agent's entire state-changing surface is "click" and "type", the unit of enforcement cannot be the tool name anymore. It has to be what the click is *for*, where it lands, and what it changes.
 
 <!-- more -->
 
@@ -116,7 +116,7 @@ A starting schedule for a browser-based agent looks closer to a CSS-selector mat
 
 The values here are recognizably parallel to the [outbound action schedule](/blog/ai-agent-action-control-hard-limits-side-effects), but the rows are conditioned on (target, intent, context) rather than on a tool name. The agent's *intent* enters the rule both directly (the text of the next step) and indirectly (what was typed just before, what URL is in the address bar, what selector matched).
 
-For pixel agents that cannot reliably extract the DOM target, the schedule degrades. The rules can still match on URL pattern, screenshot crop similarity, action verb in the chain-of-thought, and recent history — but the false-positive and false-negative rates rise compared to a DOM-aware setup. That is itself a useful input to the budget: a pixel-only agent should typically have a lower per-session promotion-authority cap than a DOM-aware one operating on the same site.
+For pixel agents that cannot reliably extract the DOM target, the schedule degrades. The rules can still match on URL pattern, screenshot crop similarity, the agent's stated next-step text, and recent history — but the false-positive and false-negative rates rise compared to a DOM-aware setup. That is itself a useful input to the budget: a pixel-only agent should typically have a lower per-session promotion-authority cap than a DOM-aware one operating on the same site.
 
 ## Reserve-Commit at the Click Layer
 
@@ -150,7 +150,7 @@ Several layers in the typical computer-use agent stack touch the click surface. 
 
 OpenAI's CUA-based agents pause for "User takeover" on login flows and CAPTCHAs because those are the categories where the user is supposed to handle credentials directly. That is a reasonable narrow safety boundary; it is not a substitute for a general runtime authority decision on every click that affects state.
 
-Anthropic's Computer Use ships with a prompt-injection classifier that nudges the model toward confirmation on a set of sensitive categories — cookie banners, financial transactions, agreeing to terms of service. That is the broader pattern, but it relies on the classifier recognizing the sensitivity in the model's input; it does not bind the click to a per-session authority budget. And the underlying API tool runs against a customer-controlled sandbox, which bounds the *environment*, not the action. A click inside a customer-controlled sandbox can still reach a production admin console if the credentials in the sandbox allow it.
+Anthropic's Computer Use documentation has two adjacent layers worth distinguishing. First, developer guidance: Anthropic recommends asking for human confirmation on a specific catalogue of sensitive actions — cookie banners, financial transactions, agreeing to terms of service — implemented in the agent harness, not in the model. Second, a prompt-injection classifier that flags suspicious screenshots and steers the model toward confirmation when it triggers. Both are useful; neither binds the click to a per-session authority budget. And the underlying API tool runs against a customer-controlled sandbox, which bounds the *environment*, not the action. A click inside a customer-controlled sandbox can still reach a production admin console if the credentials in the sandbox allow it.
 
 Browser-Use cleans up the DOM so the model can act more reliably. Reliability is not policy. A more reliable click can still be the wrong click.
 
@@ -193,7 +193,7 @@ That asymmetry is itself a deployment decision worth being explicit about. Teams
 
 For each computer-use agent the team runs against any production surface:
 
-1. **Can the agent operate against a tenant other than its assigned one?** If yes, browser-session scoping is missing. Computer-use agents are the only class where a single misclassified click can switch tenants without an API call.
+1. **Can the agent operate against a tenant other than its assigned one?** If yes, browser-session scoping is missing. Computer-use agents are one of the few classes where a single misclassified click can switch tenants without an explicit API call.
 2. **Does every destructive label in the team's admin consoles map to a known rule in the click gate?** "Delete," "Remove," "Cancel" (when it means destructive), "Force," "Override," and the team's domain-specific verbs.
 3. **Are clicks gated by freshness?** A click against a target classified more than N seconds ago, or after any intervening action, should re-classify.
 4. **Are typed inputs evaluated against the field they target?** Typing `1000` into a notes field is different from typing it into an amount field.
@@ -201,7 +201,7 @@ For each computer-use agent the team runs against any production surface:
 6. **Does the audit trail record the click attempt, the runtime decision, and the actual event separately?** Application logs alone collapse these.
 7. **Is the per-session click budget denominated in something other than count?** A session that can do 800 read-clicks should not get to do 800 destructive clicks for the same authority.
 
-A team that can answer "yes" to all seven is running computer-use as an action surface, not as an unstructured pixel stream. As of mid-2026, the default for most teams is closer to "no" on most of these — the maturity gap between traditional tool-calling agents and computer-use agents is large enough that the same team often has thoughtful action authority on one and almost none on the other.
+A team that can answer "yes" to all seven is running computer-use as an action surface, not as an unstructured pixel stream. As of mid-2026, many deployments are closer to "no" on most of these — the maturity gap between traditional tool-calling agents and computer-use agents is large enough that the same team often has thoughtful action authority on one and almost none on the other.
 
 ## What Changes When Clicks Are Treated as Actions
 
