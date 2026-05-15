@@ -61,8 +61,8 @@ The four-surface table:
 | Outbound tool calls | tool + args | Outward in space | Sync per call | 1 per call |
 | Memory writes | operation + scope | Forward in time | Sync per write | 1 per fact |
 | Merge buttons | branch + author + approver | [Fan-out](/glossary#fan-out) via CI/CD | Sync per merge | 1 per merge |
-| Clicks | URL + DOM/region + intent | One target, configurable | Sync per click + freshness | 1 per click |
-| Voice frames | tier + duration + wall-clock | Continuous accumulation | Predictive + per-bracket | 1 per call + brackets |
+| Clicks | URL + DOM/region + intent | Single DOM target; severity depends on target + context | Sync per click + freshness | 1 per click |
+| Voice frames | tier + duration + wall-clock | Continuous accumulation | Predictive + per-bracket | 1 per call (with periodic re-checks) |
 
 The lifecycle does not appear in this table because it did not change.
 
@@ -70,7 +70,7 @@ The lifecycle does not appear in this table because it did not change.
 
 Memory writes added the *temporal* dimension to [action authority](/glossary#action-authority). The corpus had thought of blast radius as spatial — how far does the side effect reach? Memory forced the temporal axis: how far forward does this write propagate, retrieved at what amplification, by what future runs? The TTL-on-unverified-facts pattern and the per-write provenance argument are both temporal patterns that did not exist in the old action-authority framing.
 
-Merge buttons added the *trust elevation* dimension. The corpus had treated authorship and execution as separate but symmetric concerns. Merge made it asymmetric — the *promotion* of a state into the trunk is a distinct action from the *creation* of that state. The bot-reviewer loophole (an agent author and an agent approver satisfying a one-approval rule) only exists at the merge layer; nothing analogous shows up for `send_email` or `deploy`. Distinct-approver caps are a merge-specific cap that the framework did not previously need.
+Merge buttons added the *trust elevation* dimension. The corpus had treated authorship and execution as separate but symmetric concerns. Merge made it asymmetric — the *promotion* of a state into the trunk is a distinct action from the *creation* of that state. The bot-reviewer loophole (an agent author and an agent approver satisfying a one-approval rule) shows up most cleanly at the merge layer, where the audit trail is built around author + approver pairs. Analogous approval loops can exist for deploys and other promotion gates, but the merge surface is where the corpus first foregrounded distinct-approver caps as a framework primitive.
 
 Computer-use clicks added the *(target, intent, context)* dimension. The corpus had quietly assumed that tool names carried semantic information. When every state-changing tool is `click`, the rule body has to look at what is being clicked, where, why, in what URL, with what DOM context. The schedule rows changed from `tool_name -> points` to `(URL pattern × DOM target × action verb × site authority) -> points`. The framework absorbed this by realizing the *tool name* was always just one feature; for screen-control agents it just happens to be uninformative.
 
@@ -90,7 +90,7 @@ The next surface that needs first-class treatment is probably one where one of t
 
 - **Agent-controlled infrastructure provisioning.** The agent says `terraform apply` against a real cloud. The feature vector is the resource diff, the environment, the cost delta. This is closer to the merge surface but with a much larger blast radius and a much wider time-to-discovery. The lifecycle absorbs it; the schedule is dominated by Tier 4 events.
 
-In each case, the surface adds at least one feature that prior surfaces did not have. In each case, the lifecycle does not break — it just needs a new feature vector and a tuned schedule. The substrate is uniform; the surfaces are not.
+In each case, the surface adds at least one feature that prior surfaces did not have. The hypothesis the four-surface evidence supports is that the lifecycle does not break — it just needs a new feature vector and a tuned schedule. The substrate is uniform; the surfaces are not. Each new surface remains a real test of that hypothesis, not a forgone conclusion.
 
 ## What Did Not Generalize
 
@@ -104,11 +104,13 @@ The framework's portability is real but partial. The decision model transfers. T
 
 ## Reserve-Commit Is the Stable Layer
 
-The most useful thing the four surfaces taught us is structural: the [action authority lifecycle](/glossary#action-authority) — propose, decide, act, commit — is the stable layer in this stack. Surfaces will keep arriving — multi-agent voice, embodied agents, infrastructure provisioning, whatever the next frontier model surface adds — and each will have its own feature vector and its own enforcement work. The decision shape, the audit shape, and the [three-way decision](/glossary#three-way-decision) model do not need to change for any of them.
+The most useful thing the four surfaces taught us is structural: the [action authority lifecycle](/glossary#action-authority) — propose, decide, act, commit — held up as the stable layer in this stack. Surfaces will keep arriving — multi-agent voice, embodied agents, infrastructure provisioning, whatever the next frontier model surface adds — and each will have its own feature vector and its own enforcement work. Across the four surfaces here, the decision shape, the audit shape, and the [three-way decision](/glossary#three-way-decision) model did not need to change; the bet is that the same holds for surfaces still to come, though each will earn that conclusion the same way these did — by being walked through end to end.
 
-Posts like the four siblings are useful in two ways. First, they extend the framework to new surfaces in practice, so the corpus has a worked example for the next team facing one of them. Second, they probe the framework's generality — every surface that fits without modification is evidence that the framework is *the right shape*, not just *one reasonable shape*. Four surfaces, no modifications to the lifecycle, is evidence of shape rather than coincidence.
+Voice is the partial exception worth being explicit about. Slow-path tool calls in a voice session preserve reserve-commit unchanged, but the fast audio path uses predictive reservation and floor-authority patterns that move the per-action decision earlier in time. The decision shape — propose, decide, audit — is preserved at the boundaries; the cadence is different. That is the cleanest demonstration of what "the lifecycle generalized" means in practice: the primitives held, the binding shifted.
 
-The next time a team adopts runtime authority on a new agent surface, the question worth asking first is not "does the lifecycle apply?" — assume it does. The questions are: *what is the feature vector for the rule body, what is the schedule for risk-point assignment, where does the gate sit, and what does the harness have to do to honor the decision?* The first question is fixed; the next four are surface-specific work.
+Posts like the four siblings are useful in two ways. First, they extend the framework to new surfaces in practice, so the corpus has a worked example for the next team facing one of them. Second, they probe the framework's generality — every surface that fits with the lifecycle preserved at its boundaries is evidence that the framework is *the right shape*, not just *one reasonable shape*. Four surfaces, with the lifecycle preserved at the decision boundaries, is evidence of shape rather than coincidence.
+
+The next time a team adopts runtime authority on a new agent surface, the lifecycle is the most likely starting point — though new surfaces should be expected to stretch the binding the way voice did with the audio path. The questions are: *what is the feature vector for the rule body, what is the schedule for risk-point assignment, where does the gate sit (per-action, per-call, or pre-reserved against a cumulative budget), and what does the harness have to do to honor the decision?*
 
 ## Next Steps
 
