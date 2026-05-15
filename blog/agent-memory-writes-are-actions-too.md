@@ -1,6 +1,6 @@
 ---
 title: "Agent Memory Writes Are Actions, Too"
-date: 2026-05-15
+date: 2026-05-16
 author: Albert Mavashev
 tags:
   - action-authority
