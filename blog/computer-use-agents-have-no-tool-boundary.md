@@ -40,7 +40,7 @@ Computer-use agents do not have that. The model picks up the screen state via sc
 
 | Agent | Primitives exposed | Where it runs |
 |---|---|---|
-| OpenAI CUA (powers [ChatGPT agent](https://openai.com/index/introducing-chatgpt-agent/)) | screenshot, mouse click/scroll, keyboard input, in a virtual browser | OpenAI-hosted sandbox |
+| OpenAI's computer-use lineage — CUA, [ChatGPT agent](https://openai.com/index/introducing-chatgpt-agent/) | screenshot, mouse click/scroll, keyboard input, in a virtual browser | OpenAI-hosted sandbox |
 | Anthropic [Claude Computer Use](https://www.anthropic.com/news/3-5-models-and-computer-use) | screenshot, `left_click` at coordinates, `type` text, scroll, key, and related desktop primitives | Customer-controlled sandbox; reference implementation ships as a Linux Docker container |
 | [Browser-Use](https://github.com/browser-use/browser-use) | DOM-aware click, type, navigate; exposes an indexed clickable-element vocabulary to the model | Customer-controlled browser, self-hosted or cloud |
 
@@ -141,7 +141,8 @@ Several layers in the typical computer-use agent stack touch the click surface. 
 | Layer | What it does | What it does not do |
 |---|---|---|
 | CUA "User takeover" mode | Pauses for the user on login forms and CAPTCHAs | Anchored on a narrow catalogue; does not pause on arbitrary destructive admin actions |
-| Claude Computer Use prompt-injection classifier | Steers the model to ask for confirmation on cookie banners, financial transactions, ToS, and similar | Triggered by an injection-detection heuristic; does not cover the long tail of domain-specific destructive labels |
+| Anthropic developer guidance on sensitive actions | Recommends asking for human confirmation on cookie banners, financial transactions, ToS, and similar | A documentation pattern, implemented in the agent harness; not a runtime enforcement layer |
+| Anthropic prompt-injection classifier | Flags suspicious screenshots and steers the model toward confirmation when triggered | Injection-detection heuristic; does not cover the long tail of domain-specific destructive labels |
 | Browser-Use DOM filtering | Restructures messy DOM into LLM-friendly form | Improves the model's success rate; does not enforce policy on what the model can do |
 | Sandbox isolation | The agent runs against a sandbox / VM | The sandbox can still contain real production credentials and authority |
 | Per-call risk classifier (Claude Code Auto mode style) | Risk-scores each tool call | The "tool call" is `click` — at this layer, every call is the same |
@@ -181,7 +182,7 @@ A practical view of how the schedule fits each major computer-use stack today:
 
 | Stack | DOM target available? | URL pattern available? | Screenshot region available? | Gate vantage point |
 |---|---|---|---|---|
-| OpenAI ChatGPT agent (CUA-backed) | No (pixel-based) | Yes | Yes | Hard to instrument externally — agent runs in OpenAI's sandbox |
+| OpenAI ChatGPT agent (Operator-derived web interaction) | No (pixel-based) | Yes | Yes | Hard to instrument externally — agent runs in OpenAI's sandbox |
 | Anthropic Claude Computer Use | Limited (depends on the surface) | Yes if the agent is browser-driving; no for pure desktop | Yes | Customer-controlled sandbox: a Cycles-style gate can wrap the tool-call layer |
 | Browser-Use | Yes (the framework's strength) | Yes | Yes | Customer-controlled; easiest to instrument |
 
