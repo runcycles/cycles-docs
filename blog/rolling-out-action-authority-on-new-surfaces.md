@@ -1,6 +1,6 @@
 ---
 title: "Rolling Out Action Authority on New Surfaces"
-date: 2026-05-22
+date: 2026-06-20
 author: Albert Mavashev
 tags:
   - action-authority
@@ -23,7 +23,7 @@ head:
 
 # Rolling Out Action Authority on New Surfaces
 
-The last five posts went through what [runtime authority](/glossary#runtime-authority) looks like on four new agent surfaces: [memory writes](/blog/agent-memory-writes-are-actions-too), [merge buttons](/blog/when-coding-agents-press-merge), [computer-use clicks](/blog/computer-use-agents-have-no-tool-boundary), and [voice frames](/blog/voice-agent-budgets-when-you-cant-pause-to-reserve), plus the [synthesis](/blog/what-four-new-surfaces-taught-us) of what the four had in common. The framing is consistent; the patterns are recognizable. A team that buys the framing arrives at the obvious next question.
+The recent five-post arc went through what [runtime authority](/glossary#runtime-authority) looks like on four new agent surfaces: [memory writes](/blog/agent-memory-writes-are-actions-too), [merge buttons](/blog/when-coding-agents-press-merge), [computer-use clicks](/blog/computer-use-agents-have-no-tool-boundary), and [voice frames](/blog/voice-agent-budgets-when-you-cant-pause-to-reserve), plus the [synthesis](/blog/what-four-new-surfaces-taught-us) of what the four had in common. The framing is consistent; the patterns are recognizable. A team that buys the framing arrives at the obvious next question.
 
 *Monday morning. Which surface goes first, what do you instrument, and how do you know when to flip the gate from observing to enforcing?*
 
