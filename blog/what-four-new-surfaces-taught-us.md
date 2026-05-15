@@ -64,7 +64,7 @@ The four-surface table:
 | Clicks | URL + DOM/region + intent | Single DOM target; severity depends on target + context | Sync per click + freshness | 1 per click |
 | Voice frames | tier + duration + wall-clock | Continuous accumulation | Predictive + per-bracket | 1 per call (with periodic re-checks) |
 
-The lifecycle does not appear in this table because it did not change.
+The lifecycle itself does not appear in this table: the table tracks what varies (binding and cadence), not the decision primitive (propose → decide → act → commit), which the four surfaces preserved at their boundaries.
 
 ## What Each Surface Added
 
@@ -84,11 +84,11 @@ If the lifecycle generalized this cleanly across four surfaces, what does it pre
 
 The next surface that needs first-class treatment is probably one where one of these dimensions stretches further:
 
-- **Multi-agent voice-to-voice.** Two voice agents talking to each other over a phone bridge — a credit-card dispute handled by the bank's voice agent and the merchant's voice agent in real time. The latency constraint stays; the *trust* relationship is now agent-to-agent rather than agent-to-human. The [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) argument applies, but the audit unit is *the conversation*, not *the call*. The framework will absorb it the same way: same lifecycle, new feature vector (peer-agent identity, conversation budget, attenuation level).
+- **Multi-agent voice-to-voice.** Two voice agents talking to each other over a phone bridge — a credit-card dispute handled by the bank's voice agent and the merchant's voice agent in real time. The latency constraint stays; the *trust* relationship is now agent-to-agent rather than agent-to-human. The [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) argument plausibly applies, with the audit unit shifting from *the call* to *the conversation*. The likely shape: same lifecycle, new feature vector (peer-agent identity, conversation budget, attenuation level) — though the deny-side mechanics for two simultaneously running fast paths are genuinely new and would need to be worked through.
 
-- **Embodied agents.** A robot arm in a warehouse acting on physical inventory. The feature vector includes a *position*, a *force*, a *contact prediction* — and the irreversibility is genuinely physical. Rollback windows do not exist. The framework will absorb it the same way: same lifecycle, new feature vector, much stricter cap policies because the deny-window pattern simply does not apply to a moving robot arm.
+- **Embodied agents.** A robot arm in a warehouse acting on physical inventory. The feature vector plausibly includes a *position*, a *force*, a *contact prediction* — and the irreversibility is genuinely physical. Rollback windows are much narrower if they exist at all. The framework's likely shape: same lifecycle, new feature vector, much stricter cap policies because the deny-window pattern barely applies to a moving robot arm. Whether the lifecycle holds at all here is the open question; physical irreversibility is the strongest test the framework has not yet faced.
 
-- **Agent-controlled infrastructure provisioning.** The agent says `terraform apply` against a real cloud. The feature vector is the resource diff, the environment, the cost delta. This is closer to the merge surface but with a much larger blast radius and a much wider time-to-discovery. The lifecycle absorbs it; the schedule is dominated by Tier 4 events.
+- **Agent-controlled infrastructure provisioning.** The agent says `terraform apply` against a real cloud. The feature vector is the resource diff, the environment, the cost delta. This is closer to the merge surface but with a much larger blast radius and a much wider time-to-discovery. Probably absorbs cleanly into the lifecycle; the schedule is likely dominated by Tier 4 events.
 
 In each case, the surface adds at least one feature that prior surfaces did not have. The hypothesis the four-surface evidence supports is that the lifecycle does not break — it just needs a new feature vector and a tuned schedule. The substrate is uniform; the surfaces are not. Each new surface remains a real test of that hypothesis, not a forgone conclusion.
 
