@@ -10,7 +10,7 @@ tags:
   - governance
   - runtime-authority
   - security
-  - risk-points
+  - RISK_POINTS
 description: "Agent memory writes change future runs. Treat mem0, Letta, Zep, and Claude-style memory mutations as RISK_POINTS-budgeted actions under runtime authority."
 blog: true
 sidebar: false
@@ -43,7 +43,7 @@ The OWASP Top 10 for Agentic Applications, [published December 2025](https://gen
 
 ## What a Memory Operation Actually Does
 
-To classify memory writes the way we classify other actions, it helps to be precise about which operations a memory layer exposes. Across mem0, Letta, Zep, and bespoke RAG-style stores, the operation set is close to:
+To classify memory writes the way we classify other actions, it helps to be precise about which operations a memory layer exposes. The names below are conceptual — mem0, Letta, Zep, and bespoke RAG-style stores label them differently — but the operation set across these systems is close to:
 
 | Operation | What it does | Persistence | Read amplification |
 |---|---|---|---|
@@ -65,7 +65,7 @@ These are the properties that turn memory mutations into a structural compromise
 
 ## Placing Memory Writes in the Action Tier Model
 
-The five-tier action model from [AI Agent Action Control](/blog/ai-agent-action-control-hard-limits-side-effects) classifies tools by blast radius and reversibility. Memory writes do not fit cleanly into any single tier — different operations behave differently, and the *scope* of the write matters as much as the operation.
+The tier model from [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) classifies tools 0–4 by blast radius and reversibility. Memory writes do not fit cleanly into any single tier — different operations behave differently, and the *scope* of the write matters as much as the operation.
 
 A useful first pass:
 
@@ -76,7 +76,7 @@ A useful first pass:
 | `add` to shared / global scope | All tenants | 4 (Mutation, broad blast) | Cross-tenant contamination if misclassified |
 | `update` of a pinned core memory | Always-in-context | 4 (Mutation) | Loaded on every run regardless of retrieval |
 | `delete` of a verified fact | Any | 3 (Mutation) | Irreversible without backup; affects future retrieval |
-| `archive` (move out of hot context) | Any | 1 (Write-local) | Reversible via `recall`; no semantic change |
+| `archive` (move out of hot context) | Any | 1 (Write-local) | Reversible via `recall`; affects retrieval visibility but not stored content |
 
 This is a starting point, not a verdict. As with the tool-tier model, the value is in the *exercise* — forcing the team to ask, for each memory scope they expose, what the worst-case downstream effect of a single bad write looks like. A team running per-tenant memory namespaces has a different tier map than a team running shared embeddings across their whole customer base.
 
@@ -123,7 +123,7 @@ A handful of layers in the typical agent stack touch memory in some way. None of
 | Layer | What it does | What it does not do |
 |---|---|---|
 | Memory layer (mem0, Letta, Zep) | Stores and retrieves facts | Does not decide whether a given write *should* be persisted under a given run's risk budget |
-| [MCP server](/glossary#mcp-server) in front of the memory tool | Brokers tool calls | Does not see cross-run amplification; sees one call at a time |
+| [MCP server](/glossary#mcp-server) in front of the memory tool | Brokers tool calls | In its default configuration, sees one call at a time without cross-run amplification context |
 | RAG retrieval reranker | Filters what gets read | Operates at read time; the bad fact is already in the store |
 | Memory hygiene / guard products | Validate hashes, detect tampering | Detect *attacks*; do not bound *authorized but ill-advised* writes |
 | Observability / tracing | Records what was written | Records, not enforces |
@@ -168,7 +168,7 @@ For each memory layer in production, ask:
 5. **Are tenant scopes isolated at the store level, not only at the application level?** Application bugs are common; store-level isolation survives them.
 6. **Are pinned / always-loaded memories on a separate, stricter gate?** A bad pin is loaded on every run; the blast radius is permanent until cleared.
 
-A memory layer can answer none of these questions on its own. The questions are runtime authority concerns, applied to a write surface that most stacks currently treat as silent state.
+A memory layer can answer few of these questions on its own. The questions are runtime authority concerns, applied to a write surface that most stacks currently treat as silent state.
 
 ## What Changes When Memory Writes Are Budgeted
 
