@@ -20,7 +20,7 @@ const reasons = [
   },
 ]
 
-const issuesUrl = 'https://github.com/runcycles/docs/issues'
+const issuesUrl = 'https://github.com/runcycles/cycles-docs/issues'
 </script>
 
 <template>
