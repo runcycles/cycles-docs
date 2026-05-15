@@ -2,7 +2,7 @@
   "npm": 4804,
   "pypi": 4012,
   "crates": 67,
-  "clones": 70541,
+  "clones": 79498,
   "clonesByRepo": {
     ".github": {
       "count": 1057,
@@ -79,6 +79,10 @@
     "cycles-ap2-python": {
       "count": 509,
       "lastSeenDay": "2026-05-14"
+    },
+    "cycles-docs": {
+      "count": 8957,
+      "lastSeenDay": "2026-05-14"
     }
   },
   "releases": 0,
@@ -101,12 +105,13 @@
     "cycles-dashboard": 0,
     "langchain-runcycles": 0,
     "cycles-spring-ai-starter": 0,
-    "cycles-ap2-python": 0
+    "cycles-ap2-python": 0,
+    "cycles-docs": 0
   },
   "ghPackages": 2959,
   "maven": 1477,
   "total": 13319,
-  "fetchedAt": "2026-05-15T08:38:55.815Z",
+  "fetchedAt": "2026-05-15T22:35:43.051Z",
   "npmByPackage": {
     "runcycles": 1324,
     "@runcycles/mcp-server": 776,
