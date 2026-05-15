@@ -1,6 +1,6 @@
 ---
 title: "Reserving Authority When You Can't Pause"
-date: 2026-05-20
+date: 2026-06-06
 author: Albert Mavashev
 tags:
   - voice-agents
