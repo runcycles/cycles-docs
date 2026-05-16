@@ -20,6 +20,8 @@ The same lifecycle composes against other Rust LLM clients (Anthropic, Bedrock, 
 - Error-aware patterns using `ReservationGuard` that preserve typed `OpenAIError` for the caller (`with_cycles()` wraps closure errors as `Error::Validation` and loses the original type)
 - Token-to-USD conversion at commit time for spend-denominated budgets
 
+**Loud-failure stance.** The examples on this page error out on missing `usage`, missing `content`, or non-positive `caps.max_tokens` rather than silently committing zero or sending `max_completion_tokens=0` to OpenAI. This matches the shipped [`examples/async_openai_completion.rs`](https://github.com/runcycles/cycles-client-rust/blob/main/examples/async_openai_completion.rs) in the runcycles crate. Production code that prefers a fallback (e.g. commit the reservation estimate on missing usage) should opt into that fallback explicitly — the default in a teaching example should not be silent under-billing.
+
 ## Cargo.toml
 
 ```toml
@@ -64,7 +66,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         |_ctx| async move {
             let request = CreateChatCompletionRequestArgs::default()
                 .model("gpt-4o-mini")
-                .max_tokens(800u32)
+                // max_completion_tokens is the current field; max_tokens is
+                // deprecated upstream for chat completions.
+                .max_completion_tokens(800u32)
                 .messages([ChatCompletionRequestUserMessageArgs::default()
                     .content(prompt)
                     .build()?
@@ -73,17 +77,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let response = openai.chat().create(request).await?;
 
+            // Loud-failure stance: a successful HTTP response with no choices
+            // / no content is a malformed result. Surfacing it as `Err` lets
+            // `with_cycles` release the reservation rather than commit on an
+            // empty reply.
             let text = response
                 .choices
                 .first()
                 .and_then(|c| c.message.content.clone())
-                .unwrap_or_default();
+                .ok_or("OpenAI response had no message content")?;
 
-            // usage is `Option<CompletionUsage>`; treat missing as zero
-            let actual = response
+            // Same stance for missing usage: committing zero tokens against a
+            // successful-looking call silently under-bills the budget. Error
+            // out and let the caller decide whether to fall back.
+            let usage = response
                 .usage
-                .map(|u| u.total_tokens as i64)
-                .unwrap_or(0);
+                .ok_or("OpenAI response omitted usage — refusing to commit a guessed amount")?;
+            let actual = i64::from(usage.total_tokens);
 
             Ok((text, Amount::tokens(actual)))
         },
@@ -117,17 +127,24 @@ let reply = with_cycles(
         .action("llm.completion", "gpt-4o-mini")
         .subject(Subject { tenant: Some("acme-corp".into()), ..Default::default() }),
     |ctx| async move {
-        // Default ceiling; override if Cycles capped lower
+        // Default ceiling; override if Cycles capped lower. A non-positive
+        // cap is treated as an explicit refusal — sending max_completion_tokens=0
+        // would charge the request for zero output, which is never the intent.
         let mut max_tokens: u32 = 800;
         if let Some(caps) = &ctx.caps {
             if let Some(cap) = caps.max_tokens {
-                max_tokens = (cap as u32).min(max_tokens);
+                let cap_u32 = u32::try_from(cap)
+                    .map_err(|_| "caps.max_tokens is negative — refusing to call OpenAI")?;
+                if cap_u32 == 0 {
+                    return Err("caps.max_tokens is 0 — refusing to call OpenAI".into());
+                }
+                max_tokens = cap_u32.min(max_tokens);
             }
         }
 
         let request = CreateChatCompletionRequestArgs::default()
             .model("gpt-4o-mini")
-            .max_tokens(max_tokens)
+            .max_completion_tokens(max_tokens)
             .messages([ChatCompletionRequestUserMessageArgs::default()
                 .content(prompt)
                 .build()?
@@ -135,9 +152,12 @@ let reply = with_cycles(
             .build()?;
 
         let response = openai.chat().create(request).await?;
-        let actual = response.usage.map(|u| u.total_tokens as i64).unwrap_or(0);
-        let text = response.choices.first().and_then(|c| c.message.content.clone()).unwrap_or_default();
-        Ok((text, Amount::tokens(actual)))
+        let text = response.choices.first()
+            .and_then(|c| c.message.content.clone())
+            .ok_or("OpenAI response had no message content")?;
+        let usage = response.usage
+            .ok_or("OpenAI response omitted usage")?;
+        Ok((text, Amount::tokens(i64::from(usage.total_tokens))))
     },
 ).await?;
 ```
@@ -178,17 +198,24 @@ let guard = cycles.reserve(
         .build()
 ).await?;
 
-// Apply caps before building the request
+// Apply caps before building the request. Non-positive caps are an explicit
+// refusal — release the guard and bail rather than send max_completion_tokens=0.
 let mut max_tokens: u32 = 1_500;
 if let Some(caps) = guard.caps() {
     if let Some(cap) = caps.max_tokens {
-        max_tokens = (cap as u32).min(max_tokens);
+        let cap_u32 = u32::try_from(cap)
+            .map_err(|_| "caps.max_tokens is negative — refusing to call OpenAI")?;
+        if cap_u32 == 0 {
+            guard.release("caps.max_tokens is 0".to_string()).await?;
+            return Err("caps.max_tokens is 0 — refusing to call OpenAI".into());
+        }
+        max_tokens = cap_u32.min(max_tokens);
     }
 }
 
 let request = CreateChatCompletionRequestArgs::default()
     .model("gpt-4o-mini")
-    .max_tokens(max_tokens)
+    .max_completion_tokens(max_tokens)
     .messages([ChatCompletionRequestUserMessageArgs::default()
         .content(prompt)
         .build()?
@@ -212,14 +239,29 @@ while let Some(chunk_result) = stream.next().await {
     }
     // The final chunk carries usage when include_usage was set.
     if let Some(usage) = chunk.usage {
-        final_usage_tokens = usage.total_tokens as i64;
+        final_usage_tokens = i64::from(usage.total_tokens);
     }
 }
 
 // Defensive fallback: if usage didn't arrive (some OpenAI-compatible
-// providers don't honor include_usage), estimate locally.
+// providers don't honor include_usage), estimate locally. Streaming is the
+// one legitimate place for a fallback — you've already consumed the stream
+// and can't re-issue it cheaply, so a tokenizer estimate beats committing
+// zero. Plug in a real tokenizer here (e.g. the `tiktoken-rs` crate's
+// `cl100k_base` / `o200k_base` encoders) rather than the stub below:
+//
+//     fn estimate_tokens(prompt: &str, output: &str) -> i64 {
+//         use tiktoken_rs::o200k_base;
+//         let bpe = o200k_base().unwrap();
+//         (bpe.encode_with_special_tokens(prompt).len()
+//          + bpe.encode_with_special_tokens(output).len()) as i64
+//     }
+//
+// If you don't want to add a tokenizer dependency, releasing the guard and
+// erroring is also a defensible choice — see the loud-failure note in the
+// non-streaming examples.
 if final_usage_tokens == 0 {
-    final_usage_tokens = estimate_tokens_with_tiktoken(&prompt, &full_text);
+    final_usage_tokens = estimate_tokens(&prompt, &full_text);
 }
 
 guard.commit(
@@ -282,7 +324,7 @@ async fn run_completion(
 
     let request = CreateChatCompletionRequestArgs::default()
         .model("gpt-4o-mini")
-        .max_tokens(800u32)
+        .max_completion_tokens(800u32)
         .messages([ChatCompletionRequestUserMessageArgs::default()
             .content(prompt)
             .build()?
@@ -298,14 +340,31 @@ async fn run_completion(
         }
     };
 
-    let text = response.choices.first()
-        .and_then(|c| c.message.content.clone())
-        .unwrap_or_default();
-    let actual = response.usage.map(|u| u.total_tokens as i64).unwrap_or(0);
+    // Loud failure on malformed-but-successful responses: missing content or
+    // missing usage releases the reservation and surfaces as a typed error,
+    // rather than committing zero and silently under-billing.
+    let text = match response.choices.first().and_then(|c| c.message.content.clone()) {
+        Some(t) => t,
+        None => {
+            let _ = guard.release("openai_no_content".to_string()).await;
+            return Err(CompletionError::Cycles(CyclesError::Validation(
+                "OpenAI response had no message content".into(),
+            )));
+        }
+    };
+    let usage = match response.usage {
+        Some(u) => u,
+        None => {
+            let _ = guard.release("openai_no_usage".to_string()).await;
+            return Err(CompletionError::Cycles(CyclesError::Validation(
+                "OpenAI response omitted usage".into(),
+            )));
+        }
+    };
 
     guard.commit(
         CommitRequest::builder()
-            .actual(Amount::tokens(actual))
+            .actual(Amount::tokens(i64::from(usage.total_tokens)))
             .build()
     ).await?;
 
@@ -356,9 +415,12 @@ fn tokens_to_microcents(prompt_tokens: u32, completion_tokens: u32, model: &str)
 }
 
 // Inside the with_cycles closure:
-let usage = response.usage.unwrap_or_default();
+let usage = response.usage
+    .ok_or("OpenAI response omitted usage — refusing to commit a guessed amount")?;
 let microcents = tokens_to_microcents(usage.prompt_tokens, usage.completion_tokens, "gpt-4o-mini");
-Ok((text, Amount::usd_microcents(microcents as i64)))
+let amount = i64::try_from(microcents)
+    .map_err(|_| "microcents overflow when converting to i64")?;
+Ok((text, Amount::usd_microcents(amount)))
 ```
 
 Keeping the rate table in one helper makes provider rate changes a single-edit fix. For multi-provider deployments, hoist it to your shared `costs` module.
@@ -380,15 +442,17 @@ The [`Error Handling in Rust`](/how-to/error-handling-patterns-in-rust) patterns
 
 ## Common gotchas
 
-1. **Streaming without `include_usage` reports zero tokens.** OpenAI's official streaming endpoint emits usage only when `stream_options.include_usage = true` is set on the request. Without it, you'll commit zero tokens and the budget will not reflect actual spend. Set the option, or fall back to a tokenizer estimate.
+1. **Streaming without `include_usage` reports zero tokens.** OpenAI's official streaming endpoint emits usage only when `stream_options.include_usage` is set on the request. Without it, you'll commit zero tokens and the budget will not reflect actual spend. Set the option, and have a tokenizer fallback for OpenAI-compatible providers that don't honor it.
 
-2. **`response.usage` is `Option`.** Some compatible servers (Ollama, vLLM, certain LiteLLM configs) don't return usage. Treat `None` as "estimate it locally" rather than "no spend."
+2. **`response.usage` is `Option`.** Some compatible servers (Ollama, vLLM, certain LiteLLM configs) don't return usage. For **non-streaming** calls, the cleanest pattern is loud failure — return `Err`, let `with_cycles` release the reservation, surface the issue to the caller (the examples above follow this stance, matching the shipped `cycles-client-rust/examples/async_openai_completion.rs`). Streaming is the genuine exception: you've already consumed the stream so re-issuing is expensive, and a tokenizer estimate beats committing zero.
 
-3. **`response.choices[0].message.content` can be `None`** when the model returns a tool-call or refusal. Handle the `None` case (commit zero or commit the prompt-token cost only) rather than unwrapping.
+3. **`response.choices[0].message.content` can be `None`** when the model returns only a tool-call, a refusal, or finishes with `length` on a malformed setup. Treat that as a malformed result (fail loud and release) rather than committing on an empty reply.
 
 4. **Don't include the OpenAI API key in the Cycles reservation metadata.** Cycles records actions, not credentials. If you're tagging the reservation with provider info, use the action name (`gpt-4o-mini`) — never the key.
 
 5. **Mismatched async runtimes.** `async-openai` uses `tokio`; the blocking `runcycles` variant requires not being inside a Tokio runtime. Pick one — for most LLM workloads, the async client is correct.
+
+6. **`as u32` / `as i64` on values you got from elsewhere.** `cap as u32` silently wraps on a negative `cap.max_tokens`; `microcents as i64` silently wraps on overflow. Use `u32::try_from(...)` / `i64::try_from(...)` and surface a typed error instead.
 
 ## Next steps
 
