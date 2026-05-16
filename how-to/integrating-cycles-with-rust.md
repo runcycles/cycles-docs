@@ -32,6 +32,8 @@ export CYCLES_TENANT="acme"
 
 > **Need an API key?** Create one via the Admin Server — see [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key) or [API Key Management](/how-to/api-key-management-in-cycles).
 
+> **Looking for a real LLM example?** The `openai_call` / `stream_llm_response` placeholders below are intentionally generic. For the concrete `async-openai` wiring — including streaming token capture and error mapping — see [Integrate Cycles with async-openai (Rust)](/how-to/integrating-cycles-with-async-openai).
+
 ## Quick start
 
 ```rust
