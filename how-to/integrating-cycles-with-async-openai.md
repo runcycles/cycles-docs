@@ -9,15 +9,15 @@ head:
 
 # Integrate Cycles with async-openai (Rust)
 
-The [Rust quickstart](/quickstart/getting-started-with-the-rust-client) and [Rust integration guide](/how-to/integrating-cycles-with-rust) both use a `call_llm()` placeholder where a real OpenAI call should go. This page fills that gap: it shows how `runcycles` composes with [`async-openai`](https://crates.io/crates/async-openai) (the dominant Rust client for the OpenAI API) for chat completions, streaming, and token-accurate commits.
+The [Rust quickstart](/quickstart/getting-started-with-the-rust-client) and [Rust integration guide](/how-to/integrating-cycles-with-rust) both use a `call_llm()` placeholder where a real OpenAI call should go. This page fills that gap: it shows how `runcycles` composes with [`async-openai`](https://crates.io/crates/async-openai) (a widely used Rust client for the OpenAI API) for chat completions, streaming, and token-accurate commits.
 
-The same pattern transfers to [`anthropic-sdk-rs`](https://crates.io/crates/anthropic-sdk) and other Rust LLM clients — only the type names change. See the [Anthropic variant](#anthropic-variant-anthropic-sdk-rs) section at the bottom.
+The same lifecycle composes against other Rust LLM clients (Anthropic, Bedrock, local LLMs via Ollama) — the reserve-commit shape doesn't change. See the brief [Other Rust LLM clients](#other-rust-llm-clients) note at the bottom.
 
 ## What you get
 
 - `with_cycles()` wrapping a real OpenAI call, with `prompt_tokens + completion_tokens` flowing through to the commit
 - A `ReservationGuard` pattern for streaming chat completions where token counts are only known at the end of the stream
-- Error mapping that distinguishes OpenAI errors (network, rate limit, auth) from Cycles errors (budget exceeded, [reservation](/glossary#reservation) expired) so callers can act on each correctly
+- Error-aware patterns using `ReservationGuard` that preserve typed `OpenAIError` for the caller (`with_cycles()` wraps closure errors as `Error::Validation` and loses the original type)
 - Token-to-USD conversion at commit time for spend-denominated budgets
 
 ## Cargo.toml
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Step | What runs | What is recorded |
 |---|---|---|
-| Before the closure | Cycles reserves `1_500` [tokens](/glossary#tokens) against the session subject | Reservation created, decision evaluated |
+| Before the closure | Cycles reserves `1_500` [tokens](/glossary#token) against the request subject | Reservation created, decision evaluated |
 | Inside the closure | `openai.chat().create(request)` issues the actual API call | OpenAI bills your account for the real usage |
 | Return value | `(text, Amount::tokens(actual_total))` | The actual `total_tokens` becomes the commit amount |
 | After the closure | Cycles commits `actual` tokens, releases the unused reservation | Final spend recorded; the reservation lifecycle closes |
@@ -146,12 +146,18 @@ let reply = with_cycles(
 
 ## Streaming: ReservationGuard with stream consumption
 
-Streaming chat completions return tokens one chunk at a time. The total token count is only known after the stream ends, which means `with_cycles()` (which expects the closure to return both the value and the actual cost in one go) is not the right primitive. Use a `ReservationGuard` instead:
+Streaming chat completions return tokens one chunk at a time. The total token count is only known after the stream ends, which means `with_cycles()` (which expects the closure to return both the value and the actual cost in one go) is not the right primitive. Use a `ReservationGuard` instead.
+
+OpenAI's streaming endpoint emits a final `usage` chunk only when `stream_options.include_usage` is set on the request. Set it explicitly:
 
 ```rust
 use async_openai::{
     Client,
-    types::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs},
+    types::{
+        CreateChatCompletionRequestArgs,
+        ChatCompletionRequestUserMessageArgs,
+        ChatCompletionStreamOptions,
+    },
 };
 use futures::StreamExt;
 use runcycles::{
@@ -188,6 +194,8 @@ let request = CreateChatCompletionRequestArgs::default()
         .build()?
         .into()])
     .stream(true)
+    // Required for the stream to emit a final usage chunk.
+    .stream_options(ChatCompletionStreamOptions { include_usage: true })
     .build()?;
 
 let mut stream = openai.chat().create_stream(request).await?;
@@ -202,17 +210,14 @@ while let Some(chunk_result) = stream.next().await {
             full_text.push_str(&content);
         }
     }
-    // Some OpenAI-compatible providers stream a final usage chunk; the official
-    // OpenAI API streams usage only when `stream_options.include_usage = true`
-    // is set on the request. Capture it when present:
+    // The final chunk carries usage when include_usage was set.
     if let Some(usage) = chunk.usage {
         final_usage_tokens = usage.total_tokens as i64;
     }
 }
 
-// If usage wasn't streamed, fall back to a tokenizer estimate or a follow-up
-// non-streaming /v1/chat/completions call. For most production setups, set
-// `stream_options.include_usage = true` so the stream reports usage itself.
+// Defensive fallback: if usage didn't arrive (some OpenAI-compatible
+// providers don't honor include_usage), estimate locally.
 if final_usage_tokens == 0 {
     final_usage_tokens = estimate_tokens_with_tiktoken(&prompt, &full_text);
 }
@@ -232,63 +237,106 @@ guard.commit(
 
 `with_cycles()` evaluates the closure to a `(value, actual_cost)` tuple in one synchronous return. Streaming requires you to drive the stream to completion (which can take seconds), then commit the total. The guard exposes that lifecycle as two explicit steps — reserve before the stream begins, commit after it ends.
 
-If the stream errors midway (network failure, rate limit, content policy violation), drop the guard or call `guard.release(...).await?` — the reservation is returned to the pool. The guard's `Drop` implementation provides best-effort release on panic / early `?` return, but explicit release with a reason code is preferred for clean audit records.
+If the stream errors midway (network failure, rate limit, content policy violation), call `guard.release(...).await?` — the reservation is returned to the pool with a reason code. The guard's `Drop` implementation provides best-effort release on panic / early `?` return, but explicit release with a reason code is preferred for clean audit records.
 
-## Error handling: separating OpenAI errors from Cycles errors
+## Error handling: preserving the OpenAI error type
 
 `async-openai` returns `OpenAIError`; Cycles returns `runcycles::Error`. Callers usually want to act on these differently:
 
 - **OpenAI errors** — rate-limit retries with backoff, model fallback (gpt-4o → gpt-4o-mini), prompt resubmission.
 - **Cycles errors** — [graceful degradation](/glossary#graceful-degradation) to a smaller model, deferred response, "budget exhausted" UX.
 
-A clean way to keep both inside `with_cycles()`:
+`with_cycles()` is *not* the right primitive for error-aware flows. Its closure must return `Result<(T, Amount), Box<dyn std::error::Error + Send + Sync>>`, and any closure error is wrapped as `runcycles::Error::Validation(format!("guarded function failed: {e}"))`. The original typed error is stringified into the message and lost — the caller cannot recover it.
+
+For flows that need to act on the typed `OpenAIError`, use `ReservationGuard` and keep the error visible to the caller:
 
 ```rust
-use async_openai::error::OpenAIError;
-use runcycles::Error as CyclesError;
-
-#[derive(Debug)]
-enum CompletionError {
-    OpenAi(OpenAIError),
-    Cycles(CyclesError),
-}
-
-impl std::fmt::Display for CompletionError { /* impl */ }
-impl std::error::Error for CompletionError {}
-
-impl From<OpenAIError> for CompletionError {
-    fn from(e: OpenAIError) -> Self { CompletionError::OpenAi(e) }
-}
-impl From<CyclesError> for CompletionError {
-    fn from(e: CyclesError) -> Self { CompletionError::Cycles(e) }
-}
-
-let result: Result<(String, Amount), Box<dyn std::error::Error>> = with_cycles(
-    &cycles,
-    WithCyclesConfig::new(Amount::tokens(1_500))
-        .action("llm.completion", "gpt-4o-mini")
-        .subject(Subject { tenant: Some("acme-corp".into()), ..Default::default() }),
-    |_ctx| async move {
-        let response = openai.chat().create(request).await
-            .map_err(CompletionError::from)?;
-        let actual = response.usage.map(|u| u.total_tokens as i64).unwrap_or(0);
-        let text = response.choices.first().and_then(|c| c.message.content.clone()).unwrap_or_default();
-        Ok((text, Amount::tokens(actual)))
+use async_openai::{
+    Client,
+    error::OpenAIError,
+    types::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs},
+};
+use runcycles::{
+    CyclesClient, Error as CyclesError,
+    models::{
+        Amount, Subject, Action, ReservationCreateRequest, CommitRequest, ReleaseRequest,
     },
-).await;
+};
 
-match result {
-    Ok((text, _)) => println!("{text}"),
-    Err(e) => {
-        // Walk the error chain to recover the typed variant
-        if let Some(CompletionError::OpenAi(oe)) = e.downcast_ref::<CompletionError>() {
-            // backoff / retry / fallback model
-        } else if let Some(CyclesError::BudgetExceeded { retry_after, .. }) = e.downcast_ref::<CyclesError>() {
-            // graceful degradation
+#[derive(Debug, thiserror::Error)]
+enum CompletionError {
+    #[error(transparent)] OpenAi(#[from] OpenAIError),
+    #[error(transparent)] Cycles(#[from] CyclesError),
+}
+
+async fn run_completion(
+    cycles: &CyclesClient,
+    openai: &Client<async_openai::config::OpenAIConfig>,
+    prompt: &str,
+) -> Result<String, CompletionError> {
+    let guard = cycles.reserve(
+        ReservationCreateRequest::builder()
+            .subject(Subject { tenant: Some("acme-corp".into()), ..Default::default() })
+            .action(Action::new("llm.completion", "gpt-4o-mini"))
+            .estimate(Amount::tokens(1_500))
+            .build()
+    ).await?;
+
+    let request = CreateChatCompletionRequestArgs::default()
+        .model("gpt-4o-mini")
+        .max_tokens(800u32)
+        .messages([ChatCompletionRequestUserMessageArgs::default()
+            .content(prompt)
+            .build()?
+            .into()])
+        .build()?;
+
+    let response = match openai.chat().create(request).await {
+        Ok(r) => r,
+        Err(e) => {
+            // Release the reservation with a reason; preserve the typed OpenAI error
+            let _ = guard.release(
+                ReleaseRequest::new(Some(format!("openai_error: {e}")))
+            ).await;
+            return Err(e.into()); // OpenAIError flows to the caller
         }
+    };
+
+    let text = response.choices.first()
+        .and_then(|c| c.message.content.clone())
+        .unwrap_or_default();
+    let actual = response.usage.map(|u| u.total_tokens as i64).unwrap_or(0);
+
+    guard.commit(
+        CommitRequest::builder()
+            .actual(Amount::tokens(actual))
+            .build()
+    ).await?;
+
+    Ok(text)
+}
+```
+
+At the call site, the typed branches are now available:
+
+```rust
+match run_completion(&cycles, &openai, prompt).await {
+    Ok(text) => println!("{text}"),
+    Err(CompletionError::OpenAi(_e)) => {
+        // backoff / retry / fallback model
+    }
+    Err(CompletionError::Cycles(CyclesError::BudgetExceeded { retry_after, .. })) => {
+        // graceful degradation — defer, downsize model, return cached response
+        let _ = retry_after;
+    }
+    Err(CompletionError::Cycles(other)) => {
+        // log and surface
+        eprintln!("cycles error: {other}");
     }
 }
 ```
+
+Use `with_cycles()` when the caller doesn't need to distinguish the underlying error type — for fire-and-forget background tasks, scripts, or higher-level orchestrators that uniformly retry on any failure. Switch to `ReservationGuard` whenever the caller needs to branch on the actual error.
 
 The Cycles error types and their convenience methods (`is_retryable`, `is_budget_exceeded`, `retry_after`) are covered in [Error Handling in Rust](/how-to/error-handling-patterns-in-rust).
 
@@ -321,36 +369,18 @@ Keeping the rate table in one helper makes provider rate changes a single-edit f
 
 For the canonical breakdown of provider rates and the cost-estimation patterns used elsewhere in the corpus, see [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet).
 
-## Anthropic variant (`anthropic-sdk-rs`)
+## Other Rust LLM clients
 
-The same composition works against Anthropic with one or two name changes:
+The reserve-commit shape is the same for any Rust LLM client. The four things you need to adapt to a new provider:
 
-```rust
-use anthropic_sdk::{Client, MessagesRequest, Role};
-use runcycles::{with_cycles, WithCyclesConfig, models::{Amount, Subject}};
+1. **The request builder type** — `CreateChatCompletionRequestArgs` for async-openai, `MessageCreateBuilder` / `MessageCreateParams` for Anthropic's `anthropic-sdk-rust`, the provider-specific equivalent elsewhere.
+2. **The call method** — `client.chat().create(req)` for async-openai; consult the provider crate's docs for the equivalent.
+3. **The response usage extraction** — `response.usage.map(|u| u.total_tokens as i64)` for async-openai; Anthropic returns `input_tokens` + `output_tokens` separately on its response usage object; check the crate.
+4. **The model name in the action label** — `.action("llm.completion", "claude-3-5-sonnet-20241022")` rather than `"gpt-4o-mini"`.
 
-let anthropic = Client::new();
+Pin to the specific crate version you're using and verify each of those four points against its current docs before copy-pasting. The Rust Anthropic ecosystem in particular has churn across crate names and major versions; the reserve-commit lifecycle is unchanged, but the provider-side type paths are not portable.
 
-let reply = with_cycles(
-    &cycles,
-    WithCyclesConfig::new(Amount::tokens(1_500))
-        .action("llm.completion", "claude-3-5-sonnet")
-        .subject(Subject { tenant: Some("acme-corp".into()), ..Default::default() }),
-    |_ctx| async move {
-        let request = MessagesRequest::new("claude-3-5-sonnet-20241022")
-            .max_tokens(800)
-            .message(Role::User, prompt);
-
-        let response = anthropic.messages().create(request).await?;
-        let text = response.content_text();
-        let actual = (response.usage.input_tokens + response.usage.output_tokens) as i64;
-
-        Ok((text, Amount::tokens(actual)))
-    },
-).await?;
-```
-
-The Anthropic crates ecosystem is smaller than `async-openai`'s — exact crate names and APIs change. Pin to the crate version you're using and adapt the type paths above. The reserve-commit lifecycle is unchanged.
+The [`Error Handling in Rust`](/how-to/error-handling-patterns-in-rust) patterns apply to all providers — the typed `OpenAIError` branch above becomes a typed `AnthropicError` (or equivalent) branch for the other crate.
 
 ## Common gotchas
 

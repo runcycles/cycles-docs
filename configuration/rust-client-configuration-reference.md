@@ -48,36 +48,24 @@ These fields set default Subject values applied to every request unless overridd
 
 ### Retry configuration
 
-Controls the commit retry engine for transient failures. The same engine runs in the async client and the blocking variant.
+The retry-related fields are present on `CyclesConfig` as configuration surface for a future automatic-retry engine; **the engine is not wired in `runcycles` 0.2.x.** Commit failures surface to the caller as `Error::Transport` or `Error::Api { status: 5xx, .. }` and the caller decides whether to retry. The fields below are documented so they are stable when the engine ships; setting them in 0.2.x has no runtime effect.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `retry_enabled` | `bool` | `true` | Enable automatic commit retries |
-| `retry_max_attempts` | `u32` | `5` | Maximum number of retry attempts |
-| `retry_initial_delay` | `Duration` | `500 ms` | Delay before the first retry |
-| `retry_multiplier` | `f64` | `2.0` | Exponential backoff multiplier between retries |
-| `retry_max_delay` | `Duration` | `30_000 ms` | Maximum delay between retries (cap) |
+| `retry_enabled` | `bool` | `true` | Future: enable automatic commit retries |
+| `retry_max_attempts` | `u32` | `5` | Future: maximum number of retry attempts |
+| `retry_initial_delay` | `Duration` | `500 ms` | Future: delay before the first retry |
+| `retry_multiplier` | `f64` | `2.0` | Future: exponential backoff multiplier between retries |
+| `retry_max_delay` | `Duration` | `30_000 ms` | Future: maximum delay between retries (cap) |
 
-#### How retry works
-
-When a commit fails with a transport error or a 5xx response, the retry engine schedules a retry using exponential backoff:
-
-```
-Attempt 1: wait 500 ms
-Attempt 2: wait 1_000 ms
-Attempt 3: wait 2_000 ms
-Attempt 4: wait 4_000 ms
-Attempt 5: wait 8_000 ms (capped at retry_max_delay if smaller)
-```
-
-Non-retryable errors (4xx responses other than 429, validation failures, deserialization errors) are not retried. `BudgetExceeded` carries a server-suggested `retry_after` that callers can apply manually.
+For now, callers wrap commits in their own retry loop using the `Error::is_retryable()` / `retry_after()` convenience methods. See [Error Handling in Rust](/how-to/error-handling-patterns-in-rust) for the in-app pattern. `BudgetExceeded` carries a server-suggested `retry_after` regardless of whether the engine is wired.
 
 ## Programmatic configuration
 
-The builder API is the recommended way to construct a client:
+The builder API is the recommended way to construct a client. The builder exposes the fields that callers tune in practice — connection settings, subject defaults, and the retry-enabled toggle. The remaining retry-engine fields (initial delay, multiplier, max delay) are configured by constructing `CyclesConfig` directly when the future engine lands; they are not yet on the builder.
 
 ```rust
-use runcycles::{CyclesClient, CyclesConfig};
+use runcycles::CyclesClient;
 use std::time::Duration;
 
 let client = CyclesClient::builder(
@@ -91,13 +79,10 @@ let client = CyclesClient::builder(
 .read_timeout(Duration::from_millis(5_000))
 .retry_enabled(true)
 .retry_max_attempts(5)
-.retry_initial_delay(Duration::from_millis(500))
-.retry_multiplier(2.0)
-.retry_max_delay(Duration::from_secs(30))
 .build();
 ```
 
-Or construct `CyclesConfig` directly and pass it to `CyclesClient::new`:
+To set the retry-engine fields that aren't on the builder, construct `CyclesConfig` directly:
 
 ```rust
 use runcycles::{CyclesClient, CyclesConfig};
@@ -107,6 +92,11 @@ let config = CyclesConfig {
     base_url: "http://localhost:7878".into(),
     api_key: "cyc_live_...".into(),
     tenant: Some("acme-corp".into()),
+    workspace: None,
+    app: None,
+    workflow: None,
+    agent: None,
+    toolset: None,
     connect_timeout: Duration::from_millis(2_000),
     read_timeout: Duration::from_millis(5_000),
     retry_enabled: true,
@@ -114,11 +104,12 @@ let config = CyclesConfig {
     retry_initial_delay: Duration::from_millis(500),
     retry_multiplier: 2.0,
     retry_max_delay: Duration::from_secs(30),
-    ..Default::default()
 };
 
 let client = CyclesClient::new(config);
 ```
+
+`CyclesConfig` does not implement `Default`; populate every field explicitly when constructing the struct directly, or use the builder.
 
 ## Environment variable configuration
 
@@ -149,7 +140,7 @@ let config = CyclesConfig::from_env().expect("missing required CYCLES_* env vars
 | `CYCLES_RETRY_MAX_DELAY` | `retry_max_delay` | milliseconds (integer) | No |
 
 ::: tip Custom env var prefix
-Unlike most clients in the corpus, the Rust client supports loading from a custom prefix. Useful when a single process runs multiple Cycles instances against different servers:
+The Rust client supports loading from a custom prefix, which is useful when a single process holds connections to multiple Cycles instances:
 
 ```rust
 let primary  = CyclesConfig::from_env_with_prefix("CYCLES_PRIMARY_")?;
@@ -159,14 +150,28 @@ let staging  = CyclesConfig::from_env_with_prefix("CYCLES_STAGING_")?;
 The default `from_env()` is equivalent to `from_env_with_prefix("CYCLES_")`.
 :::
 
-## Resolution order
+## Subject defaults: what they do (and don't)
 
-For each Subject field, the request builder resolves values in this priority:
+The subject fields on `CyclesConfig` (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) are stored on the config and accessible via `client.config()`, but the high-level helpers in `runcycles` 0.2.x **do not automatically apply them** to the per-request `Subject`. Each `with_cycles()` / `client.reserve()` / `client.create_reservation()` call uses the `Subject` you pass in explicitly (or `Subject::default()` if you pass none).
 
-1. **Per-call value** — passed explicitly to the request builder (e.g. `Subject { tenant: Some("override".into()), .. }`)
-2. **Config default** — set on the `CyclesConfig` / builder
+If you want a single tenant applied to every request, build the subject once and reuse it:
 
-If neither provides a value, the field is omitted from the request and the server applies its own defaults.
+```rust
+use runcycles::models::Subject;
+
+let subject = Subject {
+    tenant: Some("acme-corp".into()),
+    workspace: Some("production".into()),
+    ..Default::default()
+};
+
+// Pass the same subject to every WithCyclesConfig / ReservationCreateRequest
+let cfg = WithCyclesConfig::new(Amount::tokens(1_000))
+    .action("llm.completion", "gpt-4o-mini")
+    .subject(subject.clone());
+```
+
+Future versions of the crate may wire the config's subject defaults into request subjects automatically; this reference will be updated when that lands.
 
 ## Custom `reqwest::Client`
 
@@ -204,63 +209,41 @@ runcycles = { version = "0.2", features = ["blocking"] }
 ```
 
 ```rust
-use runcycles::{BlockingCyclesClient, CyclesConfig};
+use runcycles::{BlockingCyclesClient, CyclesConfig, models::BalanceParams};
 
-let client = BlockingCyclesClient::new(CyclesConfig::from_env()?);
+let client = BlockingCyclesClient::new(CyclesConfig::from_env()?)?;
 let resp = client.get_balances(&BalanceParams {
     tenant: Some("acme-corp".into()),
     ..Default::default()
 })?;
 ```
 
-The blocking client mirrors the async client's surface but uses `reqwest::blocking::Client` underneath. The reserve-commit lifecycle, retry engine, and error types are identical; only the await points are removed.
+The blocking client exposes only the **low-level protocol methods** — `create_reservation`, `commit_reservation`, `release_reservation`, `extend_reservation`, `decide`, `create_event`, `list_reservations`, `get_reservation`, `get_balances`. The high-level `with_cycles()` helper and the `ReservationGuard` RAII pattern are **async-only** in 0.2.x; blocking callers compose the reserve / commit / release sequence themselves.
 
 ::: warning Don't mix runtimes
 The blocking client must not be called from inside a Tokio runtime (it will block the executor). For most applications using `tokio::main`, the async client is correct. The blocking variant is for genuinely synchronous contexts.
 :::
-
-## Disabling retry
-
-```rust
-let client = CyclesClient::builder("cyc_live_...", "http://localhost:7878")
-    .retry_enabled(false)
-    .build();
-```
-
-## Aggressive retry for critical commits
-
-```rust
-use std::time::Duration;
-
-let client = CyclesClient::builder("cyc_live_...", "http://localhost:7878")
-    .retry_max_attempts(10)
-    .retry_initial_delay(Duration::from_millis(200))
-    .retry_multiplier(1.5)
-    .retry_max_delay(Duration::from_secs(60))
-    .build();
-```
 
 ## CyclesClientBuilder method reference
 
 | Method | Sets | Notes |
 |---|---|---|
 | `new(api_key, base_url)` | required fields | The constructor; both args are `impl Into<String>` |
-| `.tenant(s)` | subject default | All subject methods accept `impl Into<String>` |
-| `.workspace(s)` | subject default | |
-| `.app(s)` | subject default | |
-| `.workflow(s)` | subject default | |
-| `.agent(s)` | subject default | |
-| `.toolset(s)` | subject default | |
+| `.tenant(s)` | config subject default | All subject methods accept `impl Into<String>`. Stored on the config but not auto-applied to request subjects — see [Subject defaults](#subject-defaults-what-they-do-and-don-t). |
+| `.workspace(s)` | config subject default | |
+| `.app(s)` | config subject default | |
+| `.workflow(s)` | config subject default | |
+| `.agent(s)` | config subject default | |
+| `.toolset(s)` | config subject default | |
 | `.connect_timeout(d)` | HTTP | Takes `std::time::Duration` |
 | `.read_timeout(d)` | HTTP | Takes `std::time::Duration` |
-| `.retry_enabled(b)` | retry | Toggle the retry engine |
-| `.retry_max_attempts(n)` | retry | |
-| `.retry_initial_delay(d)` | retry | Takes `std::time::Duration` |
-| `.retry_multiplier(f)` | retry | Takes `f64` |
-| `.retry_max_delay(d)` | retry | Takes `std::time::Duration` |
+| `.retry_enabled(b)` | retry-future | Sets the field for the future retry engine; no runtime effect in 0.2.x |
+| `.retry_max_attempts(n)` | retry-future | Sets the field for the future retry engine |
 | `.http_client(c)` | HTTP | Provide a custom `reqwest::Client`; overrides timeouts |
 | `.build()` | finalizes | Returns `CyclesClient` (async) |
-| `.build_blocking()` | finalizes | Returns `BlockingCyclesClient`; requires the `blocking` feature |
+| `.build_blocking()` | finalizes | Returns `Result<BlockingCyclesClient, Error>`; requires the `blocking` feature |
+
+The `retry_initial_delay`, `retry_multiplier`, and `retry_max_delay` fields are reachable only by constructing `CyclesConfig` directly (see [Programmatic configuration](#programmatic-configuration)).
 
 ## Next steps
 

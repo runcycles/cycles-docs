@@ -280,7 +280,7 @@ let client = CyclesClient::builder("cyc_live_abc123", "http://localhost:7878")
     .build();
 ```
 
-See [Rust Client Configuration](/quickstart/getting-started-with-the-rust-client#configuration) for all options.
+See the [Rust Client Configuration Reference](/configuration/rust-client-configuration-reference) for the full surface.
 
 ## Blocking client
 
