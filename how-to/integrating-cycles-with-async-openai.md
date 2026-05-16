@@ -25,19 +25,19 @@ The same lifecycle composes against other Rust LLM clients (Anthropic, Bedrock, 
 ```toml
 [dependencies]
 runcycles = "0.2"
-async-openai = "0.30"          # check crates.io for the current version
+async-openai = { version = "0.38", default-features = false, features = ["chat-completion", "rustls"] }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"                # for stream consumption
 ```
 
-`async-openai` major versions change occasionally. The shape of the API (chat completions, usage, streaming) has been stable for several minor releases; the type paths in this guide are accurate to the 0.30.x line at publication. If you pin a different version, the names below may need a small adjustment.
+`async-openai` 0.31+ splits its surface behind per-API features — the `chat-completion` feature is what makes `Client` and the chat-completion types available. The 0.30.x line bundled everything by default; if you're upgrading from there, the example uses `async_openai::types::chat::` paths (the chat types moved out of the top-level `types::` module in 0.31). The 0.30.x line also pulled `backoff` transitively, which has been replaced with `tower` in 0.31+ — worth the version bump for the cleaner dependency tree alone.
 
 ## The basic pattern: with_cycles + chat completions
 
 ```rust
 use async_openai::{
     Client,
-    types::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs, Role},
+    types::chat::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs},
 };
 use runcycles::{
     CyclesClient, with_cycles, WithCyclesConfig,
@@ -153,7 +153,7 @@ OpenAI's streaming endpoint emits a final `usage` chunk only when `stream_option
 ```rust
 use async_openai::{
     Client,
-    types::{
+    types::chat::{
         CreateChatCompletionRequestArgs,
         ChatCompletionRequestUserMessageArgs,
         ChatCompletionStreamOptions,
@@ -254,7 +254,7 @@ For flows that need to act on the typed `OpenAIError`, use `ReservationGuard` an
 use async_openai::{
     Client,
     error::OpenAIError,
-    types::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs},
+    types::chat::{CreateChatCompletionRequestArgs, ChatCompletionRequestUserMessageArgs},
 };
 use runcycles::{
     CyclesClient, Error as CyclesError,
