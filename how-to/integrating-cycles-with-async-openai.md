@@ -258,9 +258,7 @@ use async_openai::{
 };
 use runcycles::{
     CyclesClient, Error as CyclesError,
-    models::{
-        Amount, Subject, Action, ReservationCreateRequest, CommitRequest, ReleaseRequest,
-    },
+    models::{Amount, Subject, Action, ReservationCreateRequest, CommitRequest},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -295,9 +293,7 @@ async fn run_completion(
         Ok(r) => r,
         Err(e) => {
             // Release the reservation with a reason; preserve the typed OpenAI error
-            let _ = guard.release(
-                ReleaseRequest::new(Some(format!("openai_error: {e}")))
-            ).await;
+            let _ = guard.release(format!("openai_error: {e}")).await;
             return Err(e.into()); // OpenAIError flows to the caller
         }
     };
@@ -367,7 +363,7 @@ Ok((text, Amount::usd_microcents(microcents as i64)))
 
 Keeping the rate table in one helper makes provider rate changes a single-edit fix. For multi-provider deployments, hoist it to your shared `costs` module.
 
-For the canonical breakdown of provider rates and the cost-estimation patterns used elsewhere in the corpus, see [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet).
+For the canonical breakdown of provider rates and the cost-estimation patterns used elsewhere in the docs, see [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet).
 
 ## Other Rust LLM clients
 

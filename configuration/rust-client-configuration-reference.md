@@ -26,7 +26,7 @@ The `CyclesConfig` struct holds all client configuration. It can be constructed 
 
 ### Subject defaults
 
-These fields set default Subject values applied to every request unless overridden at the call site. Override at the call site by passing an explicit `Subject` to the request builder.
+These fields hold subject values that are stored on the config and available via `client.config()`. **They are not auto-applied to per-request subjects in 0.2.x** — see [Subject defaults: what they do (and don't)](#subject-defaults-what-they-do-and-don-t) below for the actual behavior.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -48,7 +48,7 @@ These fields set default Subject values applied to every request unless overridd
 
 ### Retry configuration
 
-The retry-related fields are present on `CyclesConfig` as configuration surface for a future automatic-retry engine; **the engine is not wired in `runcycles` 0.2.x.** Commit failures surface to the caller as `Error::Transport` or `Error::Api { status: 5xx, .. }` and the caller decides whether to retry. The fields below are documented so they are stable when the engine ships; setting them in 0.2.x has no runtime effect.
+The retry-related fields are present on `CyclesConfig` as configuration surface for a future automatic-retry engine; **the engine is not wired in `runcycles` 0.2.x.** Transient commit failures (network, 5xx, timeouts) surface to the caller as `Error::Transport` or `Error::Api { .. }` and the caller decides whether to retry. The fields below are documented here because they are already public on the struct; setting them in 0.2.x has no runtime effect, and any wiring behavior in a future release will be announced separately.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -218,7 +218,7 @@ let resp = client.get_balances(&BalanceParams {
 })?;
 ```
 
-The blocking client exposes only the **low-level protocol methods** — `create_reservation`, `commit_reservation`, `release_reservation`, `extend_reservation`, `decide`, `create_event`, `list_reservations`, `get_reservation`, `get_balances`. The high-level `with_cycles()` helper and the `ReservationGuard` RAII pattern are **async-only** in 0.2.x; blocking callers compose the reserve / commit / release sequence themselves.
+The blocking client exposes the low-level protocol methods only — `create_reservation`, `create_reservation_with_metadata`, `commit_reservation`, `release_reservation`, `extend_reservation`, `decide`, `create_event`, `list_reservations`, `get_reservation`, `get_balances` — plus a `config()` accessor. The high-level `with_cycles()` helper and the `ReservationGuard` RAII pattern are **async-only** in 0.2.x; blocking callers compose the reserve / commit / release sequence themselves.
 
 ::: warning Don't mix runtimes
 The blocking client must not be called from inside a Tokio runtime (it will block the executor). For most applications using `tokio::main`, the async client is correct. The blocking variant is for genuinely synchronous contexts.
