@@ -30,6 +30,7 @@ runcycles = "0.2"
 async-openai = { version = "0.38", default-features = false, features = ["chat-completion", "rustls"] }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"                # for stream consumption
+thiserror = "2"                # for the error-aware section
 ```
 
 `async-openai` 0.31+ splits its surface behind per-API features — the `chat-completion` feature is what makes `Client` and the chat-completion types available. The 0.30.x line bundled everything by default; if you're upgrading from there, the example uses `async_openai::types::chat::` paths (the chat types moved out of the top-level `types::` module in 0.31). The 0.30.x line also pulled `backoff` transitively, which has been replaced with `tower` in 0.31+ — worth the version bump for the cleaner dependency tree alone.
@@ -200,13 +201,17 @@ let guard = cycles.reserve(
 
 // Apply caps before building the request. Non-positive caps are an explicit
 // refusal — release the guard and bail rather than send max_completion_tokens=0.
+// Note `let _ = ... .await` on release: if the release itself errors (rare —
+// network failure between the agent and the Cycles server), the caller still
+// sees the original zero-cap error rather than the release error swallowing
+// it.
 let mut max_tokens: u32 = 1_500;
 if let Some(caps) = guard.caps() {
     if let Some(cap) = caps.max_tokens {
         let cap_u32 = u32::try_from(cap)
             .map_err(|_| "caps.max_tokens is negative — refusing to call OpenAI")?;
         if cap_u32 == 0 {
-            guard.release("caps.max_tokens is 0".to_string()).await?;
+            let _ = guard.release("caps.max_tokens is 0".to_string()).await;
             return Err("caps.max_tokens is 0 — refusing to call OpenAI".into());
         }
         max_tokens = cap_u32.min(max_tokens);
@@ -221,8 +226,13 @@ let request = CreateChatCompletionRequestArgs::default()
         .build()?
         .into()])
     .stream(true)
-    // Required for the stream to emit a final usage chunk.
-    .stream_options(ChatCompletionStreamOptions { include_usage: true })
+    // Required for the stream to emit a final usage chunk. The struct's
+    // fields are `Option<bool>` in async-openai 0.38.x — `include_obfuscation`
+    // is set to `None` to keep the upstream default.
+    .stream_options(ChatCompletionStreamOptions {
+        include_usage: Some(true),
+        include_obfuscation: None,
+    })
     .build()?;
 
 let mut stream = openai.chat().create_stream(request).await?;
@@ -243,25 +253,29 @@ while let Some(chunk_result) = stream.next().await {
     }
 }
 
-// Defensive fallback: if usage didn't arrive (some OpenAI-compatible
-// providers don't honor include_usage), estimate locally. Streaming is the
-// one legitimate place for a fallback — you've already consumed the stream
-// and can't re-issue it cheaply, so a tokenizer estimate beats committing
-// zero. Plug in a real tokenizer here (e.g. the `tiktoken-rs` crate's
-// `cl100k_base` / `o200k_base` encoders) rather than the stub below:
+// Two edge cases at end-of-stream:
 //
-//     fn estimate_tokens(prompt: &str, output: &str) -> i64 {
-//         use tiktoken_rs::o200k_base;
-//         let bpe = o200k_base().unwrap();
-//         (bpe.encode_with_special_tokens(prompt).len()
-//          + bpe.encode_with_special_tokens(output).len()) as i64
-//     }
+//   - `full_text` is empty: the stream produced no content chunks. Treat as
+//     a malformed result and release the guard rather than commit on a
+//     zero-output response.
+//   - `final_usage_tokens` is zero: the stream completed but the provider
+//     didn't honor `include_usage`. Some OpenAI-compatible servers (Ollama,
+//     vLLM, certain LiteLLM configs) silently drop the usage chunk. Either
+//     estimate locally with a tokenizer, or release and error.
 //
-// If you don't want to add a tokenizer dependency, releasing the guard and
-// erroring is also a defensible choice — see the loud-failure note in the
-// non-streaming examples.
+// The example below takes the loud path (release + error) to match the
+// non-streaming sections' stance. For production code that prefers a
+// fallback, plug in the `tiktoken-rs` crate's `o200k_base()` encoder and
+// commit the estimate — see the snippet at the end of this section.
+if full_text.is_empty() {
+    let _ = guard.release("openai_stream_no_content".to_string()).await;
+    return Err("OpenAI stream produced no content".into());
+}
 if final_usage_tokens == 0 {
-    final_usage_tokens = estimate_tokens(&prompt, &full_text);
+    let _ = guard.release("openai_stream_no_usage".to_string()).await;
+    return Err(
+        "OpenAI stream omitted usage — set stream_options.include_usage or estimate locally".into(),
+    );
 }
 
 guard.commit(
@@ -280,6 +294,24 @@ guard.commit(
 `with_cycles()` evaluates the closure to a `(value, actual_cost)` tuple in one synchronous return. Streaming requires you to drive the stream to completion (which can take seconds), then commit the total. The guard exposes that lifecycle as two explicit steps — reserve before the stream begins, commit after it ends.
 
 If the stream errors midway (network failure, rate limit, content policy violation), call `guard.release(...).await?` — the reservation is returned to the pool with a reason code. The guard's `Drop` implementation provides best-effort release on panic / early `?` return, but explicit release with a reason code is preferred for clean audit records.
+
+### Optional: tokenizer fallback for missing-usage chunks
+
+If the loud-failure path on missing usage is too pessimistic for your deployment — for instance, you're routing through an OpenAI-compatible proxy that doesn't honor `include_usage` and you can't change the proxy — plug in a real tokenizer instead of erroring out. The `tiktoken-rs` crate's `o200k_base` encoder matches the tokenizer used by gpt-4o-family models:
+
+```rust
+// Add to Cargo.toml: tiktoken-rs = "0.6"   (check crates.io for current)
+use tiktoken_rs::o200k_base;
+
+fn estimate_tokens(prompt: &str, output: &str) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
+    let bpe = o200k_base()?;
+    let input = i64::try_from(bpe.encode_with_special_tokens(prompt).len())?;
+    let out = i64::try_from(bpe.encode_with_special_tokens(output).len())?;
+    Ok(input + out)
+}
+```
+
+Then commit `estimate_tokens(&prompt, &full_text)` instead of releasing the guard on the missing-usage branch. The estimate will be approximate — it doesn't account for system prompts, tool definitions, or the model's actual tokenization of formatting tokens — but it beats committing zero.
 
 ## Error handling: preserving the OpenAI error type
 
@@ -433,7 +465,7 @@ The reserve-commit shape is the same for any Rust LLM client. The four things yo
 
 1. **The request builder type** — `CreateChatCompletionRequestArgs` for async-openai, `MessageCreateBuilder` / `MessageCreateParams` for Anthropic's `anthropic-sdk-rust`, the provider-specific equivalent elsewhere.
 2. **The call method** — `client.chat().create(req)` for async-openai; consult the provider crate's docs for the equivalent.
-3. **The response usage extraction** — `response.usage.map(|u| u.total_tokens as i64)` for async-openai; Anthropic returns `input_tokens` + `output_tokens` separately on its response usage object; check the crate.
+3. **The response usage extraction** — `response.usage.ok_or(...)?` then `i64::from(usage.total_tokens)` for async-openai (loud failure on missing usage, no `as` cast). Anthropic returns `input_tokens` + `output_tokens` separately on its response usage object; the same `ok_or(...)?` / `i64::from(...)` pattern applies, you just sum the two fields.
 4. **The model name in the action label** — `.action("llm.completion", "claude-3-5-sonnet-20241022")` rather than `"gpt-4o-mini"`.
 
 Pin to the specific crate version you're using and verify each of those four points against its current docs before copy-pasting. The Rust Anthropic ecosystem in particular has churn across crate names and major versions; the reserve-commit lifecycle is unchanged, but the provider-side type paths are not portable.
