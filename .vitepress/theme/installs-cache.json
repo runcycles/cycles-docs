@@ -48,7 +48,7 @@
       "count": 1552,
       "lastSeenDay": "2026-05-14"
     },
-    "docs": {
+    "cycles-docs": {
       "count": 16064,
       "lastSeenDay": "2026-05-14"
     },
@@ -90,7 +90,7 @@
     "cycles-agent-action-authority-demo": 0,
     "cycles-openai-agents": 0,
     "cycles-client-python": 0,
-    "docs": 0,
+    "cycles-docs": 0,
     "cycles-client-typescript": 0,
     "cycles-openclaw-budget-guard": 0,
     "cycles-server-events": 0,
