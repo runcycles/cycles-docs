@@ -118,6 +118,8 @@ let config = CyclesConfig::from_env().expect("missing CYCLES_ env vars");
 let client = CyclesClient::new(config);
 ```
 
+For the complete configuration surface — retry tuning, custom `reqwest::Client`, blocking variant, env var prefix customization — see the [Rust Client Configuration Reference](/configuration/rust-client-configuration-reference).
+
 ## Automatic lifecycle with `with_cycles()`
 
 The simplest way to add budget enforcement — wrap any async operation:
@@ -435,6 +437,9 @@ For each `with_cycles()` call or `ReservationGuard`:
 
 ## Next steps
 
-- [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) — general error handling patterns
+- [Integrate Cycles with async-openai (Rust)](/how-to/integrating-cycles-with-async-openai) — replaces the `call_llm()` placeholders above with a real OpenAI chat completion, including streaming
+- [Rust Client Configuration Reference](/configuration/rust-client-configuration-reference) — full config surface, retry tuning, custom `reqwest::Client`, blocking variant
+- [Error Handling in Rust](/how-to/error-handling-patterns-in-rust) — Rust-specific error patterns, retries, RAII safety, graceful degradation
+- [Integrating Cycles with Rust](/how-to/integrating-cycles-with-rust) — broader integration patterns (multi-step flows, framework middleware)
 - [API Reference](/api/) — interactive endpoint documentation
-- [How Reserve/Commit Works](/protocol/how-reserve-commit-works-in-cycles) — the core protocol lifecycle
+- [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles) — the core protocol lifecycle
