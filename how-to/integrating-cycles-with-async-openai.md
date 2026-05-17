@@ -20,7 +20,7 @@ The same lifecycle composes against other Rust LLM clients (Anthropic, Bedrock, 
 - Error-aware patterns using `ReservationGuard` that preserve typed `OpenAIError` for the caller (`with_cycles()` wraps closure errors as `Error::Validation` and loses the original type)
 - Token-to-USD conversion at commit time for spend-denominated budgets
 
-**Loud-failure stance.** The examples on this page error out on missing `usage`, missing `content`, or non-positive `caps.max_tokens` rather than silently committing zero or sending `max_completion_tokens=0` to OpenAI. This matches the shipped [`examples/async_openai_completion.rs`](https://github.com/runcycles/cycles-client-rust/blob/main/examples/async_openai_completion.rs) in the runcycles crate. Production code that prefers a fallback (e.g. commit the reservation estimate on missing usage) should opt into that fallback explicitly — the default in a teaching example should not be silent under-billing.
+**Loud-failure stance.** All four examples on this page error out on missing `usage` or missing `content` rather than silently committing zero. The examples that read `caps.max_tokens` (the ALLOW_WITH_CAPS example, the streaming example, and the error-aware example) additionally error on non-positive cap values rather than sending `max_completion_tokens=0` to OpenAI. The basic example deliberately ignores `ctx.caps` to keep the minimum-viable composition compact — production code should follow the capped pattern. This matches the shipped [`examples/async_openai_completion.rs`](https://github.com/runcycles/cycles-client-rust/blob/main/examples/async_openai_completion.rs) in the runcycles crate. Production code that prefers a fallback (e.g. commit the reservation estimate on missing usage) should opt into that fallback explicitly — the default in a teaching example should not be silent under-billing.
 
 ## Cargo.toml
 
@@ -300,7 +300,7 @@ If the stream errors midway (network failure, rate limit, content policy violati
 If the loud-failure path on missing usage is too pessimistic for your deployment — for instance, you're routing through an OpenAI-compatible proxy that doesn't honor `include_usage` and you can't change the proxy — plug in a real tokenizer instead of erroring out. The `tiktoken-rs` crate's `o200k_base` encoder matches the tokenizer used by gpt-4o-family models:
 
 ```rust
-// Add to Cargo.toml: tiktoken-rs = "0.6"   (check crates.io for current)
+// Add to Cargo.toml: tiktoken-rs = "0.11"   (check crates.io for current)
 use tiktoken_rs::o200k_base;
 
 fn estimate_tokens(prompt: &str, output: &str) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
@@ -354,9 +354,30 @@ async fn run_completion(
             .build()
     ).await?;
 
+    // Same cap handling as the other examples: non-positive caps release the
+    // guard and surface a typed Cycles error rather than send
+    // max_completion_tokens=0 to OpenAI.
+    let mut max_tokens: u32 = 800;
+    if let Some(caps) = guard.caps() {
+        if let Some(cap) = caps.max_tokens {
+            let cap_u32 = u32::try_from(cap).map_err(|_| {
+                CompletionError::Cycles(CyclesError::Validation(
+                    "caps.max_tokens is negative".into(),
+                ))
+            })?;
+            if cap_u32 == 0 {
+                let _ = guard.release("caps.max_tokens is 0".to_string()).await;
+                return Err(CompletionError::Cycles(CyclesError::Validation(
+                    "caps.max_tokens is 0".into(),
+                )));
+            }
+            max_tokens = cap_u32.min(max_tokens);
+        }
+    }
+
     let request = CreateChatCompletionRequestArgs::default()
         .model("gpt-4o-mini")
-        .max_completion_tokens(800u32)
+        .max_completion_tokens(max_tokens)
         .messages([ChatCompletionRequestUserMessageArgs::default()
             .content(prompt)
             .build()?
