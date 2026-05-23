@@ -18,7 +18,7 @@ Recipes for common tasks with Cycles, organized by what you're trying to do.
 
 ### LLM providers
 
-[OpenAI (Python)](/how-to/integrating-cycles-with-openai) · [OpenAI (TypeScript)](/how-to/integrating-cycles-with-openai-typescript) · [Anthropic (Python)](/how-to/integrating-cycles-with-anthropic) · [Anthropic (TypeScript)](/how-to/integrating-cycles-with-anthropic-typescript) · [AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock) · [Google Gemini](/how-to/integrating-cycles-with-google-gemini) · [Groq](/how-to/integrating-cycles-with-groq) · [Ollama / local LLMs](/how-to/integrating-cycles-with-ollama)
+[OpenAI (Python)](/how-to/integrating-cycles-with-openai) · [OpenAI (TypeScript)](/how-to/integrating-cycles-with-openai-typescript) · [OpenAI (Rust / async-openai)](/how-to/integrating-cycles-with-async-openai) · [Anthropic (Python)](/how-to/integrating-cycles-with-anthropic) · [Anthropic (TypeScript)](/how-to/integrating-cycles-with-anthropic-typescript) · [AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock) · [Google Gemini](/how-to/integrating-cycles-with-google-gemini) · [Groq](/how-to/integrating-cycles-with-groq) · [Ollama / local LLMs](/how-to/integrating-cycles-with-ollama)
 
 ### Agent frameworks
 

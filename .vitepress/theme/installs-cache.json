@@ -1,84 +1,84 @@
 {
-  "npm": 4804,
-  "pypi": 4012,
-  "crates": 67,
-  "clones": 70541,
+  "npm": 4972,
+  "pypi": 4538,
+  "crates": 68,
+  "clones": 78405,
   "clonesByRepo": {
     ".github": {
-      "count": 1057,
-      "lastSeenDay": "2026-05-14"
+      "count": 1127,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-server-admin": {
-      "count": 9152,
-      "lastSeenDay": "2026-05-14"
+      "count": 9260,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-server": {
-      "count": 6945,
-      "lastSeenDay": "2026-05-14"
+      "count": 7206,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-protocol": {
-      "count": 5733,
-      "lastSeenDay": "2026-05-14"
+      "count": 6856,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-client-python": {
-      "count": 851,
-      "lastSeenDay": "2026-05-14"
+      "count": 987,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-spring-boot-starter": {
-      "count": 983,
-      "lastSeenDay": "2026-05-14"
+      "count": 1255,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-agent-action-authority-demo": {
-      "count": 441,
-      "lastSeenDay": "2026-05-14"
+      "count": 462,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-dashboard": {
-      "count": 14906,
-      "lastSeenDay": "2026-05-14"
+      "count": 17146,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-server-events": {
-      "count": 1780,
-      "lastSeenDay": "2026-05-14"
+      "count": 1855,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-runaway-demo": {
-      "count": 877,
-      "lastSeenDay": "2026-05-14"
+      "count": 907,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-client-typescript": {
-      "count": 1552,
-      "lastSeenDay": "2026-05-14"
+      "count": 1753,
+      "lastSeenDay": "2026-05-22"
     },
-    "docs": {
-      "count": 16064,
-      "lastSeenDay": "2026-05-14"
+    "cycles-docs": {
+      "count": 16950,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-openai-agents": {
-      "count": 507,
-      "lastSeenDay": "2026-05-14"
+      "count": 554,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-openclaw-budget-guard": {
-      "count": 1144,
-      "lastSeenDay": "2026-05-14"
+      "count": 1284,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-client-rust": {
-      "count": 900,
-      "lastSeenDay": "2026-05-14"
+      "count": 1093,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-mcp-server": {
-      "count": 1990,
-      "lastSeenDay": "2026-05-14"
+      "count": 2283,
+      "lastSeenDay": "2026-05-22"
     },
     "langchain-runcycles": {
-      "count": 1061,
-      "lastSeenDay": "2026-05-14"
+      "count": 1328,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-spring-ai-starter": {
-      "count": 4089,
-      "lastSeenDay": "2026-05-14"
+      "count": 5431,
+      "lastSeenDay": "2026-05-22"
     },
     "cycles-ap2-python": {
-      "count": 509,
-      "lastSeenDay": "2026-05-14"
+      "count": 668,
+      "lastSeenDay": "2026-05-22"
     }
   },
   "releases": 0,
@@ -90,7 +90,7 @@
     "cycles-agent-action-authority-demo": 0,
     "cycles-openai-agents": 0,
     "cycles-client-python": 0,
-    "docs": 0,
+    "cycles-docs": 0,
     "cycles-client-typescript": 0,
     "cycles-openclaw-budget-guard": 0,
     "cycles-server-events": 0,
@@ -105,20 +105,20 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 13319,
-  "fetchedAt": "2026-05-15T08:38:55.815Z",
+  "total": 14014,
+  "fetchedAt": "2026-05-23T08:06:28.242Z",
   "npmByPackage": {
-    "runcycles": 1324,
-    "@runcycles/mcp-server": 776,
-    "@runcycles/openclaw-budget-guard": 2704
+    "runcycles": 1377,
+    "@runcycles/mcp-server": 812,
+    "@runcycles/openclaw-budget-guard": 2783
   },
   "pypiByPackage": {
-    "runcycles": 2285,
-    "runcycles-openai-agents": 486,
-    "langchain-runcycles": 988,
-    "runcycles-ap2": 253
+    "runcycles": 2410,
+    "runcycles-openai-agents": 518,
+    "langchain-runcycles": 1292,
+    "runcycles-ap2": 318
   },
   "cratesByPackage": {
-    "runcycles": 67
+    "runcycles": 68
   }
 }
