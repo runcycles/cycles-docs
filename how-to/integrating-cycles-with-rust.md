@@ -32,6 +32,8 @@ export CYCLES_TENANT="acme"
 
 > **Need an API key?** Create one via the Admin Server — see [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key) or [API Key Management](/how-to/api-key-management-in-cycles).
 
+> **Looking for a real LLM example?** The `openai_call` / `stream_llm_response` placeholders below are intentionally generic. For the concrete `async-openai` wiring — including streaming token capture and error mapping — see [Integrate Cycles with async-openai (Rust)](/how-to/integrating-cycles-with-async-openai).
+
 ## Quick start
 
 ```rust
@@ -278,7 +280,7 @@ let client = CyclesClient::builder("cyc_live_abc123", "http://localhost:7878")
     .build();
 ```
 
-See [Rust Client Configuration](/quickstart/getting-started-with-the-rust-client#configuration) for all options.
+See the [Rust Client Configuration Reference](/configuration/rust-client-configuration-reference) for the full surface.
 
 ## Blocking client
 

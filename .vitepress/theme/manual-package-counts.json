@@ -1,18 +1,18 @@
 {
   "_note": "GHCR pull counts are NOT exposed via the GitHub REST API. The `download_count` field is present in the response schema for /orgs/{org}/packages?package_type=container (and the per-version endpoint) but is always null for container packages even with `read:packages` scope — verified 2026-05-07. The field is populated for some other registry types but not GHCR. Public package pages render rounded values (e.g. '1.2K') for high-traffic packages; per-package pages now also round above ~1K (as of 2026-05-12 — previously they showed exact integers, but GitHub appears to have changed this) and still show exact integers below ~1000. This manual file is the source of truth for ghPackages — update by peeking at https://github.com/orgs/runcycles/packages (typical cadence: monthly, or before publishing the homepage installs counter). Values above 1K are recorded as the rounded display × 1000 (e.g. '1.29K' → 1290) and are approximate to ±5.",
   "_source": "https://github.com/orgs/runcycles/packages",
-  "lastVerifiedAt": "2026-05-12",
+  "lastVerifiedAt": "2026-05-19",
   "ghPackages": {
-    "cycles-server-admin":  1290,
-    "cycles-server":        1030,
+    "cycles-server-admin":  1300,
+    "cycles-server":        1040,
     "cycles-dashboard":      669,
-    "cycles-server-events":  373
+    "cycles-server-events":  430
   },
   "_mavenNote": "Maven Central has no public downloads API. Sonatype Central exposes download counts to the publisher via the Central Portal (https://central.sonatype.com/) under 'Statistics'. The portal reports at the namespace level (groupId), so we key by groupId here rather than groupId:artifactId. Update manually after each release (typical cadence: monthly).",
   "_mavenSource": "https://central.sonatype.com/ → Statistics → Downloads",
-  "_mavenBreakdown": "As of 2026-05-12: Unique sources 225. Companies 55. (No monthly split captured this refresh.)",
-  "mavenLastVerifiedAt": "2026-05-12",
+  "_mavenBreakdown": "As of 2026-05-19: Unique sources 256. Companies 56. (No monthly split captured this refresh.)",
+  "mavenLastVerifiedAt": "2026-05-19",
   "maven": {
-    "io.runcycles": 1589
+    "io.runcycles": 1901
   }
 }
