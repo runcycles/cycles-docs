@@ -33,7 +33,7 @@
     "html2canvas-pro": "^2.0.3",
     "medium-zoom": "^1.1.0",
     "shiki": "^4.1.0",
-    "vitepress-openapi": "^0.1.20",
+    "vitepress-openapi": "^0.2.0",
     "yaml": "^2.9.0"
   }
 }
