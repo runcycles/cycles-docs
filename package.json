@@ -11,7 +11,7 @@
     "serve-static": "^2.2.1",
     "sharp": "^0.34.5",
     "vitepress": "^1.6.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "overrides": {
     "esbuild": "^0.25.0",
