@@ -20,4 +20,8 @@ jobs:
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # AUTOMERGE_PAT (repo+workflow scope) lets auto-merge work on PRs that
+          # touch .github/workflows/** (e.g. github-actions bumps); the default
+          # GITHUB_TOKEN is forbidden by GitHub from doing so. Falls back to
+          # GITHUB_TOKEN when the secret is absent (unchanged behavior).
+          GH_TOKEN: ${{ secrets.AUTOMERGE_PAT || secrets.GITHUB_TOKEN }}
