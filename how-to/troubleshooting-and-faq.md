@@ -284,6 +284,14 @@ Your application's behavior depends on your error handling. The SDK clients thro
 
 Yes. Each application uses its own tenant (or its own workspace within a tenant). The Cycles server is stateless — all state lives in Redis.
 
+### How do I prove what Cycles decided, after the fact?
+
+Enable **CyclesEvidence**. When the signing identity is configured, decide / reserve / commit / release responses — and budget/lifecycle denials like a `409 BUDGET_EXCEEDED` — carry an optional `cycles_evidence` reference (`evidence_id` + `cycles_evidence_url`). The `evidence_id` is a SHA-256 content address computed synchronously and returned in-band; the `cycles-server-events` tier asynchronously Ed25519-signs the envelope, which you fetch and verify at `GET /v1/evidence/{id}` — offline, without trusting or reaching the live ledger. It's the receipt, not the gate: it doesn't change enforcement, it makes decisions auditable and bindable by other systems. See [CyclesEvidence: Verifiable Audit](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions), the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles), and the operator [enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md).
+
+### What happens to evidence if I don't configure the signing identity?
+
+Nothing breaks in the budget-enforcement path — Cycles continues to decide, reserve, commit, and release exactly as before — but verifiable evidence is not available until the shared identity is configured consistently. In fully unconfigured/dev setups, responses omit `cycles_evidence`; if `EVIDENCE_SERVER_ID` is blank, `cycles-server-events` dead-letters evidence source records instead of signing an invalid envelope; and if the producer/worker public identity differs, the worker dead-letters on the `evidence_id` cross-check. The events worker's ephemeral-key mode is development-only and only covers the case where `EVIDENCE_SERVER_ID` is present but the signing pair is absent; it is not a production evidence identity. Set `EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` (public, on both services) and `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` (secret, on `cycles-server-events` only), then watch `evidence:failed` during rollout.
+
 ### How do I reset a budget to zero?
 
 Two different "reset to zero" intents — use the right operation for the one you mean.
