@@ -49,6 +49,14 @@ The real cost committed after execution completes. The actual amount may be less
 
 A preflight budget check that evaluates whether a reservation **would** be allowed, without actually creating one. Useful for UI gating, request routing, or early rejection of requests that would exceed budget. See [How Decide Works](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation).
 
+### CyclesEvidence
+
+A tamper-evident, content-addressed, Ed25519-signed envelope that records a budget decision (`decide` / `reserve` / `commit` / `release` / `error`) so any third party can verify *what Cycles decided* offline, without trusting or reaching the Cycles server. Responses carry an optional `cycles_evidence` reference (`evidence_id` + `cycles_evidence_url`); the signed envelope is fetched at `GET /v1/evidence/{id}`. See [CyclesEvidence: Verifiable Audit](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions) and the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles).
+
+### evidence_id
+
+The content address of a [CyclesEvidence](#cyclesevidence) envelope — the lowercase SHA-256 (64 hex) of its RFC 8785 (JCS) canonical bytes with `evidence_id` and `signature` emptied. Computed synchronously by Cycles and returned on the response, so the id *is* the integrity check: alter the envelope and the id no longer matches.
+
 ## Budget & Scope
 
 ### Scope
