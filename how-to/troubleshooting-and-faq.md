@@ -290,7 +290,7 @@ Enable **CyclesEvidence**. When the signing identity is configured, decide / res
 
 ### What happens to evidence if I don't configure the signing identity?
 
-Nothing breaks — Cycles enforces budgets exactly as before; it just emits no `cycles_evidence` and the events worker signs with a throwaway key (dev only). Evidence is opt-in: set `EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` (public, on both services) and `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` (secret, on `cycles-server-events` only) to turn it on.
+Nothing breaks in the budget-enforcement path — Cycles continues to decide, reserve, commit, and release exactly as before — but verifiable evidence is not available until the shared identity is configured consistently. In fully unconfigured/dev setups, responses omit `cycles_evidence`; if `EVIDENCE_SERVER_ID` is blank, `cycles-server-events` dead-letters evidence source records instead of signing an invalid envelope; and if the producer/worker public identity differs, the worker dead-letters on the `evidence_id` cross-check. The events worker's ephemeral-key mode is development-only and only covers the case where `EVIDENCE_SERVER_ID` is present but the signing pair is absent; it is not a production evidence identity. Set `EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` (public, on both services) and `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` (secret, on `cycles-server-events` only), then watch `evidence:failed` during rollout.
 
 ### How do I reset a budget to zero?
 
