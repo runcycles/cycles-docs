@@ -48,7 +48,7 @@ A consumer records the `evidence_id`, then fetches the signed envelope at `cycle
 
 **The full chain is reconstructable.** `decide → reserve → commit / release`, plus the error paths, each produce evidence, with the `reservation_id` carried into commit/release so the authorization → settlement chain can be rebuilt from the artifacts alone.
 
-**Long-horizon, regulatory-grade.** Content-addressed signed records are exactly what regimes like the EU AI Act's record-keeping requirements expect — verifiable years later, independent of whether the original server is still running.
+**Long-horizon retention.** Content-addressed, signed records are well-suited to long-horizon record-keeping — for example EU AI Act Article 12 retention — verifiable years later, independent of whether the original server is still running.
 
 **Zero friction to produce.** The `evidence_id` is computed *synchronously* and returned in-band on the response; the expensive signing and storage happen asynchronously. Producing the proof costs the caller nothing extra — there is no separate "generate evidence" call.
 
