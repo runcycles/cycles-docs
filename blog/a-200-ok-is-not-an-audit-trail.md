@@ -10,7 +10,7 @@ tags:
   - agents
   - production
   - evidence
-description: "Enforcing an agent's budget is only half of runtime authority. The other half is proving what you decided — to an auditor, a counterparty, or a regulator who wasn't on the call. CyclesEvidence makes every decision a signed, portable receipt."
+description: "Enforcing an agent's budget is only half of runtime authority. The other half is proving what you decided — to an auditor, a counterparty, or a regulator who wasn't on the call. When configured, CyclesEvidence turns eligible budget decisions into signed, portable receipts."
 blog: true
 sidebar: false
 featured: false
@@ -50,9 +50,9 @@ It is the difference between "trust me, the budget said no" and handing someone 
 
 Three properties, each doing a specific job:
 
-- **Content-addressed.** The `evidence_id` is the SHA-256 of the envelope's [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS) canonical bytes. The id *is* the integrity check — change one byte of a decision and the id no longer matches.
-- **Signed.** An Ed25519 signature over those bytes proves origin. Forge the contents and the signature fails.
-- **In-band, then fetchable.** Cycles computes the `evidence_id` *synchronously* and returns it on the response (`cycles_evidence: { evidence_id, cycles_evidence_url }`); the expensive signing and storage happen asynchronously, off the request path. A consumer records the id and later fetches the signed envelope from the public `GET /v1/evidence/{id}` capability URL — and verifies it on its own.
+- **Content-addressed.** The `evidence_id` is the SHA-256 of the envelope's [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS) canonical bytes — computed with the `evidence_id` and `signature` fields themselves left blank. The id *is* the integrity check: change one byte of a decision and it no longer matches.
+- **Signed.** An Ed25519 signature then covers a second canonical pass — the same envelope with the `evidence_id` now filled in and `signature` still blank — proving origin. Forge the contents and the signature fails.
+- **In-band, then fetchable.** Cycles computes the `evidence_id` *synchronously* and returns it on the response (`cycles_evidence: { evidence_id, cycles_evidence_url }`); the expensive signing and storage happen asynchronously, off the request path. A consumer records the id and later fetches the signed envelope from the public `GET /v1/evidence/{id}` capability URL — and verifies it on its own. (Because signing is async, a fetch immediately after the response can return a transient `404` until the envelope lands — retry.)
 
 Producing the proof costs the caller nothing extra — there's no separate "generate evidence" call. The mechanics are in the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles); the why is in [the concept page](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions).
 
@@ -60,7 +60,7 @@ Producing the proof costs the caller nothing extra — there's no separate "gene
 
 Here's the part most audit stories miss. The highest-signal governance event is not "the agent ran." It's **"the budget said no."**
 
-In Cycles, a non-dry reservation that would exceed budget is *not* a `200` with `decision: DENY` — it's an HTTP `409 BUDGET_EXCEEDED`, captured as a signed `error` envelope. Settling a reservation that already expired is a `410`. Both are signed. So is the frozen budget, the overdraft-limit breach, the outstanding-debt block.
+In Cycles, a non-dry reservation that would exceed budget is *not* a `200` with `decision: DENY` — it's an HTTP `409 BUDGET_EXCEEDED`, captured as a signed `error` envelope. Settling a reservation that already expired is a `410`; settling an already-finalized hold is a `409`. The other post-evaluation budget denials get signed `error` envelopes too — frozen and closed budgets, overdraft-limit breaches, outstanding debt, unit mismatches. (Pre-evaluation failures — bad auth, malformed input — get no receipt: nothing was decided, so there's nothing to attest.)
 
 Proving an action was **blocked** — and exactly why, and against which scope — is frequently more valuable than proving one ran. It's the evidence that says *the control worked*. The reservation id is carried into the commit and release receipts too, so the whole authorization → settlement chain reconstructs from the artifacts alone — no live ledger required.
 
