@@ -379,6 +379,7 @@ export default defineConfig({
               ]
             },
             { text: 'Webhooks and Events', link: '/concepts/webhooks-and-events' },
+            { text: 'CyclesEvidence: Verifiable Audit', link: '/concepts/cycles-evidence-verifiable-audit-for-agent-decisions' },
             { text: 'Glossary', link: '/glossary' },
           ]
         },
@@ -529,6 +530,7 @@ export default defineConfig({
             { text: 'Event Payloads Reference', link: '/protocol/event-payloads-reference' },
             { text: 'Webhook Scope Filter Syntax', link: '/protocol/webhook-scope-filter-syntax' },
             { text: 'Correlation and Tracing', link: '/protocol/correlation-and-tracing-in-cycles' },
+            { text: 'CyclesEvidence Envelopes', link: '/protocol/cycles-evidence-envelopes-in-cycles' },
             { text: 'Tenant-Close Cascade Semantics', link: '/protocol/tenant-close-cascade-semantics' },
           ]
         },
