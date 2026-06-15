@@ -97,7 +97,7 @@ const services = [
         class="card tier"
         :class="{ featured: tier.featured }"
       >
-        <span v-if="tier.featured" class="ribbon">Most popular</span>
+        <span v-if="tier.featured" class="ribbon">Recommended</span>
         <div class="tier-head">
           <h3 class="tier-name">{{ tier.name }}</h3>
         </div>
@@ -287,6 +287,7 @@ const services = [
 
 .features li {
   position: relative;
+  margin: 0; /* override .vp-doc `li + li` margin inside markdown; spacing comes from the flex gap */
   padding-left: 22px;
   font-size: 14px;
   color: var(--vp-c-text-2);
@@ -318,7 +319,13 @@ const services = [
   transition: background 0.2s, transform 0.1s;
 }
 
-.cta-button:hover { background: var(--vp-c-brand-2); }
+/* Pin color/decoration on hover: these render inside .vp-doc, whose
+   `a:hover` rule would otherwise recolor the text (teal on teal = invisible). */
+.cta-button:hover {
+  background: var(--vp-c-brand-2);
+  color: var(--vp-c-bg);
+  text-decoration: none;
+}
 .cta-button:active { transform: translateY(1px); }
 
 .cta-button.alt {
@@ -330,6 +337,8 @@ const services = [
 .cta-button.alt:hover {
   background: var(--vp-c-bg);
   border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
 }
 
 .boundary {

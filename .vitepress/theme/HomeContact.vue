@@ -123,6 +123,7 @@ const issuesUrl = 'https://github.com/runcycles/cycles-docs/issues'
 .reason {
   display: flex;
   flex-direction: column;
+  margin: 0; /* override .vp-doc `li + li` margin when rendered inside markdown */
   padding: 16px 18px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
@@ -181,6 +182,8 @@ const issuesUrl = 'https://github.com/runcycles/cycles-docs/issues'
 
 .cta-button:hover {
   background: var(--vp-c-brand-2);
+  color: var(--vp-c-bg);
+  text-decoration: none;
 }
 
 .cta-button:active {
