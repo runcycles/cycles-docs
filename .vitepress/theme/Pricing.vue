@@ -105,6 +105,8 @@ const services = [
         <span v-if="tier.featured" class="ribbon">Most popular</span>
         <div class="tier-head">
           <h3 class="tier-name">{{ tier.name }}</h3>
+        </div>
+        <div class="badge-slot">
           <span v-if="tier.badge" class="badge">{{ tier.badge }}</span>
         </div>
         <div class="price-row">
@@ -169,7 +171,7 @@ const services = [
   display: flex;
   flex-direction: column;
   padding: 22px 20px;
-  border: 1px solid var(--vp-c-divider);
+  border: 2px solid var(--vp-c-divider);
   border-radius: 12px;
   background: var(--vp-c-bg-soft);
   transition: border-color 0.2s, transform 0.1s;
@@ -181,7 +183,6 @@ const services = [
 
 .tier.featured {
   border-color: var(--vp-c-brand-1);
-  border-width: 2px;
   box-shadow: 0 4px 24px -12px var(--vp-c-brand-1);
 }
 
@@ -200,11 +201,14 @@ const services = [
 }
 
 .tier-head {
+  margin-bottom: 4px;
+}
+
+.badge-slot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  min-height: 22px;
+  margin-bottom: 8px;
 }
 
 .tier-name {
@@ -235,6 +239,13 @@ const services = [
   margin-bottom: 12px;
 }
 
+/* Fixed-height price slot so the description and CTA rows share a baseline
+   across all three tiers regardless of how the cadence text wraps. */
+.tier .price-row {
+  min-height: 72px;
+  align-content: flex-start;
+}
+
 .price {
   font-size: 30px;
   font-weight: 800;
@@ -259,6 +270,7 @@ const services = [
   color: var(--vp-c-text-2);
   margin: 0 0 14px;
   line-height: 1.5;
+  min-height: 42px;
 }
 
 .features {
@@ -355,6 +367,14 @@ const services = [
   border-top: none;
   padding-top: 0;
   letter-spacing: -0.01em;
+  min-height: 44px;
+}
+
+@media (max-width: 767px) {
+  /* Single-column: no neighbor to align with, so drop the reserved slots. */
+  .service-name { min-height: 0; }
+  .tier .price-row { min-height: 0; }
+  .for-who { min-height: 0; }
 }
 
 .service-detail {
