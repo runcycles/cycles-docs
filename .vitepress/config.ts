@@ -273,6 +273,7 @@ export default defineConfig({
         ],
       },
       { text: 'Blog', link: '/blog/' },
+      { text: 'Pricing', link: '/pricing' },
       { text: 'Partners', link: '/design-partners' },
       { text: 'Contact', link: '/contact' },
       { text: 'GitHub', link: 'https://github.com/runcycles' }
