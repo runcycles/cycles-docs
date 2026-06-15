@@ -233,9 +233,8 @@ const services = [
 
 .price-row {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 5px;
   margin-bottom: 12px;
 }
 
@@ -243,7 +242,7 @@ const services = [
    across all three tiers regardless of how the cadence text wraps. */
 .tier .price-row {
   min-height: 72px;
-  align-content: flex-start;
+  justify-content: flex-start;
 }
 
 .price {
