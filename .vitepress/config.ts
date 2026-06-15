@@ -230,15 +230,6 @@ export default defineConfig({
     nav: [
       { text: 'Why Cycles', link: '/why-cycles' },
       { text: 'Quickstart', link: '/quickstart/what-is-cycles' },
-      { text: 'Protocol', link: '/protocol/' },
-      {
-        text: 'Tools',
-        items: [
-          { text: 'All tools', link: '/calculators/' },
-          { text: 'Blast Radius Risk Calculator', link: '/calculators/ai-agent-blast-radius-standalone' },
-          { text: 'Cost Calculator (Claude vs GPT)', link: '/calculators/claude-vs-gpt-cost-standalone' },
-        ],
-      },
       {
         text: 'Docs',
         items: [
@@ -258,6 +249,7 @@ export default defineConfig({
             items: [
               { text: 'API Reference (Interactive)', link: '/api/' },
               { text: 'Admin API (Interactive)', link: '/admin-api/' },
+              { text: 'Protocol Reference (Interactive)', link: '/protocol/' },
               { text: 'Protocol Spec', link: 'https://github.com/runcycles/cycles-protocol' },
               { text: 'Configuration', link: '/configuration/python-client-configuration-reference' },
             ],
@@ -270,13 +262,25 @@ export default defineConfig({
               { text: 'Demos', link: '/demos/' },
             ],
           },
+          {
+            text: 'Tools',
+            items: [
+              { text: 'All tools', link: '/calculators/' },
+              { text: 'Blast Radius Risk Calculator', link: '/calculators/ai-agent-blast-radius-standalone' },
+              { text: 'Cost Calculator (Claude vs GPT)', link: '/calculators/claude-vs-gpt-cost-standalone' },
+            ],
+          },
         ],
       },
-      { text: 'Blog', link: '/blog/' },
       { text: 'Pricing', link: '/pricing' },
-      { text: 'Partners', link: '/design-partners' },
-      { text: 'Contact', link: '/contact' },
-      { text: 'GitHub', link: 'https://github.com/runcycles' }
+      { text: 'Blog', link: '/blog/' },
+      {
+        text: 'Contact',
+        items: [
+          { text: 'Talk to the team', link: '/contact' },
+          { text: 'Become a design partner', link: '/design-partners' },
+        ],
+      },
     ],
     sidebar: {
       '/api/': [
@@ -609,7 +613,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/runcycles/cycles-docs' }
+      { icon: 'github', link: 'https://github.com/runcycles' }
     ]
   },
   transformPageData(pageData) {
