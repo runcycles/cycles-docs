@@ -23,7 +23,7 @@ The [Design Partner program](/design-partners) is not a pricing tier. It's a sma
 
 Running a real multi-tenant workload and willing to shape the next two protocol releases? [Apply to become a design partner &rarr;](/design-partners)
 
-## Managed cloud — coming
+## Managed cloud — coming {#managed-cloud-coming}
 
 A fully managed Cycles (RunCycles.io) is on the roadmap: we run Redis, the runtime, the admin server, and the events service, on a SOC 2 track, so you don't have to. It is **planned but not yet available** — until then, every paid plan above supports your self-hosted deployment.
 
