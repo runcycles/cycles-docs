@@ -19,7 +19,8 @@ const tiers = [
   {
     name: 'Production',
     price: '$1,500',
-    cadence: '/mo, billed annually ($18,000/yr)',
+    cadence: '/mo, billed annually',
+    annual: '$18,000/yr',
     badge: 'Introductory pricing',
     forWho: 'One production workload',
     featured: true,
@@ -36,7 +37,8 @@ const tiers = [
   {
     name: 'Enterprise',
     price: 'From $6,000',
-    cadence: '/mo, billed annually (from $72,000/yr)',
+    cadence: '/mo, billed annually',
+    annual: 'from $72,000/yr',
     forWho: 'Mission-critical, regulated, or multiple workloads',
     featured: false,
     features: [
@@ -76,13 +78,6 @@ const services = [
       'Map Cycles-generated evidence and runtime controls to selected control narratives for EU AI Act readiness, NIST AI RMF, and ISO/IEC 42001. Configure CyclesEvidence signing and retention/cold export, and deliver an auditor-ready evidence pack. This is not legal advice.',
   },
   {
-    name: 'Custom Integration & Policy Design',
-    price: 'From $250',
-    cadence: '/hr or fixed bid',
-    detail:
-      'Custom SDK or agent-host integration, policy and scope design, and migrations — scoped to your stack and delivered as a working patch set.',
-  },
-  {
     name: 'Team Enablement Workshop',
     price: '$3,500',
     cadence: 'half-day · $6,000 full-day',
@@ -112,6 +107,7 @@ const services = [
         <div class="price-row">
           <span class="price">{{ tier.price }}</span>
           <span class="cadence">{{ tier.cadence }}</span>
+          <span v-if="tier.annual" class="annual">{{ tier.annual }}</span>
         </div>
         <p class="for-who">{{ tier.forWho }}</p>
         <ul class="features">
@@ -241,7 +237,7 @@ const services = [
 /* Fixed-height price slot so the description and CTA rows share a baseline
    across all three tiers regardless of how the cadence text wraps. */
 .tier .price-row {
-  min-height: 72px;
+  min-height: 84px;
   justify-content: flex-start;
 }
 
@@ -260,6 +256,13 @@ const services = [
 .cadence {
   font-size: 13px;
   color: var(--vp-c-text-3);
+  line-height: 1.4;
+}
+
+.annual {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
   line-height: 1.4;
 }
 
