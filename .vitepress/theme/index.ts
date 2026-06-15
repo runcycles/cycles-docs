@@ -24,6 +24,8 @@ import NetworkZones from './NetworkZones.vue'
 import AdoptionLadder from './AdoptionLadder.vue'
 import CostCalculator from './CostCalculator.vue'
 import BlastRadiusCalculator from './BlastRadiusCalculator.vue'
+import Pricing from './Pricing.vue'
+import HomeContact from './HomeContact.vue'
 
 export default {
   extends: DefaultTheme,
@@ -47,6 +49,8 @@ export default {
     app.component('AdoptionLadder', AdoptionLadder)
     app.component('CostCalculator', CostCalculator)
     app.component('BlastRadiusCalculator', BlastRadiusCalculator)
+    app.component('Pricing', Pricing)
+    app.component('HomeContact', HomeContact)
   },
   setup() {
     const route = useRoute()

@@ -4,6 +4,7 @@ const links = [
   { text: 'Security', href: '/security' },
   { text: 'Tools', href: '/calculators/' },
   { text: 'Blog', href: '/blog/' },
+  { text: 'Pricing', href: '/pricing' },
   { text: 'Changelog', href: '/changelog' },
   { text: 'Contact', href: '/contact' },
   { text: 'GitHub', href: 'https://github.com/runcycles', external: true },
