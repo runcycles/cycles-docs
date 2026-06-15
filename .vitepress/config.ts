@@ -262,14 +262,14 @@ export default defineConfig({
               { text: 'Demos', link: '/demos/' },
             ],
           },
-          {
-            text: 'Tools',
-            items: [
-              { text: 'All tools', link: '/calculators/' },
-              { text: 'Blast Radius Risk Calculator', link: '/calculators/ai-agent-blast-radius-standalone' },
-              { text: 'Cost Calculator (Claude vs GPT)', link: '/calculators/claude-vs-gpt-cost-standalone' },
-            ],
-          },
+        ],
+      },
+      {
+        text: 'Tools',
+        items: [
+          { text: 'All tools', link: '/calculators/' },
+          { text: 'Blast Radius Risk Calculator', link: '/calculators/ai-agent-blast-radius-standalone' },
+          { text: 'Cost Calculator (Claude vs GPT)', link: '/calculators/claude-vs-gpt-cost-standalone' },
         ],
       },
       { text: 'Pricing', link: '/pricing' },
