@@ -5,15 +5,17 @@ description: "Cycles is Apache 2.0 open-source software — self-host it for fre
 
 # Pricing
 
-**Self-host Cycles for free. Pay only when you want our people involved.** No license key, no seat fees, and no percentage of agent spend.
+**Self-host Cycles for free. Pay for production assurance when runtime authority becomes part of your agent infrastructure.** No license key, no seat fees, and no percentage of agent spend.
 
-Today, paid plans support self-hosted Cycles deployments. A managed cloud (RunCycles.io) is planned but [not yet available](#managed-cloud-coming).
+Today, paid plans support self-hosted Cycles deployments. A managed cloud (runcycles.ai) is planned but [not yet available](#managed-cloud-coming).
 
 ## How pricing works
 
 - **Apache 2.0 open-source software.** Cycles is Apache 2.0 open-source software. Self-host it for free. Paid plans do not unlock hidden features; they add support, implementation help, and assurance. No license key, no feature gating, no seat fees.
 - **No agent-spend tax.** We never take a percentage of your model, tool, or agent spend. Support pricing is flat and independent of tokens, requests, agents, tenants, or downstream provider spend — the opposite of gateways that bill a cut of every call.
-- **You pay for humans and guarantees, not bits.** Response targets, expert integration help, and compliance-readiness evidence are the product. The software stays free.
+- **You pay for the production layer, not the software.** The software stays open. Paid plans add response targets, upgrade guidance, incident support, architecture review, and audit-ready evidence configuration for teams running Cycles as a control point in their agent infrastructure.
+
+For regulated or enterprise deployments, paid support can include evidence retention, signed CyclesEvidence exports, audit-readiness review, and control-narrative support — see the [Compliance Evidence Package](#fixed-scope-services) below.
 
 <Pricing />
 
@@ -25,7 +27,7 @@ Running a real multi-tenant workload and willing to shape the next two protocol 
 
 ## Managed cloud — coming {#managed-cloud-coming}
 
-A fully managed Cycles (RunCycles.io) is on the roadmap: we run Redis, the runtime, the admin server, and the events service, on a SOC 2 track, so you don't have to. It is **planned but not yet available** — until then, every paid plan above supports your self-hosted deployment.
+A fully managed Cycles (runcycles.ai) is on the roadmap: we run Redis, the runtime, the admin server, and the events service, on a SOC 2 track, so you don't have to. It is **planned but not yet available** — until then, every paid plan above supports your self-hosted deployment.
 
 <a href="https://forms.gle/r6w2wD4Hu9cbRPmd8" target="_blank" rel="noopener"><strong>Join the managed-cloud waitlist &rarr;</strong></a>
 
