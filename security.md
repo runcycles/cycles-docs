@@ -13,7 +13,7 @@ All Cycles state lives in Redis. Cycles is currently self-hosted only: Redis run
 
 Cycles stores budget state — reservation amounts, balances, event records, and tenant configuration. It does not store LLM prompts, responses, or any content from agent interactions.
 
-A managed cloud offering (RunCycles.io) is planned. It is not yet available.
+A managed cloud offering (runcycles.ai) is planned. It is not yet available.
 
 ## Event audit trail
 
@@ -77,7 +77,7 @@ All Cycles services run on the internal network. Only the load balancer is expos
 
 Cycles ships today as self-hosted open source. Redis, the runtime server, the admin server, and the events service all run inside your infrastructure. Data location, network exposure, Redis operation, admin-server access, and compliance scope are all under your control and inherit your existing audit perimeter.
 
-A managed cloud offering (RunCycles.io) is on the roadmap. When it ships, this page will document its data-residency, access-control, and certification posture.
+A managed cloud offering (runcycles.ai) is on the roadmap. When it ships, this page will document its data-residency, access-control, and certification posture.
 
 ## Webhook security
 

@@ -17,12 +17,12 @@ const tiers = [
     ctaLink: '/quickstart/what-is-cycles',
   },
   {
-    name: 'Production',
+    name: 'Production Support',
     price: '$1,500',
     cadence: '/mo, billed annually',
     annual: '$18,000/yr',
     badge: 'Introductory pricing',
-    forWho: 'One production workload',
+    forWho: 'One production deployment or workload path',
     featured: true,
     features: [
       'One private Slack channel + email',
@@ -42,11 +42,12 @@ const tiers = [
     forWho: 'Mission-critical, regulated, or multiple workloads',
     featured: false,
     features: [
-      'Private Slack + email + scheduled calls',
+      'Named engineer + quarterly architecture reviews',
       'Custom incident-response terms, including optional 24×7 SEV-1 coverage',
-      'Pre-release access + version-pinning guidance',
-      'Quarterly architecture reviews + named engineer',
-      'Evidence/retention config + auditor Q&A support',
+      'Evidence/retention configuration + auditor Q&A support',
+      'Version-pinning + upgrade guidance',
+      'Pre-release access for protocol changes',
+      'Private Slack, email, and scheduled calls',
       'Prioritized protocol requests',
     ],
     ctaText: 'Contact sales',
@@ -121,14 +122,40 @@ const services = [
       </div>
     </div>
 
-    <p class="boundary">
-      Production support covers Cycles deployment, configuration, upgrades, protocol
-      behavior, and integration guidance. It does not include building or operating
-      your agent application.
+    <p class="tiers-note">
+      Enterprise pricing scales with workloads, environments, response coverage, and
+      evidence requirements.
+    </p>
+
+    <!-- What support covers -->
+    <div class="scope">
+      <div class="scope-col inc">
+        <h4 class="scope-title">What support includes</h4>
+        <ul>
+          <li>Cycles runtime / admin / events deployment guidance</li>
+          <li>Protocol behavior and configuration support</li>
+          <li>Upgrade and version-pinning guidance</li>
+          <li>Scope, budget, policy, and evidence-model review</li>
+          <li>Integration guidance for supported frameworks</li>
+        </ul>
+      </div>
+      <div class="scope-col exc">
+        <h4 class="scope-title">What it does not include</h4>
+        <ul>
+          <li>Building your agent product</li>
+          <li>Owning your production operations</li>
+          <li>Legal advice</li>
+          <li>Custom feature development unless separately scoped</li>
+        </ul>
+      </div>
+    </div>
+    <p class="workload-note">
+      A workload means one agreed production path where Cycles gates model calls, tool
+      calls, agent runs, or another consequential action flow.
     </p>
 
     <!-- Professional services -->
-    <h2 class="services-heading">Fixed-scope services</h2>
+    <h2 id="fixed-scope-services" class="services-heading">Fixed-scope services</h2>
     <p class="services-caption">
       One-time engagements with a fixed price and a concrete deliverable. Subscriptions
       are billed annually; services are 50% on start / 50% on delivery, or net-30.
@@ -237,20 +264,21 @@ const services = [
 /* Fixed-height price slot so the description and CTA rows share a baseline
    across all three tiers regardless of how the cadence text wraps. */
 .tier .price-row {
-  min-height: 84px;
+  min-height: 76px;
   justify-content: flex-start;
 }
 
 .price {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 800;
   color: var(--vp-c-text-1);
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.1;
+  white-space: nowrap; /* keep "From $6,000" on one line so price blocks stay equal height */
 }
 
 .price.small {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .cadence {
@@ -272,7 +300,7 @@ const services = [
   color: var(--vp-c-text-2);
   margin: 0 0 14px;
   line-height: 1.5;
-  min-height: 42px;
+  min-height: 63px; /* fit up to 3 lines so the feature lists start at the same height */
 }
 
 .features {
@@ -341,14 +369,77 @@ const services = [
   text-decoration: none;
 }
 
-.boundary {
-  margin: 18px 0 0;
-  padding: 12px 16px;
-  border-left: 3px solid var(--vp-c-brand-1);
-  background: var(--vp-c-bg-soft);
-  border-radius: 0 8px 8px 0;
+.tiers-note {
+  margin: 14px 2px 0;
   font-size: 13px;
+  color: var(--vp-c-text-3);
+  line-height: 1.6;
+}
+
+.scope {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px 32px;
+  margin: 24px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+}
+
+@media (min-width: 768px) {
+  .scope { grid-template-columns: 1fr 1fr; }
+}
+
+.scope-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  margin: 0 0 10px;
+  border-top: none;
+  padding-top: 0;
+  letter-spacing: -0.01em;
+}
+
+.scope-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.scope-col li {
+  position: relative;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 13.5px;
   color: var(--vp-c-text-2);
+  line-height: 1.5;
+}
+
+.scope-col li::before {
+  position: absolute;
+  left: 2px;
+  top: 0;
+  font-weight: 700;
+}
+
+.scope-col.inc li::before {
+  content: '✓';
+  color: var(--vp-c-brand-1);
+}
+
+.scope-col.exc li::before {
+  content: '×';
+  color: var(--vp-c-text-3);
+}
+
+.workload-note {
+  margin: 12px 2px 0;
+  font-size: 13px;
+  color: var(--vp-c-text-3);
   line-height: 1.6;
 }
 
