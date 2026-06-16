@@ -90,6 +90,33 @@ const services = [
 
 <template>
   <section class="pricing">
+    <!-- What support covers (shown before the tiers so scope is clear up front) -->
+    <div class="scope">
+      <div class="scope-col inc">
+        <h4 class="scope-title">What support includes</h4>
+        <ul>
+          <li>Cycles runtime / admin / events deployment guidance</li>
+          <li>Protocol behavior and configuration support</li>
+          <li>Upgrade and version-pinning guidance</li>
+          <li>Scope, budget, policy, and evidence-model review</li>
+          <li>Integration guidance for supported frameworks</li>
+        </ul>
+      </div>
+      <div class="scope-col exc">
+        <h4 class="scope-title">What it does not include</h4>
+        <ul>
+          <li>Legal advice</li>
+          <li>Building your agent product</li>
+          <li>Owning your production operations</li>
+          <li>Custom feature development unless separately scoped</li>
+        </ul>
+      </div>
+    </div>
+    <p class="workload-note">
+      A workload means one agreed production path where Cycles gates model calls, tool
+      calls, agent runs, or another consequential action flow.
+    </p>
+
     <!-- Support subscriptions -->
     <div class="grid tiers">
       <div
@@ -123,35 +150,8 @@ const services = [
     </div>
 
     <p class="tiers-note">
-      Enterprise pricing scales with workloads, environments, response coverage, and
-      evidence requirements.
-    </p>
-
-    <!-- What support covers -->
-    <div class="scope">
-      <div class="scope-col inc">
-        <h4 class="scope-title">What support includes</h4>
-        <ul>
-          <li>Cycles runtime / admin / events deployment guidance</li>
-          <li>Protocol behavior and configuration support</li>
-          <li>Upgrade and version-pinning guidance</li>
-          <li>Scope, budget, policy, and evidence-model review</li>
-          <li>Integration guidance for supported frameworks</li>
-        </ul>
-      </div>
-      <div class="scope-col exc">
-        <h4 class="scope-title">What it does not include</h4>
-        <ul>
-          <li>Building your agent product</li>
-          <li>Owning your production operations</li>
-          <li>Legal advice</li>
-          <li>Custom feature development unless separately scoped</li>
-        </ul>
-      </div>
-    </div>
-    <p class="workload-note">
-      A workload means one agreed production path where Cycles gates model calls, tool
-      calls, agent runs, or another consequential action flow.
+      Enterprise pricing scales with workloads, environments, response coverage,
+      evidence requirements, and 24×7 terms.
     </p>
 
     <!-- Professional services -->
@@ -437,7 +437,7 @@ const services = [
 }
 
 .workload-note {
-  margin: 12px 2px 0;
+  margin: 12px 2px 24px;
   font-size: 13px;
   color: var(--vp-c-text-3);
   line-height: 1.6;
