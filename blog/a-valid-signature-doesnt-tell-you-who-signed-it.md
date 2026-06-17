@@ -61,13 +61,13 @@ So the design has the published key set **keep retired keys**, each stamped with
 
 Once resolution involves fetching something, a new failure mode appears: *you couldn't reach the key directory*. The dangerous move is to fold that into the signature result. "I couldn't fetch the keys" is **not** "this is forged" — collapsing them turns a network blip into a false fraud alarm, or, worse, lets a real tamper hide behind an ambiguous "couldn't check."
 
-So the outcome of verification isn't `valid: true/false`. It's a small set of *distinct* dispositions:
+So the outcome of verification isn't `valid: true/false`. It's a small set of *distinct* dispositions (the protocol's identifier is in parentheses):
 
-- **authentic** — signature valid **and** the key resolved to the server's published set for the time it was signed. Both axes pass.
-- **binding-only** — signature valid, but authority wasn't established (no resolution, or a pinned-issuer posture). Honest about what it does and doesn't prove.
-- **authority-not-established** — the key set resolved fine, but the signing key isn't in it (or isn't valid for this server at that time). This is exactly where the embedded-key forgery lands — and it is neither a network failure nor a proof of tamper.
-- **could-not-resolve** — the key directory was unreachable or unparseable. Establishes *nothing* about the bytes. Must never read as "invalid."
-- **invalid** — the bytes don't verify. This, and only this, is tamper.
+- **authentic** (`authentic`) — signature valid **and** the key resolved to the server's published set for the time it was signed. Both axes pass.
+- **binding-only** (`binding_only`) — signature valid, but authority wasn't established (no resolution, or a pinned-issuer posture). Honest about what it does and doesn't prove.
+- **authority-not-established** (`signer_authority_failed`) — the key set resolved fine, but the signing key isn't in it (or isn't valid for this server at that time). This is exactly where the embedded-key forgery lands — and it is neither a network failure nor a proof of tamper.
+- **could-not-resolve** (`signer_resolution_failed`) — the key directory was unreachable or unparseable. Establishes *nothing* about the bytes. Must never read as "invalid."
+- **invalid** (`signature_invalid`) — the bytes don't verify. This, and only this, is tamper.
 
 Three of those five are "valid signature, but not authentic" for three genuinely different reasons — and the failures (couldn't-resolve, authority-not-established, invalid) stay rigidly separate: a network blip, an unauthorized key, and a forgery are not the same event. Collapsing them is how verifiers lie. That's why the result is a taxonomy, not a checkbox.
 
