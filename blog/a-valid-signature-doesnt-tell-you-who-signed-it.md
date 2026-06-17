@@ -32,9 +32,11 @@ This is that part. Because the moment you hand someone a signed receipt, they as
 
 A signature check is mechanical: it takes some bytes, a signature, and a public key, and tells you the three are consistent. That's real and useful — change one byte of the receipt and the check fails.
 
-But look at what it *doesn't* say. If the public key it checks against is simply the one carried inside the receipt, then a forger writes their own receipt, embeds *their own* key, and signs it with the matching private key. Every field is internally consistent. The signature verifies. And it attests to nothing, because the attacker chose the key it verifies against.
+But look at what it *doesn't* say. If the public key it checks against is simply the one carried inside the receipt, then a forger writes their own receipt, embeds *their own* key, and signs it with the matching private key. Every field is internally consistent. The signature verifies. But all it proves is that whoever controlled the embedded key signed those bytes — it does *not* prove the claimed server ever authorized that key.
 
 "The signature is valid" answers *do these bytes match this key*. It does not answer *is this key allowed to speak for that server*. Those are two different questions, and only the second one is trust.
+
+And the second one is the one your auditor, regulator, counterparty, or incident reviewer actually cares about. Without signer authority, a "signed" receipt is awkward to hand to any of them: the verifier still has to either trust whatever key the receipt carried or have manually pinned the signer in advance. That's not evidence that stands on its own — it's evidence with a footnote.
 
 ## Validity and authority are different axes
 
@@ -49,13 +51,15 @@ Closing the gap means anchoring the key to the server's own published identity r
 
 Now the trust anchor is the server's identity, not a key the receipt handed you. A forger can still embed their own key and self-sign — but it won't be in the real server's published set, so it resolves to *not authorized*, not *authentic*. (The exact identifier and key-set format are being nailed down with our first cross-system consumer; the mechanics live in the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles) and the protocol issue it tracks.)
 
+> **Status.** Signed, content-addressed evidence works today — and a server can publish its verification key set today. Full *signer resolution* (a consumer resolving the envelope's signer to that set, end-to-end) is being finalized with the first cross-system consumer. Until it round-trips, pin the expected signer and read the result as `binding_only` — which is exactly enough for a known counterparty. The boundary is deliberate, not a missing feature.
+
 ## The rotation trap — the part that's easy to get catastrophically wrong
 
 Keys rotate. They should: a signing key has a lifetime, and rotating it is hygiene. Here's where a naive resolver quietly destroys your audit trail.
 
 The tempting implementation fetches the key set and uses **the current key**. It passes every test you write today, because today's receipts were signed by today's key. Then you rotate — and every receipt signed before the rotation stops verifying, all at once, because it's being checked against a key that didn't exist when it was signed. For a live system that's an outage. For an audit trail meant to last *years*, it's the whole asset evaporating on a routine key change.
 
-So the design has the published key set **keep retired keys**, each stamped with the window of time it was valid, and the verifier selects the key whose window covers the receipt's *issuance time* — never "the latest." A receipt from eight months and two rotations ago still verifies, against the key that was genuinely valid when it was signed. This is the unglamorous mechanism that lets evidence survive long-horizon retention — the [EU AI Act Article 12](/blog/a-200-ok-is-not-an-audit-trail) kind of horizon — instead of silently rotting on the next key change. (Today a server publishes a single active key; the retired-key history and validity windows are the next step on the publication side — but the verifier rule is built for them from the start, because retrofitting "pick the key for the signing time" *after* you've rotated is exactly the outage you're trying to avoid.)
+So the design has the published key set **keep retired keys**, each stamped with the window of time it was valid, and the verifier selects the key whose window covers the receipt's *issuance time* — never "the latest." A receipt from eight months and two rotations ago still verifies, against the key that was genuinely valid when it was signed. This is the unglamorous mechanism that long-lived AI-governance records need: regimes like the [EU AI Act](/blog/a-200-ok-is-not-an-audit-trail) expect automated decision records to be retained and reviewable long after the fact — and "long after the fact" routinely outlives a signing key. Evidence has to survive the rotation, not silently rot on the next key change. (Today a server publishes a single active key; the retired-key history and validity windows are the next step on the publication side — but the verifier rule is built for them from the start, because retrofitting "pick the key for the signing time" *after* you've rotated is exactly the outage you're trying to avoid.)
 
 ## Honesty is a disposition, not a boolean
 
@@ -67,9 +71,9 @@ So the outcome of verification isn't `valid: true/false`. It's a small set of *d
 - **binding-only** (`binding_only`) — signature valid, but authority wasn't established (no resolution, or a pinned-issuer posture). Honest about what it does and doesn't prove.
 - **authority-not-established** (`signer_authority_failed`) — the key set resolved fine, but the signing key isn't in it (or isn't valid for this server at that time). This is exactly where the embedded-key forgery lands — and it is neither a network failure nor a proof of tamper.
 - **could-not-resolve** (`signer_resolution_failed`) — the key directory was unreachable or unparseable. Establishes *nothing* about the bytes. Must never read as "invalid."
-- **invalid** (`signature_invalid`) — the bytes don't verify. This, and only this, is tamper.
+- **invalid** (`signature_invalid`) — the bytes don't verify against the resolved key. Failed cryptographic integrity: it may be tampering, but it can equally be corruption, an encoding or canonicalization mismatch, or a verifier/envelope version skew. Serious, but not automatically "someone forged this."
 
-Three of those five are "valid signature, but not authentic" for three genuinely different reasons — and the failures (couldn't-resolve, authority-not-established, invalid) stay rigidly separate: a network blip, an unauthorized key, and a forgery are not the same event. Collapsing them is how verifiers lie. That's why the result is a taxonomy, not a checkbox.
+Three of those five are "valid signature, but not authentic" for three genuinely different reasons — and the failures (couldn't-resolve, authority-not-established, invalid) stay rigidly separate: a network blip, an unauthorized key, and a failed-integrity check are not the same event. Collapsing them is how verifiers lie. That's why the result is a taxonomy, not a checkbox.
 
 ## The honest boundary (again, on purpose)
 
@@ -80,7 +84,9 @@ Two things this still isn't, because over-claiming an audit feature is its own r
 
 ## Close the loop
 
-If your agents touch money, tools, or anything with a blast radius, "it's signed" is not the end of the auditor's question. "Signed by whom — provably, and still provably after the keys have rotated" is. The first half of that is a signature. The second half is signer authority, and it's the half that has to survive time.
+CyclesEvidence is built to keep these two claims separate and explicit: `binding_only` when the bytes verify, `authentic` when the signer also resolves to an authorized server key, and distinct failure states when authority can't be established — never a single green checkmark papering over the difference.
+
+If your agents touch money, tools, or anything with a blast radius, "it's signed" is not the end of the auditor's question. The real question is: *signed by whom, under what authority, and will it still verify after the keys have rotated?* A signature gives you byte integrity. Signer authority gives you trust — and the job is to keep that trust separate, explicit, and durable over time.
 
 - Previously: [A 200 OK Is Not an Audit Trail](/blog/a-200-ok-is-not-an-audit-trail)
 - Concept: [CyclesEvidence — Verifiable Audit for Agent Decisions](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions)
