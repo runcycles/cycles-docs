@@ -40,7 +40,7 @@ A consumer records the `evidence_id`, then fetches the signed envelope at `cycle
 
 ## Why it matters
 
-**Tamper-evident and self-authenticating.** Change one byte of a budget decision and the `evidence_id` no longer matches; forge the contents and the Ed25519 signature no longer verifies. You cannot quietly rewrite history.
+**Tamper-evident.** Change one byte of a budget decision and the `evidence_id` no longer matches; forge the contents and the Ed25519 signature no longer verifies. You cannot quietly rewrite history. A valid signature proves the bytes came from a key, though — not that the key is the server's. That second question is *signer authority*, resolved separately against the server's published key set, which is built to keep verifying [across key rotations](/blog/rotating-keys-shouldnt-rewrite-history) (see [A Valid Signature Doesn't Tell You Who Signed It](/blog/a-valid-signature-doesnt-tell-you-who-signed-it)).
 
 **Cross-system binding.** A receipt or agent-passport system can record a Cycles `evidence_id` and bind its own signed receipt to it — proving *"this agent's action ran within authorized budget scope X"* by composing two independent systems, without either trusting the other's live state. This is the integration that drove the feature (with [APS, the agent-passport-system](https://github.com/aeoess/agent-passport-system)).
 

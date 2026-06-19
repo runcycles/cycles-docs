@@ -141,6 +141,8 @@ This means a full reservation lifecycle can carry metadata from creation through
 2. Extend with `metadata: { "heartbeat_seq": "3" }`
 3. Commit with `metadata: { "request_id": "..." }` and `metrics: { ... }`
 
+Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field — so the metadata attached at commit is auditable after the fact, not just sent and forgotten.
+
 ## Metrics in client code
 
 Attach metrics and metadata through the context object inside a decorated function or annotated method. The SDK automatically includes these in the commit request when the function returns.
