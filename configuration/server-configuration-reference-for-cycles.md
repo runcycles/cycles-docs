@@ -211,6 +211,13 @@ Quick reference for setting all properties via environment variables:
 | `REDIS_PASSWORD` | `redis.password` |
 | `SERVER_PORT` | `server.port` |
 | `CYCLES_EXPIRY_INTERVAL_MS` | `cycles.expiry.interval-ms` |
+| `EVIDENCE_SERVER_ID` | `cycles.evidence.server-id` |
+| `EVIDENCE_SIGNING_SIGNER_DID` | `cycles.evidence.signing.signer-did` |
+| `EVIDENCE_SIGNING_KID` | `cycles.evidence.signing.kid` |
+| `EVIDENCE_SIGNING_NBF_MS` | `cycles.evidence.signing.nbf-ms` |
+| `EVIDENCE_SIGNING_RETIRED_KEYS` | `cycles.evidence.signing.retired-keys` |
+
+The `EVIDENCE_SIGNING_*` variables configure CyclesEvidence signer-key publication and rotation (the public identity; the private `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` lives only on `cycles-server-events`). `KID` / `NBF_MS` describe the active key's JWK; `RETIRED_KEYS` is the JSON rotation history. See [Signer-key resolution and rotation](/protocol/cycles-evidence-envelopes-in-cycles#signer-key-resolution-and-rotation) for the JWK shape and the rotation procedure, and the [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md) for first-time setup.
 
 ---
 

@@ -85,7 +85,43 @@ Given an envelope:
 2. **Verify the Ed25519 `signature`** (with `evidence_id` populated, `signature` emptied) against the key in `signer_did`.
 3. **Check the `artifact_type` ↔ `payload` pairing** (e.g. `artifact_type: commit` requires `payload.commit`).
 
-Signature *validity* against `signer_did` is fully specified today. Signer *authority* — proving `signer_did` is genuinely the legitimate Cycles signer for `server_id` at `issued_at_ms` (did:cycles / JWKS / key rotation) — is the v0.2 work tracked in [cycles-protocol#103](https://github.com/runcycles/cycles-protocol/issues/103). Until then, pin the expected signer (`expected_signer`) for issuer trust.
+Signature *validity* against `signer_did` is fully specified today. Signer *authority* — proving `signer_did` is genuinely the legitimate Cycles signer for `server_id` at `issued_at_ms` — is the additive v0.2 layer ([cycles-protocol#103](https://github.com/runcycles/cycles-protocol/issues/103)), and its **publication half is live**: a server publishes its keys at `GET {server_id}/.well-known/cycles-jwks.json` (`getEvidenceJwks`), and the set carries **retired keys with `[cycles_nbf_ms, cycles_exp_ms)` validity windows** so a verifier selects the key authoritative at the envelope's `issued_at_ms` — evidence keeps verifying [across key rotations](/blog/rotating-keys-shouldnt-rewrite-history). **End-to-end resolution** (a consumer resolving `signer_did` against that set) is landing with the first cross-system consumer; until it round-trips, pin the expected signer (`expected_signer`) for issuer trust — the `binding_only` posture. Why validity and authority are different questions: [A Valid Signature Doesn't Tell You Who Signed It](/blog/a-valid-signature-doesnt-tell-you-who-signed-it).
+
+## Signer-key resolution and rotation
+
+Step 2 needs the right public key. A server publishes its keys as a JWK Set:
+
+```
+GET {server_id}/.well-known/cycles-jwks.json     # operationId: getEvidenceJwks
+```
+
+Public and unauthenticated (it carries public keys only). Each entry is an Ed25519 OKP JWK with a validity window:
+
+```json
+{
+  "kty": "OKP", "crv": "Ed25519", "alg": "EdDSA",
+  "x": "<base64url of the 32 raw public-key bytes>",
+  "kid": "2026-h2",
+  "cycles_nbf_ms": 1781000000000,
+  "cycles_exp_ms": 1796000000000,
+  "status": "retired"
+}
+```
+
+The **active** key omits `cycles_exp_ms` (open-ended) and has `status: active`. A server not doing signer-key resolution publishes nothing — the endpoint `404`s, and consumers stay on the pinned-signer (`binding_only`) path.
+
+**Window-gated selection.** A verifier selects the key whose `[cycles_nbf_ms, cycles_exp_ms)` window covers the envelope's `issued_at_ms` — never "the current key." So an envelope signed two rotations ago still verifies against the key that was valid when it was signed; the set keeps **retired** keys for exactly this. `status` is advisory — selection is by window. (The forgery this prevents: [Rotating Keys Shouldn't Rewrite History](/blog/rotating-keys-shouldnt-rewrite-history).)
+
+### Rotating the signing key (operator procedure)
+
+The windows must tile without overlapping. On rotation:
+
+1. Make the new key active — `EVIDENCE_SIGNING_SIGNER_DID` = the new raw-hex public key, `EVIDENCE_SIGNING_NBF_MS` = the rotation time (epoch ms).
+2. Append the old key to `EVIDENCE_SIGNING_RETIRED_KEYS` — a JSON array of `{"signer_did","kid","nbf_ms","exp_ms"}` — with `exp_ms` = that same rotation time.
+
+The retiring key's window then ends exactly where the new key's begins.
+
+**Fail-safe, never fail-closed.** If `nbf-ms` is left below the latest retired `exp_ms`, the published active window is **clamped up** to that boundary (with a warning), so the current key is never published as authoritative for pre-rotation `issued_at_ms` by accident. A retired entry that can't be published (malformed hex, empty/inverted window, out-of-range bound, duplicate `kid`) is dropped, not fatal; if the whole `retired-keys` value is unusable, the server logs an error and keeps serving the active key — it never refuses to publish, which would break verification of *all* current evidence.
 
 ## Producer / signer split
 
