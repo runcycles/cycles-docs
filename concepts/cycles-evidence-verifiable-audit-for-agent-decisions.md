@@ -1,6 +1,6 @@
 ---
 title: "CyclesEvidence: Verifiable Audit for Agent Decisions"
-description: "CyclesEvidence turns every budget decision into a tamper-evident, signed, content-addressed envelope that any third party can verify offline — without trusting or reaching the Cycles server."
+description: "CyclesEvidence turns each budget decision into a signed, content-addressed envelope — verify its integrity offline, with signer authority checked separately."
 ---
 
 # CyclesEvidence: Verifiable Audit for Agent Decisions
