@@ -60,7 +60,7 @@ It is also **off until configured.** A deployment must set a shared signing iden
 
 ## In one line
 
-CyclesEvidence makes a budget decision **portable, verifiable proof** — so an agent's spending and action authority can be audited and trusted by systems that never talk to your Cycles server.
+CyclesEvidence makes a budget decision **portable, verifiable proof** — so an agent's spending and action authority can be audited and trusted by systems that don't depend on your live ledger.
 
 ## Related
 
