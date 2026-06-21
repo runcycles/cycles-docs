@@ -65,7 +65,7 @@ jobs:
       # ORG_TRAFFIC_TOKEN lacks write scope on runcycles/cycles-docs. With creds
       # persisted, git falls back to the persisted GITHUB_TOKEN (which has
       # contents:write from the job's permissions block) and the push succeeds.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
