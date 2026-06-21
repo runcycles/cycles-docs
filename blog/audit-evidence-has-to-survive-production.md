@@ -140,7 +140,7 @@ Cycles has multiple record surfaces:
 - hot runtime data used for live operations,
 - queryable reservations, events, and audit rows used by operators,
 - signed CyclesEvidence envelopes used for later proof,
-- optional cold exports used for long-horizon retention.
+- optional cold exports you configure for long-horizon retention.
 
 Those surfaces do not need the same retention policy. Hot operational data can age out sooner. Signed evidence may need to survive much longer, especially when it supports customer disputes, incident reviews, regulated workflows, or third-party verification.
 
