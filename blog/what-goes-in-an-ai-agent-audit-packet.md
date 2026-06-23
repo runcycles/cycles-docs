@@ -78,7 +78,7 @@ For a Cycles-controlled agent action, the packet should be small enough to revie
 | Retention statement | Hot store duration, archive path, restore procedure, retired-key retention | Shows the proof will survive the review window |
 | Findings log | Gaps, owner, due date, follow-up drill date | Turns weak evidence into managed risk |
 
-The [CyclesEvidence concept page](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions) explains why the receipt exists. The [envelope protocol](/protocol/cycles-evidence-envelopes-in-cycles) defines the five artifact types: `decide`, `reserve`, `commit`, `release`, and `error`. The packet does not replace those documents. It packages their output for a specific review.
+The [CyclesEvidence concept page](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions) explains why the receipt exists. The [envelope protocol](/protocol/cycles-evidence-envelopes-in-cycles) documents the five artifact types: `decide`, `reserve`, `commit`, `release`, and `error`. The packet does not replace those documents. It packages their output for a specific review.
 
 ## What the receipt proves
 
