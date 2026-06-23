@@ -126,6 +126,7 @@ Use a conservative number that normal successful runs should fit under, then obs
 - How far apart are reserved estimates and committed actuals?
 - Which workflows need a higher cap?
 - Which tools need a lower cap?
+- Can you recover the decision record, trace or correlation ID, and cap or denial reason later?
 
 The first budget is a measurement instrument as much as an enforcement control. If it never denies, it may be too high or placed on the wrong surface. If it denies normal traffic constantly, the estimate or threshold is wrong.
 
@@ -143,7 +144,7 @@ Before enabling enforcement, decide what the agent does when it receives:
 
 For a tenant budget, `DENY` might mean "ask the customer to upgrade or wait for reset." For a run budget, it might mean "summarize current progress and stop." For a toolset budget, it might mean "skip the risky tool and ask for approval."
 
-The response should be product behavior, not an infrastructure exception. For examples, see [When Budget Runs Out](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents).
+The response should be product behavior, not an infrastructure exception. The system should also keep enough evidence to explain the decision later: the scope, action, estimate, actual usage when available, decision, cap or denial reason, and trace or correlation ID. For examples, see [When Budget Runs Out](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents).
 
 ## A simple decision rule
 
