@@ -134,7 +134,9 @@ The clean rollout is incremental.
 
 **Step 5: Define degradation paths.** Decide what happens for `ALLOW_WITH_CAPS` and `DENY` before launch. Pricing plans should not fail as generic infrastructure errors.
 
-**Step 6: Reconcile with billing.** Send committed usage to the billing or metering system. Treat the runtime ledger as the enforcement record and the billing system as the customer-facing invoice layer.
+**Step 6: Preserve the dispute trail.** Usage pricing eventually creates customer questions: why was this workflow charged, capped, or denied? Keep the enforcement record tied to the tenant, actor, run, action, estimate, actual usage, decision, cap or denial reason, and trace or correlation ID. That record is what connects the customer-facing meter to the runtime decision that produced it.
+
+**Step 7: Reconcile with billing.** Send committed usage to the billing or metering system. Treat the runtime ledger as the enforcement record and the billing system as the customer-facing invoice layer.
 
 The [multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles) and [budget allocation guide](/how-to/budget-allocation-and-management-in-cycles) cover the implementation side of tenant scopes, budget funding, and allocation.
 
