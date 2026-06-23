@@ -119,7 +119,7 @@ The reliable pattern is layered:
 
 - Validate content and tool arguments with OpenAI Agents SDK guardrails.
 - Enforce cost, risk, and action limits with runtime budgets before execution.
-- Record the decisions and outcomes so operators can tune thresholds later.
+- Record the decisions and outcomes so operators can tune thresholds and explain actions later: scope, action, estimate, actual usage when available, `ALLOW_WITH_CAPS` or `DENY` reason, and trace or correlation ID.
 
 ## Resource links
 
