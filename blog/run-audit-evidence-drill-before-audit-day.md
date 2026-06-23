@@ -127,7 +127,7 @@ If the envelope lives in cold storage, document the restore path. A reviewer doe
 
 The first cryptographic check is the `evidence_id`.
 
-The [protocol reference](/protocol/cycles-evidence-envelopes-in-cycles#evidence_id-the-content-hash-recipe-normative) defines the recipe:
+The [protocol reference](/protocol/cycles-evidence-envelopes-in-cycles) defines the recipe:
 
 1. Build the envelope with `evidence_id` and `signature` set to `""`.
 2. Canonicalize the JSON bytes with RFC 8785 JCS.
