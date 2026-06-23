@@ -110,11 +110,27 @@ For agent systems, that usually means:
 - Retrieval or search calls with provider cost.
 - Agent handoffs that can trigger more work.
 - Long-running workflow steps.
-- Customer-visible side effects that carry risk even when the model cost is low.
 
 The placement depends on the architecture. In one system, the enforcement point may be an SDK hook. In another, it may be an MCP tool wrapper, service middleware, queue worker, or gateway. The [integration pattern guide](/how-to/choosing-the-right-integration-pattern) walks through those options.
 
 The placement rule is simple: if the expensive action can bypass the spend limit, the spend limit is advisory.
+
+## Where spend limits are not enough
+
+Some agent actions are cheap in dollars and expensive in consequences.
+
+Sending one customer email may cost almost nothing in model tokens. Issuing a refund, posting to a production ticket, changing a CRM record, or triggering a deploy may also have a small provider bill. The risk is not the model cost. The risk is the side effect.
+
+Those actions need action authority as well as spend limits:
+
+- Classify the tool by risk, not only by cost.
+- Reserve [RISK_POINTS](/glossary#risk-points) or another non-monetary unit before execution.
+- Use smaller budgets for irreversible, external, or customer-visible actions.
+- Record the decision so operators can explain why the action was allowed, capped, or denied.
+
+That is why a production agent control stack often has both a monetary budget and a risk budget. The monetary budget prevents slow overspend. The risk budget prevents low-cost but high-impact actions from repeating unchecked.
+
+For the action side of the same pattern, see [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do).
 
 ## What a spend limit should return
 
