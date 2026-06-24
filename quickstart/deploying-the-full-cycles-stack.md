@@ -51,7 +51,7 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.41
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
@@ -69,10 +69,9 @@ services:
       REDIS_PASSWORD: ""
     depends_on:
       redis: { condition: service_healthy }
-  # Optional: webhook event delivery service (port 7980)
+  # Optional: webhook event delivery and evidence signing worker
   cycles-events:
     image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
-    ports: ["7980:7980"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -154,14 +153,14 @@ A complete Cycles deployment has four components that share a single Redis insta
 
 <ArchDiagram />
 
-| Component | Purpose | Port |
+| Component | Purpose | Port / access |
 |---|---|---|
 | **Redis 7+** | Stores all budget state, reservations, and tenant data | 6379 |
 | **Cycles Admin Server** | Create tenants, API keys, and budget ledgers. Management plane. | 7979 |
 | **Cycles Server** | Runtime budget enforcement. Your app talks to this. | 7878 |
-| **Cycles Events Service** | Async webhook delivery with HMAC signing and optional CyclesEvidence signing. | 7980 |
+| **Cycles Events Service** | Async webhook delivery with HMAC signing and optional CyclesEvidence signing. | No public inbound; app 7980 and management 9980 stay internal |
 
-Your application only talks to the **Cycles Server** (port 7878). You use the **Admin Server** (port 7979) to set up tenants, keys, and budgets before your app starts enforcing. The **Events Service** (port 7980) is optional — it delivers webhook notifications asynchronously and, when evidence is configured, signs CyclesEvidence envelopes for the runtime server to serve. See [Deploying the Events Service](/quickstart/deploying-the-events-service).
+Your application only talks to the **Cycles Server** (port 7878). You use the **Admin Server** (port 7979) to set up tenants, keys, and budgets before your app starts enforcing. The **Events Service** is optional and outbound-only for normal operation — it delivers webhook notifications asynchronously and, when evidence is configured, signs CyclesEvidence envelopes for the runtime server to serve. See [Deploying the Events Service](/quickstart/deploying-the-events-service).
 
 ::: info Optional: deploy the admin dashboard
 For a web UI on top of this stack — operator workflows for tenants, budgets, webhooks, events, audit, and incident response (freeze, suspend, force-release) — also deploy the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard). It's a Vue 3 SPA that proxies through to the admin server (and to the runtime server for force-release). Skip if you only need SDK integration.
@@ -206,7 +205,7 @@ services:
       retries: 5
 
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.41
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
     ports:
       - "7979:7979"
     environment:
@@ -238,8 +237,8 @@ services:
   # Docs: https://runcycles.io/quickstart/deploying-the-events-service
   # cycles-events:
   #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
-  #   ports:
-  #     - "7980:7980"
+  #   # No public inbound port is required. Add "9980:9980" only for local
+  #   # management inspection; keep it internal in production.
   #   environment:
   #     REDIS_HOST: redis
   #     REDIS_PORT: 6379
@@ -260,7 +259,7 @@ docker compose up -d
 ```
 
 ::: tip Version pinning
-The examples above pin known compatible images: admin `0.1.25.41`, server `0.1.25.39`, and events `0.1.25.15`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
+The examples above pin known compatible images: admin `0.1.25.42`, server `0.1.25.39`, and events `0.1.25.15`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
 :::
 
 Verify all services are healthy:
@@ -647,7 +646,7 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 | `ADMIN_API_KEY` | (empty) | Master admin key for `X-Admin-API-Key` header |
 | `server.port` | `7979` | HTTP port |
 
-### Cycles Events Service (port 7980)
+### Cycles Events Service (outbound worker)
 
 | Variable | Default | Description |
 |---|---|---|

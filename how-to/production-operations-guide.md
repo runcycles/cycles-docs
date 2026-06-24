@@ -112,7 +112,7 @@ curl http://localhost:7979/actuator/health/readiness
 curl http://localhost:9980/actuator/health
 ```
 
-Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire the Admin Server's liveness/readiness probes to `/actuator/health/liveness` and `/actuator/health/readiness`. For the runtime service, probe `/actuator/health` on port 7878. For the events service, probe `/actuator/health` on its management port 9980, not the dispatch port 7980. All three services rely on Spring Boot's default Redis health indicator — the aggregate `/actuator/health` status turns `DOWN` when Redis is unreachable. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
+Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire the Admin Server's liveness/readiness probes to `/actuator/health/liveness` and `/actuator/health/readiness`. For the runtime service, probe `/actuator/health` on port 7878. For the events service, probe `/actuator/health` on its management port 9980, not the app port 7980. All three services rely on Spring Boot's default Redis health indicator — the aggregate `/actuator/health` status turns `DOWN` when Redis is unreachable. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
 
 ### JVM tuning
 
@@ -138,7 +138,7 @@ For listing and recovering stale or orphaned reservations after client crashes, 
 
 ## Events Service configuration
 
-The **Cycles Events Service** (`cycles-server-events`, port 7980) delivers webhook notifications asynchronously and signs CyclesEvidence envelopes when evidence is enabled. It is optional — if not deployed, admin and runtime servers continue operating normally. Webhook events accumulate in Redis with TTL until the service starts; evidence refs may be returned by the runtime before the signed envelope is available.
+The **Cycles Events Service** (`cycles-server-events`) delivers webhook notifications asynchronously and signs CyclesEvidence envelopes when evidence is enabled. It is an outbound worker: its app port 7980 and management port 9980 should stay internal, and health/metrics checks should target 9980. It is optional — if not deployed, admin and runtime servers continue operating normally. Webhook events accumulate in Redis with TTL until the service starts; evidence refs may be returned by the runtime before the signed envelope is available.
 
 ### Configuration
 
@@ -199,7 +199,7 @@ If the Events Service is unavailable:
 
 - **Cycles Server** (port 7878): Accessible to your application. Can be on an internal network or behind an API gateway.
 - **Admin Server** (port 7979): **Internal access only.** This manages tenants, API keys, and budgets. Never expose to the public internet.
-- **Events Service** (port 7980): **Internal access only.** Consumes from Redis and delivers webhooks outbound. Never needs inbound traffic from applications.
+- **Events Service** (app port 7980, management port 9980): **Internal access only.** Consumes from Redis and delivers webhooks outbound. Never needs inbound traffic from applications.
 - **Redis** (port 6379): **Internal access only.** Never expose directly.
 
 ### TLS termination

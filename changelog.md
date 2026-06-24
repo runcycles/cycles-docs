@@ -7,7 +7,7 @@ description: "Release history and version notes for the Cycles Protocol, server,
 
 Release history for the Cycles Protocol and reference implementations.
 
-## v0.1.25.x — patch releases (April 2026)
+## v0.1.25.x — patch releases (April-June 2026)
 
 Since the initial v0.1.25 Events & Webhooks release, each component has shipped a stream of patch releases. Wire format is stable within `0.1.x`; every change below is **additive** unless explicitly marked breaking.
 
@@ -18,7 +18,7 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | Protocol spec (runtime) | v0.1.25 (revision 2026-04-18) | 2026-04-18 |
 | Governance spec (admin) | v0.1.25.34 | 2026-04-20 |
 | `cycles-server` (runtime) | v0.1.25.39 | 2026-06-24 |
-| `cycles-server-admin` | v0.1.25.41 | 2026-04-26 |
+| `cycles-server-admin` | v0.1.25.42 | 2026-06-24 |
 | `cycles-server-events` | v0.1.25.15 | 2026-06-23 |
 | `cycles-dashboard` | v0.1.25.63 | 2026-06-22 |
 
@@ -66,6 +66,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Admin server (`cycles-server-admin`)
 
+- **v0.1.25.42** (2026-06-24) — Dependency-only security release. Reintroduces the Tomcat 10.1.55 override for Apache Tomcat CVEs, carries the previously unreleased Spring Boot 3.5.15 and Jedis 7.5.0 dependency bumps, and scopes the Trivy SARIF gate to the intended HIGH/CRITICAL severity threshold while jackson-databind 2.21.5 is not yet published. No code, spec, or wire-format changes.
 - **v0.1.25.41** (2026-04-26) — Dependency hygiene aligning the service fleet on the same Spring Boot patch and Redis client major. Spring Boot 3.5.13 → 3.5.14, Jedis 5.2.0 → 6.2.0, and the explicit Tomcat 10.1.54 override was removed because the Spring Boot BOM manages it directly. No code or wire-format changes.
 - **v0.1.25.40** (2026-04-23) — Same-release hygiene sweep on the v0.1.25.39 webhook lifecycle emits. Single-op actor now populates `keyId` from `authenticated_key_id`, matching the bulk-path parity already in place. `changed_fields` on `webhook.updated` is now a real diff vs the prior snapshot — identity PATCHes emit empty `changed_fields` and full-identity PATCHes suppress the emit entirely per spec v0.1.25.33 §6281. The `"no-req"` literal correlation-id fallback is replaced with `req_<uuid>` to preserve uniqueness under misconfigured `RequestIdFilter`. No wire or spec surface change.
 - **v0.1.25.39** (2026-04-23) — **Webhook lifecycle events (spec v0.1.25.33).** `POST /v1/admin/webhooks`, `PATCH /v1/admin/webhooks/{id}`, `DELETE /v1/admin/webhooks/{id}`, and `POST /v1/admin/webhooks/bulk-action` (PAUSE / RESUME / DELETE) now emit `webhook.created` / `.updated` / `.paused` / `.resumed` / `.deleted` Events with the new `EventDataWebhookLifecycle` payload (`subscription_id`, `tenant_id`, `previous_status`, `new_status`, `changed_fields`, `disable_reason`). Update-endpoint emit type is classified by the status transition: `ACTIVE → PAUSED` yields `webhook.paused`, `PAUSED → ACTIVE` yields `webhook.resumed`, everything else yields `webhook.updated` with the touched properties enumerated in `changed_fields`. Bulk path stamps every per-row emit with `correlation_id = webhook_bulk_action:<action>:<request_id>` (one correlation_id per invocation, shared across rows) — skipped / failed rows never emit. Single-op correlation_ids: `webhook_create:<id>`, `webhook_update:<id>:<request_id>`, `webhook_delete:<id>`. The dispatcher-emitted `webhook.disabled` (auto-disable on failure threshold) is the events-service's responsibility — see `cycles-server-events` v0.1.25.11. Closes the operator-observability blind spot that v0.1.25.38 explicitly deferred. Aligns with spec v0.1.25.33 and v0.1.25.34's `EventCategory.webhook` enum addition. See [Event Payloads Reference](/protocol/event-payloads-reference).
@@ -173,7 +174,7 @@ New event-driven observability system spanning all three services.
 - `reservation.denied` on DENY decision (reserve and decide endpoints)
 - `reservation.commit_overage` on commit with actual > estimated
 
-**Events delivery service (`cycles-server-events`, port 7980):**
+**Events delivery service (`cycles-server-events`, internal app port 7980):**
 - Async webhook delivery via BRPOP from shared Redis dispatch queue
 - HMAC-SHA256 payload signing (`X-Cycles-Signature: sha256=<hex>`)
 - Exponential backoff retry, auto-disable after consecutive failures
@@ -272,7 +273,7 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `@runcycles/mcp-server` | 0.2.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Server (runtime) | v0.1.25.39 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.41 | Governance spec v0.1.25.34 |
+| Cycles Admin Server | v0.1.25.42 | Governance spec v0.1.25.34 |
 | Cycles Events Service | v0.1.25.15 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.63 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 

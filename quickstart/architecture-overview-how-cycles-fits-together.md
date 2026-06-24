@@ -17,10 +17,10 @@ This is a reference page. If you haven't set up Cycles yet, start with the [End-
 
 <ArchDiagramFull />
 
-Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** (port 7980) delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes. All three services share the same Redis instance.
+Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** is an outbound worker that delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes; its app port 7980 and management port 9980 should stay internal. All three services share the same Redis instance.
 
 ::: info Independent release cadences
-Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-06-24: `cycles-server` 0.1.25.39, `cycles-server-admin` 0.1.25.41, `cycles-server-events` 0.1.25.15, `cycles-dashboard` 0.1.25.63. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
+Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-06-24: `cycles-server` 0.1.25.39, `cycles-server-admin` 0.1.25.42, `cycles-server-events` 0.1.25.15, `cycles-dashboard` 0.1.25.63. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
 :::
 
 ## Components
@@ -159,7 +159,7 @@ See the [Admin API reference](/admin-api/) for the full API, or the [governance 
 
 ### Cycles Events Service
 
-The async webhook delivery and evidence signing service. It runs as a separate Spring Boot 3.5 service on port 7980 and shares the same Redis instance.
+The async webhook delivery and evidence signing service. It runs as a separate Spring Boot 3.5 service with an internal app port (7980) and management/actuator port (9980), and shares the same Redis instance.
 
 **What it does:**
 

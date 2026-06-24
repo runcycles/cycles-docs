@@ -243,7 +243,7 @@ A single attempt to deliver an event to a webhook endpoint via HTTP POST. Tracke
 
 ### Events Service
 
-The async webhook delivery service (`cycles-server-events`). Consumes from shared Redis queue via BRPOP and delivers via HTTP POST with HMAC signing. Optional — admin and runtime operate without it. As of v0.1.25.9, binds public API port `7980` and management/actuator port `9980` (was consolidated on `7980` pre-.9).
+The async webhook delivery service (`cycles-server-events`). Consumes from shared Redis queue via BRPOP and delivers via HTTP POST with HMAC signing. Optional — admin and runtime operate without it. As of v0.1.25.9, binds application port `7980` and management/actuator port `9980` (was consolidated on `7980` pre-.9); the reference service is an outbound worker, so neither port should be public.
 
 ### Dashboard
 
