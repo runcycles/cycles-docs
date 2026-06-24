@@ -1,15 +1,15 @@
 ---
 title: "Deploying the Events Service"
-description: "How to deploy the Cycles events service (cycles-server-events) for async webhook delivery with HMAC signing, exponential retry, and auto-disable."
+description: "How to deploy the Cycles events service (cycles-server-events) for async webhook delivery and CyclesEvidence signing."
 ---
 
 # Deploying the Events Service
 
-The events service (`cycles-server-events`) delivers webhook events asynchronously — use it to get real-time alerts in Slack, PagerDuty, or your own systems when budgets run out, thresholds are crossed, or reservations are denied.
+The events service (`cycles-server-events`) has two async jobs: webhook delivery and CyclesEvidence signing. Use webhook delivery to get real-time alerts in Slack, PagerDuty, or your own systems when budgets run out, thresholds are crossed, or reservations are denied. Use CyclesEvidence signing when runtime responses need verifiable audit receipts.
 
 As of v0.1.25.9 the service binds two ports: the public API port `7980` (dispatch control surface) and a separate management port `9980` for actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/prometheus`). Expose `7980` via public ingress; keep `9980` internal-only.
 
-It is optional — the admin and runtime servers operate normally without it. When deployed, it consumes delivery jobs from Redis and sends HTTP POST requests to webhook endpoints with HMAC-SHA256 signatures.
+It is optional — the admin and runtime servers operate normally without it. When deployed, it consumes delivery jobs from Redis and sends HTTP POST requests to webhook endpoints with HMAC-SHA256 signatures. If CyclesEvidence is enabled, it also consumes evidence-source records from Redis, signs envelopes with Ed25519, and stores them by content hash for `GET /v1/evidence/{id}`.
 
 ## Quick start with Docker
 
@@ -35,7 +35,7 @@ docker run -d --name cycles-events \
   -e REDIS_PORT=6379 \
   -e REDIS_PASSWORD=your-redis-password \
   -e WEBHOOK_SECRET_ENCRYPTION_KEY=your-base64-key \
-  ghcr.io/runcycles/cycles-server-events:0.1.25.10
+  ghcr.io/runcycles/cycles-server-events:0.1.25.15
 ```
 
 Only `7980` needs to be reachable from clients and downstream webhook targets. `9980` should remain internal — scrape it from your Prometheus cluster on its own network path.
@@ -66,6 +66,18 @@ java -jar cycles-server-events-*.jar
 |----------|---------|-------------|
 | `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret decryption. Base64-encoded 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32`. If empty, secrets are read as plaintext. |
 
+### Optional: CyclesEvidence signing
+
+Configure these only when runtime responses should include verifiable `cycles_evidence` references. The public identity must match the runtime server's `EVIDENCE_SERVER_ID` and `EVIDENCE_SIGNING_SIGNER_DID`; the private key belongs only on `cycles-server-events`.
+
+| Variable | Description |
+|----------|-------------|
+| `EVIDENCE_SERVER_ID` | Issuer base URL including `/v1`, for example `https://cycles.example.com/v1`. Blank disables evidence signing; pending source records are left untouched, not dead-lettered. |
+| `EVIDENCE_SIGNING_SIGNER_DID` | Raw-hex Ed25519 public key. Must match the runtime server's public signer identity. |
+| `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | Raw-hex Ed25519 private key. Keep this secret and deploy it only to `cycles-server-events`. |
+
+The runtime server also publishes public JWKS metadata with `EVIDENCE_SIGNING_KID`, `EVIDENCE_SIGNING_NBF_MS`, and `EVIDENCE_SIGNING_RETIRED_KEYS`. Those variables are not read by the events service.
+
 ### Tuning
 
 | Variable | Default | Description |
@@ -86,6 +98,9 @@ REDIS_HOST=redis.example.com
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 WEBHOOK_SECRET_ENCRYPTION_KEY=K7x2mP9qR4sT6wB1cD3fG5hJ8kL0nA2=
+EVIDENCE_SERVER_ID=https://cycles.example.com/v1
+EVIDENCE_SIGNING_SIGNER_DID=b10554...c522
+EVIDENCE_SIGNING_PRIVATE_KEY_HEX=4f9c...d20a
 dispatch.pending.timeout-seconds=5
 dispatch.retry.poll-interval-ms=5000
 dispatch.http.timeout-seconds=30
@@ -109,7 +124,7 @@ Pre-v0.1.25.9 deployments exposed `/actuator/health` on the public API port 7980
 
 ## What happens when the events service is down
 
-1. **Admin and runtime servers are unaffected** — event emission is fire-and-forget, never blocks API responses
+1. **Admin and runtime servers are unaffected** — event emission and evidence source writes are fire-and-forget, never blocking API responses
 2. **Events and deliveries accumulate in Redis** — `event:{id}` keys (90-day TTL), `delivery:{id}` keys (14-day TTL), `dispatch:pending` list grows
 3. **Redis memory is bounded** — TTLs ensure keys auto-expire even if never consumed
 4. **When the events service restarts:**
@@ -117,6 +132,7 @@ Pre-v0.1.25.9 deployments exposed `/actuator/health` on the public API port 7980
    - Fresh deliveries are processed normally via BRPOP
    - `RetentionCleanupService` trims orphaned ZSET index entries hourly
 5. **No data loss for events** — event records persist in Redis for 90 days regardless of delivery status
+6. **Evidence may be temporarily unavailable** — responses can still include `cycles_evidence`, but `GET /v1/evidence/{id}` may return transient `404` until the events service signs and stores the envelope
 
 ## Auto-disable for persistently failing subscriptions
 
@@ -152,6 +168,7 @@ Multiple events service instances can safely BRPOP from the same `dispatch:pendi
 ## Next steps
 
 - [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) — full event type catalog and delivery specification
+- [CyclesEvidence Envelopes](/protocol/cycles-evidence-envelopes-in-cycles) — evidence signing, JWKS verification, and rotation
 - [Managing Webhooks](/how-to/managing-webhooks) — create, test, and monitor webhooks
 - [Webhook Integrations](/how-to/webhook-integrations) — PagerDuty, Slack, ServiceNow examples
 - [Configuration Reference](/configuration/server-configuration-reference-for-cycles#events-service-configuration) — all events service settings

@@ -79,14 +79,14 @@ The Cycles Server is stateless. You can run multiple instances behind a load bal
 
 ```yaml
 cycles-server-1:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.17
+  image: ghcr.io/runcycles/cycles-server:0.1.25.39
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
 
 cycles-server-2:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.17
+  image: ghcr.io/runcycles/cycles-server:0.1.25.39
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -108,11 +108,11 @@ curl http://localhost:7979/actuator/health
 curl http://localhost:7979/actuator/health/liveness
 curl http://localhost:7979/actuator/health/readiness
 
-# Events Service (aggregate only)
-curl http://localhost:7980/actuator/health
+# Events Service (aggregate only, management port)
+curl http://localhost:9980/actuator/health
 ```
 
-Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire the Admin Server's liveness/readiness probes to `/actuator/health/liveness` and `/actuator/health/readiness`. For the runtime and events services, probe `/actuator/health` directly. All three services rely on Spring Boot's default Redis health indicator — the aggregate `/actuator/health` status turns `DOWN` when Redis is unreachable. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
+Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire the Admin Server's liveness/readiness probes to `/actuator/health/liveness` and `/actuator/health/readiness`. For the runtime service, probe `/actuator/health` on port 7878. For the events service, probe `/actuator/health` on its management port 9980, not the dispatch port 7980. All three services rely on Spring Boot's default Redis health indicator — the aggregate `/actuator/health` status turns `DOWN` when Redis is unreachable. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
 
 ### JVM tuning
 
@@ -138,7 +138,7 @@ For listing and recovering stale or orphaned reservations after client crashes, 
 
 ## Events Service configuration
 
-The **Cycles Events Service** (`cycles-server-events`, port 7980) delivers webhook notifications asynchronously. It is optional — if not deployed, admin and runtime servers continue operating normally, and events accumulate in Redis with TTL until the service starts.
+The **Cycles Events Service** (`cycles-server-events`, port 7980) delivers webhook notifications asynchronously and signs CyclesEvidence envelopes when evidence is enabled. It is optional — if not deployed, admin and runtime servers continue operating normally. Webhook events accumulate in Redis with TTL until the service starts; evidence refs may be returned by the runtime before the signed envelope is available.
 
 ### Configuration
 
@@ -152,6 +152,9 @@ The **Cycles Events Service** (`cycles-server-events`, port 7980) delivers webho
 | `dispatch.retry.batch-size` | 100 | Max deliveries processed per retry-scan tick. |
 | `dispatch.http.timeout-seconds` | 30 | HTTP request timeout per delivery attempt. |
 | `dispatch.http.connect-timeout-seconds` | 5 | HTTP connect timeout per delivery attempt. |
+| `EVIDENCE_SERVER_ID` | (empty) | CyclesEvidence issuer base including `/v1`. Blank disables evidence signing and leaves pending source records untouched. |
+| `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Raw-hex public Ed25519 key. Must match the runtime server when evidence is enabled. |
+| `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex private Ed25519 key. Secret; set only on `cycles-server-events`. |
 
 The per-subscription retry policy (exponential backoff) defaults to `max_retries=5`, `initial_delay_ms=1000`, `backoff_multiplier=2.0`, `max_delay_ms=60000`. A delivery older than `MAX_DELIVERY_AGE_MS` is failed immediately without further retries. See the [Events Service section in the Server Configuration Reference](/configuration/server-configuration-reference-for-cycles#events-service-configuration) for the full knob list.
 
@@ -161,7 +164,7 @@ The Events Service is safe to run as multiple instances. Each instance consumes 
 
 ```yaml
 cycles-events-1:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -169,7 +172,7 @@ cycles-events-1:
     WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY}
 
 cycles-events-2:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -181,9 +184,10 @@ cycles-events-2:
 
 If the Events Service is unavailable:
 
-1. Admin and runtime servers are **unaffected** — event dispatch is fire-and-forget
+1. Admin and runtime servers are **unaffected** — event dispatch and evidence source writes are fire-and-forget
 2. Redis accumulates events with TTL (90-day events, 14-day deliveries)
 3. On restart: stale deliveries older than `MAX_DELIVERY_AGE_MS` (default 24h) auto-fail; fresh ones deliver normally
+4. If CyclesEvidence is enabled, `GET /v1/evidence/{id}` may return transient `404` until the events service signs and stores the envelope
 
 ## Network architecture
 
@@ -250,7 +254,7 @@ All three services (Cycles Server, Admin Server, Events Service) are stateless �
 1. Pull the new image: `docker pull ghcr.io/runcycles/cycles-server:NEW_VERSION`
 2. Stop one instance at a time
 3. Start the new version
-4. Verify health check passes (`/actuator/health` on ports 7878, 7979, 7980)
+4. Verify health check passes (`/actuator/health` on ports 7878, 7979, and events management port 9980)
 5. Repeat for remaining instances
 
 The Events Service can be upgraded independently. While it is down, webhook deliveries queue in Redis and are processed when the new version starts.
@@ -377,7 +381,7 @@ If all retries are exhausted or the client process crashes entirely, the reserva
 **Symptom:** Webhook endpoints are not receiving events. Queue depth grows.
 
 **Response:**
-1. Check Events Service health: `GET http://localhost:7980/actuator/health`
+1. Check Events Service health: `GET http://localhost:9980/actuator/health`
 2. Check queue depth: `redis-cli LLEN dispatch:pending`
 3. Check if subscription was auto-disabled: `GET /v1/admin/webhooks/{subscription_id}`
 4. Re-enable if needed: `PATCH /v1/admin/webhooks/{subscription_id}` with `{"status": "ACTIVE"}`

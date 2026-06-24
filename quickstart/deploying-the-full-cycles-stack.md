@@ -51,7 +51,7 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.36
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.41
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
@@ -61,7 +61,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.17
+    image: ghcr.io/runcycles/cycles-server:0.1.25.39
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
@@ -71,7 +71,7 @@ services:
       redis: { condition: service_healthy }
   # Optional: webhook event delivery service (port 7980)
   cycles-events:
-    image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
     ports: ["7980:7980"]
     environment:
       REDIS_HOST: redis
@@ -159,9 +159,9 @@ A complete Cycles deployment has four components that share a single Redis insta
 | **Redis 7+** | Stores all budget state, reservations, and tenant data | 6379 |
 | **Cycles Admin Server** | Create tenants, API keys, and budget ledgers. Management plane. | 7979 |
 | **Cycles Server** | Runtime budget enforcement. Your app talks to this. | 7878 |
-| **Cycles Events Service** | Async webhook delivery with HMAC signing. Optional. | 7980 |
+| **Cycles Events Service** | Async webhook delivery with HMAC signing and optional CyclesEvidence signing. | 7980 |
 
-Your application only talks to the **Cycles Server** (port 7878). You use the **Admin Server** (port 7979) to set up tenants, keys, and budgets before your app starts enforcing. The **Events Service** (port 7980) is optional — it delivers webhook notifications asynchronously. See [Deploying the Events Service](/quickstart/deploying-the-events-service).
+Your application only talks to the **Cycles Server** (port 7878). You use the **Admin Server** (port 7979) to set up tenants, keys, and budgets before your app starts enforcing. The **Events Service** (port 7980) is optional — it delivers webhook notifications asynchronously and, when evidence is configured, signs CyclesEvidence envelopes for the runtime server to serve. See [Deploying the Events Service](/quickstart/deploying-the-events-service).
 
 ::: info Optional: deploy the admin dashboard
 For a web UI on top of this stack — operator workflows for tenants, budgets, webhooks, events, audit, and incident response (freeze, suspend, force-release) — also deploy the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard). It's a Vue 3 SPA that proxies through to the admin server (and to the runtime server for force-release). Skip if you only need SDK integration.
@@ -206,7 +206,7 @@ services:
       retries: 5
 
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.36
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.41
     ports:
       - "7979:7979"
     environment:
@@ -219,7 +219,7 @@ services:
         condition: service_healthy
 
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.17
+    image: ghcr.io/runcycles/cycles-server:0.1.25.39
     ports:
       - "7878:7878"
     environment:
@@ -230,12 +230,14 @@ services:
       redis:
         condition: service_healthy
 
-  # Optional: webhook delivery service — uncomment to receive budget alerts
-  # via Slack, PagerDuty, or custom endpoints. Set WEBHOOK_SECRET_ENCRYPTION_KEY
-  # for production: export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
+  # Optional: webhook delivery and CyclesEvidence signing service. Set
+  # WEBHOOK_SECRET_ENCRYPTION_KEY for production webhook secret encryption:
+  # export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
+  # Evidence signing is off unless EVIDENCE_SERVER_ID, EVIDENCE_SIGNING_SIGNER_DID,
+  # and the worker-only EVIDENCE_SIGNING_PRIVATE_KEY_HEX are configured.
   # Docs: https://runcycles.io/quickstart/deploying-the-events-service
   # cycles-events:
-  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
   #   ports:
   #     - "7980:7980"
   #   environment:
@@ -258,7 +260,7 @@ docker compose up -d
 ```
 
 ::: tip Version pinning
-The examples above pin specific versions (admin `0.1.25.26`, server `0.1.25.13`, events `0.1.25.6`). Check [GitHub releases](https://github.com/runcycles/cycles-server/releases) for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
+The examples above pin known compatible images: admin `0.1.25.41`, server `0.1.25.39`, and events `0.1.25.15`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
 :::
 
 Verify all services are healthy:
@@ -468,6 +470,31 @@ You should see `spent` has increased and `remaining` has decreased.
 
 **Your deployment is working.** The full reserve-commit-balance cycle completed successfully.
 
+## Optional: Enable CyclesEvidence
+
+The quickstart stack enforces budgets without enabling signed evidence by default. To return `cycles_evidence` refs on runtime responses and make `GET /v1/evidence/{id}` resolve after the async signer runs, configure a shared public identity on `cycles-server` and `cycles-server-events`, and keep the private key only on `cycles-server-events`.
+
+Runtime server:
+
+```yaml
+environment:
+  EVIDENCE_SERVER_ID: http://localhost:7878/v1
+  EVIDENCE_SIGNING_SIGNER_DID: <64-hex-public-ed25519-key>
+  EVIDENCE_SIGNING_KID: local-dev-1
+  EVIDENCE_SIGNING_NBF_MS: <epoch-ms-rotation-start>
+```
+
+Events service:
+
+```yaml
+environment:
+  EVIDENCE_SERVER_ID: http://localhost:7878/v1
+  EVIDENCE_SIGNING_SIGNER_DID: <same-64-hex-public-ed25519-key>
+  EVIDENCE_SIGNING_PRIVATE_KEY_HEX: <64-hex-private-ed25519-seed>
+```
+
+`EVIDENCE_SIGNING_KID` is a public JWK `kid` label for the runtime server's JWKS endpoint. It is not key material and is not read by `cycles-server-events`. For key generation, coherence checks, and rotation, use the [CyclesEvidence envelope reference](/protocol/cycles-evidence-envelopes-in-cycles) and the [events-service deployment guide](/quickstart/deploying-the-events-service#optional-cyclesevidence-signing).
+
 ## Step 6: Connect your application
 
 ### Spring Boot (using the Cycles Spring Boot Starter)
@@ -604,6 +631,11 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `server.port` | `7878` | HTTP port |
 | `cycles.expiry.interval-ms` | `5000` | Reservation expiry sweep interval (ms) |
+| `EVIDENCE_SERVER_ID` | (empty) | Public CyclesEvidence issuer base including `/v1`; set with `EVIDENCE_SIGNING_SIGNER_DID` to emit evidence refs |
+| `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Raw-hex public Ed25519 key; must match `cycles-server-events` when evidence is enabled |
+| `EVIDENCE_SIGNING_KID` | derived | Public JWK `kid` label for `GET /v1/.well-known/cycles-jwks.json`; not key material |
+| `EVIDENCE_SIGNING_NBF_MS` | `0` | Active JWK validity start, epoch ms |
+| `EVIDENCE_SIGNING_RETIRED_KEYS` | (empty) | JSON rotation history for retired public signing keys |
 
 ### Cycles Admin Server (port 7979)
 
@@ -614,6 +646,18 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 | `REDIS_PASSWORD` | (required) | Redis password (set empty string if none) |
 | `ADMIN_API_KEY` | (empty) | Master admin key for `X-Admin-API-Key` header |
 | `server.port` | `7979` | HTTP port |
+
+### Cycles Events Service (port 7980)
+
+| Variable | Default | Description |
+|---|---|---|
+| `REDIS_HOST` | `localhost` | Redis hostname |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | (empty) | Redis password |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for webhook signing secrets at rest |
+| `EVIDENCE_SERVER_ID` | (empty) | Same issuer base as the runtime server. Blank disables evidence signing and leaves pending evidence records untouched. |
+| `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Same raw-hex public Ed25519 key as the runtime server |
+| `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex private Ed25519 key; set only on `cycles-server-events` |
 
 ## Troubleshooting
 

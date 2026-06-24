@@ -50,7 +50,7 @@ The docker-compose block for an events service that works on `v0.1.25.9+` looks 
 
 ```yaml
 cycles-events:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
   restart: unless-stopped
   # No `ports:` stanza — the service has no public inbound surface.
   # Traffic-plane dispatch is outbound-only; only the management-plane
@@ -100,7 +100,7 @@ A minimal probe config:
 spec:
   containers:
     - name: cycles-events
-      image: ghcr.io/runcycles/cycles-server-events:0.1.25.10
+      image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
       ports:
         - name: traffic
           containerPort: 7980

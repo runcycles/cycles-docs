@@ -95,7 +95,7 @@ curl http://localhost:7979/actuator/health/readiness
 curl http://localhost:7979/actuator/prometheus
 
 # Events Service
-curl http://localhost:7980/actuator/health
+curl http://localhost:9980/actuator/health
 curl http://localhost:7980/actuator/prometheus
 ```
 

@@ -78,7 +78,7 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.36
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.41
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
@@ -88,7 +88,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.17
+    image: ghcr.io/runcycles/cycles-server:0.1.25.39
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis

@@ -7,7 +7,7 @@ description: "The wire shape, evidence_id content-hash recipe, Ed25519 signature
 
 This page is the protocol reference for CyclesEvidence — the signed, content-addressed audit envelope behind the [verifiable-audit concept](/concepts/cycles-evidence-verifiable-audit-for-agent-decisions). For *why* it exists, start there; this page is the *how*.
 
-The consumer surface (`cycles_evidence` on responses, `GET /v1/evidence/{id}`) is defined in `cycles-protocol-v0.yaml`. The envelope itself is specified in the draft companion [`cycles-evidence-v0.1.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/drafts/cycles-evidence-v0.1.yaml) (pre-normative).
+The consumer surface (`cycles_evidence` on responses, `GET /v1/evidence/{id}`, and `GET /v1/.well-known/cycles-jwks.json`) is defined in `cycles-protocol-v0.yaml`. The envelope and signer-authority rules are specified in [`cycles-evidence-v0.2.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-evidence-v0.2.yaml). The wire `schema_version` remains `cycles-evidence/v0.1` for compatibility; v0.2 adds the normative JWK Set authority layer around that envelope shape.
 
 ## The `cycles_evidence` reference
 
@@ -82,10 +82,11 @@ The `cycles_evidence` ref is stamped onto the response **after** `evidence_id` i
 Given an envelope:
 
 1. **Re-derive `evidence_id`** per the recipe above and compare byte-for-byte. Mismatch ⇒ tampered or canonicalization error.
-2. **Verify the Ed25519 `signature`** (with `evidence_id` populated, `signature` emptied) against the key in `signer_did`.
-3. **Check the `artifact_type` ↔ `payload` pairing** (e.g. `artifact_type: commit` requires `payload.commit`).
+2. **Resolve signer authority** by fetching `GET {server_id}/.well-known/cycles-jwks.json` and selecting the Ed25519 JWK whose `[cycles_nbf_ms, cycles_exp_ms)` window covers the envelope's `issued_at_ms`. The selected key's public bytes must match `signer_did`.
+3. **Verify the Ed25519 `signature`** (with `evidence_id` populated, `signature` emptied) against that public key.
+4. **Check the `artifact_type` ↔ `payload` pairing** (e.g. `artifact_type: commit` requires `payload.commit`).
 
-Signature *validity* against `signer_did` is fully specified today. Signer *authority* — proving `signer_did` is genuinely the legitimate Cycles signer for `server_id` at `issued_at_ms` — is the additive v0.2 layer ([cycles-protocol#103](https://github.com/runcycles/cycles-protocol/issues/103)), and its **publication half is live**: a server publishes its keys at `GET {server_id}/.well-known/cycles-jwks.json` (`getEvidenceJwks`), and the set carries **retired keys with `[cycles_nbf_ms, cycles_exp_ms)` validity windows** so a verifier selects the key authoritative at the envelope's `issued_at_ms` — evidence keeps verifying [across key rotations](/blog/rotating-keys-shouldnt-rewrite-history). **End-to-end resolution** (a consumer resolving `signer_did` against that set) is landing with the first cross-system consumer; until it round-trips, pin the expected signer (`expected_signer`) for issuer trust — the `binding_only` posture. Why validity and authority are different questions: [A Valid Signature Doesn't Tell You Who Signed It](/blog/a-valid-signature-doesnt-tell-you-who-signed-it).
+Signature *validity* proves the envelope was signed by the key in `signer_did`. Signer *authority* proves that key was published by the issuing `server_id` for the envelope's issuance window. The JWK Set is the normative v0.2 authority layer. If a server does not publish JWKS, consumers can still run in a pinned-signer (`binding_only`) posture by comparing `signer_did` to an expected signer out of band. Why validity and authority are different questions: [A Valid Signature Doesn't Tell You Who Signed It](/blog/a-valid-signature-doesnt-tell-you-who-signed-it).
 
 ## Signer-key resolution and rotation
 
@@ -116,8 +117,10 @@ The **active** key omits `cycles_exp_ms` (open-ended) and has `status: active`. 
 
 The windows must tile without overlapping. On rotation:
 
-1. Make the new key active — `EVIDENCE_SIGNING_SIGNER_DID` = the new raw-hex public key, `EVIDENCE_SIGNING_NBF_MS` = the rotation time (epoch ms).
-2. Append the old key to `EVIDENCE_SIGNING_RETIRED_KEYS` — a JSON array of `{"signer_did","kid","nbf_ms","exp_ms"}` — with `exp_ms` = that same rotation time.
+1. Generate the new Ed25519 key pair and deploy the private key only to `cycles-server-events` as `EVIDENCE_SIGNING_PRIVATE_KEY_HEX`.
+2. Make the new public key active on the runtime server — `EVIDENCE_SIGNING_SIGNER_DID` = the new raw-hex public key, `EVIDENCE_SIGNING_KID` = the active JWK `kid`, and `EVIDENCE_SIGNING_NBF_MS` = the rotation time (epoch ms).
+3. Deploy the same public `EVIDENCE_SIGNING_SIGNER_DID` and `EVIDENCE_SERVER_ID` to `cycles-server-events` so the worker signs envelopes with the same identity the runtime publishes and used when computing `evidence_id`.
+4. Append the old public key to the runtime server's `EVIDENCE_SIGNING_RETIRED_KEYS` — a JSON array of `{"signer_did","kid","nbf_ms","exp_ms"}` — with `exp_ms` = that same rotation time.
 
 The retiring key's window then ends exactly where the new key's begins.
 
@@ -125,14 +128,21 @@ The retiring key's window then ends exactly where the new key's begins.
 
 ## Producer / signer split
 
-- **`cycles-server`** computes `evidence_id` synchronously, returns `cycles_evidence`, and serves `GET /v1/evidence/{id}`. It holds only the **public** identity.
+- **`cycles-server`** computes `evidence_id` synchronously, returns `cycles_evidence`, serves `GET /v1/evidence/{id}` and `GET /v1/.well-known/cycles-jwks.json`, and holds only the **public** identity.
 - **`cycles-server-events`** asynchronously builds, **Ed25519-signs** (the private key lives only here), and stores the envelope content-addressed. It recomputes the id and **dead-letters on drift**, so producer/signer config mismatch fails closed.
 
 Because signing is async, a fetch immediately after the response may return a transient `404` — treat it as not-yet-available and retry.
 
 ## Enabling it
 
-Evidence is **off until a shared signing identity is configured** (`EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` on both services; the private `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` only on `cycles-server-events`). See the operator [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md).
+Evidence is **off until a shared signing identity is configured**:
+
+- `EVIDENCE_SERVER_ID` on both services — the issuer base URL, including `/v1`, used in evidence URLs and envelopes.
+- `EVIDENCE_SIGNING_SIGNER_DID` on both services — the raw-hex public Ed25519 key.
+- `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` only on `cycles-server-events` — the raw-hex private Ed25519 key.
+- `EVIDENCE_SIGNING_KID`, `EVIDENCE_SIGNING_NBF_MS`, and `EVIDENCE_SIGNING_RETIRED_KEYS` only on `cycles-server` — public JWKS metadata and rotation history.
+
+See the operator [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md).
 
 ## Related
 
