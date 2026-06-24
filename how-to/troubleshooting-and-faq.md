@@ -290,7 +290,7 @@ Enable **CyclesEvidence**. When the signing identity is configured, decide / res
 
 ### What happens to evidence if I don't configure the signing identity?
 
-Nothing breaks in the budget-enforcement path — Cycles continues to decide, reserve, commit, and release exactly as before — but verifiable evidence is not available until the shared identity is configured consistently. In fully unconfigured/dev setups, responses omit `cycles_evidence`; if `EVIDENCE_SERVER_ID` is blank, `cycles-server-events` dead-letters evidence source records instead of signing an invalid envelope; and if the producer/worker public identity differs, the worker dead-letters on the `evidence_id` cross-check. The events worker's ephemeral-key mode is development-only and only covers the case where `EVIDENCE_SERVER_ID` is present but the signing pair is absent; it is not a production evidence identity. Set `EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` (public, on both services) and `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` (secret, on `cycles-server-events` only), then watch `evidence:failed` during rollout.
+Nothing breaks in the budget-enforcement path — Cycles continues to decide, reserve, commit, and release exactly as before — but verifiable evidence is not available until the shared identity is configured consistently. In fully unconfigured/dev setups, responses omit `cycles_evidence`; if `EVIDENCE_SERVER_ID` is blank on `cycles-server-events`, the evidence signer is disabled and pending source records are left untouched, not dead-lettered. If `EVIDENCE_SERVER_ID` is present but the producer/worker public identity differs, the worker dead-letters on the `evidence_id` cross-check. The events worker's ephemeral-key mode is development-only and only covers the case where `EVIDENCE_SERVER_ID` is present but the signing pair is absent; it is not a production evidence identity and will not match a runtime server publishing a different public signer. Set `EVIDENCE_SERVER_ID` + `EVIDENCE_SIGNING_SIGNER_DID` (public, on both services) and `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` (secret, on `cycles-server-events` only), then watch `evidence:failed` during rollout.
 
 ### How do I reset a budget to zero?
 
@@ -469,7 +469,7 @@ See [Understanding Units](/protocol/understanding-units-in-cycles-usd-microcents
 
 **Checklist:**
 
-1. **Is the events service running?** Webhook delivery requires the events service (`cycles-server-events`) to be deployed and connected to the same Redis instance. Check with `curl http://localhost:7980/actuator/health`.
+1. **Is the events service running?** Webhook delivery requires the events service (`cycles-server-events`) to be deployed and connected to the same Redis instance. Check the management port with `curl http://localhost:9980/actuator/health`.
 2. **Is the subscription active?** Subscriptions are auto-disabled after 10 consecutive delivery failures. Check status: `GET /v1/admin/webhooks/{id}` — look for `"status": "DISABLED"`.
 3. **Does the subscription match the event type?** Check the `event_types` array in your subscription. If it's empty, the subscription receives all event types. If it lists specific types, the event must match.
 4. **Does the scope filter match?** If you set a `scope_filter`, only events whose scope matches the filter will be delivered. See [Scope Filter Syntax](/protocol/webhook-scope-filter-syntax) for matching rules.

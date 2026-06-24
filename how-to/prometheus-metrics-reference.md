@@ -20,10 +20,10 @@ Null or blank tag values are normalised to the sentinel `UNKNOWN`. Missing tags 
 | Service | Scrape port | Prometheus path |
 |---|---|---|
 | `cycles-server` (runtime) | `7878` (same as API) | `/actuator/prometheus` |
-| `cycles-server-events` (dispatcher) | **`9980`** (dedicated management port, split from API `7980` in v0.1.25.9, env `MANAGEMENT_PORT`) | `/actuator/prometheus` |
+| `cycles-server-events` (dispatcher) | **`9980`** (dedicated management port, split from app port `7980` in v0.1.25.9, env `MANAGEMENT_PORT`) | `/actuator/prometheus` |
 | `cycles-server-admin` | `7979` (same as API) | `/actuator/prometheus` |
 
-**Events-service port split.** Starting with `cycles-server-events` v0.1.25.9, the `health`, `info`, and `prometheus` actuator endpoints moved from the public API port `7980` to a dedicated management port (default `9980`, env `MANAGEMENT_PORT`). Scrape configs, kubelet probes, and Docker `HEALTHCHECK` commands must target `:9980` — the published Docker image's `HEALTHCHECK` is already updated. Expose `7980` publicly; keep `9980` internal-only.
+**Events-service port split.** Starting with `cycles-server-events` v0.1.25.9, the `health`, `info`, and `prometheus` actuator endpoints moved from the application port `7980` to a dedicated management port (default `9980`, env `MANAGEMENT_PORT`). Scrape configs, kubelet probes, and Docker `HEALTHCHECK` commands must target `:9980` — the published Docker image's `HEALTHCHECK` is already updated. Do not publish `7980` for webhook delivery; keep both events-service ports internal-only.
 
 ## Runtime server (`cycles-server`)
 
@@ -99,7 +99,7 @@ scrape_configs:
   - job_name: cycles-events
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['cycles-server-events:9980']  # management port, NOT the API port (7980)
+      - targets: ['cycles-server-events:9980']  # management port, NOT the app port (7980)
 
   - job_name: cycles-admin
     metrics_path: /actuator/prometheus

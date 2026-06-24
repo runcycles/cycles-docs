@@ -7,7 +7,7 @@ description: "Release history and version notes for the Cycles Protocol, server,
 
 Release history for the Cycles Protocol and reference implementations.
 
-## v0.1.25.x — patch releases (April 2026)
+## v0.1.25.x — patch releases (April-June 2026)
 
 Since the initial v0.1.25 Events & Webhooks release, each component has shipped a stream of patch releases. Wire format is stable within `0.1.x`; every change below is **additive** unless explicitly marked breaking.
 
@@ -17,10 +17,10 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (revision 2026-04-18) | 2026-04-18 |
 | Governance spec (admin) | v0.1.25.34 | 2026-04-20 |
-| `cycles-server` (runtime) | v0.1.25.17 | 2026-04-20 |
-| `cycles-server-admin` | v0.1.25.40 | 2026-04-23 |
-| `cycles-server-events` | v0.1.25.11 | 2026-04-23 |
-| `cycles-dashboard` | v0.1.25.59 | 2026-04-23 |
+| `cycles-server` (runtime) | v0.1.25.39 | 2026-06-24 |
+| `cycles-server-admin` | v0.1.25.42 | 2026-06-24 |
+| `cycles-server-events` | v0.1.25.15 | 2026-06-23 |
+| `cycles-dashboard` | v0.1.25.63 | 2026-06-22 |
 
 **Client SDKs and plugins.** The language clients and plugin integrations are versioned independently from the protocol / server / dashboard tracks — they track the client API surface rather than the wire spec. Current releases:
 
@@ -46,6 +46,9 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Runtime server (`cycles-server`)
 
+- **v0.1.25.39** (2026-06-24) — Pagination, replay, auth, and production-default hardening. Legacy SCAN pagination for reservations/balances no longer skips rows when a page limit is reached mid-batch; sorted reservations no longer truncate at 2000 hydrated rows. Auth-filter errors now carry `trace_id`, `POST /v1/events` idempotent replay returns the stored original response, invalid tenant default overage policies fail closed, API key validation no longer caches full allow/deny decisions, and production Compose pins `cycles-server` to 0.1.25.39.
+- **v0.1.25.38** (2026-06-23) — **Unconfigured CyclesEvidence no longer queues source records.** If `EVIDENCE_SERVER_ID` or `EVIDENCE_SIGNING_SIGNER_DID` is blank, the runtime emitter returns no `cycles_evidence` ref and does not push to `evidence:pending`. Configured deployments still compute `evidence_id` synchronously, queue the source record, and return the evidence ref.
+- **v0.1.25.37** (2026-06-22) — **Reservation evidence projection.** The runtime persists computed evidence refs on reservation hashes and exposes them through `GET /v1/reservations/{id}` and `include=evidence` on `GET /v1/reservations`, enabling dashboard "View evidence" links after the original response is gone.
 - **v0.1.25.17** (2026-04-20) — Pin `commons-lang3` 3.18.0 to close CVE-2025-48924. No wire or behavior change.
 - **v0.1.25.16** (2026-04-20) — Bump Spring Boot 3.5.11 → 3.5.13, pin embedded tomcat 10.1.54 (CVE remediation). No wire or behavior change.
 - **v0.1.25.15** (2026-04-18) — **Runtime audit-log retention TTL.** New `audit.retention.days` config (default `400`, env `AUDIT_RETENTION_DAYS`) applies a TTL to `audit:log:{id}` keys — previously these persisted indefinitely until Redis eviction, silently escaping the authenticated-tier retention the admin plane applies. New `audit.sweep.cron` (default `0 0 3 * * *`, env `AUDIT_SWEEP_CRON`) prunes stale ZSET pointers. Set to `0` for indefinite retention.
@@ -63,6 +66,8 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Admin server (`cycles-server-admin`)
 
+- **v0.1.25.42** (2026-06-24) — Dependency-only security release. Reintroduces the Tomcat 10.1.55 override for Apache Tomcat CVEs, carries the previously unreleased Spring Boot 3.5.15 and Jedis 7.5.0 dependency bumps, and scopes the Trivy SARIF gate to the intended HIGH/CRITICAL severity threshold while jackson-databind 2.21.5 is not yet published. No code, spec, or wire-format changes.
+- **v0.1.25.41** (2026-04-26) — Dependency hygiene aligning the service fleet on the same Spring Boot patch and Redis client major. Spring Boot 3.5.13 → 3.5.14, Jedis 5.2.0 → 6.2.0, and the explicit Tomcat 10.1.54 override was removed because the Spring Boot BOM manages it directly. No code or wire-format changes.
 - **v0.1.25.40** (2026-04-23) — Same-release hygiene sweep on the v0.1.25.39 webhook lifecycle emits. Single-op actor now populates `keyId` from `authenticated_key_id`, matching the bulk-path parity already in place. `changed_fields` on `webhook.updated` is now a real diff vs the prior snapshot — identity PATCHes emit empty `changed_fields` and full-identity PATCHes suppress the emit entirely per spec v0.1.25.33 §6281. The `"no-req"` literal correlation-id fallback is replaced with `req_<uuid>` to preserve uniqueness under misconfigured `RequestIdFilter`. No wire or spec surface change.
 - **v0.1.25.39** (2026-04-23) — **Webhook lifecycle events (spec v0.1.25.33).** `POST /v1/admin/webhooks`, `PATCH /v1/admin/webhooks/{id}`, `DELETE /v1/admin/webhooks/{id}`, and `POST /v1/admin/webhooks/bulk-action` (PAUSE / RESUME / DELETE) now emit `webhook.created` / `.updated` / `.paused` / `.resumed` / `.deleted` Events with the new `EventDataWebhookLifecycle` payload (`subscription_id`, `tenant_id`, `previous_status`, `new_status`, `changed_fields`, `disable_reason`). Update-endpoint emit type is classified by the status transition: `ACTIVE → PAUSED` yields `webhook.paused`, `PAUSED → ACTIVE` yields `webhook.resumed`, everything else yields `webhook.updated` with the touched properties enumerated in `changed_fields`. Bulk path stamps every per-row emit with `correlation_id = webhook_bulk_action:<action>:<request_id>` (one correlation_id per invocation, shared across rows) — skipped / failed rows never emit. Single-op correlation_ids: `webhook_create:<id>`, `webhook_update:<id>:<request_id>`, `webhook_delete:<id>`. The dispatcher-emitted `webhook.disabled` (auto-disable on failure threshold) is the events-service's responsibility — see `cycles-server-events` v0.1.25.11. Closes the operator-observability blind spot that v0.1.25.38 explicitly deferred. Aligns with spec v0.1.25.33 and v0.1.25.34's `EventCategory.webhook` enum addition. See [Event Payloads Reference](/protocol/event-payloads-reference).
 - **v0.1.25.38** (2026-04-22) — **Bulk-action event parity (spec v0.1.25.32).** `POST /v1/admin/budgets/bulk-action` and `POST /v1/admin/tenants/bulk-action` now emit per-row Events matching single-op kinds (`budget.funded` / `.debited` / `.reset` / `.reset_spent` / `.debt_repaid` for budgets; `tenant.suspended` / `.reactivated` / `.closed` for tenants) after each successful mutation. Correlation-id shape: `budget_bulk_action:<action>:<request_id>` and `tenant_bulk_action:<action>:<request_id>` — one correlation_id per invocation, shared across rows. Skipped rows (`ALREADY_IN_TARGET_STATE`) and failed rows emit no Event. For `action=CLOSE` on tenants the existing `tenant_close_cascade:<tenant_id>:<request_id>` correlation axis (spec v0.1.25.29) is unchanged — operators tracing an invocation query by `tenant_bulk_action:close:<req>`, operators tracing one specific tenant's close query by `tenant_close_cascade:<tenant_id>:<req>`. Aggregate `AuditLogEntry` per invocation (spec v0.1.25.26) unchanged. `bulkActionWebhooks` was explicitly deferred in this release — its lifecycle `EventType` values did not yet exist — and is closed in v0.1.25.39. See [Using Bulk Actions](/how-to/using-bulk-actions-for-tenants-and-webhooks).
@@ -96,9 +101,11 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Events service (`cycles-server-events`)
 
+- **v0.1.25.15** (2026-06-23) — **Unconfigured CyclesEvidence is a supported disabled mode.** A blank `EVIDENCE_SERVER_ID` prevents the evidence signer worker, envelope builder, and local signing key from being created. The worker no longer claims source records or dead-letters them solely because `server_id` is absent. Retention cleanup also skips non-ZSET Redis keys matched by broad `events:*` scans, avoiding `WRONGTYPE` startup noise.
+- **v0.1.25.14** (2026-06-12) — **CyclesEvidence signing tier.** The events service consumes `evidence:pending`, builds `cycles-evidence/v0.1` envelopes, cross-checks the producer-stamped `evidence_id`, Ed25519-signs with the private key held only in this service, and stores the envelope content-addressed for the runtime server to serve.
 - **v0.1.25.11** (2026-04-23) — **Dispatcher-side webhook lifecycle emit (spec v0.1.25.33).** When `DeliveryHandler.incrementConsecutiveFailures` crosses `disable_after_failures`, the dispatcher now writes a `webhook.disabled` Event directly to the shared Redis store alongside the existing `DISABLED` status flip and `cycles_webhook_subscription_auto_disabled_total` metric. `EventType.WEBHOOK_DISABLED` and `EventCategory.WEBHOOK` enum values added (additive, no wire break). `correlation_id = webhook_auto_disable:<subscription_id>:<delivery_id>`; payload conforms to `EventDataWebhookLifecycle` with `disable_reason="consecutive_failures_exceeded_threshold"`, `actor.type=system`, `source=cycles-events`; `trace_id` copied from the triggering Delivery when present. Emit is best-effort — a Redis write failure logs at WARN but does not revert the status flip. The operator-initiated webhook lifecycle emits (`webhook.created/updated/paused/resumed/deleted`) remain the responsibility of `cycles-server-admin` v0.1.25.39; this patch closes only the auto-disable path the spec names as the dispatcher's exclusive emission point.
 - **v0.1.25.10** (2026-04-20) — Bump Spring Boot 3.5.11 → 3.5.13, pin embedded tomcat 10.1.54 (CVE remediation). No wire or behavior change.
-- **v0.1.25.9** (2026-04-18) — **Management port split.** `health`, `info`, and `prometheus` actuator endpoints moved from public API port `7980` to a dedicated management port (default `9980`, env `MANAGEMENT_PORT`). **Migration:** Prometheus scrape configs must update target port from `:7980` → `:9980`; kubelet probes and Docker `HEALTHCHECK` same. Published Docker image `HEALTHCHECK` already updated. No wire-format change for dispatch. Expose `7980` publicly; keep `9980` internal-only.
+- **v0.1.25.9** (2026-04-18) — **Management port split.** `health`, `info`, and `prometheus` actuator endpoints moved from application port `7980` to a dedicated management port (default `9980`, env `MANAGEMENT_PORT`). **Migration:** Prometheus scrape configs must update target port from `:7980` → `:9980`; kubelet probes and Docker `HEALTHCHECK` same. Published Docker image `HEALTHCHECK` already updated. No wire-format change for dispatch. The reference events service is an outbound worker, so do not publish `7980` for webhook delivery; keep `9980` internal-only.
 - **v0.1.25.8** (2026-04-18) — **Cross-surface correlation on `WebhookDelivery`.** Three new OPTIONAL fields: `trace_id` (captured at dispatch time from originating event), `trace_flags` (W3C trace-flags byte for outbound `traceparent`), `traceparent_inbound_valid` (whether upstream sent valid W3C traceparent). Aligns with governance-admin spec v0.1.25.28. Dispatcher honors `trace_flags` when `traceparent_inbound_valid=true`, otherwise defaults to `01` (sampled). Proactive `trace_id` stamping on `Delivery` as rolling-upgrade safety net for pre-.31 admin servers.
 - **v0.1.25.7** (2026-04-18) — **trace_id and W3C Trace Context headers on every outbound webhook delivery.** New outbound headers: `X-Cycles-Trace-Id` (always present), `traceparent: 00-<trace_id>-<16-hex-span>-<flags>` (fresh span-id per delivery, never reused from inbound), `X-Request-Id` (when event carries `request_id`). New `Event.trace_id` field, optional. Non-fatal `trace_id_shape` validation rule — malformed `trace_id` increments `cycles_webhook_events_payload_invalid_total{rule="trace_id_shape"}` and the dispatcher falls back to minting a fresh id so outbound header stays well-formed. Aligns with governance-admin spec v0.1.25.27.
 - **v0.1.25.6** (2026-04-16) — `BUDGET_RESET_SPENT` added to the `EventType` vocabulary. **Eight new Prometheus metrics** under `cycles_webhook_*`: `delivery_attempts_total`, `delivery_success_total`, `delivery_failed_total`, `delivery_retried_total`, `delivery_stale_total`, `subscription_auto_disabled_total`, `events_payload_invalid_total`, plus `cycles_webhook_delivery_latency_seconds` timer. `cycles.metrics.tenant-tag.enabled` flag mirrors the runtime. Non-fatal `EventPayloadValidator` on every ingested event (WARN + counter on violation; never drops).
@@ -109,6 +116,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Dashboard (`cycles-dashboard`)
 
+- **v0.1.25.63** (2026-06-22) — **Reservations and Evidence gap closure.** Published dashboard image that adds created/expires/finalized filters, reservation metadata detail, policy/webhook advanced config, API key/tenant fields, an Evidence page that retrieves `GET /v1/evidence/{id}` and resolves signer keys against the runtime JWKS, plus one-click reserve / commit / release evidence links from reservation detail. The dashboard proxy needs runtime routes for `/v1/reservations*`, `/v1/evidence*`, and `/v1/.well-known/cycles-jwks.json`. Requires `cycles-server` v0.1.25.37+ for the `include=evidence` projection; older servers omit the field and no links render.
 - **v0.1.25.59** (2026-04-23) — **Spec alignment v0.1.25.31 → v0.1.25.34.** Adds the six `webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted` values to the Events view type datalist plus `webhook` to the category dropdown, so operators can filter on the new lifecycle events emitted by admin v0.1.25.39 and events v0.1.25.11. Payload renderer stays untyped (`Record<string, unknown>`) — matches the existing pattern for `EventDataTenantLifecycle`. Compose pins bumped to admin v0.1.25.39 + events v0.1.25.11 so new events actually fire end-to-end. **Operator bug folded in:** Overview budget-utilization donut and the at-cap attention card now exclude spec-terminal CLOSED budgets (spec v0.1.25.29) from both the bucketing and the total, so a CLOSED-at-120% budget no longer inflates "Over cap" and CLOSED budgets no longer inflate "Healthy". FROZEN stays included — it's non-terminal.
 - **v0.1.25.58** (2026-04-23) — **Mobile-responsive sweep.** Ten fixes across layout shell, tables, menus, dialogs: Escape closes the drawer with focus-return to hamburger, hamburger sized to 44×44 with `aria-expanded` / `aria-controls`, root uses `h-dvh` (mobile Safari URL-bar), `PageHeader` reflows to column on narrow viewports, table minimum widths tightened, `RowActionsMenu` clamps to viewport horizontally, `FormDialog` + `ConfirmAction` footers flex-wrap, `LoginView` and `NotFoundView` fit 320w with `min-h-dvh`. Virtualized-table card-mode on phones and `CommandPalette` soft-keyboard handling deferred to a future release.
 - **v0.1.25.57** (2026-04-23) — Correctness + debuggability sweep. Replay body properly typed with pre-flight validation of `max_events`; tenant-list failure surfaces in the top banner instead of inline filter text; `auth.restore()` is single-flight so concurrent cold-load callers coalesce; timeout error messages include method + URL path; JSON-parse failures on error bodies log `console.warn`; `ReservationsView` reads `?tenant_id=` and mirrors the filter to URL; bulk-action durations use `Intl.NumberFormat` for locale-aware formatting.
@@ -166,7 +174,7 @@ New event-driven observability system spanning all three services.
 - `reservation.denied` on DENY decision (reserve and decide endpoints)
 - `reservation.commit_overage` on commit with actual > estimated
 
-**Events delivery service (`cycles-server-events`, port 7980):**
+**Events delivery service (`cycles-server-events`, internal app port 7980):**
 - Async webhook delivery via BRPOP from shared Redis dispatch queue
 - HMAC-SHA256 payload signing (`X-Cycles-Signature: sha256=<hex>`)
 - Exponential backoff retry, auto-disable after consecutive failures
@@ -264,10 +272,10 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `cycles-client-java-spring` | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/mcp-server` | 0.2.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Server (runtime) | v0.1.25.17 | Protocol v0.1.25 (revision 2026-04-18) |
-| Cycles Admin Server | v0.1.25.36 | Governance spec v0.1.25.31 |
-| Cycles Events Service | v0.1.25.10 | Shared Redis dispatch queue |
-| Cycles Dashboard | v0.1.25.43 | Admin v0.1.25.36+ (tenant-close cascade); v0.1.25.31+ (correlation chip); v0.1.25.29+ (budget bulk); v0.1.25.18+ (RESET_SPENT) |
+| Cycles Server (runtime) | v0.1.25.39 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.42 | Governance spec v0.1.25.34 |
+| Cycles Events Service | v0.1.25.15 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
+| Cycles Dashboard | v0.1.25.63 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
 All current SDK versions are backward-compatible with server v0.1.23. New v0.1.24 features (budget patch, policy patch, capped `ALLOW_IF_AVAILABLE` commits) require server v0.1.24+. New v0.1.25 features (event emission, webhook delivery, events service, `policy_id` / `deny_detail` on `reservation.denied`) require server v0.1.25.
 
@@ -275,6 +283,8 @@ All current SDK versions are backward-compatible with server v0.1.23. New v0.1.2
 
 | Feature | Minimum component |
 |---|---|
+| Dashboard Evidence viewer and reservation "View evidence" links | `cycles-dashboard` v0.1.25.63+; `cycles-server` v0.1.25.37+ for `include=evidence`; `cycles-server-events` v0.1.25.14+ to sign envelopes |
+| Unconfigured CyclesEvidence disabled mode (no queueing or dead-lettering when identity is blank) | `cycles-server` v0.1.25.38, `cycles-server-events` v0.1.25.15 |
 | Tenant-close cascade + `TENANT_CLOSED` (409) error code + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |
 | W3C Trace Context (`trace_id` on responses + audit/events filter) | `cycles-server` v0.1.25.14, `cycles-server-admin` v0.1.25.31, `cycles-server-events` v0.1.25.7, `cycles-dashboard` v0.1.25.39 |
 | Runtime audit-log retention TTL (`AUDIT_RETENTION_DAYS`) | `cycles-server` v0.1.25.15 |

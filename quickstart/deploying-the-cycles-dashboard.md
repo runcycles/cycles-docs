@@ -29,7 +29,8 @@ A single pane for all operator tasks, capability-gated by the admin key:
 | **Events** | Correlation-first investigation tool with expandable detail rows |
 | **API Keys** | Cross-tenant key list with masked IDs, permissions, status filters |
 | **Webhooks** | Subscription health (green/yellow/red) + delivery history, replay, test |
-| **Reservations** | Hung-reservation force-release during incident response (runtime-plane admin-on-behalf-of) |
+| **Reservations** | Hung-reservation force-release during incident response (runtime-plane admin-on-behalf-of), with "View evidence" links when the runtime server emits evidence refs |
+| **Evidence** | Retrieve and inspect a signed evidence envelope by id; resolve the signer against the runtime server's published JWK Set |
 | **Audit** | Compliance query tool with CSV/JSON export |
 
 Incident-response actions (freeze budget, suspend tenant, revoke API key, pause webhook, force-release reservation, emergency tenant-wide freeze) are one-click with confirmation and blast-radius summaries.
@@ -47,13 +48,13 @@ The dashboard is a static SPA served by nginx. It talks to **two backends** — 
 
 <DashboardArchDiagram />
 
-The default path (left branch) carries every dashboard page except Reservations. The split path (right branch) carries runtime-plane force-release calls issued from the Reservations page during incident response.
+The default path (left branch) carries the governance/admin pages. The split path (right branch) carries runtime-plane Reservations and Evidence calls, including force-release, evidence lookup, and signer JWKS resolution.
 
 The nginx routing split in `nginx.conf`:
 
 | Request path | Upstream | Used by |
 |---|---|---|
-| `/v1/reservations*` | `cycles-server:7878` | Reservations page — force-release hung reservations (runtime-plane admin-on-behalf-of) |
+| `/v1/reservations*`, `/v1/evidence*`, `/v1/.well-known/cycles-jwks.json` | `cycles-server:7878` | Reservations and Evidence pages — force-release, envelope lookup, signer-key resolution |
 | `/v1/*` (everything else) | `cycles-admin:7979` | All other dashboard pages |
 
 Both backends authenticate the same `X-Admin-API-Key` header. On the runtime plane, force-release is a dual-authenticated admin-on-behalf-of call — the runtime server validates the admin key and records the actor in the audit trail.
@@ -71,7 +72,7 @@ npm run dev
 
 Dashboard opens at `http://localhost:5173`. The Vite dev server mirrors the production routing split:
 
-- `/v1/reservations*` → `localhost:7878` (`cycles-server` — runtime plane)
+- `/v1/reservations*`, `/v1/evidence*`, `/v1/.well-known/cycles-jwks.json` → `localhost:7878` (`cycles-server` — runtime plane)
 - `/v1/*` (everything else) → `localhost:7979` (`cycles-admin` — governance plane)
 
 **You need both backends running.** See [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) to bring them up — or `cd ../cycles-server-admin && ADMIN_API_KEY=your-key docker compose up -d` if you only want admin + Redis and plan to run `cycles-server` separately. Log in with the same `ADMIN_API_KEY` you set on the servers (both admin and runtime must share the same key for force-release to work).
@@ -102,9 +103,12 @@ services:
       - cycles
 
   dashboard:
-    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.43
+    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.63
     restart: unless-stopped
     # No exposed ports — only reachable through Caddy.
+    environment:
+      ADMIN_UPSTREAM: ${ADMIN_UPSTREAM:-http://cycles-admin:7979}
+      RUNTIME_UPSTREAM: ${RUNTIME_UPSTREAM:-http://cycles-server:7878}
     depends_on:
       cycles-admin:
         condition: service_healthy
@@ -113,11 +117,13 @@ services:
     networks:
       - cycles
 
-  # Runtime plane — reservation force-release goes here via /v1/reservations*.
+  # Runtime plane — reservation force-release, evidence lookup, and signer JWKS
+  # go here via /v1/reservations*, /v1/evidence*, and
+  # /v1/.well-known/cycles-jwks.json.
   # Its ADMIN_API_KEY must match cycles-admin's so admin-on-behalf-of calls
   # authenticate on both sides.
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.17
+    image: ghcr.io/runcycles/cycles-server:0.1.25.39
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
@@ -139,7 +145,7 @@ services:
 
   # Governance plane — tenants, budgets, policies, webhooks, events, audit.
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.36
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
@@ -156,6 +162,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - cycles
+
+  # Async webhook delivery and optional CyclesEvidence signing.
+  cycles-events:
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:-}
+      # Evidence signing is off unless these are set consistently with cycles-server:
+      # EVIDENCE_SERVER_ID, EVIDENCE_SIGNING_SIGNER_DID,
+      # EVIDENCE_SIGNING_PRIVATE_KEY_HEX.
     depends_on:
       redis:
         condition: service_healthy
@@ -185,7 +209,7 @@ networks:
 ```
 
 ::: warning Both backends required
-The dashboard's nginx routes `/v1/reservations*` to `cycles-server:7878` for the Reservations page's force-release action. If you omit `cycles-server`, every other page works but force-release fails with a 502. The `ADMIN_API_KEY` **must be the same** on both `cycles-admin` and `cycles-server` — admin-on-behalf-of calls authenticate on both sides.
+The dashboard's nginx routes `/v1/reservations*`, `/v1/evidence*`, and `/v1/.well-known/cycles-jwks.json` to `cycles-server:7878`. If you omit `cycles-server`, every governance page works but Reservations and Evidence fail with a 502. The `ADMIN_API_KEY` **must be the same** on both `cycles-admin` and `cycles-server` — admin-on-behalf-of force-release calls authenticate on both sides. Signed evidence also requires `cycles-server-events` to run with the matching evidence private key.
 :::
 
 ```
@@ -261,10 +285,15 @@ Each page manages its own polling lifecycle via a `usePolling` composable. Inter
 | `REDIS_PASSWORD` | Recommended | (empty) | Redis authentication password |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY` | Recommended | (empty) | AES-256-GCM key for webhook signing secrets at rest |
 | `DASHBOARD_CORS_ORIGIN` | Dev only | `http://localhost:5173` | CORS origin — only needed when the browser calls the admin server directly (dev mode); unused in standard production |
+| `ADMIN_UPSTREAM` | No | `http://cycles-admin:7979` | Governance-plane upstream for the dashboard container's nginx proxy |
+| `RUNTIME_UPSTREAM` | No | `http://cycles-server:7878` | Runtime-plane upstream for reservations, evidence lookup, and signer JWKS |
+| `EVIDENCE_SERVER_ID` / `EVIDENCE_SIGNING_SIGNER_DID` | Evidence only | (empty) | Backend identity values required on both `cycles-server` and `cycles-events` for signed evidence |
+| `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | Evidence only | (empty) | Backend private Ed25519 signing seed. Set only on `cycles-events`; never set on the dashboard or runtime server |
+| `EVIDENCE_SIGNING_KID` | Evidence JWKS only | derived | Public JWK `kid` label for the runtime server's signer JWKS. Not key material and not read by `cycles-events` |
 
-The dashboard itself has no server-side configuration — it's a static SPA. The admin server URL is set by the proxy:
-- **Development:** Vite proxy in `vite.config.ts` (default: `localhost:7979`).
-- **Production:** nginx reverse proxy in `nginx.conf` (default: `cycles-admin:7979`).
+The dashboard itself has no application-level server configuration — it's a static SPA. The backend URLs are set by the proxy:
+- **Development:** Vite proxy in `vite.config.ts` (defaults: `localhost:7979` admin, `localhost:7878` runtime).
+- **Production:** `ADMIN_UPSTREAM` and `RUNTIME_UPSTREAM` on the dashboard container's nginx proxy.
 
 ## Next steps
 

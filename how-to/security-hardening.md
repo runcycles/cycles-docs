@@ -15,7 +15,7 @@ The Admin Server (port 7979) should **never** be exposed to the public internet.
 
 ### Separate management and runtime planes
 
-All Cycles services — Server, Admin Server, Events Service — run on the internal network. Only a load balancer should be exposed to application traffic. The Admin Server (port 7979), Events Service (port 7980), Cycles Server (port 7878), and Redis (port 6379) should **never be accessible from the public internet**.
+All Cycles services — Server, Admin Server, Events Service — run on the internal network. Only a load balancer should be exposed to application traffic. The Admin Server (port 7979), Events Service app/management ports (7980/9980), Cycles Server (port 7878), and Redis (port 6379) should **never be accessible from the public internet**.
 
 <NetworkZones />
 
@@ -33,7 +33,7 @@ All Cycles services — Server, Admin Server, Events Service — run on the inte
 | Events Service | External webhook endpoints | 443 (HTTPS) | Yes |
 | Public internet | Cycles Server | 7878 | **No** |
 | Public internet | Admin Server | 7979 | **No** |
-| Public internet | Events Service | 7980 | **No** |
+| Public internet | Events Service | 7980/9980 | **No** |
 | Public internet | Redis | 6379 | **No** |
 
 ## Redis security
@@ -199,7 +199,7 @@ docker run --rm ghcr.io/runcycles/cycles-server:latest whoami
 Use specific version tags, not `latest`:
 
 ```yaml
-image: ghcr.io/runcycles/cycles-server:0.1.25.17  # Pinned
+image: ghcr.io/runcycles/cycles-server:0.1.25.39  # Pinned
 # NOT: ghcr.io/runcycles/cycles-server:latest   # Unpinned
 ```
 
@@ -209,7 +209,7 @@ Mount the container filesystem as read-only:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.17
+  image: ghcr.io/runcycles/cycles-server:0.1.25.39
   read_only: true
   tmpfs:
     - /tmp

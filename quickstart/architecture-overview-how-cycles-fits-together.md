@@ -17,10 +17,10 @@ This is a reference page. If you haven't set up Cycles yet, start with the [End-
 
 <ArchDiagramFull />
 
-Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** (port 7980) delivers webhook notifications asynchronously. All three services share the same Redis instance.
+Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** is an outbound worker that delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes; its app port 7980 and management port 9980 should stay internal. All three services share the same Redis instance.
 
 ::: info Independent release cadences
-Runtime, admin, and events services ship patch releases independently. Current versions as of 2026-04-17: `cycles-server` 0.1.25.13, `cycles-server-admin` 0.1.25.26, `cycles-server-events` 0.1.25.6, `cycles-dashboard` 0.1.25.28. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
+Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-06-24: `cycles-server` 0.1.25.39, `cycles-server-admin` 0.1.25.42, `cycles-server-events` 0.1.25.15, `cycles-dashboard` 0.1.25.63. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
 :::
 
 ## Components
@@ -31,7 +31,7 @@ The protocol specification defines the API contract. It is a language-agnostic O
 
 The protocol defines:
 
-- Nine HTTP endpoints for reservations, decisions, balances, and events
+- Runtime endpoints for decisions, reservations, balances, event ingest, evidence retrieval, and signer JWKS publication
 - The Subject hierarchy (tenant, workspace, app, workflow, agent, toolset)
 - The reserve → execute → commit lifecycle
 - Error codes and their semantics
@@ -51,6 +51,7 @@ The reference server implementation. It is a Spring Boot 3.5 application backed 
 - Executes atomic budget operations via Redis Lua scripts
 - Maintains budget state (allocated, spent, reserved, debt)
 - Runs a background expiry sweep to clean up abandoned reservations
+- Computes CyclesEvidence content hashes synchronously, returns `cycles_evidence` refs when configured, and serves signed envelopes plus public signer JWKS
 
 **Modules:**
 
@@ -158,7 +159,7 @@ See the [Admin API reference](/admin-api/) for the full API, or the [governance 
 
 ### Cycles Events Service
 
-The async webhook delivery service. It runs as a separate Spring Boot 3.5 service on port 7980 and shares the same Redis instance.
+The async webhook delivery and evidence signing service. It runs as a separate Spring Boot 3.5 service with an internal app port (7980) and management/actuator port (9980), and shares the same Redis instance.
 
 **What it does:**
 
@@ -168,19 +169,21 @@ The async webhook delivery service. It runs as a separate Spring Boot 3.5 servic
 - Auto-disables subscriptions after consecutive failures (default threshold: 10)
 - Expires stale deliveries after configurable max age (default: 24h)
 - Cleans up expired ZSET index entries hourly
+- Builds and Ed25519-signs CyclesEvidence envelopes when `EVIDENCE_SERVER_ID` and the signing key are configured
+- Stores signed evidence envelopes content-addressed for the runtime server to serve at `GET /v1/evidence/{id}`
 
 **Why a separate service:**
 
 | Concern | Admin Server | Events Service |
 |---------|-------------|----------------|
-| Workload | Synchronous CRUD, operator-facing | Asynchronous delivery, variable latency |
+| Workload | Synchronous CRUD, operator-facing | Asynchronous delivery and signing, variable latency |
 | Scaling | Scale with admin traffic | Scale with webhook volume |
 | Failure isolation | Admin stays responsive during delivery backlog | Delivery retries don't block admin API |
 | Concurrency | Single instance | Multiple instances safe (BRPOP is atomic) |
 
-**Optional:** If the events service is not deployed, admin and runtime servers operate normally. Events and deliveries accumulate in Redis (bounded by TTL) and are processed when the events service starts.
+**Optional:** If the events service is not deployed, admin and runtime servers operate normally. Webhook events and deliveries accumulate in Redis (bounded by TTL) and are processed when the events service starts. If CyclesEvidence is configured on the runtime server but the events service is down, responses may carry `cycles_evidence` refs while `GET /v1/evidence/{id}` returns transient `404` until the signer catches up.
 
-See [Deploying the Events Service](/quickstart/deploying-the-events-service) for setup and [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for the delivery specification.
+See [Deploying the Events Service](/quickstart/deploying-the-events-service) for setup, [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for webhook delivery, and [CyclesEvidence Envelopes](/protocol/cycles-evidence-envelopes-in-cycles) for evidence signing and verification.
 
 ### Cycles MCP Server
 
@@ -297,7 +300,9 @@ Each reservation is stored with:
 
 ## Authentication
 
-The server authenticates every request via the `X-Cycles-API-Key` header. Each API key is associated with a tenant. The server enforces that `subject.tenant` matches the key's tenant — a key for tenant A cannot create reservations for tenant B.
+Budget and reservation requests authenticate via the `X-Cycles-API-Key` header. Each API key is associated with a tenant. The server enforces that `subject.tenant` matches the key's tenant — a key for tenant A cannot create reservations for tenant B.
+
+Public runtime endpoints are intentionally narrow: health/OpenAPI paths, `GET /v1/evidence/{id}` (a content-addressed capability URL), and `GET /v1/.well-known/cycles-jwks.json` (public verification keys only). Evidence retrieval does not expose ledger state; the unguessable `evidence_id` is the lookup capability.
 
 ## Deployment topology
 
@@ -305,7 +310,7 @@ A typical deployment:
 
 <DeploymentDiagram />
 
-Multiple Cycles server instances can run behind a load balancer. All state is in Redis, so the server is stateless. The admin server is typically on an internal network, accessible only to operators and CI/CD pipelines. The events service is optional — if deployed, it consumes delivery jobs from Redis and delivers webhooks with HMAC-SHA256 signatures.
+Multiple Cycles server instances can run behind a load balancer. All state is in Redis, so the server is stateless. The admin server is typically on an internal network, accessible only to operators and CI/CD pipelines. The events service is optional — if deployed, it consumes delivery jobs from Redis, delivers webhooks with HMAC-SHA256 signatures, and signs CyclesEvidence envelopes when the shared evidence identity is configured.
 
 Non-Spring clients (Python, TypeScript/Node.js, Go) can use the protocol directly via HTTP — the client libraries are convenience layers, not a requirement. MCP-compatible agents (Claude Desktop, Claude Code, Cursor, Windsurf) can use the Cycles MCP Server for a zero-code integration path.
 

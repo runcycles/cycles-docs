@@ -95,8 +95,8 @@ curl http://localhost:7979/actuator/health/readiness
 curl http://localhost:7979/actuator/prometheus
 
 # Events Service
-curl http://localhost:7980/actuator/health
-curl http://localhost:7980/actuator/prometheus
+curl http://localhost:9980/actuator/health
+curl http://localhost:9980/actuator/prometheus
 ```
 
 ::: tip Liveness/readiness probes
@@ -114,7 +114,7 @@ Key server metrics (all derived from Spring Boot's default Micrometer registrati
 
 ### Events Service metrics
 
-The Events Service (port 7980) delivers webhooks asynchronously. Monitor separately:
+The Events Service delivers webhooks asynchronously. Its management port is 9980 by default; the app port 7980 has no operator-facing API in the current reference service. Monitor separately:
 
 | Metric | What to watch |
 |---|---|

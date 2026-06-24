@@ -217,7 +217,7 @@ Quick reference for setting all properties via environment variables:
 | `EVIDENCE_SIGNING_NBF_MS` | `cycles.evidence.signing.nbf-ms` |
 | `EVIDENCE_SIGNING_RETIRED_KEYS` | `cycles.evidence.signing.retired-keys` |
 
-The `EVIDENCE_SIGNING_*` variables configure CyclesEvidence signer-key publication and rotation (the public identity; the private `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` lives only on `cycles-server-events`). `KID` / `NBF_MS` describe the active key's JWK; `RETIRED_KEYS` is the JSON rotation history. See [Signer-key resolution and rotation](/protocol/cycles-evidence-envelopes-in-cycles#signer-key-resolution-and-rotation) for the JWK shape and the rotation procedure, and the [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md) for first-time setup.
+These runtime-server variables configure CyclesEvidence signer-key publication and rotation. They are public identity/JWKS settings; the private `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` lives only on `cycles-server-events` and is not read by `cycles-server`. `KID` / `NBF_MS` describe the active key's JWK; `RETIRED_KEYS` is the JSON rotation history. See [Signer-key resolution and rotation](/protocol/cycles-evidence-envelopes-in-cycles#signer-key-resolution-and-rotation) for the JWK shape and the rotation procedure, and the [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md) for first-time setup.
 
 ---
 
@@ -327,20 +327,20 @@ The admin server exposes powerful management operations. In production:
 
 ## Events Service Configuration
 
-The events delivery service (`cycles-server-events`) is an optional component for webhook delivery.
+The events service (`cycles-server-events`) is an optional component for webhook delivery and CyclesEvidence signing.
 
 ### Ports (v0.1.25.9)
 
-As of v0.1.25.9 the events service separates its public API port from its management (actuator) port:
+As of v0.1.25.9 the events service separates its application port from its management (actuator) port:
 
 | Port | Default | Env Variable | Purpose |
 |---|---|---|---|
-| Public API | `7980` | `SERVER_PORT` | Webhook dispatch control surface |
+| Application | `7980` | `SERVER_PORT` | Spring application port. The current reference service is an outbound worker and exposes no operator-facing HTTP API here. |
 | Management | `9980` | `MANAGEMENT_PORT` | Actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/prometheus`) |
 
 **Migration from pre-.9:** Prometheus scrape configs must point to `:9980/actuator/prometheus`. Kubernetes liveness / readiness probes and Docker `HEALTHCHECK` must hit `:9980/actuator/health`. The published Docker image `HEALTHCHECK` has already been updated. No wire-format change for the dispatch surface.
 
-Expose `7980` via public ingress or external ClusterIP; keep `9980` on an internal-only ClusterIP scraped by Prometheus.
+Do not publish either port to the internet. Keep `9980` on an internal-only ClusterIP scraped by Prometheus; leave `7980` unexposed unless your deployment has an explicit internal control-plane use for that app port.
 
 ### Core config
 
@@ -350,6 +350,9 @@ Expose `7980` via public ingress or external ClusterIP; keep `9980` on an intern
 | `REDIS_PORT` | 6379 | Redis port |
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32` |
+| `EVIDENCE_SERVER_ID` | (empty) | Issuer base URL including `/v1`. Blank disables evidence signing and leaves pending evidence-source records untouched. Must match the runtime server when evidence is enabled. |
+| `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Raw-hex Ed25519 public key. Must match the runtime server's public signer identity when evidence is enabled. |
+| `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex Ed25519 private key used to sign evidence envelopes. Secret; deploy only to `cycles-server-events`. |
 | `dispatch.pending.timeout-seconds` | 5 | BRPOP blocking timeout |
 | `dispatch.retry.poll-interval-ms` | 5000 | Retry queue poll interval (ms) |
 | `dispatch.retry.batch-size` / `RETRY_BATCH_SIZE` | 100 | Max ready-for-retry deliveries processed per poll tick |
@@ -386,6 +389,15 @@ Introduced in `cycles-server-events` v0.1.25.6. Seven counters plus one latency 
 export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 ```
 
+### CyclesEvidence signer identity
+
+To enable evidence, configure the same public identity on the runtime and events services:
+
+- `EVIDENCE_SERVER_ID` — issuer URL, including `/v1`.
+- `EVIDENCE_SIGNING_SIGNER_DID` — raw-hex public Ed25519 key.
+
+Then configure only the events service with `EVIDENCE_SIGNING_PRIVATE_KEY_HEX`. Configure only the runtime server with `EVIDENCE_SIGNING_KID`, `EVIDENCE_SIGNING_NBF_MS`, and `EVIDENCE_SIGNING_RETIRED_KEYS` so it can publish `GET /v1/.well-known/cycles-jwks.json`.
+
 ### Full events service configuration example
 
 ```bash
@@ -394,6 +406,11 @@ REDIS_HOST=redis.example.com
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# Optional — CyclesEvidence signer identity
+EVIDENCE_SERVER_ID=https://cycles.example.com/v1
+EVIDENCE_SIGNING_SIGNER_DID=b10554...c522
+EVIDENCE_SIGNING_PRIVATE_KEY_HEX=4f9c...d20a
 
 # Dispatch tuning
 dispatch.pending.timeout-seconds=5
