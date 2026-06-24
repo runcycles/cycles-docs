@@ -7,7 +7,7 @@ description: "How to deploy the Cycles events service (cycles-server-events) for
 
 The events service (`cycles-server-events`) has two async jobs: webhook delivery and CyclesEvidence signing. Use webhook delivery to get real-time alerts in Slack, PagerDuty, or your own systems when budgets run out, thresholds are crossed, or reservations are denied. Use CyclesEvidence signing when runtime responses need verifiable audit receipts.
 
-As of v0.1.25.9 the service binds two ports: the public API port `7980` (dispatch control surface) and a separate management port `9980` for actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/prometheus`). Expose `7980` via public ingress; keep `9980` internal-only.
+As of v0.1.25.9 the service binds two ports: the application port `7980` and a separate management port `9980` for actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/prometheus`). The current reference service is an outbound worker; webhook delivery and evidence signing do not require inbound application traffic. Keep `9980` internal-only for health checks and Prometheus scraping, and do not publish `7980` unless your deployment has an explicit internal control-plane use for that app port.
 
 It is optional — the admin and runtime servers operate normally without it. When deployed, it consumes delivery jobs from Redis and sends HTTP POST requests to webhook endpoints with HMAC-SHA256 signatures. If CyclesEvidence is enabled, it also consumes evidence-source records from Redis, signs envelopes with Ed25519, and stores them by content hash for `GET /v1/evidence/{id}`.
 
@@ -21,7 +21,7 @@ export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 docker compose -f docker-compose.full-stack.yml up
 ```
 
-Services: Redis (6379), Admin (7979), Runtime (7878), Events API (7980), Events management/actuator (9980).
+Services: Redis (6379), Admin (7979), Runtime (7878), Events app port (7980), Events management/actuator (9980).
 
 ## Standalone deployment
 
@@ -29,8 +29,6 @@ Services: Redis (6379), Admin (7979), Runtime (7878), Events API (7980), Events 
 
 ```bash
 docker run -d --name cycles-events \
-  -p 7980:7980 \
-  -p 9980:9980 \
   -e REDIS_HOST=redis.example.com \
   -e REDIS_PORT=6379 \
   -e REDIS_PASSWORD=your-redis-password \
@@ -38,7 +36,7 @@ docker run -d --name cycles-events \
   ghcr.io/runcycles/cycles-server-events:0.1.25.15
 ```
 
-Only `7980` needs to be reachable from clients and downstream webhook targets. `9980` should remain internal — scrape it from your Prometheus cluster on its own network path.
+The service does not need inbound traffic from applications or webhook targets; it sends webhook HTTP requests outbound. For local inspection, temporarily add `-p 9980:9980` and query the management endpoint from the host. In production, scrape `9980` from Prometheus on an internal network path and leave `7980` unpublished unless you have a specific internal use for the app port.
 
 ### From JAR
 
@@ -120,7 +118,7 @@ curl http://localhost:9980/actuator/health
 # {"status":"UP"}
 ```
 
-Pre-v0.1.25.9 deployments exposed `/actuator/health` on the public API port 7980. Update kubelet probes and Docker `HEALTHCHECK` commands to hit `:9980` when upgrading. The published Docker image's built-in `HEALTHCHECK` (30s interval, 60s start period, 5 retries) has already been updated.
+Pre-v0.1.25.9 deployments exposed `/actuator/health` on the application port 7980. Update kubelet probes and Docker `HEALTHCHECK` commands to hit `:9980` when upgrading. The published Docker image's built-in `HEALTHCHECK` (30s interval, 60s start period, 5 retries) has already been updated.
 
 ## What happens when the events service is down
 

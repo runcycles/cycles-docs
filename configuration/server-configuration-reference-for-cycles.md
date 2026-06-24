@@ -331,16 +331,16 @@ The events service (`cycles-server-events`) is an optional component for webhook
 
 ### Ports (v0.1.25.9)
 
-As of v0.1.25.9 the events service separates its public API port from its management (actuator) port:
+As of v0.1.25.9 the events service separates its application port from its management (actuator) port:
 
 | Port | Default | Env Variable | Purpose |
 |---|---|---|---|
-| Public API | `7980` | `SERVER_PORT` | Webhook dispatch control surface |
+| Application | `7980` | `SERVER_PORT` | Spring application port. The current reference service is an outbound worker and exposes no operator-facing HTTP API here. |
 | Management | `9980` | `MANAGEMENT_PORT` | Actuator endpoints (`/actuator/health`, `/actuator/info`, `/actuator/prometheus`) |
 
 **Migration from pre-.9:** Prometheus scrape configs must point to `:9980/actuator/prometheus`. Kubernetes liveness / readiness probes and Docker `HEALTHCHECK` must hit `:9980/actuator/health`. The published Docker image `HEALTHCHECK` has already been updated. No wire-format change for the dispatch surface.
 
-Expose `7980` via public ingress or external ClusterIP; keep `9980` on an internal-only ClusterIP scraped by Prometheus.
+Do not publish either port to the internet. Keep `9980` on an internal-only ClusterIP scraped by Prometheus; leave `7980` unexposed unless your deployment has an explicit internal control-plane use for that app port.
 
 ### Core config
 
