@@ -1,13 +1,13 @@
 ---
 title: "API Reference for the Cycles Protocol"
-description: "Complete developer reference for every Cycles protocol endpoint, including request and response formats, headers, and curl examples."
+description: "Developer reference for the core Cycles runtime budget endpoints and public CyclesEvidence retrieval endpoints."
 ---
 
 # API Reference for the Cycles Protocol
 
-This is a developer-friendly reference for every endpoint in the Cycles protocol. Each endpoint includes the request format, response format, and curl examples.
+This is a developer-friendly reference for the core runtime budget endpoints and public CyclesEvidence retrieval endpoints. The [interactive API reference](/api/) is generated from the YAML spec and remains the exhaustive operation browser.
 
-All requests require the `X-Cycles-API-Key` header for authentication.
+Tenant-scoped runtime requests require the `X-Cycles-API-Key` header for authentication. The two CyclesEvidence read endpoints, `GET /v1/evidence/{evidence_id}` and `GET /v1/.well-known/cycles-jwks.json`, are public by spec because they expose only content-addressed evidence envelopes and public verification keys.
 
 ::: info Protocol conformance
 Cycles is an **open protocol with a minimum conformance surface** — approximately 23 operations across the runtime base, action-kind registry, governance extensions, and eight specifically-normative operations inside the otherwise-reference admin spec. runcycles' own servers (`cycles-server`, `cycles-server-admin`, `cycles-server-events`) are one such implementation — additional admin-API surface beyond the conformance minimum is runcycles-specific reference; implementers MAY diverge. See [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) for the authoritative MUST / SHOULD / MAY statement.
@@ -20,7 +20,7 @@ Cycles is an **open protocol with a minimum conformance surface** — approximat
 | Header | Required | Description |
 |---|---|---|
 | `Content-Type` | Yes (POST) | `application/json` |
-| `X-Cycles-API-Key` | Yes | API key for authentication and tenant derivation |
+| `X-Cycles-API-Key` | Yes for tenant-scoped runtime endpoints | API key for authentication and tenant derivation |
 | `X-Idempotency-Key` | No | Client-provided idempotency key (also accepted in the request body) |
 
 ### Response headers
@@ -735,6 +735,89 @@ curl -X POST http://localhost:7878/v1/events \
 | 409 | `BUDGET_CLOSED` | Budget scope is permanently closed |
 | 409 | `OVERDRAFT_LIMIT_EXCEEDED` | Debt would exceed limit |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
+
+---
+
+## GET /v1/evidence/{evidence_id}
+
+Fetch a signed CyclesEvidence envelope by content id. This endpoint is public: the `evidence_id` is a 64-character lowercase SHA-256 content hash carried by a prior `cycles_evidence` response reference, and the returned envelope is content-addressed and signature-verifiable.
+
+### Path parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `evidence_id` | string | Yes | 64 lowercase hex characters; SHA-256 content hash of the evidence envelope |
+
+### Response (200 OK)
+
+Returns the signed envelope as JSON. The exact envelope shape is covered in [CyclesEvidence Envelopes](/protocol/cycles-evidence-envelopes-in-cycles).
+
+```json
+{
+  "schema_version": "cycles-evidence/v0.1",
+  "artifact_type": "reserve",
+  "server_id": "https://cycles.example.com/v1",
+  "signer_did": "b10554...",
+  "issued_at_ms": 1781436904050,
+  "trace_id": "b2a0ab88...",
+  "payload": { "reserve": { "request": {}, "response": {} } },
+  "evidence_id": "8403bed43e13ef7d56a8ab402a9d29ee7dd2f405e24c0cacb51068341a5e7030",
+  "signature": "4bc8cb9a..."
+}
+```
+
+### Example
+
+```bash
+curl -s http://localhost:7878/v1/evidence/8403bed43e13ef7d56a8ab402a9d29ee7dd2f405e24c0cacb51068341a5e7030
+```
+
+### Error responses
+
+| Code | Error | When |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | `evidence_id` is not a valid 64-character lowercase hex string |
+| 404 | `NOT_FOUND` | Envelope is not available or evidence signing/storage is not configured |
+| 429 | rate-limit error | Public endpoint throttled |
+
+---
+
+## GET /v1/.well-known/cycles-jwks.json
+
+Fetch the issuing server's public CyclesEvidence JWK Set. This endpoint is public and contains verification keys only; the private signing key is never served.
+
+The path is API-base-relative. If `server_id` is `https://cycles.example.com/v1`, the JWKS URL is `https://cycles.example.com/v1/.well-known/cycles-jwks.json`.
+
+### Response (200 OK)
+
+```json
+{
+  "keys": [
+    {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "alg": "EdDSA",
+      "x": "base64url-public-key",
+      "kid": "2026-h2",
+      "cycles_nbf_ms": 1781000000000,
+      "status": "active"
+    }
+  ]
+}
+```
+
+### Example
+
+```bash
+curl -s http://localhost:7878/v1/.well-known/cycles-jwks.json
+```
+
+### Error responses
+
+| Code | Error | When |
+|---|---|---|
+| 404 | `NOT_FOUND` | The server does not publish a JWK Set, usually because signer-key resolution is not configured |
+| 429 | rate-limit error | Public endpoint throttled |
 
 ---
 

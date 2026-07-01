@@ -212,7 +212,7 @@ groups:
 
 ### Balance-polling alerts (for signals without a counter)
 
-Some operational questions don't have a direct counter — point-in-time utilization (`spent / allocated`), total debt, and active-reservation counts are all derivable from the ledger but not emitted as gauges. For those, a lightweight sidecar that calls `GET /v1/admin/budgets/{id}` on a schedule and pushes the sampled values (e.g. `cycles_budget_utilization`, `cycles_budget_debt`) via pushgateway or statsd is the standard pattern. See [Query balances for monitoring](#query-balances-for-monitoring).
+Some operational questions don't have a direct counter — point-in-time utilization (`spent / allocated`), total debt, and active-reservation counts are all derivable from the ledger but not emitted as gauges. For those, a lightweight sidecar that calls `GET /v1/balances` or `GET /v1/admin/budgets` on a schedule and pushes the sampled values (e.g. `cycles_budget_utilization`, `cycles_budget_debt`) via pushgateway or statsd is the standard pattern. See [Query balances for monitoring](#query-balances-for-monitoring).
 
 ### Webhook delivery queue depth
 

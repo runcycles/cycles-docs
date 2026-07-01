@@ -364,15 +364,27 @@ Both cases are valid ledger states, not errors. The response returns the negativ
 # Prior period ended with: allocated=1000, spent=1000, debt=200, remaining=0
 
 # Step 1: Clear the outstanding debt (e.g., after the customer paid their invoice).
-curl -X POST https://admin.example.com/v1/admin/budgets/<id>/fund \
-  -H "X-Admin-Api-Key: $ADMIN_API_KEY" \
-  -d '{"operation":"REPAY_DEBT","amount":200,"reason":"invoice paid"}'
+curl -X POST "https://admin.example.com/v1/admin/budgets/fund?tenant_id=acme&scope=tenant:acme&unit=USD_MICROCENTS" \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  -d '{
+    "operation": "REPAY_DEBT",
+    "amount": { "amount": 200, "unit": "USD_MICROCENTS" },
+    "idempotency_key": "repay-acme-before-rollover",
+    "reason": "invoice paid"
+  }'
 # State now: allocated=1000, spent=1000, debt=0, remaining=0
 
 # Step 2: Start the new billing period with a fresh ceiling.
-curl -X POST https://admin.example.com/v1/admin/budgets/<id>/fund \
-  -H "X-Admin-Api-Key: $ADMIN_API_KEY" \
-  -d '{"operation":"RESET_SPENT","amount":1000,"reason":"monthly rollover"}'
+curl -X POST "https://admin.example.com/v1/admin/budgets/fund?tenant_id=acme&scope=tenant:acme&unit=USD_MICROCENTS" \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  -d '{
+    "operation": "RESET_SPENT",
+    "amount": { "amount": 1000, "unit": "USD_MICROCENTS" },
+    "idempotency_key": "rollover-acme-after-repay",
+    "reason": "monthly rollover"
+  }'
 # State now: allocated=1000, spent=0, debt=0, remaining=1000
 ```
 

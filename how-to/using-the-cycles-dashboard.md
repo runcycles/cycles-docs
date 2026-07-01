@@ -81,7 +81,7 @@ The Tenants, Webhooks, and Budgets pages expose a filter-then-bulk workflow:
 4. The dashboard calls `POST /v1/admin/tenants/bulk-action`, `/v1/admin/webhooks/bulk-action`, or `/v1/admin/budgets/bulk-action` with the filter, the `expected_count` safety gate, and an idempotency key generated from the current session.
 5. The result panel shows per-row `succeeded`, `failed`, `skipped` lists — rendered in a `BulkActionResultDialog` (v0.1.25.34+) with per-row copy-ID affordances and operator-friendly error messages sourced from the shared `errorCodeMessages` catalog. Failed rows show the per-row `error_code`.
 
-**Row-select variant (v0.1.25.36).** The Budgets view also supports row-select bulk Freeze and Unfreeze — select individual checkboxes across filtered rows rather than applying to the whole filter. Row-select bulk failures open the same `BulkActionResultDialog` with per-row status.
+**Row-select variant (v0.1.25.36).** The Budgets view also supports row-select bulk Freeze and Unfreeze — select individual checkboxes across filtered rows rather than applying to the whole filter. This is a client-side fan-out over the per-budget freeze/unfreeze endpoints, not a `POST /v1/admin/budgets/bulk-action` request. Row-select bulk failures open the same `BulkActionResultDialog` with per-row status.
 
 See [Using Bulk Actions](/how-to/using-bulk-actions-for-tenants-and-webhooks) for the full request shape and error taxonomy.
 
@@ -157,16 +157,16 @@ Every destructive action is one-click with a confirmation and a blast-radius sum
 
 | Action | Page | Backend call |
 |--------|------|-------------|
-| Freeze budget | Budgets / Budget detail | `PATCH /v1/admin/budgets?status=FROZEN` |
-| Unfreeze budget | Budgets | `PATCH /v1/admin/budgets?status=ACTIVE` |
-| Bulk Freeze / Unfreeze budgets (v0.1.25.36+) | Budgets — row-select + floating toolbar | `POST /v1/admin/budgets/bulk-action` |
+| Freeze budget | Budgets / Budget detail | `POST /v1/admin/budgets/freeze?scope={scope}&unit={unit}` |
+| Unfreeze budget | Budgets | `POST /v1/admin/budgets/unfreeze?scope={scope}&unit={unit}` |
+| Bulk Freeze / Unfreeze budgets (v0.1.25.36+) | Budgets — row-select + floating toolbar | Client-side fan-out over `POST /v1/admin/budgets/freeze` / `unfreeze` |
 | Suspend tenant | Tenants / Tenant detail | `PATCH /v1/admin/tenants/{id}` |
 | Reactivate tenant | Tenants | `PATCH /v1/admin/tenants/{id}` |
 | Revoke API key | API Keys | `DELETE /v1/admin/api-keys/{id}` |
 | Pause webhook | Webhooks / Webhook detail | `PATCH /v1/admin/webhooks/{id}` |
 | Resume webhook | Webhooks | `PATCH /v1/admin/webhooks/{id}` |
 | Test webhook | Webhook detail | `POST /v1/admin/webhooks/{id}/test` |
-| Replay webhook delivery | Webhook detail | `POST /v1/admin/webhook-deliveries/{id}/replay` |
+| Replay webhook events | Webhook detail | `POST /v1/admin/webhooks/{id}/replay` |
 | Force-release reservation | Reservations / Reservation detail | `POST /v1/reservations/{id}/release` with `X-Admin-API-Key` |
 | Emergency tenant-wide freeze | Tenant detail | Bulk freeze across all budgets for the tenant |
 | Close tenant (cascades owned objects, v0.1.25.43+) | Tenants / Tenant detail | `PATCH /v1/admin/tenants/{id}` — dashboard shows cascade preview before confirming |
