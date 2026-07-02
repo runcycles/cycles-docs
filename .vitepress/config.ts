@@ -525,6 +525,7 @@ export default defineConfig({
             { text: 'TTL, Grace Period, and Extend', link: '/protocol/reservation-ttl-grace-period-and-extend-in-cycles' },
             { text: 'Decide: Preflight Checks', link: '/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation' },
             { text: 'Dry Run and Shadow Mode', link: '/protocol/dry-run-shadow-mode-evaluation-in-cycles' },
+            { text: 'Action Governance Preview', link: '/protocol/action-governance-preview-in-cycles' },
             { text: 'Events and Direct Debit', link: '/protocol/how-events-work-in-cycles-direct-debit-without-reservation' },
             { text: 'Debt and Overdraft', link: '/protocol/debt-overdraft-and-the-over-limit-model-in-cycles' },
             { text: 'Querying Balances', link: '/protocol/querying-balances-in-cycles-understanding-budget-state' },

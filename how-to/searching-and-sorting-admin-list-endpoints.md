@@ -79,6 +79,17 @@ Omitting the `tenant_id` query parameter on `/v1/admin/api-keys`, `/v1/admin/web
 
 API-key and budget cross-tenant walks use composite cursors such as `(tenant_id, key_id)` or `(tenant_id, ledger_id)` so traversal remains stable across tenants. Treat every `next_cursor` as opaque regardless of endpoint.
 
+## Forward-compatible preview filters
+
+Two admin list surfaces accept v0.1.26-preview filters even on v0.1.25.x reference admin servers:
+
+| Endpoint | Preview filters | v0.1.25.x behavior |
+|---|---|---|
+| `GET /v1/admin/tenants` | `observe_mode=DISABLED\|OBSERVE\|ENFORCE` | Accepted for compatibility; not applied until observe mode is implemented |
+| `GET /v1/admin/policies` | `has_action_quotas`, `references_action_kind` | Accepted for compatibility; not applied until action-governance policy fields are implemented |
+
+`GET /v1/admin/policies` is cursor-paginated but is not one of the six search/sort endpoints listed above. Its current filters are `tenant_id`, `scope_pattern`, `status`, `cursor`, and `limit`; the preview filters are documented in [Action Governance Preview](/protocol/action-governance-preview-in-cycles).
+
 ## Recipes
 
 ### Oldest-expiring active reservations
