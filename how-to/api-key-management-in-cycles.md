@@ -63,7 +63,7 @@ curl -X POST http://localhost:7979/v1/admin/api-keys \
 | `reservations:extend` | Extend reservation TTL | Yes |
 | `reservations:list` | List reservations | Yes |
 | `balances:read` | Query balance information | Yes |
-| `webhooks:write` | Create, update, delete tenant webhooks at `/v1/webhooks` | No |
+| `webhooks:write` | Create, update, delete, and test tenant webhooks at `/v1/webhooks` | No |
 | `webhooks:read` | List tenant webhooks and delivery history | No |
 | `events:read` | Query tenant event stream at `/v1/events` | No |
 
@@ -188,10 +188,10 @@ curl -X POST http://localhost:7878/v1/reservations \
 `GET /v1/admin/api-keys` lists keys. By default (tenant-scoped with `X-Cycles-API-Key`), the server returns keys for the authenticated tenant only. With `X-Admin-API-Key` you can list across all tenants by omitting the `tenant_id` query parameter (v0.1.25.22+). Cross-tenant results paginate with a composite `(tenant_id, key_id)` cursor.
 
 ```bash
-# Cross-tenant — all keys, sorted by last-used
+# Cross-tenant — all keys, newest first
 curl -G "http://localhost:7979/v1/admin/api-keys" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  --data-urlencode "sort_by=last_used_at_ms" \
+  --data-urlencode "sort_by=created_at" \
   --data-urlencode "sort_dir=desc" \
   --data-urlencode "limit=50" | jq .
 
@@ -200,7 +200,7 @@ curl -G "http://localhost:7979/v1/admin/api-keys?tenant_id=acme" \
   -H "X-Admin-API-Key: $ADMIN_KEY" | jq .
 ```
 
-`search` (v0.1.25.25+) does a case-insensitive match over `key_id`, `name`, and `description`. See [Searching and Sorting Admin List Endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the full parameter vocabulary.
+`search` (v0.1.25.25+) does a case-insensitive match over `key_id` and `name`. See [Searching and Sorting Admin List Endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the full parameter vocabulary.
 
 ## Revoking API keys
 

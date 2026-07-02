@@ -1,56 +1,61 @@
 ---
 title: "Searching and Sorting Admin List Endpoints"
-description: "Use search, sort_by, and sort_dir on Cycles admin list endpoints — tenants, budgets, API keys, webhooks, reservations, and audit logs — with correct cursor handling."
+description: "Use search, sort_by, and sort_dir on Cycles admin list endpoints — tenants, budgets, API keys, webhooks, events, audit logs, and reservations — with correct cursor handling."
 ---
 
 # Searching and Sorting Admin List Endpoints
 
-The admin and runtime planes expose six list endpoints. As of `cycles-server-admin` v0.1.25.22 they all share a consistent query-parameter vocabulary for filtering, searching, sorting, and paginating. This page is the practical reference for using them from curl, scripts, and operator tools.
+The admin and runtime planes expose the list endpoints below. The admin list endpoints share a consistent query-parameter vocabulary for filtering, searching, sorting, and paginating; `/v1/reservations` uses the same sort/cursor conventions for runtime reservations. This page is the practical reference for using them from curl, scripts, and operator tools.
 
 The endpoints:
 
 | Endpoint | Plane | Added / enhanced |
 |----------|-------|------------------|
-| `GET /v1/admin/tenants` | Admin | search + sort v0.1.25.24 |
-| `GET /v1/admin/budgets` | Admin | filters v0.1.25.22, sort v0.1.25.24 |
-| `GET /v1/admin/api-keys` | Admin | cross-tenant v0.1.25.22 |
-| `GET /v1/admin/webhooks` | Admin | search + sort v0.1.25.24 |
-| `GET /v1/admin/audit/logs` | Admin | unauthenticated capture v0.1.25.20 |
+| `GET /v1/admin/tenants` | Admin | sort v0.1.25.24, search v0.1.25.25 |
+| `GET /v1/admin/budgets` | Admin | filters v0.1.25.22, sort v0.1.25.24, search v0.1.25.25 |
+| `GET /v1/admin/api-keys` | Admin | cross-tenant v0.1.25.22, sort v0.1.25.24, search v0.1.25.25 |
+| `GET /v1/admin/webhooks` | Admin | sort v0.1.25.24, search v0.1.25.25 |
+| `GET /v1/admin/events` | Admin | sort v0.1.25.24, search v0.1.25.25 |
+| `GET /v1/admin/audit/logs` | Admin | failure capture v0.1.25.20, sort v0.1.25.24, search v0.1.25.25 |
 | `GET /v1/reservations` | Runtime | sort v0.1.25.12 |
 
-Older servers that predate these parameters simply ignore them — no 400 errors, no behavioural break. This is the **additive-parameter guarantee**: the admin spec treats new query parameters as purely additive, so clients can opt in when a cluster upgrades.
+The parameters were added compatibly: older servers that predate a parameter may ignore it rather than erroring. Current servers still validate the parameters they recognize, so unsupported `sort_by`, invalid `sort_dir`, out-of-range `limit`, and `search` values over 128 characters return `400 INVALID_REQUEST`.
 
 ## Parameter vocabulary
 
 ### `search` (v0.1.25.25+)
 
-A case-insensitive substring match over the endpoint's human-facing name fields. Maximum 128 characters. Longer strings return `400 INVALID_REQUEST`.
+A case-insensitive substring match over the endpoint's searchable identifier fields. Maximum 128 characters. Longer strings return `400 INVALID_REQUEST`.
 
 | Endpoint | Fields matched by `search` |
 |----------|---------------------------|
 | `/v1/admin/tenants` | `tenant_id`, `name` |
-| `/v1/admin/budgets` | `scope`, `description` |
-| `/v1/admin/api-keys` | `key_id`, `name`, `description` |
-| `/v1/admin/webhooks` | `url`, `description` |
+| `/v1/admin/budgets` | `tenant_id`, `scope` |
+| `/v1/admin/api-keys` | `key_id`, `name` |
+| `/v1/admin/webhooks` | `subscription_id`, `url` |
+| `/v1/admin/events` | `correlation_id`, `scope` |
+| `/v1/admin/audit/logs` | `resource_id`, `log_id`, `error_code`, `operation` |
 
 `search` is applied after other filters (`status`, `plan`, etc.) and is combined with them using AND semantics.
 
 ### `sort_by` and `sort_dir`
 
-`sort_by` names the field to order on. `sort_dir` is `asc` or `desc`; defaults to `desc` when `sort_by` is provided and the parameter is otherwise ignored.
+`sort_by` names the field to order on. `sort_dir` is `asc` or `desc`; when omitted it defaults to `desc`.
 
 | Endpoint | Supported `sort_by` values |
 |----------|---------------------------|
-| `/v1/admin/tenants` | `tenant_id`, `name`, `status`, `created_at_ms` |
-| `/v1/admin/budgets` | `scope`, `allocated`, `spent`, `remaining`, `utilization`, `created_at_ms` |
-| `/v1/admin/api-keys` | `key_id`, `name`, `tenant_id`, `created_at_ms`, `last_used_at_ms`, `expires_at_ms` |
-| `/v1/admin/webhooks` | `subscription_id`, `url`, `consecutive_failures`, `created_at_ms` |
+| `/v1/admin/tenants` | `tenant_id`, `name`, `status`, `created_at` |
+| `/v1/admin/budgets` | `tenant_id`, `scope`, `unit`, `status`, `commit_overage_policy`, `utilization`, `debt` |
+| `/v1/admin/api-keys` | `key_id`, `name`, `tenant_id`, `status`, `created_at`, `expires_at` |
+| `/v1/admin/webhooks` | `url`, `tenant_id`, `status`, `consecutive_failures` |
+| `/v1/admin/events` | `event_type`, `category`, `scope`, `tenant_id`, `timestamp` |
+| `/v1/admin/audit/logs` | `timestamp`, `operation`, `resource_type`, `tenant_id`, `key_id`, `status` |
 | `/v1/reservations` | `reservation_id`, `tenant`, `scope_path`, `status`, `reserved`, `created_at_ms`, `expires_at_ms` |
 
 Unknown `sort_by` or `sort_dir` values return `400 INVALID_REQUEST`. The reservation endpoint sorts the integer `amount` within the `reserved` key (well-defined under v0's single-unit-per-reservation invariant); `scope_path` sorts the canonical scope string lexicographically.
 
-::: warning Default order changed in v0.1.25.24
-The admin list endpoints `/v1/admin/budgets` and `/v1/admin/webhooks` changed their default sort from "Redis SCAN order" to `created_at_ms desc` in v0.1.25.24. If you had scripts that relied on the implicit ordering, pass `sort_by` explicitly. `/v1/admin/tenants`, `/v1/admin/api-keys`, and `/v1/reservations` retained SCAN order as default — pass `sort_by` if you need deterministic ordering on those too.
+::: warning Default order
+Current admin-list defaults are endpoint-specific: tenants and API keys use `created_at desc`; budgets use `utilization desc`; webhooks use `consecutive_failures desc`; events and audit logs use `timestamp desc`. If a script relies on row order, pass `sort_by` and `sort_dir` explicitly. `/v1/reservations` retains its legacy default order unless `sort_by` is provided.
 :::
 
 ### `cursor`, `limit`, `has_more`, `next_cursor`
@@ -70,9 +75,9 @@ When `sort_by` or filters are provided, the returned cursor is bound to the `(so
 
 ### Cross-tenant listing (admin only)
 
-Omitting the `tenant_id` query parameter on `/v1/admin/api-keys`, `/v1/admin/webhooks`, `/v1/admin/budgets`, and `/v1/admin/audit/logs` returns rows across all tenants (v0.1.25.22+). Authentication must be via `X-Admin-API-Key` for cross-tenant access — tenant-scoped `X-Cycles-API-Key` calls are limited to their own tenant.
+Omitting the `tenant_id` query parameter on `/v1/admin/api-keys`, `/v1/admin/webhooks`, `/v1/admin/budgets`, `/v1/admin/events`, and `/v1/admin/audit/logs` returns rows across all tenants. Authentication must be via `X-Admin-API-Key` for cross-tenant access — tenant-scoped `X-Cycles-API-Key` calls are limited to their own tenant.
 
-When a cross-tenant listing paginates, the `next_cursor` encodes a composite `(tenant_id, key_id)` tuple so the traversal is stable even as tenants are added or removed mid-page.
+API-key and budget cross-tenant walks use composite cursors such as `(tenant_id, key_id)` or `(tenant_id, ledger_id)` so traversal remains stable across tenants. Treat every `next_cursor` as opaque regardless of endpoint.
 
 ## Recipes
 
@@ -110,7 +115,7 @@ curl -G "http://localhost:7979/v1/admin/budgets" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   --data-urlencode "over_limit=true" \
   --data-urlencode "has_debt=true" \
-  --data-urlencode "sort_by=spent" \
+  --data-urlencode "sort_by=debt" \
   --data-urlencode "sort_dir=desc" | jq .
 ```
 
@@ -136,7 +141,7 @@ Audit — find every API key whose name contains "integration":
 curl -G "http://localhost:7979/v1/admin/api-keys" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   --data-urlencode "search=integration" \
-  --data-urlencode "sort_by=last_used_at_ms" \
+  --data-urlencode "sort_by=created_at" \
   --data-urlencode "sort_dir=desc" | jq .
 ```
 

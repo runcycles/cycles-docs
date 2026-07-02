@@ -915,7 +915,7 @@ def handle():
 Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 27 of 47 registered types, plus the additive `_via_tenant_cascade` fan-out events the reference admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants.
 
 **Required API key permissions:**
-- `webhooks:write` — create, update, delete subscriptions
+- `webhooks:write` — create, update, delete, and test subscriptions
 - `webhooks:read` — list subscriptions and delivery history
 - `events:read` — query tenant's event stream via `GET /v1/events`
 

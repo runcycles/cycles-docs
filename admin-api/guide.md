@@ -407,13 +407,13 @@ See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol)
 
 ## List-endpoint features (v0.1.25.22+)
 
-Six admin list endpoints (`/v1/admin/tenants`, `/api-keys`, `/budgets`, `/webhooks/subscriptions`, `/events`, `/audit/logs`) gained three operator features across the v0.1.25.22–.25 window. See [Searching and sorting admin list endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the full cursor-invalidation rules.
+Six admin list endpoints (`/v1/admin/tenants`, `/v1/admin/api-keys`, `/v1/admin/budgets`, `/v1/admin/webhooks`, `/v1/admin/events`, `/v1/admin/audit/logs`) gained three operator features across the v0.1.25.22 through v0.1.25.25 window. See [Searching and sorting admin list endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the full cursor-invalidation rules.
 
-**Cross-tenant lists (v0.1.25.22).** `GET /v1/admin/api-keys` and `GET /v1/admin/budgets` accept an omitted `tenant_id` under admin auth — the walk covers every tenant and returns a composite cursor (`{tenantId}|{keyId}` or `{tenantId}|{ledgerId}`). Dashboards that previously ran N+1 per-tenant loops should replace them with a single cross-tenant call.
+**Cross-tenant lists (v0.1.25.22).** `GET /v1/admin/api-keys`, `GET /v1/admin/budgets`, `GET /v1/admin/webhooks`, `GET /v1/admin/events`, and `GET /v1/admin/audit/logs` accept an omitted `tenant_id` under admin auth. API-key and budget cross-tenant walks return composite cursors (`{tenantId}|{keyId}` or `{tenantId}|{ledgerId}`) so pagination remains stable across tenants. Dashboards that previously ran N+1 per-tenant loops should replace them with a single cross-tenant call.
 
 **Budget filters (v0.1.25.22).** `GET /v1/admin/budgets` adds `over_limit` (boolean), `has_debt` (boolean), `utilization_min` (`[0,1]`), and `utilization_max` (`[0,1]`). AND-combined with every other filter; applied before cursor traversal so pagination stays stable. `utilization_min > utilization_max` → 400.
 
-**Server-side sort (v0.1.25.24).** `sort_by` + `sort_dir` on all six endpoints. Per-endpoint whitelists; unknown keys → 400. `listBudgets` and `listWebhookSubscriptions` **change default row order** (utilization DESC / consecutive_failures DESC) — pass `sort_by=created_at&sort_dir=desc` to restore prior behavior.
+**Server-side sort (v0.1.25.24).** `sort_by` + `sort_dir` on all six endpoints. Per-endpoint whitelists; unknown keys → 400. Current default row order is `utilization desc` for budgets, `consecutive_failures desc` for webhooks, `timestamp desc` for events and audit logs, and `created_at desc` for tenants and API keys. Pass an endpoint-supported `sort_by` and `sort_dir` when row order matters.
 
 **Free-text search (v0.1.25.25).** `search` query param on all six endpoints. Case-insensitive substring match on natural identifier fields, ≤128 characters, AND-combined with other filters.
 
