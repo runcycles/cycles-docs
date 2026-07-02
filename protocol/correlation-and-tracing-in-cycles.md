@@ -88,7 +88,7 @@ Standard event payloads carry:
 
 ### Inside audit-log entries
 
-Every `AuditLogEntry` carries `request_id` and (OPTIONAL) `trace_id`. These fields flow from the inbound request onto the audit row at write time. Admin-driven operations (`actor_type=admin_on_behalf_of`, `actor_type=admin`) carry the same `trace_id` as the request that triggered them.
+Every `AuditLogEntry` carries `request_id` and (OPTIONAL) `trace_id`. These fields flow from the inbound request onto the audit row at write time. Admin-driven operations tagged with metadata such as `metadata.actor_type=admin_on_behalf_of` or `metadata.actor_type=admin` carry the same `trace_id` as the request that triggered them.
 
 ### Inside webhook delivery records
 
@@ -155,17 +155,17 @@ TID=0af7651916cd43dd8448eb211c80319c
 # 1. The request reached the server. What decision was recorded?
 curl -s "http://localhost:7979/v1/admin/audit/logs?trace_id=$TID" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.items[] | {operation, status, error_code, metadata}'
+  | jq '.logs[] | {operation, status, error_code, metadata}'
 
 # 2. What events were emitted as side effects?
 curl -s "http://localhost:7979/v1/admin/events?trace_id=$TID" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.items[] | {event_type, data}'
+  | jq '.events[] | {event_type, data}'
 
 # 3. What webhook deliveries went out as a consequence?
 curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries?trace_id=$TID" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.items[] | {status, response_status, url, trace_flags}'
+  | jq '.deliveries[] | {status, response_status, url, trace_flags}'
 ```
 
 Three calls, one ID, full causal picture across runtime response → audit row → emitted events → webhook fan-out.

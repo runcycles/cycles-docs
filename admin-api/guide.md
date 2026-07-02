@@ -484,7 +484,7 @@ Search was extended to match `error_code` and `operation` in addition to `resour
 
 ```bash
 # All 4xx failures for budget operations today
-curl -s 'http://localhost:7979/v1/admin/audit/logs?status_min=400&status_max=499&resource_type=budget&from_ts=2026-04-18T00:00:00Z' \
+curl -s 'http://localhost:7979/v1/admin/audit/logs?status_min=400&status_max=499&resource_type=budget&from=2026-04-18T00:00:00Z' \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 
 # Narrow to a set, minus a noisy subset
@@ -594,7 +594,7 @@ Several mutating endpoints accept admin auth with an explicit `tenant_id` in the
 - `POST /v1/admin/policies`, `PATCH /v1/admin/policies/{id}` (policy creation + update)
 - Six tenant-scoped webhook endpoints: `GET /v1/webhooks`, `GET/PATCH/DELETE /v1/webhooks/{id}`, `POST /v1/webhooks/{id}/test`, `GET /v1/webhooks/{id}/deliveries`
 
-All admin-driven mutations tag the audit entry with `metadata.actor_type=admin_on_behalf_of` so the provenance is queryable. `POST /v1/webhooks` (create) remains tenant-only — admin-creating-on-tenant-behalf would obscure the audit trail.
+All admin-driven mutations tag the audit entry with `metadata.actor_type=admin_on_behalf_of` so provenance is visible when the row is expanded, copied, or exported. `metadata.actor_type` is not a standalone `listAuditLogs` query parameter; filter by top-level fields such as `operation`, `tenant_id`, `resource_type`, `resource_id`, `trace_id`, or `request_id`, then inspect the metadata. `POST /v1/webhooks` (create) remains tenant-only — admin-creating-on-tenant-behalf would obscure the audit trail.
 
 Incident-response bonus: `POST /v1/reservations/{id}/release` on the runtime server (port 7878) also accepts `X-Admin-API-Key` as of cycles-server v0.1.25.8 — see [Force-releasing stuck reservations as an operator](/how-to/force-releasing-stuck-reservations-as-an-operator).
 

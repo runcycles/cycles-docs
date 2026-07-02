@@ -173,6 +173,8 @@ curl -G "http://localhost:7979/v1/admin/api-keys" \
 
 Also, `search` on `listAuditLogs` was extended to match `error_code` and `operation` in addition to `resource_id` / `log_id` — useful when you remember "`BUDGET_EXCEEDED` was involved" but not the full resource id.
 
+Audit metadata is returned on each row but is not exposed as `metadata.*` query parameters. For metadata-only facts such as `metadata.actor_type` or bulk-action `metadata.idempotency_key`, narrow with top-level filters (`operation`, `tenant_id`, `resource_type`, `resource_id`, `trace_id`, `request_id`, or time range), then inspect the expanded row or exported JSON.
+
 ```bash
 # 5xx failures on budget endpoints in the last hour, not counting known idempotency noise
 curl -G 'http://localhost:7979/v1/admin/audit/logs' \
@@ -180,13 +182,13 @@ curl -G 'http://localhost:7979/v1/admin/audit/logs' \
   --data-urlencode "status_min=500" \
   --data-urlencode "resource_type=budget" \
   --data-urlencode "error_code_exclude=IDEMPOTENCY_MISMATCH" \
-  --data-urlencode "from_ts=2026-04-18T12:00:00Z" | jq .
+  --data-urlencode "from=2026-04-18T12:00:00Z" | jq .
 
 # Everything admins did cross-tenant today
 curl -G 'http://localhost:7979/v1/admin/audit/logs' \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   --data-urlencode "tenant_id=__admin__" \
-  --data-urlencode "from_ts=2026-04-18T00:00:00Z" | jq .
+  --data-urlencode "from=2026-04-18T00:00:00Z" | jq .
 ```
 
 ### Tenant sentinels (v0.1.25.28)

@@ -147,9 +147,9 @@ curl -X PATCH http://localhost:7979/v1/admin/tenants/acme-corp \
   -d '{"status": "CLOSED"}'
 
 # 3. Verify the cascade audit entries
-curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&from_ts=$(date -u -Iseconds -d '5 min ago')" \
+curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&from=$(date -u -Iseconds -d '5 min ago')" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.items[] | {operation, event_kind: .metadata.event_kind, resource_id}'
+  | jq '.logs[] | {operation, event_kind: .metadata.event_kind, resource_id}'
 ```
 
 If the `/admin/overview` dashboard still shows frozen budgets on the closed tenant after a few seconds, your admin server is on a pre-v0.1.25.35 version — the cascade hasn't shipped and you need to upgrade. See the [Admin API Guide — Tenant close and cascade semantics](/admin-api/guide).
