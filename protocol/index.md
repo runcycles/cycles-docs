@@ -21,6 +21,7 @@ The protocol defines how budgets are reserved before execution, committed after,
 - **Concurrency-safe enforcement** — shared budgets MUST NOT be oversubscribed under concurrent reserve calls.
 - **Idempotent commit and release** — retries are safe; the same action MUST NOT settle twice.
 - **Explicit error semantics** — `BUDGET_EXCEEDED` (409), `IDEMPOTENCY_MISMATCH` (409), `RESERVATION_EXPIRED` (410), `UNIT_MISMATCH` (400), and the rest defined in the spec.
+- **Action-governance preview** — v0.1.26 YAMLs define action kinds, action quotas, allow/deny lists, observe mode, and quota-counter APIs. See [Action Governance Preview](/protocol/action-governance-preview-in-cycles).
 - **Multiple language clients** — Python, TypeScript, Rust, Spring Boot, MCP host.
 
 ## Specification
@@ -36,6 +37,8 @@ The full specification lives in the [`runcycles/cycles-protocol`](https://github
 | [`cycles-governance-extensions-v0.1.26.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-governance-extensions-v0.1.26.yaml) | Action-quota / access-control policy fields (upcoming) |
 | [`cycles-spec-index.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-spec-index.yaml) | Index of all spec files with conformance metadata |
 | [`CHANGELOG.md`](https://github.com/runcycles/cycles-protocol/blob/main/CHANGELOG.md) | Versioned change history |
+
+For the human-readable v0.1.26 extension walkthrough, see [Action Governance Preview](/protocol/action-governance-preview-in-cycles). The YAML files remain authoritative.
 
 ## Conformance
 
@@ -70,7 +73,7 @@ If you're building a framework, an in-house budget system, or an alternative ser
 
 ## Protocol reference
 
-The reference pages in the sidebar walk through every primitive in the protocol — reserve-commit lifecycle, scope derivation, units, caps and three-way decisions, overage policies, TTL and grace, decide preflight, dry-run / shadow mode, events and direct debit, debt and overdraft, balance queries, reservation recovery, metrics and metadata, error codes, webhook event delivery, event payload schemas, scope filter syntax, correlation and tracing, tenant-close cascade semantics.
+The reference pages in the sidebar walk through every primitive in the protocol — reserve-commit lifecycle, scope derivation, units, caps and three-way decisions, overage policies, TTL and grace, decide preflight, dry-run / shadow mode, action-governance preview, events and direct debit, debt and overdraft, balance queries, reservation recovery, metrics and metadata, error codes, webhook event delivery, event payload schemas, scope filter syntax, correlation and tracing, tenant-close cascade semantics.
 
 Start with [API Reference](/protocol/api-reference-for-the-cycles-protocol) for the operation surface, or [How Reserve / Commit Works](/protocol/how-reserve-commit-works-in-cycles) for the lifecycle that everything else builds on.
 

@@ -46,6 +46,8 @@ Most pages poll their backends on a page-specific interval — see the [deployme
 
 The Overview is the landing page. It opens on a single `/v1/admin/overview` fetch that hydrates the counter strip, four attention cards, and the four donut charts.
 
+The payload includes optional aggregates beyond the visible cards. `recent_denials_by_reason` is populated by v0.1.25.x admin servers and lets operators see denial distribution even when the recent-event sample is capped. `quota_health`, `access_control_stats`, and `tenant_counts.in_observe_mode` are reserved for v0.1.26+ action-governance servers; dashboards should render them when present and tolerate null or absent values on v0.1.25.x reference servers. See [Action Governance Preview](/protocol/action-governance-preview-in-cycles).
+
 ### Counter strip
 
 Top of page. Six tiles — Tenants, Budgets, API Keys, Webhooks, Reservations, Events (60m window) — each with a click target that drills to the corresponding list view with any relevant filter pre-applied. Counter totals are server-aggregated via `AdminOverviewService`, so they reconcile by construction with the list pages' own counts (no client-side reduce drift).
@@ -202,7 +204,7 @@ The dashboard is a static SPA and has no backend of its own, so its "health" is 
 - `GET /v1/admin/overview` — if it returns 200, the full stack (Redis + admin + auth) is working.
 - `GET /actuator/health` on the admin server — standard Spring Boot liveness.
 
-Alert on the overview payload's `failing_webhooks` and `over_limit_scopes` arrays.
+Alert on the overview payload's `failing_webhooks` and `over_limit_scopes` arrays. On servers that populate v0.1.26 action-governance fields, also alert on counters at limit in `quota_health` and on spikes in `recent_denials_by_reason.ACTION_QUOTA_EXCEEDED`, `recent_denials_by_reason.ACTION_KIND_DENIED`, or `recent_denials_by_reason.ACTION_KIND_NOT_ALLOWED`.
 
 ## Mobile layout (v0.1.25.58)
 

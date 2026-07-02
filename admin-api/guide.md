@@ -242,6 +242,15 @@ curl -s "http://localhost:7979/v1/admin/overview" \
 
 Returns a server-wide summary: entity counts (tenants, budgets, webhooks), top offenders, and recent event summaries. Designed for admin dashboard UIs — this endpoint is what powers the Overview page in the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard).
 
+The overview payload also carries machine-readable aggregates that dashboards should treat as optional by server version:
+
+| Field | Meaning |
+|---|---|
+| `recent_denials_by_reason` | Recent denial counts keyed by reason code. v0.1.25.x servers populate this for base denial reasons; v0.1.26 action-governance servers also include action reason codes such as `ACTION_QUOTA_EXCEEDED`. |
+| `quota_health` | v0.1.26+ action-quota health summary for counters near or at their limit. Null or absent on v0.1.25.x reference admin servers. |
+| `access_control_stats` | v0.1.26+ summary of policies using action-kind allow/deny lists and related access-control activity. Null or absent on v0.1.25.x reference admin servers. |
+| `tenant_counts.in_observe_mode` | v0.1.26+ count of tenants with `observe_mode != ENFORCE`. Null or absent on v0.1.25.x reference admin servers. |
+
 ### API key introspection
 
 *New in v0.1.25.5:*
@@ -270,6 +279,8 @@ Use this for auth debugging and service-to-service validation flows. Do not expo
 
 ::: warning v0 limitation
 In v0, policies are **stored but not yet enforced at runtime**. The protocol server (port 7878) does not evaluate admin-defined policies when processing reservations, commits, or events. Enforcement is planned for a future version. Today, the only policy-like behavior enforced at runtime is the `overage_policy` resolved from the request or the tenant's `default_commit_overage_policy`.
+
+The v0.1.26 action-governance preview extends policies with action quotas and action-kind allow/deny lists, but that extension is not part of the current v0.1.25 conformance target. See [Action Governance Preview](/protocol/action-governance-preview-in-cycles).
 :::
 
 ### Create a policy
@@ -300,6 +311,12 @@ curl -s -X PATCH http://localhost:7979/v1/admin/policies/{policy_id} \
     "status": "ACTIVE"
   }' | jq .
 ```
+
+### List policies
+
+`GET /v1/admin/policies` supports `tenant_id`, `scope_pattern`, `status`, `cursor`, and `limit`. v0.1.25.x reference admin servers also accept the v0.1.26 compatibility filters `has_action_quotas` and `references_action_kind` without applying them.
+
+Under the v0.1.26 action-governance extension, `has_action_quotas=true` filters to policies with non-empty `action_quotas` or `risk_class_quotas`; `references_action_kind=<kind>` matches policies whose `action_quotas`, `allowed_action_kinds`, or `denied_action_kinds` mention that kind.
 
 ## Audit logs
 
@@ -416,6 +433,8 @@ Six admin list endpoints (`/v1/admin/tenants`, `/v1/admin/api-keys`, `/v1/admin/
 **Server-side sort (v0.1.25.24).** `sort_by` + `sort_dir` on all six endpoints. Per-endpoint whitelists; unknown keys → 400. Current default row order is `utilization desc` for budgets, `consecutive_failures desc` for webhooks, `timestamp desc` for events and audit logs, and `created_at desc` for tenants and API keys. Pass an endpoint-supported `sort_by` and `sort_dir` when row order matters.
 
 **Free-text search (v0.1.25.25).** `search` query param on all six endpoints. Case-insensitive substring match on natural identifier fields, ≤128 characters, AND-combined with other filters.
+
+**Forward-compatible v0.1.26 filters.** `GET /v1/admin/tenants` accepts `observe_mode`, and `GET /v1/admin/policies` accepts `has_action_quotas` and `references_action_kind`. On v0.1.25.x reference admin servers these parameters are accepted for compatibility but do not narrow results. Servers that implement [Action Governance Preview](/protocol/action-governance-preview-in-cycles) must wire them to the preview fields.
 
 ## Audit log failure capture (v0.1.25.20)
 

@@ -40,7 +40,7 @@ The fastest way to know whether Cycles fits is to run the full stack and watch a
 2. **Create a tenant** via the admin server. See [Tenant Creation and Management](/how-to/tenant-creation-and-management-in-cycles).
 3. **Create a budget** scoped to that tenant — a small one, e.g., a few cents.
 4. **Run one allowed check.** A `decide` call returns `ALLOW` without creating a reservation, or a `reserve` call returns `ALLOW` and records an active reservation.
-5. **Run one denied check.** Exhaust the tenant budget with a request larger than the remaining balance. A `decide` call returns `DENY`, or a `reserve` call is rejected before the underlying action executes. (If you're evaluating the v0.1.26 action-governance preview, you can also test per-action quotas and allow/deny lists.)
+5. **Run one denied check.** Exhaust the tenant budget with a request larger than the remaining balance. A `decide` call returns `DENY`, or a `reserve` call is rejected before the underlying action executes. (If you're evaluating the [v0.1.26 action-governance preview](/protocol/action-governance-preview-in-cycles), you can also test per-action quotas and allow/deny lists.)
 6. **Open the dashboard.** Watch the reservation, commit, and denial show up under the tenant's budget view. If you used `decide`, expect a decision result but no active reservation.
 
 You should see three things:
@@ -74,7 +74,7 @@ That mapping is the design exercise. See [Assigning Risk Points to Agent Tools](
 
 Cycles becomes the **runtime authority layer** between agent intent and external execution: every consequential action passes through `reserve → execute → commit` (or `release` on failure), scoped by tenant / workflow / run / tool.
 
-That is the core idea. Multi-tenant isolation, per-tier budgets, action-governance previews, OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
+That is the core idea. Multi-tenant isolation, per-tier budgets, [action-governance previews](/protocol/action-governance-preview-in-cycles), OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
 
 ## What a good first integration looks like
 

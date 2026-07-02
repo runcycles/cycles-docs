@@ -42,6 +42,8 @@ curl -X POST http://localhost:7979/v1/admin/tenants/bulk-action \
 - **`idempotency_key`** — stable, unique string. Replays within 15 minutes return the original response without re-executing. Required on every bulk call — there is no "best-effort" mode.
 - **`filter`** — an object with the same filter keys the corresponding list endpoint supports. Tenant filters: `status`, `parent_tenant_id`, `observe_mode`, `search`. Webhook filters: `tenant_id`, `status`, `event_type`, `search`. An empty filter is rejected — the server refuses to act on "every tenant" or "every webhook" without at least one constraint. Unknown filter keys return `400 INVALID_REQUEST` (strict `additionalProperties: false`).
 
+`observe_mode` is a forward-compatible tenant filter for the v0.1.26 action-governance preview. v0.1.25.x reference admin servers accept it in the filter shape but only servers that implement observe mode narrow tenant bulk actions by that value.
+
 ### Optional fields
 
 - **`expected_count`** — safety gate. If the server resolves the filter to a different number of rows, the call fails with `409 COUNT_MISMATCH` and **no rows are touched**. Use this to catch drift between when you previewed the list and when you executed the bulk action.
