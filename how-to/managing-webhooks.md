@@ -367,7 +367,7 @@ curl http://localhost:7979/v1/admin/events/evt_abc123 \
 
 ## Tenant Self-Service
 
-Tenants manage their own webhooks via `/v1/webhooks` (using `X-Cycles-API-Key`):
+Tenants manage their own webhooks via `/v1/webhooks` using `X-Cycles-API-Key`. The tenant is derived from the key; do not pass a tenant query parameter with tenant-scoped auth.
 
 ```bash
 # Create (restricted to budget.*, reservation.*, tenant.* events)
@@ -383,12 +383,34 @@ curl -X POST http://localhost:7979/v1/webhooks \
 curl http://localhost:7979/v1/webhooks \
   -H "X-Cycles-API-Key: $TENANT_API_KEY"
 
+# Get one subscription
+curl http://localhost:7979/v1/webhooks/whsub_abc123 \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY"
+
+# Pause or resume delivery
+curl -X PATCH http://localhost:7979/v1/webhooks/whsub_abc123 \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "PAUSED"}'
+
+# Send a test delivery to the subscription URL
+curl -X POST http://localhost:7979/v1/webhooks/whsub_abc123/test \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY"
+
+# Inspect delivery attempts
+curl "http://localhost:7979/v1/webhooks/whsub_abc123/deliveries?status=FAILED&limit=10" \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY"
+
+# Delete a subscription
+curl -X DELETE http://localhost:7979/v1/webhooks/whsub_abc123 \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY"
+
 # Query tenant's events
 curl "http://localhost:7979/v1/events?event_type=budget.exhausted" \
   -H "X-Cycles-API-Key: $TENANT_API_KEY"
 ```
 
-**Required permissions:** `webhooks:write` (create/update/delete), `webhooks:read` (list), `events:read` (query events). These are not included in default key permissions — they must be explicitly requested at key creation. See [API Key Permissions](/how-to/api-key-management-in-cycles#available-permissions-27-total) for the full list.
+**Required permissions:** `webhooks:write` (create/update/delete/test), `webhooks:read` (list/get delivery history), `events:read` (query events). These are not included in default key permissions — they must be explicitly requested at key creation. See [API Key Permissions](/how-to/api-key-management-in-cycles#available-permissions-27-total) for the full list.
 
 ## Webhook URL Security
 
