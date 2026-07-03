@@ -173,7 +173,7 @@ Every destructive action is one-click with a confirmation and a blast-radius sum
 | Emergency tenant-wide freeze | Tenant detail | Bulk freeze across all budgets for the tenant |
 | Close tenant (cascades owned objects, v0.1.25.43+) | Tenants / Tenant detail | `PATCH /v1/admin/tenants/{id}` — dashboard shows cascade preview before confirming |
 
-Force-release uses dual authentication — the dashboard's nginx routes `/v1/reservations*` to `cycles-server:7878` and the runtime server validates both keys before executing. The audit log tags the action `actor_type=admin_on_behalf_of`. See [Force-Releasing Stuck Reservations](/how-to/force-releasing-stuck-reservations-as-an-operator) for the underlying flow.
+Force-release uses dual authentication — the dashboard's nginx routes `/v1/reservations*` to `cycles-server:7878` and the runtime server validates both keys before executing. The audit log tags the action with `metadata.actor_type=admin_on_behalf_of`. See [Force-Releasing Stuck Reservations](/how-to/force-releasing-stuck-reservations-as-an-operator) for the underlying flow.
 
 ## Events investigation
 
@@ -191,7 +191,9 @@ Per-row **Copy JSON** (v0.1.25.37+) is available on every surface rendering an e
 
 Audit is the one page that is manual-only. You build a query, press **Run Query**, and the dashboard calls `GET /v1/admin/audit/logs` with the filter you built.
 
-Supported filters (v0.1.25.33 UI + v0.1.25.27 server DSL): `tenant_id`, `actor_type`, `action_kind`, `idempotency_key`, `bulk_idempotency_key`, `request_id`, `trace_id`, `error_code` (IN-list), `error_code_exclude` (NOT-IN-list), `status_min` / `status_max` (range), `operation` (IN-list), `resource_type` (typeahead + IN-list), free-text `search`, time range. Deep-link URL params (`?error_code_exclude=`, `?status_min=`) support sharable filter state. Results can be exported as CSV or JSON for compliance review.
+Supported filters (v0.1.25.33 UI + v0.1.25.27 server DSL): `tenant_id`, `key_id`, `operation` (IN-list), `resource_type` (typeahead + IN-list), `resource_id`, `request_id`, `trace_id`, `error_code` (IN-list), `error_code_exclude` (NOT-IN-list), `status_min` / `status_max` (range), free-text `search`, and time range (`from` / `to`). Deep-link URL params (`?error_code_exclude=`, `?status_min=`) support sharable filter state. Results can be exported as CSV or JSON for compliance review.
+
+Metadata fields such as `metadata.actor_type`, bulk-action `metadata.idempotency_key`, and per-row bulk outcomes are displayed in the expanded row and exported JSON, but they are not standalone server-side query parameters. Use top-level filters like `operation`, `tenant_id`, `resource_type`, `resource_id`, `trace_id`, or `request_id` to narrow the result set before inspecting metadata.
 
 Bulk-action audit rows expand into a structured detail panel (v0.1.25.38) that renders `succeeded_ids`, `failed_rows`, `skipped_rows`, `filter` echo, and `duration_ms` as a first-class layout instead of raw JSON — per-row copy affordances are wired for immediate triage.
 

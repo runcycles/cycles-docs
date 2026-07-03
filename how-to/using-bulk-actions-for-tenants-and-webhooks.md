@@ -158,6 +158,7 @@ curl -G "http://localhost:7979/v1/admin/audit/logs" \
 ```
 
 The `operation` param was promoted to an array in v0.1.25.27 — you can OR across all three bulk operations in one query.
+There is no `bulk_idempotency_key` audit query parameter. The bulk request's `idempotency_key` is stored as `metadata.idempotency_key` on the returned audit row, so filter by `operation` plus `tenant_id`, time range, `trace_id`, or `request_id`, then inspect the expanded row or exported JSON.
 
 ## Event log emission
 
@@ -250,7 +251,7 @@ curl -X POST http://localhost:7979/v1/admin/budgets/bulk-action \
 2. **Propose.** Compose the bulk request body. Set `idempotency_key` to something traceable back to an incident or runbook (`ops-INC-842-suspend-abusers`). Set `expected_count` to the preview count.
 3. **Execute.** POST the bulk request. Capture the full response envelope to your runbook record.
 4. **Reconcile.** Inspect `failed[]`. Investigate each `error_code` — bulk actions do not "retry until green"; follow-up fixes are manual.
-5. **Audit.** Query audit logs by `bulk_idempotency_key` to confirm every row was logged and to export for compliance review.
+5. **Audit.** Query audit logs by bulk `operation` and relevant top-level filters, then inspect `metadata.idempotency_key`, `succeeded_ids`, `failed_rows`, and `skipped_rows` to confirm every row was logged and to export for compliance review.
 
 ::: tip Dashboard equivalent
 The Tenants and Webhooks pages in the [dashboard](/quickstart/deploying-the-cycles-dashboard) expose the same flow as a visual lane: filter the list, preview the count, click **Bulk action**, confirm with a blast-radius summary, and see per-row results in a side panel. The dashboard sets `expected_count` automatically from the current filter count.

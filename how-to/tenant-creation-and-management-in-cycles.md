@@ -298,7 +298,7 @@ All four cascade events share the `correlation_id` of the originating `tenant.cl
 ```bash
 # All cascade events for one close
 curl -s "http://localhost:7979/v1/admin/events?correlation_id=<id>" \
-  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.items[] | {event_type, data}'
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, data}'
 ```
 
 After the cascade, mutating any owned object returns `409 TENANT_CLOSED` (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
@@ -328,11 +328,11 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 ```bash
 # Get the correlation_id of your tenant.closed audit entry
 CID=$(curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=updateTenant&limit=1" \
-  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.items[0].metadata.correlation_id')
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.logs[0].metadata.correlation_id')
 
 # Pull every cascade event under that correlation_id
 curl -s "http://localhost:7979/v1/admin/events?correlation_id=$CID" \
-  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.items[] | {event_type, resource: .data}'
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, resource: .data}'
 ```
 
 You should see one event per owned object — `budget.closed_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade`. If the count is short, either the cascade is still draining (wait a second and re-query) or you're on pre-v0.1.25.35 admin.

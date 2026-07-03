@@ -281,7 +281,7 @@ The authentication scheme keyed on the `X-Admin-API-Key` header. Used for platfo
 
 ### Admin-on-Behalf-of
 
-An operation where a platform operator uses their admin key to act against tenant-owned resources (e.g., force-release a tenant's stuck reservation during incident response). Audit rows carry `actor_type=admin_on_behalf_of` for clear attribution. Intentionally excluded from admin auth: create/commit/extend reservations, create tenant webhook subscriptions, replay — operations where admin impersonation would distort semantics.
+An operation where a platform operator uses their admin key to act against tenant-owned resources (e.g., force-release a tenant's stuck reservation during incident response). Audit rows carry `metadata.actor_type=admin_on_behalf_of` for clear attribution. Intentionally excluded from admin auth: create/commit/extend reservations, create tenant webhook subscriptions, replay — operations where admin impersonation would distort semantics.
 
 ### Bulk Action
 

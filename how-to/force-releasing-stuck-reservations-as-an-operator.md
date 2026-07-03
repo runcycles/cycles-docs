@@ -35,7 +35,7 @@ The runtime server:
 1. Validates the `X-Admin-API-Key` against its local `ADMIN_API_KEY` env var (must match the admin server's key — deploy them with the same value).
 2. Validates the `X-Cycles-API-Key` and enforces that the reservation belongs to that key's tenant.
 3. Runs the `release.lua` script to return `reserved` budget to the pool.
-4. Writes an audit entry with `actor_type = admin_on_behalf_of`, the operator's admin key fingerprint, and the tenant key's ID.
+4. Writes an audit entry with `operation = releaseReservation`, `resource_type = reservation`, `resource_id = <reservation_id>`, and `metadata.actor_type = admin_on_behalf_of`.
 
 Response is identical to a normal release:
 
@@ -90,22 +90,23 @@ Every force-release is captured in the audit log. Query it from the admin plane:
 ```bash
 curl -G "http://localhost:7979/v1/admin/audit/logs" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  --data-urlencode "action_kind=reservation.release" \
-  --data-urlencode "actor_type=admin_on_behalf_of" | jq .
+  --data-urlencode "operation=releaseReservation" \
+  --data-urlencode "resource_type=reservation" \
+  --data-urlencode "resource_id=rsv_abc123" | jq .
 ```
 
 Fields to expect on the audit entry:
 
 | Field | Meaning |
 |-------|---------|
-| `action_kind` | `reservation.release` |
-| `actor_type` | `admin_on_behalf_of` (distinguishes from tenant-initiated releases) |
-| `actor_admin_key_id` | Fingerprint of the `X-Admin-API-Key` used |
-| `actor_api_key_id` | ID of the tenant key used |
+| `operation` | `releaseReservation` |
+| `resource_type` | `reservation` |
+| `resource_id` | The reservation ID |
+| `metadata.actor_type` | `admin_on_behalf_of` (distinguishes from tenant-initiated releases) |
 | `tenant_id` | Tenant the reservation belonged to |
-| `reservation_id` | The reservation |
-| `reason` | Free-form text from the request body, if provided |
-| `idempotency_key` | From the request body |
+| `metadata.reason` | Free-form text from the request body, sanitized for CR/LF if provided |
+| `request_id` | The HTTP request id for the release call |
+| `trace_id` | The cross-plane trace id for joining to events and webhook deliveries |
 
 The audit entry is retained under the authenticated-audit retention policy (default 400 days in v0.1.25.20+). This comfortably covers SOC2 audit windows.
 
