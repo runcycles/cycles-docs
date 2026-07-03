@@ -99,7 +99,7 @@ The optional [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard
 | `cycles-admin-service-data` | Redis repositories, key service |
 | `cycles-admin-service-model` | Shared domain models and DTOs |
 
-**Authentication:** The admin server uses two auth schemes depending on the endpoint. The split reflects a bootstrap ordering: `X-Admin-API-Key` handles operations that must exist *before* any tenant-scoped key (tenants, keys, audit), while `X-Cycles-API-Key` handles everything else (budgets, policies, runtime).
+**Authentication:** Cycles uses two auth schemes depending on the endpoint. `X-Admin-API-Key` is the bootstrap/operator key for tenant and key management, audit, admin-only budget operations, and a small runtime admin-on-behalf-of reservation surface. `X-Cycles-API-Key` is tenant-scoped and carries explicit permissions for budgets, policies, reservations, balances, events, and tenant self-service webhooks.
 
 #### `X-Admin-API-Key` — bootstrap / system administration
 
@@ -111,6 +111,8 @@ Set via the `ADMIN_API_KEY` environment variable. Not scoped to any tenant.
 | `/v1/admin/api-keys/*` | POST, GET, DELETE | Create, list, revoke API keys |
 | `/v1/auth/validate` | POST | Validate an API key |
 | `/v1/admin/audit/logs` | GET | Query audit logs |
+| `/v1/admin/budgets/freeze`, `/v1/admin/budgets/unfreeze` | POST | Admin-only budget state changes |
+| `/v1/reservations`, `/v1/reservations/{id}`, `/v1/reservations/{id}/release` | GET / POST | Runtime admin-on-behalf-of inspection and force release |
 
 #### `X-Cycles-API-Key` — tenant-scoped operations
 
@@ -133,8 +135,8 @@ Requires a key created via the admin API with the appropriate [permissions](/how
 | `/v1/events` | POST | *(valid key only)* |
 
 ::: tip Which header do I use?
-If the endpoint manages **identity** (tenants, API keys, audit) → `X-Admin-API-Key`.
-If the endpoint manages **money** (budgets, policies) or **runtime** (reservations, balances) → `X-Cycles-API-Key`.
+If the endpoint manages **identity**, fleet-level audit, admin-only budget state, or operator force-release → `X-Admin-API-Key`.
+If the endpoint is a tenant-scoped budget, policy, runtime, balance, or event call → `X-Cycles-API-Key`.
 :::
 
 #### Key provisioning

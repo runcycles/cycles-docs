@@ -198,11 +198,11 @@ curl -G 'http://localhost:7979/v1/admin/audit/logs' \
 
 v0.1.25.28 renamed the previous single `<unauthenticated>` sentinel. Historical rows keep their `<unauthenticated>` literal and age out under the unauth-tier TTL; migrate queries to `__unauth__` (pre-auth failures only) or `__admin__` (new platform-admin slice).
 
-## Hydration cap on sorted reservation listings
+## Hydration warning on sorted reservation listings
 
-On `/v1/reservations`, the sorted path caps the pre-sort working set at `SORTED_HYDRATE_CAP = 2000` rows per page (v0.1.25.13+). If your filter matches more than 2000 rows, the server logs a WARN and fills the page from the capped slice — the sort is only approximately global.
+On `/v1/reservations`, current runtime servers hydrate all matches for sorted queries, then sort and slice. If a sorted query hydrates 2,000 or more rows, the server logs a WARN so operators can narrow filters or plan sorted indices. Rows beyond 2,000 are not truncated in v0.1.25.39+.
 
-To see past the cap, narrow the filter: add `status`, `idempotency_key`, or a subject field (`workspace`, `app`, `workflow`, `agent`, `toolset`). The admin list endpoints do not apply an equivalent cap — they sort the full filtered set.
+For faster, more predictable queries, narrow the filter: add `status`, `idempotency_key`, a time window, or a subject field (`workspace`, `app`, `workflow`, `agent`, `toolset`). The admin list endpoints keep their own endpoint-specific sort behavior.
 
 ## Error reference
 

@@ -57,7 +57,7 @@ Budget, policy, and balance endpoints on the admin server require a tenant-scope
 Default API keys (created without explicit permissions) include `budgets:write` and `budgets:read` as of v0.1.25.6 and will work for budget operations. Keys created before v0.1.25.6 with explicitly specified permission sets may need `budgets:write` and/or `budgets:read` added. See [API Key Management](/how-to/api-key-management-in-cycles#available-permissions) for the full permission list.
 
 ::: warning X-Admin-API-Key vs X-Cycles-API-Key
-The bootstrap admin key (`X-Admin-API-Key`) is used for tenant management, API key management, audit log access, **and budget PATCH/freeze/unfreeze** (admin-only operations). Budget create, fund, and list require `X-Cycles-API-Key` with `budgets:write` / `budgets:read` permissions.
+The bootstrap admin key (`X-Admin-API-Key`) is used for tenant management, API key management, audit log access, and budget PATCH/freeze/unfreeze (admin-only operations). Budget create requires `X-Cycles-API-Key` with `budgets:write`. Budget list and fund accept either `X-Cycles-API-Key` or `X-Admin-API-Key`; when using the admin key, include `tenant_id`.
 :::
 
 ### Using the Cycles Admin API

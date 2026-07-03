@@ -7,10 +7,10 @@ description: "Developer reference for the core Cycles runtime budget endpoints a
 
 This is a developer-friendly reference for the core runtime budget endpoints and public CyclesEvidence retrieval endpoints. The [interactive API reference](/api/) is generated from the YAML spec and remains the exhaustive operation browser.
 
-Tenant-scoped runtime requests require the `X-Cycles-API-Key` header for authentication. The two CyclesEvidence read endpoints, `GET /v1/evidence/{evidence_id}` and `GET /v1/.well-known/cycles-jwks.json`, are public by spec because they expose only content-addressed evidence envelopes and public verification keys.
+Tenant-scoped runtime requests require the `X-Cycles-API-Key` header for authentication. Reservation list/detail/release also accept `X-Admin-API-Key` for operator workflows on the small admin-on-behalf-of surface. The two CyclesEvidence read endpoints, `GET /v1/evidence/{evidence_id}` and `GET /v1/.well-known/cycles-jwks.json`, are public by spec because they expose only content-addressed evidence envelopes and public verification keys.
 
 ::: info Protocol conformance
-Cycles is an **open protocol with a minimum conformance surface** — approximately 23 operations across the runtime base, action-kind registry, governance extensions, and eight specifically-normative operations inside the otherwise-reference admin spec. runcycles' own servers (`cycles-server`, `cycles-server-admin`, `cycles-server-events`) are one such implementation — additional admin-API surface beyond the conformance minimum is runcycles-specific reference; implementers MAY diverge. See [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) for the authoritative MUST / SHOULD / MAY statement.
+Cycles is an **open protocol with a minimum conformance surface**. The active v0.1.25 target requires 12 MUST operations: four core runtime reservation operations plus eight cross-plane event, webhook, balance, and auth-introspection operations. `decide`, reservation listing/detail, and direct-debit events are SHOULD-level runtime operations that the reference servers expose. v0.1.26 action-governance specs are published as upcoming extensions, but they are not required for current conformance and are not enforced by the current reference servers. See [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) for the authoritative MUST / SHOULD / MAY statement.
 :::
 
 ## Common headers
@@ -21,6 +21,7 @@ Cycles is an **open protocol with a minimum conformance surface** — approximat
 |---|---|---|
 | `Content-Type` | Yes (POST) | `application/json` |
 | `X-Cycles-API-Key` | Yes for tenant-scoped runtime endpoints | API key for authentication and tenant derivation |
+| `X-Admin-API-Key` | Operator-only on reservation list/detail/release | Admin-on-behalf-of authentication for incident response and inspection |
 | `X-Idempotency-Key` | No | Client-provided idempotency key (also accepted in the request body) |
 
 ### Response headers
@@ -424,10 +425,16 @@ List reservations with optional filters and pagination.
 | `toolset` | string | Filter by toolset |
 | `status` | string | Filter by status: `ACTIVE`, `COMMITTED`, `RELEASED`, `EXPIRED` |
 | `idempotency_key` | string | Filter by idempotency key |
+| `from` / `to` | string | ISO 8601 inclusive bounds on `created_at_ms`; either side may be supplied alone |
+| `expires_from` / `expires_to` | string | ISO 8601 inclusive bounds on `expires_at_ms`; useful for finding stale or soon-expiring reservations |
+| `finalized_from` / `finalized_to` | string | ISO 8601 inclusive bounds on `finalized_at_ms`; only COMMITTED and RELEASED rows match |
 | `sort_by` | string | Column to sort by (v0.1.25.12+). See [Sorting](#sorting) below. |
 | `sort_dir` | string | `asc` or `desc`. Default `desc`. |
+| `include` | string | Comma-separated projection tokens: `metadata`, `committed_metadata`, `evidence` |
 | `limit` | integer | Max results (1–200, default: 50) |
 | `cursor` | string | Opaque cursor from previous response |
+
+Under `X-Cycles-API-Key`, `tenant` is validation-only and must match the authenticated tenant. Under `X-Admin-API-Key`, `tenant` is required as a filter because admin auth has no effective tenant.
 
 ### Sorting
 
@@ -447,7 +454,7 @@ Unknown values return `400 INVALID_REQUEST`. `sort_dir` defaults to `desc`; pass
 
 **Cursor-tuple binding.** The opaque cursor binds to the `(sort_by, sort_dir, filters)` tuple it was issued under. Reusing a cursor with a different sort key, direction, or filter set returns `400 INVALID_REQUEST` — a new first-page request must issue a new cursor. Callers that switch sort mid-walk should discard the cursor and restart.
 
-**Sorted hydrate cap.** The sorted path guards against unbounded hydration with `SORTED_HYDRATE_CAP = 2000` (admin v0.1.25.13). When the filter resolves to more than 2,000 matching rows the server caps the materialized slice at 2,000, logs a WARN, and fills cursor pages from the capped slice. To see past the cap, narrow the filter (add `tenant`, `status`, `app`, etc.) and retry.
+**Sorted hydration warning.** Current reference servers hydrate all matching rows for sorted reservation listings, then sort and slice. When a sorted query hydrates 2,000 or more rows, the server logs a WARN so operators can add narrower filters or plan sorted indices. Rows beyond 2,000 are no longer truncated in v0.1.25.39+.
 
 ### Response (200 OK)
 
@@ -474,7 +481,7 @@ Unknown values return `400 INVALID_REQUEST`. `sort_dir` defaults to `desc`; pass
 ### Example
 
 ```bash
-curl -s "http://localhost:7878/v1/reservations?tenant=acme&status=ACTIVE&limit=10" \
+curl -s "http://localhost:7878/v1/reservations?tenant=acme&status=ACTIVE&include=evidence&limit=10" \
   -H "X-Cycles-API-Key: your-api-key"
 ```
 
@@ -484,7 +491,7 @@ curl -s "http://localhost:7878/v1/reservations?tenant=acme&status=ACTIVE&limit=1
 |---|---|---|
 | 400 | `INVALID_REQUEST` | Invalid filter parameters |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
-| 403 | `FORBIDDEN` | Tenant mismatch |
+| 403 | `FORBIDDEN` | Tenant mismatch under tenant auth |
 
 ---
 
@@ -508,7 +515,14 @@ Get details of a specific reservation.
   "finalized_at_ms": 1710000045000,
   "scope_path": "tenant:acme/workspace:production",
   "affected_scopes": ["tenant:acme", "tenant:acme/workspace:production"],
-  "metadata": {}
+  "metadata": {},
+  "committed_metadata": {},
+  "evidence": {
+    "reserve": {
+      "evidence_id": "8403bed43e13ef7d56a8ab402a9d29ee7dd2f405e24c0cacb51068341a5e7030",
+      "cycles_evidence_url": "https://cycles.example.com/v1/evidence/8403bed43e13ef7d56a8ab402a9d29ee7dd2f405e24c0cacb51068341a5e7030"
+    }
+  }
 }
 ```
 

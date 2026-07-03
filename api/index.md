@@ -7,7 +7,7 @@ description: Interactive API reference for the Cycles Protocol. Explore endpoint
 
 # Cycles Protocol API
 
-Interactive reference for the Cycles Protocol endpoints. All requests require an API key passed via the `X-Api-Key` header.
+Interactive reference for the active Cycles Protocol runtime endpoints. Tenant-scoped runtime requests use the `X-Cycles-API-Key` header. The public CyclesEvidence read endpoints do not require authentication.
 
 ::: tip Getting started with the API?
 1. [Deploy the Cycles server](/quickstart/deploying-the-full-cycles-stack) or use a running instance
