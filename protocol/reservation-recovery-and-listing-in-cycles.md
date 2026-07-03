@@ -16,6 +16,8 @@ The Cycles protocol provides two endpoints for these situations:
 
 Both are optional in v0 deployments, but they are essential for production operations.
 
+Tenant callers use `X-Cycles-API-Key`. Operators may also use `X-Admin-API-Key` on reservation list/detail; with admin auth, `GET /v1/reservations` requires a `tenant` query parameter because the admin key has no effective tenant.
+
 ## Recovering a lost reservation ID
 
 The most common recovery scenario: a client created a reservation, received the response, but crashed before persisting the `reservation_id`.
@@ -81,6 +83,27 @@ Responses are paginated:
 - `has_more` — whether more results exist
 - `next_cursor` — cursor for the next page
 
+### Time-window filters
+
+`GET /v1/reservations` supports three independent ISO 8601 time windows:
+
+- `from` / `to` filter `created_at_ms`.
+- `expires_from` / `expires_to` filter `expires_at_ms`.
+- `finalized_from` / `finalized_to` filter `finalized_at_ms`.
+
+Each bound is inclusive and may be supplied alone. Blank values are treated as unset. If the lower bound is greater than the upper bound for a pair, the server returns `400 INVALID_REQUEST`. `finalized_at_ms` is only populated on COMMITTED and RELEASED rows, so ACTIVE and EXPIRED rows do not match `finalized_*` filters.
+
+Example: find active reservations that have already passed their expiry:
+
+```bash
+curl -G "http://localhost:7878/v1/reservations" \
+  -H "X-Cycles-API-Key: $TENANT_API_KEY" \
+  --data-urlencode "status=ACTIVE" \
+  --data-urlencode "expires_to=2026-07-03T12:00:00Z" \
+  --data-urlencode "sort_by=expires_at_ms" \
+  --data-urlencode "sort_dir=asc"
+```
+
 ### Sorting (v0.1.25.12+)
 
 `GET /v1/reservations` accepts two optional query parameters to order results server-side:
@@ -94,13 +117,23 @@ Unknown `sort_by` or `sort_dir` values return HTTP 400 `INVALID_REQUEST`. Older 
 
 **Cursor binding.** When `sort_by` is provided, the returned cursor binds to the `(sort_by, sort_dir, filters)` tuple. Reusing a cursor under a different sort key or filter set returns HTTP 400. Reset the cursor whenever you change sort key, direction, or filters.
 
-**Hydration cap (v0.1.25.13+).** The sorted path caps the pre-sort working set at `SORTED_HYDRATE_CAP = 2000` rows per page. If your filter matches more than 2000 reservations, a WARN is logged and the page fills from the capped slice. Narrow filters (`status`, `idempotency_key`, `workspace` / `app` / `workflow` / `agent` / `toolset`) to see past the cap.
+**Hydration warning.** Current reference servers hydrate all matching rows for sorted reservation listings, then sort and slice. If a sorted query hydrates 2,000 or more rows, the server logs a WARN. Rows beyond 2,000 are not truncated in v0.1.25.39+; narrow filters (`status`, `idempotency_key`, workspace/app/workflow/agent/toolset, or the time-window filters above) still keep incident queries faster and easier to reason about.
 
 ```
 GET /v1/reservations?status=ACTIVE&sort_by=expires_at_ms&sort_dir=asc&limit=100
 ```
 
 This returns the 100 oldest-expiring active reservations — useful for incident response when you need to force-release soon-to-expire reservations before they churn.
+
+### Field projection
+
+List rows always include scalar lifecycle fields such as `committed` when present. Larger or optional maps are opt-in through `include`:
+
+- `include=metadata` projects reserve-time metadata.
+- `include=committed_metadata` projects commit-time metadata.
+- `include=evidence` projects recorded CyclesEvidence refs keyed by `reserve`, `commit`, and `release`.
+
+`include` is projection-only: it does not change which rows match, does not affect ordering, and does not invalidate sorted cursors if it changes between pages.
 
 ## Getting reservation details
 
@@ -123,6 +156,8 @@ Returns the full state of a specific reservation:
 - **affected_scopes** — all scopes impacted by this reservation
 - **idempotency_key** — the creation idempotency key (if the server persists it)
 - **metadata** — any metadata attached to the reservation
+- **committed_metadata** — metadata attached to the commit request, when present
+- **evidence** — CyclesEvidence refs keyed by artifact type, when evidence was emitted
 
 This endpoint is useful for debugging specific reservations and understanding their full lifecycle.
 
@@ -135,6 +170,8 @@ Both listing and detail endpoints enforce tenant isolation:
 - attempting to get details for a reservation owned by a different tenant returns `403 FORBIDDEN`
 
 A tenant cannot see or access another tenant's reservations.
+
+Under `X-Admin-API-Key`, reservation list requires `tenant` as an explicit filter and reservation detail can read any reservation by ID. This is the admin-on-behalf-of operator path used by the dashboard and incident runbooks.
 
 ## Use cases
 

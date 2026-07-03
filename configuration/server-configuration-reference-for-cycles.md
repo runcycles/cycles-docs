@@ -278,8 +278,8 @@ The admin server uses two authentication schemes:
 
 | Header | Variable | Purpose |
 |---|---|---|
-| `X-Admin-API-Key` | `ADMIN_API_KEY` | System-level operations (tenant CRUD, API key management, audit logs) |
-| `X-Cycles-API-Key` | — | Tenant-scoped operations (budget ledgers, policies, reservations) |
+| `X-Admin-API-Key` | `ADMIN_API_KEY` | System-level and operator operations: tenant CRUD, API key management, audit logs, admin-only budget state, and runtime reservation admin-on-behalf-of list/detail/release |
+| `X-Cycles-API-Key` | — | Tenant-scoped operations: budget ledgers, policies, reservations, balances, events, and tenant self-service webhooks |
 
 For the full endpoint-to-header mapping with required permissions, see the [Architecture Overview — Authentication](/quickstart/architecture-overview-how-cycles-fits-together#authentication).
 

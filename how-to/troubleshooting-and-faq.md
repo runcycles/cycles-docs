@@ -379,7 +379,7 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 **Common causes:**
 
 1. **Wrong port.** The admin API runs on port **7979**, not 7878. The protocol API (reservations, commits) runs on 7878.
-2. **Wrong header.** Budget and policy endpoints use `X-Cycles-API-Key` (a tenant-scoped API key with `admin:write` permission), not `X-Admin-API-Key`. The bootstrap admin key is only used for tenant management, API key management, and audit logs.
+2. **Wrong header.** Tenant-scoped budget and policy endpoints use `X-Cycles-API-Key` with the required permissions. Admin-only operations such as tenant/key management, audit logs, budget PATCH/freeze/unfreeze, and runtime reservation force-release use `X-Admin-API-Key`. Budget list and fund are dual-auth; admin-key calls must include `tenant_id`.
 3. **Missing admin permissions.** Default API keys lack `admin:write`. Create a key with `"permissions": ["admin:read", "admin:write"]` — see [API Key Management](/how-to/api-key-management-in-cycles#available-permissions).
 
 ### Budget fund operation has no effect

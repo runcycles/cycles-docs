@@ -57,7 +57,7 @@ The nginx routing split in `nginx.conf`:
 | `/v1/reservations*`, `/v1/evidence*`, `/v1/.well-known/cycles-jwks.json` | `cycles-server:7878` | Reservations and Evidence pages — force-release, envelope lookup, signer-key resolution |
 | `/v1/*` (everything else) | `cycles-admin:7979` | All other dashboard pages |
 
-Both backends authenticate the same `X-Admin-API-Key` header. On the runtime plane, force-release is a dual-authenticated admin-on-behalf-of call — the runtime server validates the admin key and records the actor in the audit trail.
+Both backends authenticate the same `X-Admin-API-Key` header. On the runtime plane, force-release is an admin-on-behalf-of call — the runtime server validates the admin key and records the actor in the audit trail.
 
 ## Quick start (development)
 

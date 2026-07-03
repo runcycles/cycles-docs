@@ -1,6 +1,6 @@
 ---
 title: "Force-Releasing Stuck Reservations as an Operator"
-description: "How Cycles operators can force-release hung reservations on the runtime plane using admin-on-behalf-of dual authentication, with full audit tagging."
+description: "How Cycles operators can force-release hung reservations on the runtime plane using AdminKeyAuth, with full audit tagging."
 ---
 
 # Force-Releasing Stuck Reservations as an Operator
@@ -9,19 +9,18 @@ Reservations can get stuck. A client crashes without committing. A network parti
 
 The normal path is to wait for the reservation to expire (`ttl_ms` plus the grace period) and let the server-side sweeper release it. That is usually fine. But during an incident you often cannot wait: customer-facing agents are failing reservation requests *right now* because budget is parked on a hung run that has already been cancelled upstream.
 
-For this case the runtime plane supports **admin-on-behalf-of release** on `POST /v1/reservations/{id}/release` (added in `cycles-server` v0.1.25.8). Operators can force-release any reservation by presenting both the tenant-scoped `X-Cycles-API-Key` and the `X-Admin-API-Key` on the same request. Every such call is tagged in the audit log so the action is never invisible.
+For this case the runtime plane supports **admin-on-behalf-of release** on `POST /v1/reservations/{id}/release` (added in `cycles-server` v0.1.25.8). Operators can force-release any reservation with `X-Admin-API-Key`; no tenant-scoped API key is required. Every such call is tagged in the audit log so the action is never invisible.
 
 ::: tip When to reach for this
 Use force-release only when you cannot wait for normal expiry and you have confirmed the downstream work is truly dead. Releasing a reservation whose client is still executing will cause the client's commit to land on a freshly-restored balance — double-counting. If there is any doubt, wait for expiry.
 :::
 
-## Dual-authentication request
+## Admin-authenticated request
 
-The force-release call is the standard release endpoint with a second header:
+The force-release call is the standard release endpoint authenticated with the runtime server's admin key:
 
 ```bash
 curl -X POST "http://localhost:7878/v1/reservations/rsv_abc123/release" \
-  -H "X-Cycles-API-Key: $TENANT_API_KEY" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -33,7 +32,7 @@ curl -X POST "http://localhost:7878/v1/reservations/rsv_abc123/release" \
 The runtime server:
 
 1. Validates the `X-Admin-API-Key` against its local `ADMIN_API_KEY` env var (must match the admin server's key — deploy them with the same value).
-2. Validates the `X-Cycles-API-Key` and enforces that the reservation belongs to that key's tenant.
+2. Looks up the reservation owner from the reservation ID and skips tenant-key ownership checks because this is the admin-on-behalf-of path.
 3. Runs the `release.lua` script to return `reserved` budget to the pool.
 4. Writes an audit entry with `operation = releaseReservation`, `resource_type = reservation`, `resource_id = <reservation_id>`, and `metadata.actor_type = admin_on_behalf_of`.
 
@@ -41,14 +40,14 @@ Response is identical to a normal release:
 
 ```json
 {
-  "reservation_id": "rsv_abc123",
   "status": "RELEASED",
-  "released_at_ms": 1744905600000
+  "released": { "amount": 5000, "unit": "USD_MICROCENTS" },
+  "balances": []
 }
 ```
 
 ::: warning ADMIN_API_KEY must be the same on both planes
-Admin-on-behalf-of authenticates on the runtime plane, so `cycles-server` and `cycles-server-admin` must share the same `ADMIN_API_KEY`. If the runtime plane has a different value or none at all, the dual-auth header is rejected with `401 UNAUTHORIZED` and the release does not happen.
+Admin-on-behalf-of authenticates on the runtime plane, so `cycles-server` and `cycles-server-admin` must share the same `ADMIN_API_KEY`. If the runtime plane has a different value, the request returns `401 UNAUTHORIZED`. If the runtime plane has no admin key configured, the request fails closed as a server misconfiguration and the release does not happen.
 :::
 
 ## Finding the reservation to release
@@ -61,7 +60,8 @@ If the client was built to generate idempotency keys for reservations before cal
 
 ```bash
 curl -G "http://localhost:7878/v1/reservations" \
-  -H "X-Cycles-API-Key: $TENANT_API_KEY" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  --data-urlencode "tenant=acme-corp" \
   --data-urlencode "idempotency_key=run-ac35f-step-4" | jq .
 ```
 
@@ -73,7 +73,8 @@ If the client did not log the key, find it by subject and status:
 
 ```bash
 curl -G "http://localhost:7878/v1/reservations" \
-  -H "X-Cycles-API-Key: $TENANT_API_KEY" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  --data-urlencode "tenant=acme-corp" \
   --data-urlencode "status=ACTIVE" \
   --data-urlencode "app=support-bot" \
   --data-urlencode "sort_by=expires_at_ms" \
@@ -145,15 +146,16 @@ A pragmatic runbook for hung-reservation incidents:
 7. **Post-incident.** Document the hung reservation in the incident report. If the pattern repeats, look at shortening client TTLs or adding heartbeat extension.
 
 ::: tip Dashboard equivalent
-The Reservations page in the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard) exposes this exact flow — filter to `status=ACTIVE`, sort by `expires_at_ms` ascending, click a row, and use the **Force Release** button. The dashboard sends the dual-auth call through its nginx reverse proxy to the runtime plane.
+The Reservations page in the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard) exposes this exact flow — filter to `status=ACTIVE`, sort by `expires_at_ms` ascending, click a row, and use the **Force Release** button. The dashboard sends the admin-authenticated call through its nginx reverse proxy to the runtime plane.
 :::
 
 ## Failure modes
 
-- **401 UNAUTHORIZED** — either the admin key is wrong or the runtime server does not have `ADMIN_API_KEY` configured (dual-auth is rejected instead of silently falling back).
-- **403 FORBIDDEN** — the tenant key's tenant does not own the reservation. Tenant isolation is enforced even for admin-on-behalf-of calls.
+- **401 UNAUTHORIZED** — the admin key is wrong.
+- **403 FORBIDDEN** — you used tenant-key auth and that tenant does not own the reservation. Under `X-Admin-API-Key`, admin-on-behalf-of skips tenant ownership checks on this allowlisted endpoint.
+- **500 INTERNAL_ERROR** — the runtime server does not have `ADMIN_API_KEY` configured for the admin-on-behalf-of path.
 - **404 NOT_FOUND** — the reservation never existed.
-- **409 CONFLICT** — the reservation is already `COMMITTED`, `RELEASED`, or `EXPIRED`. The release is a no-op; the response echoes the current state.
+- **409 RESERVATION_FINALIZED** — the reservation is already `COMMITTED` or `RELEASED`.
 - **410 RESERVATION_EXPIRED** — the reservation already expired before you got to it; the budget is already back.
 
 ## Next steps
