@@ -55,7 +55,7 @@ Four major regulatory and standards frameworks are converging on a shared requir
 
 ### EU AI Act (Regulation 2024/1689)
 
-**Key milestone**: August 2, 2026 — enforcement of Annex III high-risk system obligations begins. Penalties reach EUR 35M or 7% of global turnover for prohibited practices, EUR 15M or 3% for other violations ([EU AI Act Implementation Timeline](https://artificialintelligenceact.eu/implementation-timeline/)).
+**Key milestone**: The Digital Omnibus adopted in June 2026 moved Annex III high-risk obligations to December 2, 2027 (Annex I embedded systems to August 2, 2028), while [Article 50 transparency and GPAI enforcement still begin August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). Penalties reach EUR 35M or 7% of global turnover for prohibited practices, EUR 15M or 3% for other violations ([EU AI Act Implementation Timeline](https://artificialintelligenceact.eu/implementation-timeline/)).
 
 Five articles directly apply to agent systems:
 
@@ -220,7 +220,7 @@ McKinsey's [State of AI Trust 2026](https://www.mckinsey.com/capabilities/tech-a
 
 Five things are visible on the 2026 horizon:
 
-**1. Regulatory teeth arrive in August.** The EU AI Act high-risk provisions kick in August 2, 2026. Organizations that deployed agents into EU markets without documented risk management, logging, or oversight are looking at multi-million-euro compliance exposure.
+**1. Regulatory teeth arrive in August — different teeth than expected.** The Digital Omnibus moved the EU AI Act's Annex III high-risk provisions to December 2, 2027, but [August 2, 2026 still brings Article 50 transparency obligations and GPAI enforcement powers](/blog/eu-ai-act-what-actually-happens-august-2-2026) with fines up to 3% of worldwide turnover. Organizations that deployed agents into EU markets without documented risk management, logging, or oversight now have a longer runway on high-risk obligations — not a reprieve from the transparency and evidence requirements arriving this year.
 
 **2. Framework-level enforcement remains underdeveloped.** Microsoft's [Agent Governance Toolkit](https://opensource.microsoft.com/blog/2026/04/02/introducing-the-agent-governance-toolkit-open-source-runtime-security-for-ai-agents/) (April 2026) is one of the first major-vendor attempts at comprehensive runtime enforcement, but adoption is early. Most production agents still run without pre-execution controls.
 

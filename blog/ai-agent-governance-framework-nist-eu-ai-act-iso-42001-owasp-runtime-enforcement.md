@@ -15,7 +15,7 @@ featured: true
 
 Regulations are converging on a single demand: if your AI system acts autonomously, you must be able to prove what it did, why it was allowed to do it, and how you would have stopped it.
 
-The EU AI Act's high-risk obligations are [currently scheduled to apply from August 2, 2026](https://eur-lex.europa.eu/eli/reg/2024/1689/oj). Organizations can already pursue certification of an AI management system against ISO/IEC 42001, with [ISO/IEC 42006:2025](https://www.iso.org/standard/44546.html) defining requirements for certification bodies. NIST's AI Risk Management Framework was published in January 2023. OWASP published its [Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) in late 2025. And in February 2026, NIST launched its [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — a direct signal that autonomous systems need governance infrastructure beyond what model-level controls provide.
+The EU AI Act's high-risk obligations were rescheduled by the Digital Omnibus adopted in June 2026 — Annex III systems now apply from December 2, 2027 — while [Article 50 transparency and GPAI enforcement still land on August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). Organizations can already pursue certification of an AI management system against ISO/IEC 42001, with [ISO/IEC 42006:2025](https://www.iso.org/standard/44546.html) defining requirements for certification bodies. NIST's AI Risk Management Framework was published in January 2023. OWASP published its [Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) in late 2025. And in February 2026, NIST launched its [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — a direct signal that autonomous systems need governance infrastructure beyond what model-level controls provide.
 
 The gap is not awareness. Teams know governance matters. The gap is implementation: **how do you translate regulatory requirements into enforceable runtime controls?**
 
@@ -29,7 +29,7 @@ Four frameworks shape the governance requirements for autonomous AI systems. Eac
 
 ### EU AI Act (Regulation 2024/1689)
 
-The EU AI Act entered into force on August 1, 2024. Its high-risk AI system obligations are currently scheduled to apply from **August 2, 2026**, though the Commission has [proposed adjusting the timeline](https://digital-strategy.ec.europa.eu/en/faqs/navigating-ai-act) while harmonized standards are finalized. The Act does not use the term "AI agent." It regulates "AI systems" — and whether an agent qualifies as high-risk depends on its intended purpose and whether it falls under an [Annex I or Annex III use case](https://ai-act-service-desk.ec.europa.eu/en/faq). AI agents are not a separate legal category.
+The EU AI Act entered into force on August 1, 2024. Its high-risk AI system obligations were originally scheduled to apply from August 2, 2026, but the Digital Omnibus on AI — approved by the Council on June 29, 2026 — moved standalone Annex III systems to **December 2, 2027** and high-risk AI embedded in Annex I regulated products to **August 2, 2028**. Article 50 transparency obligations and Commission enforcement powers over general-purpose AI providers still take effect August 2, 2026; [this post breaks down what applies when](/blog/eu-ai-act-what-actually-happens-august-2-2026). The Act does not use the term "AI agent." It regulates "AI systems" — and whether an agent qualifies as high-risk depends on its intended purpose and whether it falls under an [Annex I or Annex III use case](https://ai-act-service-desk.ec.europa.eu/en/faq). AI agents are not a separate legal category.
 
 For AI agents that qualify as high-risk AI systems, five articles create direct obligations:
 
@@ -270,7 +270,7 @@ Governance is not a feature you add after shipping. It is the infrastructure tha
 
 ## Sources
 
-1. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj) — Entered into force August 1, 2024. High-risk obligations currently scheduled to apply from August 2, 2026.
+1. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj) — Entered into force August 1, 2024. High-risk obligations rescheduled by the June 2026 Digital Omnibus to December 2, 2027 (Annex III) and August 2, 2028 (Annex I embedded).
 2. [NIST AI Risk Management Framework 1.0](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework-ai-rmf-10) — Published January 26, 2023
 3. [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — Announced February 17, 2026
 4. [ISO/IEC 42001:2023](https://www.iso.org/standard/81230.html) — AI Management System standard, published December 2023

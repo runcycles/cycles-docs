@@ -169,6 +169,16 @@ The proxy layer **optimizes** what you spend (routing, caching, model selection)
 
 The left column is proxy-only. The right column is where you need the authority layer underneath.
 
+## Update, July 2026: the quarter cost control went mainstream
+
+Three developments since this guide was published in April are worth folding in.
+
+**The bills arrived.** TechCrunch's June 5 report ["The token bill comes due"](https://techcrunch.com/2026/06/05/the-token-bill-comes-due-inside-the-industry-scramble-to-manage-ais-runaway-costs/) documented Uber exhausting its entire 2026 AI coding budget by April, Microsoft revoking internal Claude Code licenses months after enabling them (per The Verge), a Priceline employee describing a 4–5x Cursor renewal, and — per Axios — an unnamed company hitting a $500M Claude bill after failing to set usage limits. Faros AI's April study of 20,000 developers measured per-developer token consumption up 18.6x in nine months. FinOps Foundation executive director J.R. Storment summarized the shift: "In April and May, I started hearing from companies: 'Oh my god, we are 3x over our entire 2026 token budget and it's only April.'" None of this changes the analysis above — it confirms that per-seat intuitions don't survive contact with per-token reality, and that post-hoc tracking finds out after the budget is gone.
+
+**Standards bodies moved.** On June 3, the Linux Foundation [announced its intent to launch the Tokenomics Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-intent-to-launch-the-tokenomics-foundation-to-establish-open-standards-for-ai-cost-management) — open specifications, benchmarks, and frameworks for token-based spending, with initial support from Google Cloud, Microsoft, IBM, JPMorganChase, Booking.com, and others. What those specifications should standardize — spend semantics that hold under concurrency and retries, not just reporting formats — is exactly the territory this post's "atomic enforcement" section covers.
+
+**A new tool category appeared.** In April, Portal26 [launched "Agentic Token Controls"](https://siliconangle.com/2026/04/23/portal26-launches-agentic-token-controls-cap-runaway-ai-agent-spend/) — token budgets per agent, workflow, or organization, with throttling as limits approach and pause/terminate on breach. It's a meaningful signal: enterprise vendors now treat runaway agent spend as its own product category, not a dashboard feature. The evaluation questions from this guide apply unchanged to the new entrants: is enforcement atomic under concurrency, does it happen before execution or as adaptive reaction during it, can it see actions and delegation or only tokens?
+
 ## The honest take
 
 LiteLLM, Helicone, and OpenRouter are good tools that solve real problems at the proxy layer. If your agents only make LLM calls with no side effects, no concurrent budget sharing, and no delegation chains — a well-configured proxy tool is probably enough.
@@ -179,7 +189,7 @@ That's the gap runtime authority fills. Not instead of proxy tools — underneat
 
 ## Sources and versions
 
-Feature claims in this post were verified against the following documentation as of April 2026:
+Feature claims in this post were verified against the following documentation as of April 2026, with the July 2026 update section verified against its linked sources at publication:
 
 - **LiteLLM** — [docs.litellm.ai/docs/proxy/users](https://docs.litellm.ai/docs/proxy/users) (budgets, rate limits, team management)
 - **Helicone** — [docs.helicone.ai](https://docs.helicone.ai) (cost tracking, rate limiting, caching, alerts)
