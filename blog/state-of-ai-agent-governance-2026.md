@@ -55,7 +55,7 @@ Four major regulatory and standards frameworks are converging on a shared requir
 
 ### EU AI Act (Regulation 2024/1689)
 
-**Key milestone**: August 2, 2026 — enforcement of Annex III high-risk system obligations begins. Penalties reach EUR 35M or 7% of global turnover for prohibited practices, EUR 15M or 3% for other violations ([EU AI Act Implementation Timeline](https://artificialintelligenceact.eu/implementation-timeline/)).
+**Key milestone**: The Digital Omnibus adopted in June 2026 moved Annex III high-risk obligations to December 2, 2027 (Annex I embedded systems to August 2, 2028), while [Article 50 transparency and GPAI enforcement still begin August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). Penalties reach EUR 35M or 7% of global turnover for prohibited practices, EUR 15M or 3% for other violations ([EU AI Act Implementation Timeline](https://artificialintelligenceact.eu/implementation-timeline/)).
 
 Five articles directly apply to agent systems:
 
