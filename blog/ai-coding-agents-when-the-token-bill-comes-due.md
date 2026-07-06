@@ -45,7 +45,7 @@ A coding agent breaks that in three compounding ways:
 
 **Context accumulates.** Agent sessions carry growing context windows, and agentic workflows re-read files, re-run searches, and re-summarize prior steps. Later calls in a session are systematically more expensive than earlier ones, so session length amplifies cost non-linearly — the dynamic that [reasoning-token budgeting](/blog/budgeting-reasoning-tokens-governing-extended-thinking-before-it-bills) covers from the extended-thinking angle.
 
-**Adoption multiplies per-user intensity.** Seat-era adoption curves add users at flat cost. Agent adoption curves add users *and* deepen each user's consumption as they move from autocomplete to delegated tasks. That is how a per-developer metric moves 18.6x while headcount barely changes.
+**Adoption multiplies per-user intensity.** Seat-era adoption curves add users at flat cost. Agent adoption curves add users *and* deepen each user's consumption as they move from autocomplete to delegated tasks. That is how a per-developer metric — not a total-spend metric — moves 18.6x in nine months.
 
 The result: spend went from bounded to unbounded, and nobody re-derived the controls.
 
@@ -63,14 +63,14 @@ For the most part, these were not failures of absent cost controls — they were
 
 ## What per-token governance looks like
 
-The fix is not spending less on agents. For most of these organizations the agents are worth it — that's *why* consumption exploded. The fix is making token spend behave like every other production workload cost: metered, scoped, and enforced before the meter runs, not reconciled after.
+The fix is not spending less on agents. Consumption exploded because developers kept choosing to use them — the demand is real, whatever the ROI accounting eventually says. The fix is making token spend behave like every other production workload cost: metered, scoped, and enforced before the meter runs, not reconciled after.
 
 Concretely, for coding agents:
 
 1. **Budgets scoped to the unit of work, not the org.** Per-developer monthly allowances, per-session caps for unattended runs, per-repository budgets for CI agents. Hierarchical scopes mean a team's ceiling contains its members' allowances, and one developer's runaway session exhausts their budget — not the team's.
 2. **Enforcement before execution.** A pre-execution reserve-commit check — reserve the estimated cost, proceed only if approved, commit the actual — turns a budget from a report into a gate. For Claude Code, Cursor, and Windsurf this is [available as config-only MCP integration](/blog/claude-code-cursor-windsurf-budget-limits-mcp), no code changes to the agent.
 3. **Degradation instead of cutoff.** The reason teams resist hard limits is the fear of blocking work mid-task. A [three-way decision](/glossary#three-way-decision) — ALLOW, ALLOW_WITH_CAPS, or DENY — lets a session near its limit continue on a cheaper model or a trimmed context instead of dying. The [degradation patterns post](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents) covers the options; "downgrade before deny" resolves most of the objection.
-4. **Calibrate in shadow mode first.** Set budgets from observed usage, not guesses: run enforcement in dry-run against real traffic for a week, see what would have been denied, adjust, then enforce. Limits set by fiat get reverted the first time they block a principal engineer.
+4. **Calibrate in shadow mode first.** Set budgets from observed usage, not guesses: run enforcement in dry-run against real traffic for a week, see what would have been denied, adjust, then enforce. Limits set by fiat tend to get reverted the first time they block a principal engineer.
 5. **Report in business units, not tokens.** Cost per merged PR, per task, per developer-week — the framing [unit economics for agents](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin) argues for. "We spent 40 billion tokens" is noise; "PR-review agent cost fell to $0.90 per review" is a decision input.
 
 ## The FinOps turn
