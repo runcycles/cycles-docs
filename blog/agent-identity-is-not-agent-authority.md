@@ -15,9 +15,9 @@ head:
 
 # Agent Identity Is Not Agent Authority
 
-2026 is the year agent identity shipped. [Okta for AI Agents went generally available on April 30](https://www.okta.com/blog/ai/okta-for-ai-agents-general-availability/). [Microsoft Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/what-are-agent-identities) gives every agent a first-class identity in the [tenant](/glossary#tenant) — Copilot Studio mints one automatically for each agent a user creates, with the creator recorded as sponsor. Agent-to-agent protocols carry [signed agent cards](/blog/a2a-vs-mcp-vs-runtime-authority). The identity giants looked at the agent problem and did what identity giants do, and did it well.
+2026 is the year agent identity shipped. [Okta for AI Agents went generally available on April 30](https://www.okta.com/blog/ai/okta-for-ai-agents-general-availability/). [Microsoft Entra Agent ID](https://learn.microsoft.com/en-us/entra/agent-id/what-are-agent-identities) gives every agent a first-class identity in the [tenant](/glossary#tenant) — Copilot Studio mints one automatically for each agent a user creates, with the creator recorded as sponsor. Agent-to-agent protocols define [agent cards](/blog/a2a-vs-mcp-vs-runtime-authority) that can be signed. The identity giants looked at the agent problem and did what identity giants do, and did it well.
 
-Okta's launch blueprint frames the mission as answering three questions: *where are my agents, what can they connect to, and what can they do?* The first two are identity and access questions, and identity infrastructure genuinely answers them. The third one it does not answer — and the gap between "what can they do" as an access-management question and "what may this agent do next" as a runtime question is where much of the 2026 incident record lives.
+Okta's launch blueprint frames the mission as answering three questions: *where are my agents, what can they connect to, and what can they do?* The first two are identity and access questions, and identity infrastructure genuinely answers them. The third one it does not answer — and the gap between "what can they do" as an access-management question and "what may this agent do next" as a runtime question is where many of 2026's agent-governance failures live.
 
 <!-- more -->
 
