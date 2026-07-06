@@ -25,11 +25,11 @@ This post goes category by category. The [full framework mapping](/blog/ai-agent
 
 ## The enforceability test
 
-A control *enforces* an ASI category when it can render the harmful outcome unreachable by construction — a decision point outside the model, evaluated before execution, that no amount of context manipulation can rewrite. Anything else — classifiers, sandboxes, reviews, monitoring — is valuable, but it reduces probability rather than bounding outcome. The [guardrails vs. observability vs. authority](/blog/runtime-authority-vs-guardrails-vs-observability) distinction, applied per risk.
+A control *enforces* an ASI category when it can render the harmful outcome unreachable by construction — a decision point outside the model, evaluated before execution, that no amount of context manipulation can rewrite. Detection-shaped controls — classifiers, reviews, monitoring — are valuable, but they reduce probability rather than bounding outcome. And the question here is narrower than "enforceable at all": it is which categories a *runtime authority* layer can enforce. Some categories have deterministic enforcement of their own — sandboxes for code execution, authenticated channels for transport — that simply lives in a different layer. The [guardrails vs. observability vs. authority](/blog/runtime-authority-vs-guardrails-vs-observability) distinction, applied per risk.
 
 ## Category by category
 
-| ASI | Risk | Pre-execution enforceable? | The enforcing control |
+| ASI | Risk | Enforceable by runtime authority? | The enforcing control |
 |---|---|---|---|
 | ASI01 | Agent Goal Hijack | **Partially** | Can't stop the hijack; can bound what a hijacked agent executes — action quotas, [RISK_POINTS](/glossary#risk-points), destination allow-lists |
 | ASI02 | Tool Misuse & Exploitation | **Yes** | Per-tool budgets and quotas decided before each call |
@@ -48,7 +48,7 @@ Four clean yeses, three partials, three nos. A note on scoring: the [framework p
 
 **The partials (ASI01, 04, 06)** are the injection-shaped ones — and this is where the June report's six-of-ten finding matters. You cannot enforce your way out of the hijack itself; the model's intent is not an enforceable surface. What you can enforce is the consequence budget: a goal-hijacked agent with a five-send quota and a priced action vocabulary is a contained incident, not a breach narrative. Same logic as [metering the trifecta's action leg](/blog/lethal-trifecta-rule-of-two-metered-authority) — determinism about outcomes, agnosticism about intent.
 
-**The nos (ASI05, 07, 09)** deserve equal honesty: sandboxing, transport security, and interaction design are not authority problems, and a budget gate contributes little. A vendor mapping all ten categories to their product is telling you about their marketing, not their architecture.
+**The nos (ASI05, 07, 09)** deserve equal honesty: these are not authority problems, and a budget gate contributes little. That is not the same as unenforceable — sandboxing enforces ASI05 as deterministically as a budget gate enforces ASI02; it just belongs to a different layer, as authenticated channels do for ASI07 and disclosure design does for ASI09. A vendor mapping all ten categories to their product is telling you about their marketing, not their architecture.
 
 ## What this means for a 2026 control review
 
