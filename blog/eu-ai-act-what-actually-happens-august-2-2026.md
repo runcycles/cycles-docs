@@ -25,7 +25,7 @@ This post separates what moved from what didn't, and what each means if you oper
 
 ## What the Digital Omnibus Changed
 
-The Digital Omnibus on AI was proposed by the Commission on November 19, 2025, reached provisional political agreement at the May 6–7 trilogue, and cleared both co-legislators in June. As of publication, the amending regulation has been adopted but not yet published in the Official Journal; publication is expected in mid-to-late July 2026, and the amendments become binding on entry into force. Until then, the dates below reflect the adopted text.
+The Digital Omnibus on AI was proposed by the Commission on November 19, 2025, reached provisional political agreement at the May 6–7 trilogue, and cleared both co-legislators in June. As of publication, the amending regulation has been adopted but not yet published in the Official Journal; publication is expected in July 2026, and the amendments become binding on entry into force. Until then, the dates below reflect the adopted text.
 
 The headline changes to the timeline:
 
@@ -83,12 +83,13 @@ The Omnibus answered the question "when do the high-risk rules apply" with "late
 ## Sources
 
 1. [Council of the EU — final green light for the AI simplification package](https://www.consilium.europa.eu/en/press/press-releases/2026/06/29/artificial-intelligence-council-gives-final-green-light-to-simplify-and-streamline-rules/) — June 29, 2026
-2. [Gibson Dunn — EU AI Act Omnibus Agreement: postponed high-risk deadlines and other key changes](https://www.gibsondunn.com/eu-ai-act-omnibus-agreement-postponed-high-risk-deadlines-and-other-key-changes/)
-3. [Enforcement of Chapter V under the EU AI Act](https://artificialintelligenceact.eu/enforcement-of-chapter-v-under-the-eu-ai-act/) — GPAI enforcement powers and Article 101 fines
-4. [Covington — 10 takeaways from the Commission's draft guidelines on AI transparency](https://www.insideglobaltech.com/2026/05/12/10-takeaways-european-commission-draft-guidelines-on-ai-transparency-under-the-eu-ai-act/) — May 12, 2026
-5. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)
-6. [Orrick — California delays its AI Transparency Act](https://infobytes.orrick.com/2025-10-17/california-delays-its-ai-transparency-act-and-passes-new-content-laws/) — AB 853 and the new operative date
-7. [Troutman Pepper — California AI Transparency Act amendments signed into law](https://www.troutmanprivacy.com/2025/10/california-ai-transparency-act-amendments-signed-into-law/) — the EU-alignment rationale for the August 2, 2026 date
+2. [European Parliament vote record on the AI Omnibus](https://howtheyvote.eu/votes/189384) — June 16, 2026 (423 for / 57 against / 174 abstaining)
+3. [Gibson Dunn — EU AI Act Omnibus Agreement: postponed high-risk deadlines and other key changes](https://www.gibsondunn.com/eu-ai-act-omnibus-agreement-postponed-high-risk-deadlines-and-other-key-changes/)
+4. [Enforcement of Chapter V under the EU AI Act](https://artificialintelligenceact.eu/enforcement-of-chapter-v-under-the-eu-ai-act/) — GPAI enforcement powers and Article 101 fines
+5. [Covington — 10 takeaways from the Commission's draft guidelines on AI transparency](https://www.insideglobaltech.com/2026/05/12/10-takeaways-european-commission-draft-guidelines-on-ai-transparency-under-the-eu-ai-act/) — May 12, 2026
+6. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)
+7. [Orrick — California delays its AI Transparency Act](https://infobytes.orrick.com/2025-10-17/california-delays-its-ai-transparency-act-and-passes-new-content-laws/) — AB 853 and the new operative date
+8. [Troutman Pepper — California AI Transparency Act amendments signed into law](https://www.troutmanprivacy.com/2025/10/california-ai-transparency-act-amendments-signed-into-law/) — the EU-alignment rationale for the August 2, 2026 date
 
 ## Further Reading
 
