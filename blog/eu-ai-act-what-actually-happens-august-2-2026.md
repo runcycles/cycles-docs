@@ -83,7 +83,7 @@ The Omnibus answered the question "when do the high-risk rules apply" with "late
 ## Sources
 
 1. [Council of the EU — final green light for the AI simplification package](https://www.consilium.europa.eu/en/press/press-releases/2026/06/29/artificial-intelligence-council-gives-final-green-light-to-simplify-and-streamline-rules/) — June 29, 2026
-2. [European Parliament vote record on the AI Omnibus](https://howtheyvote.eu/votes/189384) — June 16, 2026 (423 for / 57 against / 174 abstaining)
+2. [Matheson — EU Parliament approves amendments to the AI Act](https://www.matheson.com/insights/eu-parliament-approves-amendments-to-the-ai-act/) — June 16, 2026 vote (423 for / 57 against / 174 abstaining)
 3. [Gibson Dunn — EU AI Act Omnibus Agreement: postponed high-risk deadlines and other key changes](https://www.gibsondunn.com/eu-ai-act-omnibus-agreement-postponed-high-risk-deadlines-and-other-key-changes/)
 4. [Enforcement of Chapter V under the EU AI Act](https://artificialintelligenceact.eu/enforcement-of-chapter-v-under-the-eu-ai-act/) — GPAI enforcement powers and Article 101 fines
 5. [Covington — 10 takeaways from the Commission's draft guidelines on AI transparency](https://www.insideglobaltech.com/2026/05/12/10-takeaways-european-commission-draft-guidelines-on-ai-transparency-under-the-eu-ai-act/) — May 12, 2026
