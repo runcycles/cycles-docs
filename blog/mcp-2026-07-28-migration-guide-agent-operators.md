@@ -2,7 +2,7 @@
 title: "MCP 2026-07-28: What Agent Operators Must Change"
 date: 2026-07-28
 author: Albert Mavashev
-tags: [mcp, engineering, agents, migration, production, protocols, runtime-authority]
+tags: [MCP, engineering, agents, migration, production, protocols, runtime-authority]
 description: "The MCP 2026-07-28 spec lands July 28: stateless core, session removal, routing headers. What to change, what breaks, and what the spec still leaves open."
 blog: true
 sidebar: false
@@ -27,10 +27,10 @@ This guide sorts the changes by what they demand from an operator — what break
 |---|---|---|
 | Protocol sessions removed (`Mcp-Session-Id` gone) | SEP-2567 | **Breaking** if you rely on session state |
 | `initialize`/`initialized` handshake removed; per-request `_meta` + `server/discover` | SEP-2575 | **Breaking** for handshake-dependent logic |
-| SSE streams replaced by `InputRequiredResult` + `requestState` for multi-round requests | SEP-2322 | **Breaking** for server-initiated interaction flows |
+| SSE streams replaced by `InputRequiredResult` + `requestState` for multi-round requests; server-initiated requests scoped to active client requests | SEP-2322, SEP-2260 | **Breaking** for server-initiated interaction flows |
 | Missing-resource error code moves `-32002` → `-32602` | SEP-2164 | **Breaking** for error-matching code |
 | `Mcp-Method` / `Mcp-Name` routing headers | SEP-2243 | Action: expose to your load balancer; new routing and policy surface |
-| `ttlMs` / `cacheScope` on list and resource read results | SEP-2549 | Action: set honest TTLs; clients will cache |
+| `ttlMs` / `cacheScope` on list and resource read results | SEP-2549 | Action: set honest TTLs; compliant clients may cache |
 | W3C Trace Context propagation documented in `_meta` | SEP-414 | Action: propagate `traceparent`; correlation gets standard |
 | Authorization hardening (issuer validation per RFC 9207, issuer binding, application type at registration, `.well-known` discovery, among others) | SEP-2468, SEP-2352, SEP-837, SEP-2351 | Action: verify your auth server emits `iss`; review client registrations |
 | First-class extensions framework | SEP-2133 | New capability; opt-in negotiation |
@@ -63,7 +63,7 @@ It is worth pausing on *why* the spec went stateless: per the [2026 roadmap](htt
 2. **Fix error-code matching** (`-32002` → `-32602`). One grep, low risk.
 3. **Update SDKs** once your language's implementation ships the final spec — Tier 1 SDKs were expected to land support within the RC window.
 4. **Expose the routing headers to your infrastructure** and decide what your edge should do with per-method visibility — at minimum, better routing; at best, per-tool policy.
-5. **Set `ttlMs` honestly** on list results. Clients will cache what you tell them to; stale tool lists are a new failure mode.
+5. **Set `ttlMs` honestly** on list results. Compliant clients may cache what you tell them to; stale tool lists become a new failure mode.
 6. **Verify authorization details**: your auth server sends `iss` (clients must validate it), client registrations declare application type, discovery endpoints use the standardized `.well-known` suffix.
 7. **Plan the deprecation replacements** for roots, sampling, and logging on your own schedule — you have until at least mid-2027, but new surfaces shouldn't accrue on deprecated primitives.
 
@@ -71,7 +71,7 @@ It is worth pausing on *why* the spec went stateless: per the [2026 roadmap](htt
 
 The MCP maintainers are explicit about this, and it is the most operator-relevant paragraph in the [roadmap](https://blog.modelcontextprotocol.io/posts/2026-mcp-roadmap/): enterprise needs like "audit trails, SSO-integrated auth, gateway behavior, and config portability" are named as priorities but left undefined — deliberately, with the expectation that "most of the enterprise readiness work" will "land as extensions rather than core spec changes."
 
-Read that as a scoping decision, not a gap in diligence. MCP standardizes how agents and tools *connect*. It does not — and by its own roadmap will not soon — standardize whether a given call should be *allowed*: whose budget it draws from, what its blast radius is, what evidence of the decision survives. Connectivity and authority are different layers, the same distinction that applies to [MCP gateways](/blog/mcp-gateways-are-not-runtime-authority): a gateway can secure the pipe, but something still has to decide about the water.
+Read that as a scoping decision, not a gap in diligence. MCP standardizes how agents and tools *connect*. It does not — and by its own roadmap will not soon — standardize whether a given call should be *allowed*: whose budget it draws from, what its blast radius is, what evidence of the decision survives. Connectivity and authority are different layers, the same distinction that applies to [MCP gateways](/blog/mcp-gateways-are-not-runtime-authority): a gateway can secure the pipe; something still has to decide whether the call is allowed.
 
 The practical upshot for operators is that the 2026-07-28 spec makes the [runtime authority](/glossary#runtime-authority) layer *easier to attach* — per-method visibility at the edge, stateless per-request decisions, standard trace propagation, task handles for reservations — while making clear it will not provide one. If your agents' MCP calls have side effects, [gating them before execution](/blog/mcp-tool-budgets-before-execution) remains your job, with better protocol hooks than before.
 
