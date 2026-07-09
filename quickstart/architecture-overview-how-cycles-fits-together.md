@@ -20,7 +20,7 @@ This is a reference page. If you haven't set up Cycles yet, start with the [End-
 Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** is an outbound worker that delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes; its app port 7980 and management port 9980 should stay internal. All three services share the same Redis instance.
 
 ::: info Independent release cadences
-Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-06-24: `cycles-server` 0.1.25.39, `cycles-server-admin` 0.1.25.42, `cycles-server-events` 0.1.25.15, `cycles-dashboard` 0.1.25.63. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
+Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-07-09: `cycles-server` 0.1.25.46, `cycles-server-admin` 0.1.25.48, `cycles-server-events` 0.1.25.22, `cycles-dashboard` 0.1.25.67. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
 :::
 
 ## Components
@@ -111,6 +111,7 @@ Set via the `ADMIN_API_KEY` environment variable. Not scoped to any tenant.
 | `/v1/admin/api-keys/*` | POST, GET, DELETE | Create, list, revoke API keys |
 | `/v1/auth/validate` | POST | Validate an API key |
 | `/v1/admin/audit/logs` | GET | Query audit logs |
+| `/v1/admin/budgets` | PATCH | Update budget settings (overage policy, overdraft limit) — admin key only |
 | `/v1/admin/budgets/freeze`, `/v1/admin/budgets/unfreeze` | POST | Admin-only budget state changes |
 | `/v1/reservations`, `/v1/reservations/{id}`, `/v1/reservations/{id}/release` | GET / POST | Runtime admin-on-behalf-of inspection and force release |
 
@@ -120,11 +121,11 @@ Requires a key created via the admin API with the appropriate [permissions](/how
 
 | Endpoint | Method | Required Permission |
 |---|---|---|
-| `/v1/admin/budgets` | POST, PATCH | `admin:write` |
-| `/v1/admin/budgets` | GET | `admin:read` |
-| `/v1/admin/budgets/fund` | POST | `admin:write` |
-| `/v1/admin/policies` | POST, PATCH | `admin:write` |
-| `/v1/admin/policies` | GET | `admin:read` |
+| `/v1/admin/budgets` | POST | `budgets:write` |
+| `/v1/admin/budgets` | GET | `budgets:read` |
+| `/v1/admin/budgets/fund` | POST | `budgets:write` |
+| `/v1/admin/policies` | POST, PATCH | `policies:write` |
+| `/v1/admin/policies` | GET | `policies:read` |
 | `/v1/balances` | GET | `balances:read` |
 | `/v1/reservations` | GET | `reservations:list` |
 | `/v1/reservations` | POST | `reservations:create` |
@@ -133,6 +134,10 @@ Requires a key created via the admin API with the appropriate [permissions](/how
 | `/v1/reservations/{id}/extend` | POST | `reservations:extend` |
 | `/v1/decide` | POST | *(valid key only)* |
 | `/v1/events` | POST | *(valid key only)* |
+
+PATCH `/v1/admin/budgets` (budget settings) is `X-Admin-API-Key`-only — it is not available to tenant keys. The legacy `admin:write` / `admin:read` permissions act as wildcards that satisfy any `*:write` / `*:read` requirement, but new keys should carry the granular permissions (`budgets:write`, `policies:write`, etc.) instead.
+
+Note that the admin server enforces these per-endpoint permissions on the governance plane. The reference runtime server (port 7878) does **not** enforce per-endpoint permissions on the runtime plane — it checks key validity and tenant match only, so the `reservations:*` permission strings on runtime endpoints document the spec's intent rather than reference-server behavior.
 
 ::: tip Which header do I use?
 If the endpoint manages **identity**, fleet-level audit, admin-only budget state, or operator force-release → `X-Admin-API-Key`.
@@ -165,7 +170,7 @@ The async webhook delivery and evidence signing service. It runs as a separate S
 
 **What it does:**
 
-- Consumes delivery jobs from a Redis queue (`dispatch:pending`) via BRPOP
+- Consumes delivery jobs from a Redis queue (`dispatch:pending`) via BLMOVE — a reliable-queue pattern that parks each claimed job on `dispatch:processing` until acknowledged, recovering orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 120000 ms)
 - Delivers events to webhook endpoints via HTTP POST with HMAC-SHA256 signatures
 - Retries failed deliveries with exponential backoff (configurable: default 5 retries, 1s–60s delay)
 - Auto-disables subscriptions after consecutive failures (default threshold: 10)
@@ -181,7 +186,7 @@ The async webhook delivery and evidence signing service. It runs as a separate S
 | Workload | Synchronous CRUD, operator-facing | Asynchronous delivery and signing, variable latency |
 | Scaling | Scale with admin traffic | Scale with webhook volume |
 | Failure isolation | Admin stays responsive during delivery backlog | Delivery retries don't block admin API |
-| Concurrency | Single instance | Multiple instances safe (BRPOP is atomic) |
+| Concurrency | Single instance | Multiple instances safe (the BLMOVE claim is atomic) |
 
 **Optional:** If the events service is not deployed, admin and runtime servers operate normally. Webhook events and deliveries accumulate in Redis (bounded by TTL) and are processed when the events service starts. If CyclesEvidence is configured on the runtime server but the events service is down, responses may carry `cycles_evidence` refs while `GET /v1/evidence/{id}` returns transient `404` until the signer catches up.
 
@@ -304,7 +309,9 @@ Each reservation is stored with:
 
 Budget and reservation requests authenticate via the `X-Cycles-API-Key` header. Each API key is associated with a tenant. The server enforces that `subject.tenant` matches the key's tenant — a key for tenant A cannot create reservations for tenant B.
 
-Public runtime endpoints are intentionally narrow: health/OpenAPI paths, `GET /v1/evidence/{id}` (a content-addressed capability URL), and `GET /v1/.well-known/cycles-jwks.json` (public verification keys only). Evidence retrieval does not expose ledger state; the unguessable `evidence_id` is the lookup capability.
+Public runtime endpoints are intentionally narrow: the `/actuator/health/liveness` and `/actuator/health/readiness` probes, `GET /v1/evidence/{id}` (a content-addressed capability URL), and `GET /v1/.well-known/cycles-jwks.json` (public verification keys only). Since cycles-server 0.1.25.45 the aggregate `/actuator/health`, `/actuator/prometheus`, and the OpenAPI/Swagger docs paths require the `X-Admin-API-Key` header. Evidence retrieval does not expose ledger state; the unguessable `evidence_id` is the lookup capability.
+
+Since 0.1.25.46 the public evidence and JWKS endpoints are rate-limited per client IP — 300 requests/minute by default (on by default; `cycles.public-rate-limit.*` properties). Exceeding the window returns `429` with `error=LIMIT_EXCEEDED` and a `Retry-After` header.
 
 ## Deployment topology
 

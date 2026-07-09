@@ -7,13 +7,13 @@ description: "How to use the Cycles Admin API for tenant management, API key lif
 
 The Cycles Admin API runs on port **7979** (separate from the runtime API on port 7878) and provides endpoints for managing tenants, API keys, budgets, and policies.
 
-**Authentication:** Budget create uses `X-Cycles-API-Key` with `budgets:write` permission. Budget list and fund accept either `X-Cycles-API-Key` or `X-Admin-API-Key` (admin requires `tenant_id` query param). Budget patch, freeze, and unfreeze use `X-Admin-API-Key`. The `admin:write` and `admin:read` permissions act as wildcards — `admin:write` satisfies any `*:write` requirement. See the [budget allocation guide](/how-to/budget-allocation-and-management-in-cycles) for details.
+**Authentication:** Budget create is dual-auth: `X-Cycles-API-Key` with `budgets:write` permission, or `X-Admin-API-Key` with an explicit `tenant_id` in the body (admin-on-behalf-of). Budget list and fund also accept either `X-Cycles-API-Key` or `X-Admin-API-Key` (admin requires `tenant_id` query param). Budget patch, freeze, and unfreeze use `X-Admin-API-Key`. The `admin:write` and `admin:read` permissions act as wildcards — `admin:write` satisfies any `*:write` requirement. See the [budget allocation guide](/how-to/budget-allocation-and-management-in-cycles) for details.
 
 **Conformance note.** Most of this admin API is **runcycles-reference**: implementers of the Cycles protocol MAY diverge — use GitOps YAML for policies, OAuth/OIDC for auth, direct DB writes for budget allocation, etc.
 
 A small set of operations and schemas inside the governance-admin YAML are labeled `x-conformance: normative` because they expose the protocol's event stream, webhook delivery contract, and cross-plane auth introspection:
 
-- **Operations (8):** events list / get / replay, webhook deliveries (admin + tenant paths), admin balances view, auth introspect.
+- **Operations (8):** `listEvents`, `getEvent`, `replayEvents`, `listWebhookDeliveries`, `listTenantWebhookDeliveries`, `listTenantEvents`, `getBalances`, and `introspectAuth`. Note `getBalances` is `GET /v1/balances` under tenant `ApiKeyAuth` — a tenant-facing view, not an admin one — and `introspectAuth` accepts either auth header.
 - **Schemas:** `Event`, `EventType`, `EventData*` variants, `WebhookDelivery`, `WebhookRetryPolicy`, `Permission`.
 
 See [CONFORMANCE.md](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) for the authoritative MUST / SHOULD / MAY statement.
@@ -260,7 +260,7 @@ curl -s "http://localhost:7979/v1/auth/introspect" \
   -H "X-Admin-API-Key: $ADMIN_KEY" | jq .
 ```
 
-Returns server-level auth introspection. Useful for debugging auth configuration. Admin-key only.
+Returns auth introspection for the presented credential. Useful for debugging auth configuration. Dual-auth: accepts either `X-Admin-API-Key` (as above) or a tenant `X-Cycles-API-Key` (v0.1.25.19+, per spec v0.1.25.15) — a tenant key gets back its own tenant, permissions, and status.
 
 ### API key validation
 
@@ -329,7 +329,7 @@ curl -s 'http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&limit=10'
 
 ## Pillar 4: Events & Webhooks (v0.1.25)
 
-The admin server provides 20 webhook/event endpoints for real-time observability:
+The admin server provides 21 webhook/event endpoints for real-time observability:
 
 - **Webhook management**: create, list, get, update, delete, test subscriptions
 - **Event query**: list and retrieve events by tenant, type, category, time range

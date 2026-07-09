@@ -44,6 +44,7 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+    volumes: ["redis-data:/data"]
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -51,27 +52,34 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       ADMIN_API_KEY: admin-bootstrap-key
+      DASHBOARD_CORS_ORIGIN: "${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}"
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.39
+    image: ghcr.io/runcycles/cycles-server:0.1.25.46
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
+      # Same value as the admin server's ADMIN_API_KEY. Without it, the
+      # protected operational endpoints (aggregate health, Prometheus,
+      # API docs) and the admin-on-behalf-of paths return 500
+      # "server misconfiguration".
+      ADMIN_API_KEY: admin-bootstrap-key
+      DASHBOARD_CORS_ORIGIN: "${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}"
     depends_on:
       redis: { condition: service_healthy }
   # Optional: webhook event delivery and evidence signing worker
   cycles-events:
-    image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -88,10 +96,11 @@ export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 
 docker compose up -d
 
-# 2. Wait for services to be ready
+# 2. Wait for services to be ready (readiness probes are public;
+#    aggregate /actuator/health requires X-Admin-API-Key since cycles-server 0.1.25.45)
 echo "Waiting for services..."
-until curl -sf http://localhost:7878/actuator/health > /dev/null 2>&1; do sleep 1; done
-until curl -sf http://localhost:7979/actuator/health > /dev/null 2>&1; do sleep 1; done
+until curl -sf http://localhost:7878/actuator/health/readiness > /dev/null 2>&1; do sleep 1; done
+until curl -sf http://localhost:7979/actuator/health/readiness > /dev/null 2>&1; do sleep 1; done
 echo "Services are up."
 
 # 3. Create tenant
@@ -107,7 +116,7 @@ API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
   -d '{
     "tenant_id": "acme-corp",
     "name": "quickstart-key",
-    "permissions": ["reservations:create","reservations:commit","reservations:release","reservations:extend","reservations:list","balances:read","admin:write"]
+    "permissions": ["reservations:create","reservations:commit","reservations:release","reservations:extend","reservations:list","balances:read","budgets:write"]
   }' | jq -r '.key_secret')
 echo "API Key: $API_KEY"
 
@@ -140,9 +149,12 @@ curl -s "http://localhost:7878/v1/balances?tenant=acme-corp" \
 
 echo ""
 echo "Done! Your Cycles stack is running."
-echo "  Runtime server: http://localhost:7878/swagger-ui.html"
-echo "  Admin server:   http://localhost:7979/swagger-ui.html"
+echo "  Runtime server: http://localhost:7878"
+echo "  Admin server:   http://localhost:7979"
 echo "  API key:        $API_KEY"
+# Swagger UI: the runtime server's /swagger-ui.html requires the
+# X-Admin-API-Key header since 0.1.25.45; the admin server's is disabled
+# by default (enable with API_DOCS_ENABLED=true and SWAGGER_ENABLED=true).
 ```
 
 </details>
@@ -205,7 +217,7 @@ services:
       retries: 5
 
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
     ports:
       - "7979:7979"
     environment:
@@ -213,18 +225,25 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       ADMIN_API_KEY: ${ADMIN_API_KEY:-admin-bootstrap-key}
+      DASHBOARD_CORS_ORIGIN: ${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       redis:
         condition: service_healthy
 
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.39
+    image: ghcr.io/runcycles/cycles-server:0.1.25.46
     ports:
       - "7878:7878"
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
+      # Same value as the admin server's ADMIN_API_KEY. Since 0.1.25.45 the
+      # aggregate /actuator/health, Prometheus, and API docs endpoints require
+      # this key; leaving it unset makes them return 500 "server
+      # misconfiguration" (liveness/readiness probes stay public).
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-admin-bootstrap-key}
+      DASHBOARD_CORS_ORIGIN: ${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       redis:
         condition: service_healthy
@@ -236,7 +255,7 @@ services:
   # and the worker-only EVIDENCE_SIGNING_PRIVATE_KEY_HEX are configured.
   # Docs: https://runcycles.io/quickstart/deploying-the-events-service
   # cycles-events:
-  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
   #   # No public inbound port is required. Add "9980:9980" only for local
   #   # management inspection; keep it internal in production.
   #   environment:
@@ -259,27 +278,28 @@ docker compose up -d
 ```
 
 ::: tip Version pinning
-The examples above pin known compatible images: admin `0.1.25.42`, server `0.1.25.39`, and events `0.1.25.15`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
+The examples above pin known compatible images: admin `0.1.25.48`, server `0.1.25.46`, and events `0.1.25.22`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
 :::
 
 Verify all services are healthy:
 
 ```bash
-curl -s http://localhost:7878/actuator/health   # Cycles Server
-curl -s http://localhost:7979/actuator/health   # Admin Server
+curl -s http://localhost:7878/actuator/health/readiness   # Cycles Server
+curl -s http://localhost:7979/actuator/health/readiness   # Admin Server
 ```
 
-Both should return `{"status":"UP"}`.
+Both should return `{"status":"UP"}`. The readiness probes are public; the aggregate `/actuator/health`, `/actuator/prometheus`, and API docs/Swagger endpoints require the `X-Admin-API-Key` header since cycles-server 0.1.25.45.
 
 ### Option B: Docker Compose from source (for development)
 
-Both repositories include multi-stage Dockerfiles that build the JARs inside Docker — no local Java or Maven installation required. Each repository includes a `docker-compose.full-stack.yml` that brings up Redis, the Cycles Server, and the Admin Server together.
+The repositories include multi-stage Dockerfiles that build the JARs inside Docker — no local Java or Maven installation required. Each repository includes a `docker-compose.full-stack.yml` that brings up Redis, the Cycles Server, the Admin Server, and the Events Service together.
 
-Clone both repositories side by side:
+Clone the repositories side by side (the full-stack compose builds all three from sibling directories):
 
 ```bash
 git clone https://github.com/runcycles/cycles-server.git
 git clone https://github.com/runcycles/cycles-server-admin.git
+git clone https://github.com/runcycles/cycles-server-events.git
 ```
 
 Start the full stack from either repo:
@@ -294,8 +314,8 @@ The multi-stage Docker build compiles the JARs automatically — no manual `mvn 
 Verify all services are healthy:
 
 ```bash
-curl -s http://localhost:7878/actuator/health   # Cycles Server
-curl -s http://localhost:7979/actuator/health   # Admin Server
+curl -s http://localhost:7878/actuator/health/readiness   # Cycles Server
+curl -s http://localhost:7979/actuator/health/readiness   # Admin Server
 ```
 
 Both should return `{"status":"UP"}`.
@@ -369,7 +389,7 @@ curl -s -X POST http://localhost:7979/v1/admin/api-keys \
       "reservations:extend",
       "reservations:list",
       "balances:read",
-      "admin:write"
+      "budgets:write"
     ]
   }' | jq .
 ```
@@ -653,6 +673,9 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 | `REDIS_HOST` | `localhost` | Redis hostname |
 | `REDIS_PORT` | `6379` | Redis port |
 | `REDIS_PASSWORD` | (empty) | Redis password |
+| `MANAGEMENT_PORT` | `9980` | Separate management port for health and Prometheus; keep internal-only |
+| `EVENT_TTL_DAYS` | `90` | Event record retention (days) |
+| `DELIVERY_TTL_DAYS` | `14` | Webhook delivery record retention (days) |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for webhook signing secrets at rest |
 | `EVIDENCE_SERVER_ID` | (empty) | Same issuer base as the runtime server. Blank disables evidence signing and leaves pending evidence records untouched. |
 | `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Same raw-hex public Ed25519 key as the runtime server |

@@ -78,7 +78,7 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
@@ -88,7 +88,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.39
+    image: ghcr.io/runcycles/cycles-server:0.1.25.46
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
@@ -101,11 +101,11 @@ COMPOSE
 docker compose up -d
 ```
 
-Wait for services to be healthy:
+Wait for services to be healthy (use the readiness probe — since 0.1.25.45 the aggregate `/actuator/health` requires the `X-Admin-API-Key` header, while liveness/readiness stay public):
 
 ```bash
-until curl -sf http://localhost:7878/actuator/health > /dev/null 2>&1; do sleep 1; done
-until curl -sf http://localhost:7979/actuator/health > /dev/null 2>&1; do sleep 1; done
+until curl -sf http://localhost:7878/actuator/health/readiness > /dev/null 2>&1; do sleep 1; done
+until curl -sf http://localhost:7979/actuator/health/readiness > /dev/null 2>&1; do sleep 1; done
 echo "Cycles is running."
 ```
 
@@ -131,7 +131,7 @@ API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
   -d '{
     "tenant_id": "my-app",
     "name": "tutorial-key",
-    "permissions": ["reservations:create","reservations:commit","reservations:release","reservations:extend","reservations:list","balances:read","admin:write"]
+    "permissions": ["reservations:create","reservations:commit","reservations:release","reservations:extend","reservations:list","balances:read","budgets:write"]
   }' | jq -r '.key_secret')
 
 echo "Your API key: $API_KEY"
@@ -398,7 +398,7 @@ docker compose down -v
 - **`401 Unauthorized` on Step 2 or 3** — you're using `X-Cycles-API-Key` instead of `X-Admin-API-Key`. Bootstrap calls (creating tenants and API keys) require the admin header. Tenant calls (Steps 4–8) use the Cycles header.
 - **`jq: command not found`** — install jq (`brew install jq` on macOS, `apt install jq` on Debian/Ubuntu, `winget install jqlang.jq` on Windows). Or pipe to `python -m json.tool` instead.
 - **`tenant_id mismatch` or `tenant not found`** — every step uses `my-app` as the tenant ID. If you changed it in Step 2, update it everywhere else too (including the `subject.tenant` field in reservations).
-- **Healthcheck loop never returns** — the `until curl -sf ...` loop is waiting for `/actuator/health` to return 200. Check `docker compose logs cycles-server` for startup errors (most often a Redis connection issue).
+- **Healthcheck loop never returns** — the `until curl -sf ...` loop is waiting for `/actuator/health/readiness` to return 200. Check `docker compose logs cycles-server` for startup errors (most often a Redis connection issue). If you queried the aggregate `/actuator/health` instead and got `401`, that is expected — it requires `X-Admin-API-Key` since 0.1.25.45.
 
 ## Next steps
 
