@@ -33,11 +33,11 @@ Cycles is **not** an observability platform, an eval framework, or an LLM proxy.
 
 ## How it ships
 
-Cycles is open source under [Apache 2.0](https://github.com/runcycles). The protocol, server, and client SDKs are available across Python, TypeScript, Java, and Rust. It integrates with [27 frameworks and LLM providers](/blog/26-integrations-every-ai-framework-one-budget-protocol).
+Cycles is open source under [Apache 2.0](https://github.com/runcycles). The protocol, server, and client SDKs are available across Python, TypeScript, Java, and Rust. It integrates with [26 frameworks and LLM providers](/blog/26-integrations-every-ai-framework-one-budget-protocol).
 
 ## Where to go next
 
 - **Read:** [Why Cycles](/why-cycles) — the four problems Cycles solves, by role
-- **Try:** [Quickstart](/quickstart/what-is-cycles) — get a budget enforced in under 5 minutes
+- **Try:** [Quickstart](/quickstart/what-is-cycles) — get a budget enforced in about 10 minutes
 - **Follow along:** [Blog](/blog/) — field notes on agent governance, unit economics, and runtime authority
 - **Get in touch:** [Contact](/contact) — a founder reads every message
