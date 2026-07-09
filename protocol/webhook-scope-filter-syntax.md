@@ -14,11 +14,11 @@ Webhook subscriptions can filter events by scope path using the `scope_filter` f
 
 The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The reference implementation's matcher (`WebhookRepository.matchesScope`) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences when running against the reference server:
 
-1. **Trailing-`/*` filters match nothing.** A filter like `tenant:acme-corp/*` is compared literally, and real scopes never contain a `*` character — so no event will ever match it. Use the bare prefix `tenant:acme-corp/` instead.
+1. **Trailing-`/*` filters match no admin-plane events.** The admin matcher compares the `*` literally, and real scopes never contain a `*` — so a spec-form filter delivers runtime events but silently misses admin-plane events until the fix ships.
 2. **A filter without `*` is a prefix, not an exact match.** `tenant:acme-corp/workspace:prod` also matches `tenant:acme-corp/workspace:prod/workflow:support` (and even `tenant:acme-corp/workspace:prod-eu`, since matching is character-wise). End the filter with `/` to bound it to child scopes.
 3. **Events with a null scope ARE delivered** to scope-filtered subscriptions (a null scope matches every filter), rather than being excluded.
 
-Filters written in the spec's `prefix/*` form start matching once you run a release containing the conformance fix; on 0.1.25.48 and earlier, use the bare-prefix form shown in the examples below.
+**Recommendation:** write filters in the spec's `/*` form. It matches runtime-emitted events (the bulk of webhook volume) today and becomes fully correct — both planes — once the conformance fix ships. There is no single filter form that matches child scopes on both planes on 0.1.25.48 and earlier: `/*` misses admin events, bare-prefix misses runtime events. If you must catch both before the fix, subscribe without a `scope_filter` and filter client-side on the envelope `scope`.
 :::
 
 ## Matching rules (spec semantics — normative)
@@ -52,7 +52,7 @@ Under spec semantics this delivers events for any scope under `tenant:acme-corp/
 - `tenant:acme-corp/workspace:prod/workflow:support`
 - `tenant:acme-corp/workspace:staging/agent:bot-1`
 
-**Reference implementation:** the `*` is compared literally, so this filter matches nothing (consequence 1 above). Use `tenant:acme-corp/` for the same intent against the reference server.
+**Reference implementation (0.1.25.48 and earlier):** the runtime plane matches this correctly; the admin plane compares the `*` literally and delivers nothing (consequence 1 above).
 
 ### No filter (default)
 
@@ -66,7 +66,7 @@ If `scope_filter` is null, empty, or not provided, the subscription matches **al
 
 ## Syntax summary
 
-| Filter | Spec semantics (normative) | Reference implementation (prefix match) |
+| Filter | Spec semantics (normative; runtime plane today) | Admin plane, 0.1.25.48 and earlier (prefix match) |
 |---|---|---|
 | `null` / empty / blank | All events | All events |
 | `tenant:acme-corp` | Only scope exactly `tenant:acme-corp` | Any scope starting with `tenant:acme-corp` (including `tenant:acme-corpX`) |
@@ -88,7 +88,7 @@ Under spec semantics, a `*` anywhere other than the end of the filter string is 
 
 ## Examples
 
-The examples below use the bare-prefix form (trailing `/`, no `*`), which works against the reference server today. Under strict spec semantics the same intent is written with a trailing `/*` — e.g. `tenant:acme-corp/*` instead of `tenant:acme-corp/`.
+The examples below use the spec `/*` form — correct for runtime-emitted events today and for both planes once the admin conformance fix ships. (On 0.1.25.48 and earlier, admin-plane events will not match these filters; see the callout above.)
 
 ### Subscribe to all events for one tenant
 
@@ -99,7 +99,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/cycles-events",
     "event_types": [],
-    "scope_filter": "tenant:acme-corp/"
+    "scope_filter": "tenant:acme-corp/*"
   }'
 ```
 
@@ -112,11 +112,11 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/prod-alerts",
     "event_types": ["budget.exhausted", "reservation.denied"],
-    "scope_filter": "tenant:acme-corp/workspace:prod/"
+    "scope_filter": "tenant:acme-corp/workspace:prod/*"
   }'
 ```
 
-This delivers only `budget.exhausted` and `reservation.denied` events where the scope starts with `tenant:acme-corp/workspace:prod/`.
+This delivers only `budget.exhausted` and `reservation.denied` events (runtime-emitted) where the scope starts with `tenant:acme-corp/workspace:prod/`.
 
 ### No scope filter — receive everything
 
