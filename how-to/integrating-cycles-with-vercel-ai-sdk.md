@@ -18,8 +18,10 @@ The Vercel AI SDK uses streaming by default, so this guide uses the `reserveForS
 ## Installation
 
 ```bash
-npm install runcycles ai @ai-sdk/openai
+npm install runcycles ai@^4 @ai-sdk/openai@^1
 ```
+
+This guide targets AI SDK v4, matching the SDK's [runnable example](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/vercel-ai-sdk). AI SDK 5 renames several of these APIs (`usage.inputTokens`/`outputTokens`, `toUIMessageStreamResponse()`, `maxOutputTokens`, `useChat` from `@ai-sdk/react`) — adjust accordingly if you are on v5.
 
 ## Environment variables
 
@@ -59,7 +61,7 @@ Create an API route that reserves budget before streaming and commits actual usa
 
 ```typescript
 // app/api/chat/route.ts
-import { streamText, type UIMessage, convertToModelMessages } from "ai";
+import { streamText, type Message, convertToCoreMessages } from "ai";
 import { openai } from "@ai-sdk/openai";
 import {
   CyclesClient,
@@ -73,7 +75,7 @@ export const runtime = "nodejs"; // Required for AsyncLocalStorage
 const cyclesClient = new CyclesClient(CyclesConfig.fromEnv());
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const { messages }: { messages: Message[] } = await req.json();
 
   // Estimate cost from message content (1 token ~ 4 chars).
   // GPT-4o: input $2.50/1M tokens (250 microcents/token),
@@ -113,7 +115,7 @@ export async function POST(req: Request) {
   try {
     const result = streamText({
       model: openai("gpt-4o"),
-      messages: await convertToModelMessages(messages),
+      messages: convertToCoreMessages(messages),
       onFinish: async ({ usage }) => {
         const actualCost = Math.ceil(
           (usage.promptTokens ?? 0) * 250 +
@@ -157,7 +159,7 @@ if (handle.caps?.maxTokens) {
 const result = streamText({
   model: openai("gpt-4o"),
   maxTokens,
-  messages: await convertToModelMessages(messages),
+  messages: convertToCoreMessages(messages),
   onFinish: async ({ usage }) => { ... },
 });
 ```

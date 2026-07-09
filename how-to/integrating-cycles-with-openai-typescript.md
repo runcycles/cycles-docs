@@ -103,7 +103,7 @@ const chatCompletion = withCycles(
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: maxTokens,
+      max_completion_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -171,7 +171,7 @@ async function streamWithBudget(prompt: string) {
     // 2. Stream the response
     const stream = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_tokens: maxTokens,
+      max_completion_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
       stream: true,
       stream_options: { include_usage: true },
@@ -203,6 +203,10 @@ async function streamWithBudget(prompt: string) {
   }
 }
 ```
+
+::: info max_tokens is deprecated
+The snippets use `max_completion_tokens`: OpenAI deprecated `max_tokens` in its favor, and reasoning models (o-series) reject `max_tokens` outright.
+:::
 
 ## Pricing reference
 
