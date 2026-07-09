@@ -1,6 +1,6 @@
 ---
 title: "Using the Cycles Dashboard"
-description: "Operator's tour of the Cycles Admin Dashboard — login, capability gating, 10 views, command palette, bulk action lanes, incident-response actions, and RESET_SPENT funding."
+description: "Operator's tour of the Cycles Admin Dashboard — login, capability gating, 11 views, command palette, bulk action lanes, incident-response actions, and RESET_SPENT funding."
 ---
 
 # Using the Cycles Dashboard
@@ -15,42 +15,43 @@ The only credential the dashboard accepts is an admin API key. On the login page
 
 1. Enter the admin API key (the value of `ADMIN_API_KEY` on the server).
 2. The dashboard calls `GET /v1/auth/introspect` to validate the key and retrieve the capability set.
-3. Sidebar navigation, action buttons, and page access are all gated by capability booleans returned by introspect (`view_overview`, `view_budgets`, `edit_budgets`, `force_release_reservations`, etc.).
+3. Sidebar navigation, action buttons, and page access are all gated by capability booleans returned by introspect (`view_overview`, `view_budgets`, `manage_budgets`, `manage_reservations`, etc.). The `manage_*` flags default to "allow" when a server doesn't return them — only an explicit `false` hides the corresponding actions.
 
 The key is stored in `sessionStorage` — it survives a page refresh but is cleared when the tab closes. It is never written to `localStorage` or a cookie. Idle timeout is 30 minutes; absolute timeout is 8 hours; the check runs every 15 seconds.
 
-After 3 failed login attempts the dashboard enforces exponential backoff (5s → 10s → 20s → 40s → 60s cap). A 401 or 403 from any subsequent API call clears the session and redirects to login.
+After 3 failed login attempts the dashboard enforces exponential backoff (5s → 10s → 20s → 40s → 60s cap). A 401 from any subsequent API call clears the session and redirects to login (with one carve-out: a 401 caused by calling an endpoint the running admin server doesn't have yet is surfaced as an in-view error instead of a logout). A 403 — authenticated key, forbidden operation — keeps the session and surfaces the error in the view, and network failures or timeouts never end the session.
 
 ::: tip Treat the admin key like a root credential
 There is no user login, no SSO out of the box. Rotate the key regularly, keep it in a secrets manager, and consider putting the dashboard behind SSO or VPN. The dashboard does not weaken this — it uses whatever key you give it.
 :::
 
-## The ten views
+## The eleven views
 
 | View | Purpose |
 |------|---------|
-| Overview | Single-request aggregated health — counter strip, four donut charts (budget status / utilization / events by category / webhook fleet), and attention cards for actionable work. See [Overview screen](#overview-screen). |
-| Tenants | Tenant list and detail, with nested Budgets / API Keys / Policies tabs |
-| Tenant detail (`/tenants/:id`) | Per-tenant drill-down with hierarchy breadcrumbs (`tenant → workspace → app`) |
+| Overview | Aggregated health — counter strip, four donut charts (budget status / utilization / events by category / webhook fleet), and six attention cards for actionable work. See [Overview screen](#overview-screen). |
+| Tenants | Tenant list with parent/child hierarchy columns and bulk actions |
+| Tenant detail (`/tenants/:id`) | Per-tenant drill-down with nested Budgets / API Keys / Policies tabs, spend rollup, children list, and a parent-tenant breadcrumb |
 | Budgets | Tenant-scoped budget list with utilization and debt bars; inline `RESET` and `RESET_SPENT` |
 | Events | Correlation-first investigation tool with expandable detail rows |
 | API Keys (`/api-keys`) | Cross-tenant key list with masked IDs, permissions, status filters |
-| Webhooks | Subscription health (green / yellow / red) plus delivery history, replay, and test |
-| Webhook detail (`/webhooks/:id`) | Four-stat row (last-success chip, delivery-outcome donut, attempts histogram, response-time p50/p95/max — see [WebhookDetailView stats row](#webhookdetailview-stats-row-v0-1-25-51)), delivery timeline, last error, signature rotation, pause/resume |
+| Webhooks | Subscription health (green / yellow / red) with status filters and bulk actions |
+| Webhook detail (`/webhooks/:id`) | Four-stat row (last-success chip, delivery-outcome donut, attempts histogram, response-time p50/p95/max — see [WebhookDetailView stats row](#webhookdetailview-stats-row-v0-1-25-51)), delivery history, last error, signature rotation, pause/resume, replay, and test |
 | Reservations (`/reservations`) | Hung-reservation force-release during incident response (runtime-plane admin-on-behalf-of) |
 | Audit | Compliance query tool with CSV / JSON export |
+| Evidence (`/evidence`) | Signed evidence-envelope viewer — paste a 64-hex `evidence_id` (or follow the deep link from force-release) to retrieve the envelope and check the signer key against the published JWK Set |
 
 Most pages poll their backends on a page-specific interval — see the [deployment guide](/quickstart/deploying-the-cycles-dashboard#polling-cadence) for the cadence table. Audit is manual-only: you press **Run Query** explicitly to avoid drive-by queries against retention-expensive endpoints.
 
 ## Overview screen
 
-The Overview is the landing page. It opens on a single `/v1/admin/overview` fetch that hydrates the counter strip, four attention cards, and the four donut charts.
+The Overview is the landing page. It opens on eight parallel fetches — the `/v1/admin/overview` aggregate plus seven list queries (API keys, the last 10 audit entries, budgets at ≥ 90% utilization, frozen budgets, closed tenants, budgets with debt, and webhooks) — that together hydrate the counter strip, the four donut charts, the six attention cards, and the recent-operator-activity feed. The fetches resolve independently, so one flaky endpoint degrades to an error banner instead of blanking the page.
 
 The payload includes optional aggregates beyond the visible cards. `recent_denials_by_reason` is populated by v0.1.25.x admin servers and lets operators see denial distribution even when the recent-event sample is capped. `quota_health`, `access_control_stats`, and `tenant_counts.in_observe_mode` are reserved for v0.1.26+ action-governance servers; dashboards should render them when present and tolerate null or absent values on v0.1.25.x reference servers. See [Action Governance Preview](/protocol/action-governance-preview-in-cycles).
 
 ### Counter strip
 
-Top of page. Six tiles — Tenants, Budgets, API Keys, Webhooks, Reservations, Events (60m window) — each with a click target that drills to the corresponding list view with any relevant filter pre-applied. Counter totals are server-aggregated via `AdminOverviewService`, so they reconcile by construction with the list pages' own counts (no client-side reduce drift).
+Top of page. Four tiles — Tenants, Budgets, Webhooks, and Events — each showing a server-aggregated total plus status chips (e.g. active / frozen / over / debt) that drill to the corresponding list view with the filter pre-applied. The Events tile's time window is server-driven: the overview payload carries `event_window_seconds`, and the tile renders it as "Events (Xm)" — there is no client-side window selector. Counter totals come from the server aggregate, so they reconcile by construction with the list pages' own counts (no client-side reduce drift).
 
 ### The four donuts (v0.1.25.47–.52)
 
@@ -63,15 +64,18 @@ Beneath the counter strip sits a 4-up donut grid. Every slice is clickable and d
 | Events by category | `budget` / `reservation` / `tenant` / `api_key` / `policy` / `webhook` / `system` / `runtime` | `/events?category=<name>&from=<window-start>&to=<now>` — time window mirrors the counter-strip "Events (Xm)" window (v0.1.25.53) |
 | Webhook fleet health | Active / Paused / Disabled | `/webhooks?status=ACTIVE\|PAUSED\|DISABLED` |
 
-Each card title carries a muted "· click a slice" hint to telegraph interactivity. Dark-mode palette re-derives on toggle (the charts aren't just re-skinned images — they're vue-echarts instances driven by a reactive `useChartTheme` composable). Spec-terminal CLOSED budgets are filtered out of the utilization bucketing and total (v0.1.25.59) so a CLOSED budget at 120% doesn't inflate "Over cap" and CLOSED budgets don't inflate "Healthy" — FROZEN stays included because it's non-terminal. Independently, the five attention cards exclude rows owned by CLOSED tenants (v0.1.25.45) so the transient Mode-B cascade window doesn't surface un-actionable work. Screen readers get an auto-rendered `sr-only` data table per pie chart (v0.1.25.56).
+Each card title carries a muted "· click a slice" hint to telegraph interactivity. Dark-mode palette re-derives on toggle (the charts aren't just re-skinned images — they're vue-echarts instances driven by a reactive `useChartTheme` composable). Spec-terminal CLOSED budgets are filtered out of the utilization bucketing and total (v0.1.25.59) so a CLOSED budget at 120% doesn't inflate "Over cap" and CLOSED budgets don't inflate "Healthy" — FROZEN stays included because it's non-terminal. Independently, the client-fetched attention cards (every card except Recent denials, which comes from the server aggregate) exclude rows owned by CLOSED tenants (v0.1.25.45) so the transient Mode-B cascade window doesn't surface un-actionable work. Screen readers get an auto-rendered `sr-only` data table per pie chart (v0.1.25.56).
 
-Under the donuts, five attention cards surface actionable work: Budgets at or near cap, Frozen budgets, Budgets with debt, Expiring API keys, Failing webhooks. Each card's "View all" link carries the same filter the card applied, so drill-down and card count agree by construction.
+Under the donuts, six attention cards surface actionable work: Budgets at or near cap, Budgets with debt, Frozen budgets, Failing webhooks, Expiring API keys (7d), and Recent denials (1h). Each card's "View all" link carries the same filter the card applied, so drill-down and card count agree by construction. An alert banner above the counter strip enumerates whichever cards are firing as severity-colored jump-link pills.
 
 ## Power-user features
 
 ### Command palette — `Cmd+K` / `Ctrl+K`
 
-Press `Cmd+K` on macOS or `Ctrl+K` on Linux/Windows to open the palette. It searches tenants, budgets, webhooks, API keys, and reservations by ID or name, and exposes common incident actions (freeze budget, suspend tenant, revoke API key, pause webhook) without navigation. The palette respects capability gating — actions you cannot perform do not appear.
+Press `Cmd+K` on macOS or `Ctrl+K` on Linux/Windows to open the palette. It is a navigation tool, not an action runner — it never mutates anything and applies no capability gating. Two modes:
+
+- **Tenant fuzzy search (default).** Type a tenant name or ID fragment; the palette filters a cached tenant list (60s TTL, up to 150 prefetched with a "Load more" affordance) and Enter jumps to the tenant detail page.
+- **Slash commands.** Type `/` to list them: `/wh <subscription_id>` (or `/webhook`) opens a webhook detail page, `/tenant <tenant_id>` (or `/t`) opens a tenant by exact ID, `/key <key_id>` opens the Audit view filtered by that key, `/audit <log_id or resource_id>` searches the audit log, and `/event <event_id>` filters the Events view. Budget and reservation ID jumps are intentionally not offered — those views don't honor the needed URL filters yet.
 
 ### Bulk action lanes
 
@@ -89,14 +93,14 @@ See [Using Bulk Actions](/how-to/using-bulk-actions-for-tenants-and-webhooks) fo
 
 ### Cross-surface correlation chip (v0.1.25.39)
 
-Every row on Events, Audit, and WebhookDeliveries views carries a **correlation chip** with three identifiers — `trace_id`, `request_id`, `correlation_id` (see [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles) for what each one scopes). Clicking any identifier opens a pivot menu:
+Rows on the Events and Audit views, event-timeline entries, and the delivery-history rows on the webhook detail page carry **correlation chips** for up to three identifiers — `trace_id`, `request_id`, `correlation_id` (see [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles) for what each one scopes). Clicking a chip pivots to the other view with that identifier pre-applied as a filter:
 
-- Click `trace_id` on an Audit row → EventsView filtered to the same trace, plus a side panel with every webhook delivery dispatched under that trace.
+- Click `trace_id` on an Audit row → EventsView filtered to the same trace.
 - Click `trace_id` on an Events row → AuditView filtered to the originating entry.
 - Click `correlation_id` on an EventTimeline row → EventsView filtered to all events in the same cluster (v0.1.25.37+).
 - Copy-to-clipboard icon on the chip for sharing into tickets or chat.
 
-This is how operator triage starts in v0.1.25: pull a `trace_id` out of a failing response header (`X-Cycles-Trace-Id`) or error body, paste into the dashboard command palette, and follow the chip through the four views. Requires `cycles-server-admin` v0.1.25.31+ for server-side support. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+There is no pivot menu or deliveries side panel — the chip is a filtered navigation plus a copy affordance. Operator triage in v0.1.25 starts here: pull a `trace_id` out of a failing response header (`X-Cycles-Trace-Id`) or error body, paste it into the Audit page's `trace_id` filter (or the Events view), and follow the chips between surfaces. Requires `cycles-server-admin` v0.1.25.31+ for server-side support. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ### Terminal-state row toggle (v0.1.25.46)
 
@@ -130,9 +134,9 @@ The stats aggregate whatever deliveries the history table has loaded — there's
 
 Polling list views show a small muted "Updated Xm ago" pill on the `PageHeader`, beside the refresh button. It reads `usePolling.lastSuccessAt` — successful polls update it; failed polls leave it alone, so operators can tell at a glance whether they're looking at fresh data or a silent poll outage. Absent on manual-query pages (Audit) and on views that don't poll.
 
-### Tenant hierarchy breadcrumbs
+### Parent-tenant breadcrumb
 
-Tenant detail pages show the full scope hierarchy — `tenant → workspace → app → workflow` — as a breadcrumb trail. Clicking any segment navigates up the scope path without losing context (filters, tab selection, and expanded rows are preserved).
+Tenant detail pages show a **Parent** link when the tenant has a `parent_tenant_id`, and a Children list of sub-tenants. Clicking a child threads `?parent=<source>` into the URL so the back arrow returns to the tenant you came from (single hop — deeper A → B → C chains return to the immediately-previous tenant, not the root). There is no scope breadcrumb: the dashboard does not render a `tenant → workspace → app` trail; scope paths appear only as budget/reservation row data.
 
 ### RESET_SPENT inline funding
 
@@ -201,10 +205,10 @@ Failed-request entries (added in `cycles-server-admin` v0.1.25.20) are included 
 
 ## Monitoring the dashboard itself
 
-The dashboard is a static SPA and has no backend of its own, so its "health" is effectively the health of `cycles-server-admin`. Two good synthetic monitoring targets:
+The dashboard container is nginx serving a static SPA plus a reverse proxy — its own liveness check is `GET /` (returns the SPA shell; this is what the container's Docker `HEALTHCHECK` probes). Backend health is the health of `cycles-server-admin`. Two good synthetic monitoring targets:
 
-- `GET /v1/admin/overview` — if it returns 200, the full stack (Redis + admin + auth) is working.
-- `GET /actuator/health` on the admin server — standard Spring Boot liveness.
+- `GET /v1/admin/overview` with the `X-Admin-API-Key` header — requires the admin key, but if it returns 200 the full stack (Redis + admin + auth) is working.
+- `GET /actuator/health/readiness` on the admin server — the unauthenticated Redis-aware readiness probe; the bundled compose files use it as the healthcheck for the admin, runtime, and events services.
 
 Alert on the overview payload's `failing_webhooks` and `over_limit_scopes` arrays. On servers that populate v0.1.26 action-governance fields, also alert on counters at limit in `quota_health` and on spikes in `recent_denials_by_reason.ACTION_QUOTA_EXCEEDED`, `recent_denials_by_reason.ACTION_KIND_DENIED`, or `recent_denials_by_reason.ACTION_KIND_NOT_ALLOWED`.
 

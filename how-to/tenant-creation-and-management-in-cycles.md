@@ -91,7 +91,7 @@ The accepted optional fields on creation are:
 | `default_reservation_ttl_ms` | `60000` (60s) | Default TTL when a reservation request does not specify `ttl_ms` |
 | `max_reservation_ttl_ms` | `3600000` (1h) | Maximum allowed TTL; requests exceeding this are capped |
 | `max_reservation_extensions` | `10` | Maximum TTL extensions per reservation |
-| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled: `AUTO_RELEASE`, `MANUAL_CLEANUP`, or `GRACE_ONLY` |
+| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled: `AUTO_RELEASE`, `MANUAL_CLEANUP`, or `GRACE_ONLY`. **Creation-only** — it cannot be changed via `PATCH` afterwards |
 | `metadata` | — | Key-value pairs for external references (up to 32 keys) |
 
 Each of these fields is covered in detail in the sections below.
@@ -138,8 +138,13 @@ Response:
 |---|---|
 | `status` | Filter by status: `ACTIVE`, `SUSPENDED`, or `CLOSED` |
 | `parent_tenant_id` | Filter by parent tenant (for hierarchical tenants) |
+| `observe_mode` | Filter by observe-mode flag (`true`/`false`) |
+| `search` | Case-insensitive substring match over `tenant_id` and `name` |
+| `sort_by` / `sort_dir` | Sort key and direction (default: `created_at` descending) |
 | `cursor` | Pagination cursor from a previous response |
 | `limit` | Page size (default: 50, max: 100) |
+
+See [Searching and Sorting Admin List Endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the shared `search`/`sort_by`/`sort_dir` parameter vocabulary.
 
 ### Cursor-based pagination
 
@@ -293,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-All four cascade events share the `correlation_id` of the originating `tenant.closed` entry — you can find every side effect of a close with one query:
+The `*_via_tenant_cascade` identifiers are **reserved audit `event_kind` values** in the governance spec — they are not members of the spec's `EventType` enum, so do not rely on `event_type=` filtering to find them. Instead, all four cascade entries share the `correlation_id` of the originating `tenant.closed` entry — you can find every side effect of a close with one query:
 
 ```bash
 # All cascade events for one close
@@ -355,7 +360,7 @@ curl -X POST http://localhost:7979/v1/admin/tenants/bulk-action \
   }' | jq '{succeeded: (.succeeded | length), failed: .failed}'
 ```
 
-The cascade runs per-row — each closed tenant's owned objects terminate under its own `correlation_id`. Failed rows (e.g., a tenant already CLOSED) land in `failed[]` with a per-row reason; the rest of the batch proceeds.
+The cascade runs per-row — each closed tenant's owned objects terminate under its own `correlation_id`. Rows already in the target state (e.g., a tenant that is already CLOSED) land in `skipped[]` with `reason: "ALREADY_IN_TARGET_STATE"`; genuine failures land in `failed[]` with a per-row `error_code` and `message`. The rest of the batch proceeds either way.
 
 The data footprint of a closed tenant is minimal.
 :::
@@ -369,7 +374,7 @@ The server rejects invalid status transitions with `400 INVALID_REQUEST`:
 
 ## Configuring tenant defaults
 
-Each tenant has configuration that governs how reservations behave. These properties can be set at creation or updated via `PATCH`.
+Each tenant has configuration that governs how reservations behave. These properties are set at creation; all except `reservation_expiry_policy` can also be updated later via `PATCH`.
 
 ### Settable per tenant
 
@@ -379,7 +384,9 @@ Each tenant has configuration that governs how reservations behave. These proper
 | `default_reservation_ttl_ms` | `60000` (60s) | Default TTL when a reservation request does not specify `ttl_ms` |
 | `max_reservation_ttl_ms` | `3600000` (1h) | Maximum allowed TTL; requests exceeding this are capped |
 | `max_reservation_extensions` | `10` | Maximum TTL extensions per reservation (prevents zombie reservations) |
-| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled |
+| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled. **Creation-only** — not updatable via `PATCH` |
+
+All of these except `reservation_expiry_policy` can also be updated later via `PATCH /v1/admin/tenants/{tenant_id}`. The expiry policy is fixed at creation; to change it you would need a new tenant.
 
 ### Commit overage policies
 
@@ -561,12 +568,18 @@ API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
       "reservations:release",
       "reservations:extend",
       "reservations:list",
-      "balances:read"
+      "balances:read",
+      "budgets:read",
+      "budgets:write"
     ]
   }' | jq -r '.key_secret')
 
 echo "API Key: $API_KEY"
 ```
+
+::: warning Explicit permissions replace the defaults
+An explicit `permissions` array **replaces** the default set — it is not merged with it. A key created with only the six runtime permissions cannot call the budget endpoints in Step 3 (`POST /v1/admin/budgets` requires `budgets:write`). Either include `budgets:read`/`budgets:write` as shown, or omit `permissions` entirely to get the 10-permission default set, which includes them.
+:::
 
 Save this key — the full secret is only returned once. See [API Key Management](/how-to/api-key-management-in-cycles) for rotation and security practices.
 
@@ -769,8 +782,12 @@ curl -s -X POST http://localhost:7979/v1/admin/tenants \
 API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
   -H "Content-Type: application/json" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" \
-  -d "{\"tenant_id\": \"$TENANT_ID\", \"name\": \"prod-key\", \"permissions\": [\"reservations:create\",\"reservations:commit\",\"reservations:release\",\"balances:read\"]}" \
+  -d "{\"tenant_id\": \"$TENANT_ID\", \"name\": \"prod-key\", \"permissions\": [\"reservations:create\",\"reservations:commit\",\"reservations:release\",\"balances:read\",\"budgets:read\",\"budgets:write\"]}" \
   | jq -r '.key_secret')
+
+# budgets:read/budgets:write are required for the budget call below —
+# an explicit permissions array REPLACES the defaults, it is not merged.
+# Alternatively, omit "permissions" to get the default set (which includes them).
 
 curl -s -X POST http://localhost:7979/v1/admin/budgets \
   -H "Content-Type: application/json" \

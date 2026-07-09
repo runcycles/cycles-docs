@@ -110,6 +110,8 @@ A typical runtime key needs only the 6 defaults. Add `budgets:write` and `budget
 
 ::: warning Admin permissions on tenant keys (v0.1.25.7)
 `admin:read` and `admin:write` are accepted on tenant keys for backward compatibility, but **SHOULD NOT be assigned to new tenant keys**. Use the specific permissions (`budgets:write`, `policies:read`, etc.) instead. The admin key (`X-Admin-API-Key`) is server-configured and is not provisioned through the API key creation endpoint.
+
+No permission on a tenant key — including `admin:read`/`admin:write` and the granular `admin:*` permissions — ever grants access to **AdminKeyAuth-only** endpoints (tenant management, API key management, audit, admin webhooks/events/config/overview). Those endpoints are unreachable with a tenant key; they accept only the server-configured `X-Admin-API-Key` header.
 :::
 
 For the full endpoint-to-header-to-permission mapping, see the [Architecture Overview — Authentication](/quickstart/architecture-overview-how-cycles-fits-together#authentication).
@@ -185,7 +187,7 @@ curl -X POST http://localhost:7878/v1/reservations \
 
 ## Listing API keys
 
-`GET /v1/admin/api-keys` lists keys. By default (tenant-scoped with `X-Cycles-API-Key`), the server returns keys for the authenticated tenant only. With `X-Admin-API-Key` you can list across all tenants by omitting the `tenant_id` query parameter (v0.1.25.22+). Cross-tenant results paginate with a composite `(tenant_id, key_id)` cursor.
+`GET /v1/admin/api-keys` lists keys. The endpoint is **AdminKeyAuth-only** — it requires the `X-Admin-API-Key` header, and tenant keys (`X-Cycles-API-Key`) cannot call it regardless of the permissions they carry. `tenant_id` is an optional filter: omit it to list keys across all tenants (v0.1.25.22+), or provide it to scope the result to a single tenant. Cross-tenant results are cursor-paginated; the cursor format is an implementation detail — treat it as an opaque string and pass it back unchanged.
 
 ```bash
 # Cross-tenant — all keys, newest first
@@ -211,15 +213,21 @@ Key revocation is also a one-click action on the API Keys page in the [Cycles Ad
 Revoke a key to immediately block all requests using it:
 
 ```bash
-curl -X DELETE http://localhost:7979/v1/admin/api-keys/key_abc123 \
+curl -X DELETE "http://localhost:7979/v1/admin/api-keys/key_abc123?reason=leaked+in+ci+logs" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY"
 ```
+
+The optional `reason` query parameter is recorded for the audit trail. Revoking a key that is already revoked returns `409` (`ALREADY_REVOKED`).
 
 Revocation is immediate. Any in-flight requests using the revoked key will fail on their next call to the Cycles server. Active reservations created with the revoked key remain valid until they expire or are committed/released.
 
 ::: tip Revocation, not deletion
 The `DELETE` endpoint performs a **status transition** (ACTIVE → REVOKED), not a hard delete. The key record is retained so that audit logs referencing the key remain resolvable. This is consistent with the lifecycle model used across Cycles — see the equivalent notes on [tenant closure](/how-to/tenant-creation-and-management-in-cycles#closed) and [budget decommissioning](/how-to/budget-allocation-and-management-in-cycles#resizing-a-budget-reset).
 :::
+
+## Updating a key without rotating
+
+`PATCH /v1/admin/api-keys/{key_id}` (AdminKeyAuth-only) performs a partial update — only the fields you send are modified. Mutable fields: `permissions` (replaces the full set), `scope_filter`, and `name`/`description`/`metadata`. `tenant_id`, `key_id`, `key_prefix`, `expires_at`, and `status` are immutable — to change expiry or tenant, revoke and recreate. Patching a revoked or expired key returns `409`.
 
 ## Key rotation
 
@@ -280,7 +288,7 @@ Track which keys are making requests. If a key is compromised, revoke it immedia
 |---|---|---|
 | `UNAUTHORIZED` | 401 | Missing `X-Cycles-API-Key` header, or key is invalid/revoked/expired |
 | `FORBIDDEN` | 403 | Key is valid but `subject.tenant` does not match the key's tenant |
-| `INSUFFICIENT_PERMISSIONS` | 403 | Key is valid but lacks the required permission for the endpoint (e.g., calling a budget endpoint without `admin:write`) |
+| `INSUFFICIENT_PERMISSIONS` | 403 | Key is valid but lacks the required permission for the endpoint (e.g., calling `POST /v1/admin/budgets/fund` without `budgets:write`) |
 
 ## Next steps
 

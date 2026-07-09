@@ -18,7 +18,7 @@ Each Cycles SDK offers multiple integration patterns. This guide helps you pick 
 | **MCP Server** | Any (agent-native) | MCP-compatible AI agents | — | — | — |
 | **Agent framework plugin** | Python, TypeScript | Agent SDKs with lifecycle hooks | — | Yes | Yes |
 | **Decorator / HOF** | Python `@cycles`, TS `withCycles`, Java `@Cycles` | Simple function calls | No | Yes | Yes |
-| **Streaming adapter** | TS `reserveForStream` | Streaming responses | Yes | Yes | Manual |
+| **Streaming adapter** | Python `stream_reservation`, TS `reserveForStream` | Streaming responses | Yes | Yes | Manual |
 | **Middleware** | Express, FastAPI | Per-request budget in web apps | Both | Depends | Manual |
 | **Programmatic client** | All languages | Full control, complex flows | Both | Manual | Manual |
 
@@ -138,9 +138,10 @@ public String ask(String prompt) {
 - You want minimal code changes
 
 **Don't use when:**
-- The function streams output (use `reserveForStream` instead)
+- The function streams output (use a streaming adapter instead)
 - You need to control when the commit happens (use programmatic client)
-- You need to pass actual token counts to the commit (the decorator commits automatically)
+
+Note that the decorator *can* commit with actual token-derived costs: both SDKs accept an `actual` callable that receives the function's return value — `@cycles(estimate=..., actual=lambda result: len(result) * 5)` in Python, `withCycles({ estimate: ..., actual: (result) => result.usage.total_tokens * 10 }, ...)` in TypeScript.
 
 ## Pattern 2: Streaming adapter
 
@@ -175,6 +176,22 @@ try {
 }
 ```
 
+### Python (`stream_reservation`)
+
+The Python client's equivalent is `client.stream_reservation(...)` — a context manager that reserves on enter and commits (or releases, on exception) on exit:
+
+```python
+with client.stream_reservation(
+    action=Action(kind="llm.completion", name="gpt-4o"),
+    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=5_000_000),
+    cost_fn=lambda u: u.tokens_input * 250 + u.tokens_output * 1000,
+) as reservation:
+    for chunk in stream:
+        # ... consume stream, track tokens ...
+        reservation.usage.add_output_tokens(chunk_tokens)
+# Auto-committed on success, auto-released on exception.
+```
+
 **Use when:**
 - The LLM response is streamed to the client
 - You need to track token counts from stream events
@@ -189,6 +206,8 @@ For web applications where every request needs budget governance.
 
 ::: code-group
 ```typescript [Express]
+// cyclesGuard is an example pattern (not exported by the SDK) — build it from
+// the programmatic client; see Integrating Cycles with Express for the full source.
 app.post("/api/chat", cyclesGuard({ client, actionKind: "llm.completion", ... }), handler);
 ```
 ```python [FastAPI]
@@ -198,6 +217,8 @@ async def chat(request: ChatRequest):
     ...
 ```
 :::
+
+See [Integrating Cycles with Express](/how-to/integrating-cycles-with-express) for a complete `cyclesGuard` middleware implementation.
 
 **Use when:**
 - Budget enforcement should apply to every request on a route
@@ -216,39 +237,45 @@ Full control over the reserve-commit lifecycle. Use this when no higher-level pa
 ```python [Python]
 client = CyclesClient(config)
 
-reservation = client.create_reservation(
-    idempotency_key="req-001",
-    subject={"tenant": "acme-corp"},
-    action={"kind": "llm.completion", "name": "gpt-4o"},
-    estimate={"amount": 2000000, "unit": "USD_MICROCENTS"},
-    ttl_ms=30000,
-)
+reservation = client.create_reservation({
+    "idempotency_key": "req-001",
+    "subject": {"tenant": "acme-corp"},
+    "action": {"kind": "llm.completion", "name": "gpt-4o"},
+    "estimate": {"amount": 2000000, "unit": "USD_MICROCENTS"},
+    "ttl_ms": 30000,
+})
 
-if reservation.decision == "DENY":
+if reservation.status == 409:
+    # Live (non-dry-run) denials are HTTP 409 BUDGET_EXCEEDED — there is
+    # no decision field to check (decision=DENY only appears when dry_run=true).
     handle_denial()
-else:
+elif reservation.is_success:
+    reservation_id = reservation.body["reservation_id"]
     result = call_llm()
-    client.commit_reservation(
-        reservation.reservation_id,
-        idempotency_key="commit-001",
-        actual={"amount": actual_cost, "unit": "USD_MICROCENTS"},
-    )
+    client.commit_reservation(reservation_id, {
+        "idempotency_key": "commit-001",
+        "actual": {"amount": actual_cost, "unit": "USD_MICROCENTS"},
+    })
 ```
 ```typescript [TypeScript]
+// The TypeScript client sends and receives wire-format (snake_case) JSON.
 const reservation = await client.createReservation({
-  idempotencyKey: "req-001",
+  idempotency_key: "req-001",
   subject: { tenant: "acme-corp" },
   action: { kind: "llm.completion", name: "gpt-4o" },
   estimate: { amount: 2000000, unit: "USD_MICROCENTS" },
-  ttlMs: 30000,
+  ttl_ms: 30000,
 });
 
-if (reservation.body.decision === "DENY") {
+if (reservation.status === 409) {
+  // Live (non-dry-run) denials are HTTP 409 BUDGET_EXCEEDED — there is
+  // no decision field to check (decision=DENY only appears when dry_run=true).
   handleDenial();
-} else {
+} else if (reservation.isSuccess) {
+  const reservationId = reservation.getBodyAttribute("reservation_id") as string;
   const result = await callLLM();
-  await client.commitReservation(reservation.body.reservationId, {
-    idempotencyKey: "commit-001",
+  await client.commitReservation(reservationId, {
+    idempotency_key: "commit-001",
     actual: { amount: actualCost, unit: "USD_MICROCENTS" },
   });
 }

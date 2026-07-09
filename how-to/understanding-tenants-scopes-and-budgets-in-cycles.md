@@ -155,11 +155,11 @@ For example:
 
 A reservation for the chatbot must pass all three levels — even if the chatbot scope has room, the reservation fails if the tenant or workspace scope is exhausted.
 
-### A budget must exist before enforcement
+### At least one budget must exist
 
-If no budget exists at a scope, the scope is treated as having zero allocation. Any reservation targeting it will be denied with `BUDGET_EXCEEDED`.
+Scopes without budgets are simply **skipped** during enforcement — a missing budget at one level never causes a denial on its own. You do not need a budget at every possible scope, only at scopes where you want enforcement.
 
-You do not need a budget at every possible scope — only at scopes where you want enforcement. Scopes without budgets are skipped during enforcement, as long as at least one derived scope has a budget defined.
+The one requirement: at least one derived scope must have a budget. If **none** of the derived scopes has a budget in the requested unit, the server rejects the request with `404 NOT_FOUND`. That is different from a budget denial — a reservation that exceeds an existing budget is rejected with `409 BUDGET_EXCEEDED`.
 
 For setting up budgets, see [Budget Allocation and Management](/how-to/budget-allocation-and-management-in-cycles).
 
@@ -180,7 +180,8 @@ Here is what happens when a reservation request flows through the system:
    → tenant:acme-corp/workspace:prod
    → tenant:acme-corp/workspace:prod/app:chatbot
 
-4. The server checks budgets at EVERY derived scope atomically:
+4. The server checks budgets at EVERY derived scope that has one,
+   atomically (scopes without a budget are skipped):
    ┌─────────────────────────────────────────┬───────────┬────────┐
    │ Scope                                   │ Remaining │ Result │
    ├─────────────────────────────────────────┼───────────┼────────┤

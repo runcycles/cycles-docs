@@ -57,7 +57,7 @@ Budget, policy, and balance endpoints on the admin server require a tenant-scope
 Default API keys (created without explicit permissions) include `budgets:write` and `budgets:read` as of v0.1.25.6 and will work for budget operations. Keys created before v0.1.25.6 with explicitly specified permission sets may need `budgets:write` and/or `budgets:read` added. See [API Key Management](/how-to/api-key-management-in-cycles#available-permissions) for the full permission list.
 
 ::: warning X-Admin-API-Key vs X-Cycles-API-Key
-The bootstrap admin key (`X-Admin-API-Key`) is used for tenant management, API key management, audit log access, and budget PATCH/freeze/unfreeze (admin-only operations). Budget create requires `X-Cycles-API-Key` with `budgets:write`. Budget list and fund accept either `X-Cycles-API-Key` or `X-Admin-API-Key`; when using the admin key, include `tenant_id`.
+The bootstrap admin key (`X-Admin-API-Key`) is used for tenant management, API key management, audit log access, and budget PATCH/freeze/unfreeze (admin-only operations). Budget **create**, **list**, and **fund** are dual-auth — they accept either `X-Cycles-API-Key` (with `budgets:write`/`budgets:read`) or `X-Admin-API-Key`. Under the admin key: create requires `tenant_id` in the request **body** (and it must be omitted under a tenant key — the tenant is implicit); fund requires the `tenant_id` **query parameter**; list treats `tenant_id` as an optional filter (omit it for a cross-tenant listing). Admin-key writes are audit-logged with `actor_type=ADMIN_ON_BEHALF_OF`.
 :::
 
 ### Using the Cycles Admin API
@@ -192,14 +192,9 @@ tenant:acme/workspace:production/agent:executor   → allocated: 200,000
 tenant:acme/workspace:production/agent:reviewer   → allocated: 50,000
 ```
 
-### Using custom dimensions
+### Custom dimensions are not budget scopes
 
-For budgeting dimensions that don't fit the standard hierarchy, use the `dimensions` field:
-
-```
-tenant:acme/dimensions:cost_center=engineering → allocated: 500,000
-tenant:acme/dimensions:cost_center=marketing   → allocated: 200,000
-```
+The Subject's optional `dimensions` map (e.g., `cost_center`, `region`) does **not** participate in scope derivation. Scopes are derived only from the six standard Subject fields, in canonical order: `tenant` → `workspace` → `app` → `workflow` → `agent` → `toolset`. There is no `dimensions:` scope segment, so you cannot allocate a budget to a dimension value. v0 servers may ignore `dimensions` for budgeting decisions entirely (they only have to accept and round-trip it) — use dimensions for reporting and policy taxonomies, and model any dimension you need to *enforce* as one of the six standard fields instead.
 
 ## Updating budget configuration
 
@@ -243,7 +238,7 @@ curl -s -X POST "http://localhost:7979/v1/admin/budgets/freeze?scope=tenant:acme
   -d '{"reason": "Investigating runaway agent in support workflow"}' | jq .
 ```
 
-All new reservations return `DENY` with reason code `BUDGET_FROZEN`. Commits and fund operations return 409. Existing active reservations can only be released, not committed. Emits a `budget.frozen` webhook event.
+All new live reservations (and events) against the frozen scope fail with `409` and `error: BUDGET_FROZEN`. Only `/v1/decide` and dry-run reserve surface the condition as a `200` response with `decision: DENY` and `reason_code: BUDGET_FROZEN`. Fund operations also return `409` while frozen. The freeze gate applies to *new* reservations — the spec does not block committing or releasing reservations that were already active when the freeze landed. Emits a `budget.frozen` webhook event.
 
 ### Unfreeze
 
@@ -510,7 +505,7 @@ Budget allocation in Cycles:
 - Is enforced atomically across the full scope hierarchy for each reservation
 - Can be adjusted at any time with immediate effect
 - Requires explicit allocation at every scope level you want to control
-- Supports flat, hierarchical, per-run, per-agent, and custom dimension patterns
+- Supports flat, hierarchical, per-run, and per-agent patterns (scopes derive from the six standard Subject fields; `dimensions` is reporting-only)
 
 ## Next steps
 

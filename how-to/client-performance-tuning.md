@@ -115,24 +115,13 @@ The Python client uses `httpx.Client`, which manages a connection pool automatic
 - Connections are reused across requests (HTTP keep-alive)
 - Pool timeout is hardcoded at 5 seconds (time to acquire a connection from the pool)
 - Write timeout is hardcoded at 5 seconds
-- httpx uses a default pool of 100 connections (10 per host)
+- httpx uses its default limits: 100 max connections, of which up to 20 are kept alive for reuse — with no per-host cap (all connections can go to the single Cycles server)
 
-For most workloads, the defaults are sufficient. If you see `PoolTimeout` errors, you likely have too many concurrent requests for a single client instance. Solutions:
+The constructor accepts only a `CyclesConfig` — there is no parameter for injecting a custom httpx transport or client, so the pool limits are not tunable per client. For most workloads, the defaults are sufficient. If you see `PoolTimeout` errors, you have more than 100 concurrent requests in flight on a single client instance. Solutions:
 
-1. **Increase concurrency limit** — create the client with a custom transport:
-   ```python
-   import httpx
-   from runcycles import CyclesConfig
+1. **Use multiple client instances** — partition by tenant or workload so each instance carries a share of the concurrency (each gets its own 100-connection pool).
 
-   config = CyclesConfig(base_url="...", api_key="...")
-
-   # Custom transport with larger pool
-   transport = httpx.HTTPTransport(
-       limits=httpx.Limits(max_connections=200, max_keepalive_connections=50)
-   )
-   ```
-
-2. **Use multiple client instances** — partition by tenant or workload if a single pool is a bottleneck.
+2. **Bound your concurrency** — cap in-flight Cycles calls below the pool size (e.g. an `asyncio.Semaphore` around reservation calls, or a bounded worker pool).
 
 ### TypeScript (fetch)
 
@@ -148,8 +137,9 @@ For high-throughput Node.js services, ensure you're running Node 20+ where `fetc
 
 The Spring Boot starter uses `WebClient` backed by Reactor Netty's `HttpClient`. Reactor Netty manages its own connection pool:
 
-- Default pool: shared global pool (500 max connections, 45s idle timeout)
-- Configure via Reactor Netty system properties or provide a custom `WebClient` bean
+- Default pool: Reactor Netty's shared global pool — max connections is `2 × max(available processors, 8)` (so 16 on small hosts), with no idle timeout by default
+- The 45-second default is the **pending-acquire timeout**: how long a request waits to acquire a connection from the pool before failing, not an idle timeout
+- Configure via Reactor Netty system properties (`reactor.netty.pool.maxConnections`, `reactor.netty.pool.acquireTimeout`) or provide a custom `WebClient` bean
 
 To customize the connection pool:
 
@@ -158,6 +148,7 @@ To customize the connection pool:
 public WebClient cyclesWebClient(CyclesProperties props) {
     ConnectionProvider provider = ConnectionProvider.builder("cycles")
         .maxConnections(200)
+        .pendingAcquireTimeout(Duration.ofSeconds(10))  // default: 45s
         .maxIdleTime(Duration.ofSeconds(30))
         .build();
 
@@ -251,7 +242,7 @@ def process(text: str) -> str:
 
 ```python
 # GOOD — pre-compute or use a fast heuristic
-@cycles(estimate=lambda text: len(text) * 4)  # ~4 tokens per character
+@cycles(estimate=lambda text: len(text) // 4)  # ~4 characters per token
 def process(text: str) -> str:
     return call_llm(text)
 ```
@@ -259,11 +250,12 @@ def process(text: str) -> str:
 ## High-throughput checklist
 
 1. **Reuse a single client instance** across all requests (all 3 clients)
-2. **Warm up on startup** — make a health check call to establish the connection pool:
+2. **Warm up on startup** — make a lightweight call through the client so its connection pool is established before real traffic arrives:
    ```python
-   import httpx
-   httpx.get(f"{config.base_url}/actuator/health")
+   client = CyclesClient(config)
+   client.get_balances(tenant="my-tenant")  # any cheap read warms the pool
    ```
+   To check server availability without an API key, use the public readiness probe (`GET /actuator/health/readiness`). Note that the aggregate `/actuator/health` and other actuator endpoints require the admin key since server 0.1.25.45 — only the liveness and readiness probes are public.
 3. **Graceful shutdown** — commit or release active reservations before process exit
 4. **Pre-compute estimates** outside the decorator/HOF hot path
 5. **Lower timeouts** if co-located, raise if cross-region
@@ -274,9 +266,9 @@ def process(text: str) -> str:
 
 For server-side performance:
 
-- **Redis connection pool** — default 50 connections. See [Production Operations Guide](/how-to/production-operations-guide).
+- **Redis connection pool** — default 128 connections. See [Production Operations Guide](/how-to/production-operations-guide).
 - **Expiry sweep interval** — default 5000ms. See [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles).
-- **Benchmarks** — Reserve 4.5ms p50, 2390 ops/sec at 32 threads. See [Performance Benchmarks](/blog/cycles-server-performance-benchmarks).
+- **Benchmarks** — Reserve 5.3ms p50, 2,632 reserve+commit lifecycles/sec at 32 threads. See [Performance Benchmarks](/blog/cycles-server-performance-benchmarks).
 
 ## Next steps
 
