@@ -276,7 +276,9 @@ with CyclesClient(config) as client:
     if not response.is_success:
         raise RuntimeError(f"Reservation failed: {response.error_message}")
 
-    # A 200 response can still carry decision=DENY with no reservation_id
+    # Defensive: a conformant server returns 409 on live budget denial, but
+    # dry-run responses (and lenient servers) return 200 with decision=DENY
+    # and no reservation_id - check before using it
     if response.get_body_attribute("decision") == "DENY":
         raise RuntimeError(
             f"Reservation denied: {response.get_body_attribute('reason_code')}"

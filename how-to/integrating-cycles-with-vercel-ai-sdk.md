@@ -21,7 +21,7 @@ The Vercel AI SDK uses streaming by default, so this guide uses the `reserveForS
 npm install runcycles ai@^4 @ai-sdk/openai@^1
 ```
 
-This guide targets AI SDK v4, matching the SDK's [runnable example](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/vercel-ai-sdk). AI SDK 5 renames several of these APIs (`usage.inputTokens`/`outputTokens`, `toUIMessageStreamResponse()`, `maxOutputTokens`, `useChat` from `@ai-sdk/react`) — adjust accordingly if you are on v5.
+This guide targets AI SDK v4 (the major pinned by the SDK's [example project](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/vercel-ai-sdk); note the example's route code is currently being aligned to the same v4 surface). AI SDK 5 renames several of these APIs (`usage.inputTokens`/`outputTokens`, `toUIMessageStreamResponse()`, `maxOutputTokens`, `useChat` from `@ai-sdk/react`) — adjust accordingly if you are on v5.
 
 ## Environment variables
 

@@ -104,7 +104,9 @@ def stream_with_budget(prompt: str, max_tokens: int = 1024) -> str:
     if not res.is_success:
         raise RuntimeError(f"Reservation failed: {res.error_message}")
 
-    # A 200 response can still carry decision=DENY with no reservation_id
+    # Defensive: a conformant server returns 409 on live budget denial, but
+    # dry-run responses (and lenient servers) return 200 with decision=DENY
+    # and no reservation_id - check before using it
     if res.get_body_attribute("decision") == "DENY":
         raise RuntimeError(
             f"Reservation denied: {res.get_body_attribute('reason_code')}"
