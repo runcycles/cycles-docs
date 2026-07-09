@@ -8,7 +8,9 @@ description: "How to filter webhook events by scope using scope_filter on subscr
 Webhook subscriptions can filter events by scope path using the `scope_filter` field. When set, only events whose `scope` matches the filter are delivered to your endpoint.
 
 ::: danger Reference implementation divergence — cycles-server-admin 0.1.25.48 and earlier
-**Update:** a spec-conformance fix is queued for the next cycles-server-admin release, after which the matcher implements the spec semantics below exactly (with one refinement: a blank or null event scope is treated as unscoped, and the replay path applies the same filter). The divergence described in this box applies to 0.1.25.48 and earlier.
+**Scope of the divergence:** it applies only to **admin-plane-emitted events** (tenant, api_key, policy, webhook lifecycle, and admin-initiated budget events) plus **replay**. Runtime-emitted events (reservations, runtime budget events — the bulk of webhook volume) have always been matched by the runtime server's own matcher, which already implements the spec semantics below (exact match, trailing-`*` prefix, null scope excluded). In other words: on 0.1.25.48 and earlier, the *same filter* matched differently depending on which plane emitted the event.
+
+**Update:** a spec-conformance fix is queued for the next cycles-server-admin release, after which both planes match identically per the spec (with one refinement on the admin side: a blank or null event scope is treated as unscoped, and the replay path applies the same filter).
 
 The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The reference implementation's matcher (`WebhookRepository.matchesScope`) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences when running against the reference server:
 
