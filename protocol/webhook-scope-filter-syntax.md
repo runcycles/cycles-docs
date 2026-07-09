@@ -7,14 +7,16 @@ description: "How to filter webhook events by scope using scope_filter on subscr
 
 Webhook subscriptions can filter events by scope path using the `scope_filter` field. When set, only events whose `scope` matches the filter are delivered to your endpoint.
 
-::: danger Reference implementation divergence — as of cycles-server-admin 0.1.25.48
+::: danger Reference implementation divergence — cycles-server-admin 0.1.25.48 and earlier
+**Update:** a spec-conformance fix is queued for the next cycles-server-admin release, after which the matcher implements the spec semantics below exactly (with one refinement: a blank or null event scope is treated as unscoped, and the replay path applies the same filter). The divergence described in this box applies to 0.1.25.48 and earlier.
+
 The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The reference implementation's matcher (`WebhookRepository.matchesScope`) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences when running against the reference server:
 
 1. **Trailing-`/*` filters match nothing.** A filter like `tenant:acme-corp/*` is compared literally, and real scopes never contain a `*` character — so no event will ever match it. Use the bare prefix `tenant:acme-corp/` instead.
 2. **A filter without `*` is a prefix, not an exact match.** `tenant:acme-corp/workspace:prod` also matches `tenant:acme-corp/workspace:prod/workflow:support` (and even `tenant:acme-corp/workspace:prod-eu`, since matching is character-wise). End the filter with `/` to bound it to child scopes.
 3. **Events with a null scope ARE delivered** to scope-filtered subscriptions (a null scope matches every filter), rather than being excluded.
 
-Filters written in the spec's `prefix/*` form will start matching once the reference matcher implements the spec; until then, use the bare-prefix form shown in the examples below.
+Filters written in the spec's `prefix/*` form start matching once you run a release containing the conformance fix; on 0.1.25.48 and earlier, use the bare-prefix form shown in the examples below.
 :::
 
 ## Matching rules (spec semantics — normative)
@@ -160,7 +162,7 @@ As of v0.1.25, the `reservation.commit_overage` event is emitted with a null env
 
 - **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events (both semantics).
 - **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The reference implementation special-cases it to match **all** events, including null-scope events. Prefer omitting `scope_filter` entirely to mean "everything".
-- **Events with some scope fields emitted as null**: Only `null` scope is checked — an empty string scope (`""`) is not treated as missing.
+- **Events with some scope fields emitted as null**: On 0.1.25.48 and earlier, only `null` scope is checked — an empty string scope (`""`) is not treated as missing. From the conformance fix onward, blank and null scopes are both treated as unscoped (excluded from scope-filtered subscriptions).
 
 ## Related
 
