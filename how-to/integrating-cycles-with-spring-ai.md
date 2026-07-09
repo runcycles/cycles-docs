@@ -28,7 +28,7 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 **Use [`cycles-spring-boot-starter`](#path-2-cycles-annotation-cycles-client-java-spring)** for non-Spring-AI code paths (custom HTTP clients, LangChain4j, vector store queries, etc.) — or when you need SpEL-driven per-method estimates.
 
 ::: warning Don't double-charge
-Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#the-double-charge-gotcha).
+Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the "Double-charge gotcha" section in the [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter).
 :::
 
 ---
@@ -44,11 +44,11 @@ The simplest path for Spring AI apps — add the dependency, configure a few `cy
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.3.0'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.3.1'
 ```
 :::
 
@@ -179,11 +179,11 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.2</version>
+    <version>0.2.5</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.2'
+implementation 'io.runcycles:cycles-client-java-spring:0.2.5'
 ```
 :::
 
@@ -416,16 +416,18 @@ public class GuardedToolService {
 }
 ```
 
-Then register these as Spring AI function callbacks:
+Then register these as Spring AI tool callbacks:
 
 ```java
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.function.FunctionToolCallback;
+
 @Configuration
 public class ToolConfig {
 
     @Bean
-    public FunctionCallback webSearchTool(GuardedToolService tools) {
-        return FunctionCallback.builder()
-            .function("web_search", (String query) -> tools.webSearch(query))
+    public ToolCallback webSearchTool(GuardedToolService tools) {
+        return FunctionToolCallback.builder("web_search", (String query) -> tools.webSearch(query))
             .description("Search the web")
             .inputType(String.class)
             .build();
@@ -460,8 +462,8 @@ public class StreamingChatService {
         );
 
         var response = cyclesClient.createReservation(body);
-        String reservationId = (String) response.get("reservation_id");
-        String decision = (String) response.get("decision");
+        String reservationId = response.getBodyAttributeAsString("reservation_id");
+        String decision = response.getBodyAttributeAsString("decision");
 
         if (!"ALLOW".equals(decision) && !"ALLOW_WITH_CAPS".equals(decision)) {
             throw new CyclesProtocolException("Budget denied: " + decision);
@@ -534,7 +536,7 @@ Start in shadow mode to measure budget impact before enforcing:
         actionKind = "llm.completion",
         actionName = "gpt-4o",
         dryRun = true)
-public String shadowChat(String prompt, int maxTokens) {
+public Object shadowChat(String prompt, int maxTokens) {  // returns DryRunResult, not the chat content
     return chatClient.prompt(prompt).call().content();
 }
 ```

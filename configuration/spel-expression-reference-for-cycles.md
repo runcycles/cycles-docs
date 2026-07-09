@@ -9,12 +9,36 @@ The `@Cycles` annotation uses Spring Expression Language (SpEL) to evaluate `est
 
 ## Where expressions are used
 
-The `@Cycles` annotation accepts SpEL expressions in two places:
+The `@Cycles` annotation accepts SpEL expressions in four places:
 
 | Attribute | Evaluated when | Purpose |
 |---|---|---|
 | `value` / `estimate` | Before the method runs | Determines the reservation amount |
 | `actual` | After the method returns | Determines the commit amount |
+| `metadata` (since 0.2.5) | After the method returns | Produces the commit metadata map |
+| Subject fields: `tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset` (since 0.2.1) | Before the method runs | Resolves the subject field when the value starts with `#` |
+
+### Subject-field expressions (since 0.2.1)
+
+A subject attribute whose first non-whitespace character is `#` is evaluated as SpEL against the method invocation; any other value is treated as a literal:
+
+```java
+@Cycles(value = "1000", tenant = "#tenantId")
+public String handle(String tenantId, String prompt) { ... }
+```
+
+Subject fields are evaluated before the guarded method runs, so `#result` is deliberately **not** available. Method parameters, `#args`, and `#target` are.
+
+### Metadata expressions (since 0.2.5)
+
+The `metadata` attribute is evaluated after the method returns and must yield a `Map<String, Object>`:
+
+```java
+@Cycles(value = "1000", metadata = "{'request_id': #requestId, 'model': #result.model}")
+public LlmResponse call(String requestId, String prompt) { ... }
+```
+
+In addition to method parameters, `#args`, `#target`, and `#result`, metadata expressions expose `#method` and a root object with `target`, `args`, `result`, and `method` properties. The evaluated map is merged with programmatic `CyclesContextHolder` commit metadata; programmatic metadata wins on key conflicts.
 
 ## Available variables
 
@@ -70,14 +94,14 @@ public String generate(int tokens) { ... }
 
 ### Return value
 
-The `#result` variable is available only in the `actual` expression, evaluated after the method returns:
+The `#result` variable is available in the `actual` and `metadata` expressions, evaluated after the method returns:
 
 ```java
 @Cycles(estimate = "5000", actual = "#result.usage.totalTokens * 8")
 public ChatResponse chat(String prompt) { ... }
 ```
 
-If the method returns `null`, `#result` is `null`. Accessing properties on it will throw a `NullPointerException`.
+If the method returns `null`, `#result` is `null`. Accessing a property on it throws a `SpelEvaluationException` (EL1007/EL1011 — property or method access on a null context object), and an expression that evaluates to `null` overall causes the starter to throw `IllegalArgumentException` (`"Expression evaluated to null: ..."`).
 
 ### Other variables
 
@@ -202,6 +226,8 @@ public Result process(String input) { ... }
 |---|---|---|
 | `value` / `estimate` | No | Before method execution |
 | `actual` | Yes | After method returns |
+| `metadata` | Yes | After method returns |
+| Subject fields | No | Before method execution |
 
 If `actual` is not specified and `useEstimateIfActualNotProvided` is `true` (the default), the estimate value is used as the actual at commit time.
 
