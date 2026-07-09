@@ -7,7 +7,7 @@ description: "How reservation time-to-live, grace periods, and the extend operat
 
 Reservations in Cycles do not live forever.
 
-Every reservation has a time-to-live (TTL). When the TTL expires, the reservation is released automatically, and the held budget returns to the available pool.
+Every reservation has a time-to-live (TTL). When the TTL (plus grace period) elapses without a commit or release, the reservation expires and the held budget returns to the available pool.
 
 This is by design.
 
@@ -25,11 +25,11 @@ When a reservation is created, the server sets an expiration time:
 expires_at_ms = created_at_ms + ttl_ms
 ```
 
-The default TTL is 60 seconds (`ttl_ms: 60000`). Tenant administrators can change this default by setting `default_reservation_ttl_ms` via the Admin API.
+The default TTL is 60 seconds (`ttl_ms: 60000`). The allowed range is 1 second to 24 hours (`1000` to `86400000` milliseconds).
 
-The allowed range is 1 second to 24 hours (`1000` to `86400000` milliseconds). Tenant administrators can further restrict this range by setting `max_reservation_ttl_ms` — any requested TTL exceeding the tenant maximum is capped automatically.
+Tenant-level TTL controls are reference-server behavior, not part of the v0 protocol: through the Admin API, tenant administrators can change the default with `default_reservation_ttl_ms` and restrict the range with `max_reservation_ttl_ms` — any requested TTL exceeding the tenant maximum is capped automatically.
 
-When the clock passes `expires_at_ms`, the reservation enters expiration processing. If it has not been committed or released, the server marks it as `EXPIRED` and returns the reserved budget to the available pool.
+When server time passes `expires_at_ms`, the reservation has expired: it can no longer be extended. In-flight commits and releases are still accepted during the grace period (below). Once the grace period has also elapsed without a commit or release, the server marks the reservation `EXPIRED` and returns the reserved budget to the available pool.
 
 ## How grace period works
 
@@ -50,7 +50,7 @@ During the grace period:
 - commit and release are still accepted
 - extend is not accepted (the reservation must be extended before TTL expires)
 
-After the grace period, the reservation is finalized as `EXPIRED`. Any attempt to commit or release returns `410 RESERVATION_EXPIRED`.
+After the grace period, the reservation is marked `EXPIRED`. Any attempt to commit or release returns `410 RESERVATION_EXPIRED`. (Expiry is not a finalization — only `COMMITTED` and `RELEASED` are finalized states, which is why an expired reservation returns `410 RESERVATION_EXPIRED` rather than `409 RESERVATION_FINALIZED`.)
 
 ### Why the grace period maximum is 60 seconds
 
@@ -113,24 +113,25 @@ This pattern keeps budget locked only while the client is actively running. If t
 
 - TTL: 20 seconds
 - Heartbeat interval: 10 seconds (TTL / 2)
+- Extension per heartbeat: `extend_by_ms: 10000`
 - Grace period: 5 seconds
 
-The client creates a reservation at T=0.
+The client creates a reservation at T=0, expiring at T=20.
 
-At T=10, T=20, T=30, etc., the client calls extend.
+At T=10, T=20, T=30, etc., the client calls extend. Each extension adds 10 seconds to the current `expires_at_ms`, not to the time of the request: the heartbeat at T=10 moves expiry from T=20 to T=30, and the heartbeat at T=20 moves it from T=30 to T=40. The expiry stays a constant 20 seconds (the original TTL) ahead of the clock.
 
-If the client crashes at T=25, the reservation was last extended to T=30. At T=30, the grace period begins. At T=35, the reservation expires and budget is released.
+If the client crashes at T=25, the last successful heartbeat (at T=20) left the expiry at T=40. The reservation expires at T=40; in-flight commits and releases are still accepted through the grace period, until T=45. At T=45, the reservation is marked `EXPIRED` and budget is released.
 
-Total lockout after crash: ~10 seconds.
+Total lockout after crash: ~20 seconds.
 
-Compare this to a single 10-minute TTL, where a crash at T=1 would lock budget for 9 minutes plus grace period.
+Compare this to a single 10-minute TTL, where a crash at T=1 would lock budget for roughly the full 10 minutes plus grace period.
 
-## Both clients handle this automatically
+## The clients handle this automatically
 
-The `@cycles` decorator (Python) and `@Cycles` annotation (Java) automatically schedule heartbeat extensions:
+The Cycles clients schedule heartbeat extensions for you: the `@cycles` decorator (Python), the TypeScript client, the `@Cycles` annotation (Java, Spring Boot starter), and the Rust client's reservation guard all do this out of the box:
 
 - The heartbeat interval is `ttl_ms / 2` (minimum 1 second)
-- Extensions are scheduled on a background thread (Python) or thread pool (Java)
+- Extensions run in the background (a thread or asyncio task in Python, a thread pool in Java, a tokio task in Rust)
 - The heartbeat stops when the function/method returns (commit or release)
 
 This means most users do not need to implement extend logic manually.
@@ -229,4 +230,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

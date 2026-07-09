@@ -11,7 +11,7 @@ This page is the operator-facing reference. For the admin API surface that honor
 
 ## Why this exists
 
-Pre-v0.1.25.29, closing a tenant was a pure status flip. Operators would then have to separately:
+Before the cascade contract was formalized (spec document revision 0.1.25.31), closing a tenant was a pure status flip. Operators would then have to separately:
 
 - drain open reservations (or let TTL expire)
 - freeze or close each owned budget
@@ -20,15 +20,15 @@ Pre-v0.1.25.29, closing a tenant was a pure status flip. Operators would then ha
 
 In practice nobody did all of that. The `/admin/overview` dashboard would accumulate "FROZEN budgets on CLOSED tenants" rows forever — inflating the "needs attention" counter with rows operators had no user-reachable path to resolve.
 
-The cascade contract, added in spec v0.1.25.29 and shipping in `cycles-server-admin` v0.1.25.35+, makes the close operation do the right thing atomically (or eventually-atomically) instead.
+The cascade contract, formalized at spec document revision 0.1.25.31 and shipping in `cycles-server-admin` v0.1.25.35+, makes the close operation do the right thing atomically (or eventually-atomically) instead.
 
 ## Version gate matrix
 
 | Feature | Minimum component | What works |
 |---|---|---|
 | Rule 1 cascade (budgets + reservations) | `cycles-server-admin` v0.1.25.35 | Closing a tenant cascades budgets → CLOSED and open reservations → RELEASED |
-| Rule 2 guard (budget + reservation mutations) | `cycles-server-admin` v0.1.25.35 | Mutations against closed-tenant budgets and reservations return `409 TENANT_CLOSED` |
-| Rule 2 full coverage (policies, api-keys, webhook admin) | `cycles-server-admin` v0.1.25.36 | All remaining mutation endpoints also return `409 TENANT_CLOSED` |
+| Rule 2 guard (budget operations, webhook create/update) | `cycles-server-admin` v0.1.25.35 | Admin-plane mutations against closed-tenant budgets, and webhook create/update, return `409 TENANT_CLOSED` |
+| Rule 2 full coverage (policies, api-keys, remaining webhook mutations) | `cycles-server-admin` v0.1.25.36 | All remaining admin-plane mutation endpoints also return `409 TENANT_CLOSED` |
 | Dashboard tombstone + cascade preview UI | `cycles-dashboard` v0.1.25.43 | Banner, CLOSE dialog preview, humanized errors, cascade audit/event chip |
 
 **Pre-v0.1.25.35 admin servers do not cascade** — operators must manually freeze budgets, revoke keys, and disable webhooks before or after closing the tenant.
@@ -41,17 +41,19 @@ On any `* → CLOSED` tenant transition (via `PATCH /v1/admin/tenants/{id}` or `
 
 | Owned object | Terminal state | Notes |
 |---|---|---|
-| `BudgetLedger` | `CLOSED` | Stamps `closed_at`; preserves the final balance snapshot for audit. |
+| `BudgetLedger` | `CLOSED` | Stamps `closed_at`; drains any outstanding `reserved` back to `remaining`; preserves the final balance snapshot for audit. |
 | `ApiKey` | `REVOKED` | Stamps `revoked_at`. |
 | Open `Reservation` | `RELEASED` (reason `tenant_closed`) | No overage debt recorded. |
 | `WebhookSubscription` | `DISABLED` | Re-enable is blocked by Rule 2 below, making `DISABLED` effectively-terminal for closed owners without adding a new enum value. |
 
-**Ordering.** The server MUST perform these in order:
+**Ordering.** Ordering is a Mode A concern. Within Mode A's single transaction, the spec says the order SHOULD be:
 
 1. Drain open reservations
 2. Close budgets
 3. Disable webhooks and revoke API keys (any order)
 4. Flip `tenant.status` to `CLOSED` last
+
+Mode B (see below) inverts this by design — the tenant flip commits **first**, and children converge afterward under the Rule 2 guard. Since runcycles' reference server implements Mode B, do not rely on this ordering in practice.
 
 **Audit emission.** One audit entry per mutated owned object, all sharing the `correlation_id` of the originating `tenant.closed` entry. Reserved `event_kind` values:
 
@@ -60,9 +62,11 @@ On any `* → CLOSED` tenant transition (via `PATCH /v1/admin/tenants/{id}` or `
 - `api_key.revoked_via_tenant_cascade`
 - `reservation.released_via_tenant_cascade`
 
+Servers should additionally emit one Event (dispatchable to webhook subscribers) per mutated owned object using the same dotted kind as its `event_type`. `reservation.released_via_tenant_cascade` is a **ledger-level aggregate**: reservation objects live on the runtime plane, so the admin plane emits one event per closed budget whose `reserved > 0` at close time — identified by `ledger_id`, not an individual reservation — carrying the drained amount as `released_amount`.
+
 See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for how these land on webhook deliveries.
 
-**Idempotency.** Re-issuing close on an already-CLOSED tenant is a no-op (returns the current state, no events re-emitted).
+**Idempotency.** Re-issuing close on an already-CLOSED tenant is a no-op *at the tenant level* (returns the current state). Under Mode A no child work remains; under Mode B a re-close completes any outstanding child transitions — without emitting duplicate audit or event rows for already-terminal children. Operator-issued re-close is in fact one of the spec-sanctioned convergence mechanisms for an interrupted Mode B cascade.
 
 ### Mode A vs Mode B
 
@@ -71,7 +75,7 @@ The spec (v0.1.25.31) permits two cascade modes:
 - **Mode A — Atomic Cascade (preferred).** All owned-object terminal transitions and the tenant flip commit in a single transaction. Rollback on any failure. Strongest guarantee but requires a transactional store.
 - **Mode B — Flip-First with Guarded Cascade (conformant alternative).** Tenant flip to `CLOSED` commits first, making Rule 2 active; server then drives children to terminal states inline or via a reconciler. Valid only when: (a) Rule 2 activates at/before flip durability, (b) cascade is idempotent, (c) eventual convergence is guaranteed within a documented bound, (d) observable reads of non-terminal children of a CLOSED tenant remain consistent with stored status until cascade reaches them.
 
-Both modes deliver the same client-observable contract: once the tenant is `CLOSED`, mutations against its owned objects return `409 TENANT_CLOSED` regardless of whether the per-object state has flipped yet.
+Both modes deliver the same client-observable contract: once the tenant is `CLOSED`, admin-plane mutations against its owned objects return `409 TENANT_CLOSED` regardless of whether the per-object state has flipped yet.
 
 **runcycles' reference server uses Mode B** — backed by Redis, not a transactional database. Operators should not rely on atomic visibility of all child transitions; instead rely on Rule 2.
 
@@ -93,26 +97,18 @@ Content-Type: application/json
 
 GET endpoints remain available — closed-tenant state is still readable post-mortem for audit and compliance.
 
-### Endpoints that guard
+### Operations that guard
 
-Per spec v0.1.25.29–.30, these mutating operations all return `409 TENANT_CLOSED` when the owning tenant is closed:
+The spec's Rule 2 scopes the guard to **every mutating admin-plane operation** whose target resource has an owning tenant. Its enumeration (explicitly non-exhaustive) covers:
 
 **Budget plane:**
-- `PATCH /v1/admin/budgets?scope=&unit=` (updateBudget)
-- `POST /v1/admin/budgets` (createBudget)
-- `POST /v1/admin/budgets/fund`
 - `POST /v1/admin/budgets/freeze`
 - `POST /v1/admin/budgets/unfreeze`
+- `POST /v1/admin/budgets/fund`
+- `PATCH /v1/admin/budgets?scope=&unit=` (updateBudget)
 - `POST /v1/admin/budgets/bulk-action` (per-row)
 
-**Reservation plane (runtime + admin):**
-- `POST /v1/reservations` (createReservation)
-- `POST /v1/reservations/{id}/commit`
-- `POST /v1/reservations/{id}/release`
-- `POST /v1/reservations/{id}/extend`
-- `POST /v1/events` (direct-debit)
-
-**Policy plane:**
+**Policy plane (tenant-scoped policies):**
 - `POST /v1/admin/policies` (createPolicy)
 - `PATCH /v1/admin/policies/{policy_id}` (updatePolicy)
 
@@ -121,7 +117,7 @@ Per spec v0.1.25.29–.30, these mutating operations all return `409 TENANT_CLOS
 - `PATCH /v1/admin/api-keys/{key_id}` (updateApiKey)
 - `DELETE /v1/admin/api-keys/{key_id}` (revokeApiKey)
 
-**Webhook plane (admin and tenant paths):**
+**Webhook plane (admin and tenant self-service paths):**
 - `POST /v1/admin/webhooks`, `PATCH`, `DELETE`, `POST .../test`
 - `POST /v1/webhooks`, `PATCH`, `DELETE`, `POST .../test`
 - `POST /v1/admin/webhooks/{id}/replay`
@@ -129,16 +125,33 @@ Per spec v0.1.25.29–.30, these mutating operations all return `409 TENANT_CLOS
 
 **Bulk-action per-row semantics.** On bulk-action endpoints, rows targeting a closed tenant go into the `failed[]` bucket with `error_code=TENANT_CLOSED` — they don't abort the rest of the batch.
 
+### What the runtime plane sees
+
+Runtime endpoints (`POST /v1/reservations`, commit / release / extend, `POST /v1/events`) **never return `TENANT_CLOSED`** — the code does not exist in the runtime protocol spec's `ErrorCode` enum at all. `TENANT_CLOSED` lives only in the governance-admin spec's shared ErrorCode enum.
+
+A closed tenant is observable on the runtime plane only through the cascade's effects:
+
+- **`401 UNAUTHORIZED`** — the cascade revokes the tenant's API keys, so calls authenticated with those keys fail authentication.
+- **`BUDGET_CLOSED`** — the cascade closes the tenant's budgets, so any operation that reaches a cascaded budget is rejected as a closed-budget mutation.
+
+Client code handling runtime errors should therefore treat "tenant was closed" as a `401`/`BUDGET_CLOSED` scenario, not a `TENANT_CLOSED` one.
+
 ## Operator recipe — closing a tenant
 
 ```bash
-# 1. Preview what will cascade — confirms intent before the irreversible close
+# 1. Preview what will cascade — confirms intent before the irreversible close.
+#    The Tenant object itself carries no child counts, so use the list endpoints:
 curl -s http://localhost:7979/v1/admin/tenants/acme-corp \
-  -H "X-Admin-API-Key: $ADMIN_KEY" | jq '{
-    status,
-    budget_count: .budget_count,
-    active_reservations: .active_reservations_count
-  }'
+  -H "X-Admin-API-Key: $ADMIN_KEY" | jq '{tenant_id, status}'
+
+# Budgets that will be closed (reserved > 0 will emit released_via_tenant_cascade)
+curl -s "http://localhost:7979/v1/admin/budgets?tenant_id=acme-corp" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  | jq '.ledgers[] | {scope, unit, status, reserved}'
+
+# Open reservations that will be released (admin key requires the tenant filter)
+curl -s "http://localhost:7979/v1/reservations?tenant=acme-corp&status=ACTIVE" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" | jq '.reservations[]'
 
 # 2. Close the tenant — cascade runs automatically
 curl -X PATCH http://localhost:7979/v1/admin/tenants/acme-corp \
@@ -169,10 +182,10 @@ See [Using the Cycles Dashboard](/how-to/using-the-cycles-dashboard#closed-tenan
 
 - Pre-v0.1.25.35 admin servers do NOT cascade. Operators on older versions must continue manually terminating owned objects before or after the tenant close.
 - Pre-v0.1.25.35 servers do NOT return `409 TENANT_CLOSED` — they return the previous per-endpoint error (`409 BUDGET_FROZEN`, `403 FORBIDDEN`, etc.) or may accept mutations against orphaned objects.
-- Pre-v0.1.25.36 servers have partial Rule 2 coverage — `.35` guarded budget and reservation ops; `.36` completed policies, api-keys, webhook-admin mutations, and per-row bulk-action.
+- Pre-v0.1.25.36 servers have partial Rule 2 coverage — `.35` guarded budget operations and webhook create/update; `.36` completed policies, api-keys, the remaining webhook mutations, and per-row bulk-action.
 - Pre-v0.1.25.43 dashboards render TENANT_CLOSED as a raw 409 error without the humanizer and without the cascade-preview dialog.
 
-**Re-issuing close on an already-CLOSED tenant** is idempotent across all versions — returns current state, no new audit entries.
+**Re-issuing close on an already-CLOSED tenant** is idempotent at the tenant level across all versions — it returns the current state and emits no duplicate audit entries for already-terminal children. Under Mode B it is not a pure no-op: a re-close completes any outstanding child transitions left by an interrupted cascade.
 
 ## Related
 

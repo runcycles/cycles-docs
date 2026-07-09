@@ -19,7 +19,7 @@ That is scope derivation.
 
 Scope derivation is the process by which the server transforms a Subject (a bag of dimension fields) into an ordered set of canonical scope identifiers.
 
-When a reservation, commit, release, or event is processed, the server derives every scope that needs to be affected.
+Derivation happens wherever a Subject is submitted: reserve (`POST /v1/reservations`), decide (`POST /v1/decide`), and event (`POST /v1/events`). When one of those requests is processed, the server derives every scope that needs to be affected. Commit and release do not take a Subject — they operate on the scopes already derived at reserve time.
 
 For example, given a Subject with:
 
@@ -69,6 +69,14 @@ Intermediate levels (`workspace`, `app`, `workflow`) are not present in the subj
 
 Scopes without budgets are skipped during enforcement — at least one derived scope must have a budget defined.
 
+## Field value charset
+
+Standard-field values (tenant, workspace, app, workflow, agent, toolset) SHOULD match `^[a-zA-Z0-9_.-]+$` (normative as of the 2026-07-03 spec revision).
+
+Canonical scope identifiers and scope paths use `:` and `/` as structural delimiters, so delimiter, whitespace, and control characters have no stable canonical encoding.
+
+Servers MAY reject out-of-pattern values with `400 INVALID_REQUEST` — the reference implementation does. Portable clients SHOULD restrict themselves to the pattern above and MUST NOT rely on out-of-pattern values being accepted.
+
 ## Why hierarchical scopes matter
 
 Hierarchical scopes enable layered budget governance.
@@ -115,9 +123,11 @@ For example, if a workflow has budget remaining but the tenant is exhausted, the
 
 ## affected_scopes in responses
 
-Reservation and event responses include an `affected_scopes` field listing all scopes that were charged.
+Reservation and decision responses include an `affected_scopes` field listing all scopes that were charged (or would be charged), in canonical order.
 
-This tells the client exactly which budget boundaries were affected, which is useful for:
+Event responses do not include `affected_scopes` — for `POST /v1/events`, read the charged scopes from the `scope_path` on each entry in the response's `balances` array instead.
+
+Where present, `affected_scopes` tells the client exactly which budget boundaries were affected, which is useful for:
 
 - debugging denial reasons
 - understanding which scope is the bottleneck
@@ -150,15 +160,17 @@ For example:
 
 In v0, servers may or may not use dimensions for budgeting decisions. But they must accept and round-trip the data.
 
+Dimensions have hard limits: at most 16 keys, and each value at most 256 characters. Keys SHOULD be lowercase and match `^[a-z0-9_.-]+$` for stable canonicalization; values are opaque strings.
+
+Dimensions never replace the standard fields. A Subject containing only `dimensions` — with no tenant, workspace, app, workflow, agent, or toolset — is invalid, and the server MUST return `400 INVALID_REQUEST`.
+
 This is how concepts like "run budgets" can be modeled — by passing a unique run identifier through dimensions.
 
 ## Scope derivation and balances
 
-When querying balances (`GET /v1/balances`), the same scope hierarchy applies.
+When querying balances (`GET /v1/balances`), the same scope hierarchy applies. At least one standard subject filter (tenant, workspace, app, workflow, agent, toolset) must be provided.
 
-A balance query for tenant `acme` returns balances at all scopes under that tenant.
-
-A balance query for app `support-bot` returns balances for that app and its children.
+Returning child scopes is opt-in: pass `include_children=true` (the default is `false`). Be aware that `include_children` MAY be ignored by v0 implementations, so do not depend on child rows being present.
 
 This gives operators visibility into budget state at any level of the hierarchy.
 

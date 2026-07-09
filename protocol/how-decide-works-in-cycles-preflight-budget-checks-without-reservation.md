@@ -57,12 +57,14 @@ Operators can use decide to evaluate hypothetical scenarios against live budget 
 
 ## How decide works in the protocol
 
-A decide request includes:
+A decide request includes four required fields:
 
 - **subject** — the budget scopes to evaluate (tenant, workspace, app, workflow, agent, toolset, dimensions)
 - **action** — the proposed action (kind, name, optional tags)
 - **estimate** — the amount the action would need
-- **idempotency_key** (required) — for request deduplication
+- **idempotency_key** — for request deduplication
+
+An optional `metadata` map can be attached for application-level context.
 
 The server evaluates the request against current balances and returns:
 
@@ -71,6 +73,9 @@ The server evaluates the request against current balances and returns:
 - **reason_code** — machine-readable reason when decision is DENY (`DecisionReasonCode`, see below)
 - **retry_after_ms** — optional guidance on when to retry
 - **affected_scopes** — which scopes were evaluated
+- **cycles_evidence** — a reference to the signed CyclesEvidence envelope emitted for this decision (artifact type `decide`; present on ALLOW, ALLOW_WITH_CAPS, and DENY outcomes, absent only when evidence emission is disabled on the server)
+
+Only `decision` is required in the response — every other field is conditional or optional.
 
 `DecisionReasonCode` is an **open string** (not a closed enum) with the following documented known values:
 
@@ -85,6 +90,16 @@ The server evaluates the request against current balances and returns:
 
 `DecisionReasonCode` was widened from a closed enum to an open string in v0.1.25 so future extension specs can add new reason codes without a breaking protocol bump. **Clients MUST handle unknown values gracefully** (treat as DENY, log the raw string, do not crash on enum parsing). Known values above are stable; future values will always be additive. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics.
 
+The v0.1.26 runtime extension adds three action-governance reason codes that can surface on decide denials:
+
+| reason_code | Meaning |
+|---|---|
+| `ACTION_QUOTA_EXCEEDED` | A per-kind or risk-class action quota rule was exceeded for the target scope and window |
+| `ACTION_KIND_DENIED` | The action kind is in the matching policy's `denied_action_kinds` list |
+| `ACTION_KIND_NOT_ALLOWED` | The matching policy has a non-empty `allowed_action_kinds` list and the action kind is not in it |
+
+See `cycles-protocol-extensions-v0.1.26.yaml` for full semantics, evaluation order, and the `DenyDetail` structure populated alongside `reason_code` for these denials.
+
 ## Decide does not guarantee future reservation
 
 An important subtlety: decide is a point-in-time evaluation.
@@ -97,9 +112,9 @@ For guaranteed budget holds, use reservations.
 
 ## Decide and debt/overdraft
 
-When a scope has outstanding debt or is in over-limit state, decide returns `DENY` with an appropriate reason code.
+When a scope has outstanding debt or is in over-limit state, the server SHOULD return `DENY` with the appropriate reason code (`DEBT_OUTSTANDING` or `OVERDRAFT_LIMIT_EXCEEDED`). This is a SHOULD, not a MUST — but the server MUST NOT return `409` for these conditions on decide.
 
-Unlike reservations, decide does not return `409` errors for debt or over-limit conditions. It always returns a `200` response with a decision value.
+For budget-state conditions — debt, overdraft, insufficient remaining — decide returns a `200` response with a decision value rather than a 4xx error. The exception is request-validity errors: if the estimate's unit doesn't match any budget at the derived scopes (but at least one of those scopes has a budget in a different unit), decide returns `400 UNIT_MISMATCH` just like the other endpoints.
 
 This makes decide safe to call in any context without needing error handling for budget state issues.
 
@@ -164,4 +179,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

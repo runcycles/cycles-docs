@@ -20,6 +20,8 @@ Metrics and metadata can be attached to two operations:
 
 Both accept an optional `metrics` field and an optional `metadata` field.
 
+Neither field is echoed back in the response. Commit responses carry `status`, `charged`, `released`, `balances`, and `cycles_evidence`; event responses carry `status`, `event_id`, `charged`, and `balances`. To read metadata back after the fact, retrieve the reservation (see below).
+
 ## Standard metrics
 
 The protocol defines a `StandardMetrics` schema with four named fields and an extensible custom map:
@@ -134,6 +136,7 @@ Metadata is accepted on several other operations beyond commits and events:
 
 - **Reservation creation** (`POST /v1/reservations`) — attach context to the reservation itself
 - **Reservation extend** (`POST /v1/reservations/{id}/extend`) — attach debugging metadata to extend operations
+- **Decide** (`POST /v1/decide`) — attach context to preflight budget checks
 
 This means a full reservation lifecycle can carry metadata from creation through commit:
 
@@ -141,7 +144,7 @@ This means a full reservation lifecycle can carry metadata from creation through
 2. Extend with `metadata: { "heartbeat_seq": "3" }`
 3. Commit with `metadata: { "request_id": "..." }` and `metrics: { ... }`
 
-Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field — so the metadata attached at commit is auditable after the fact, not just sent and forgotten.
+Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field, which is returned on the same response — so the metadata attached at reserve and commit time is auditable after the fact, not just sent and forgotten.
 
 ## Metrics in client code
 
@@ -228,6 +231,8 @@ Over time, standard metrics enable aggregate analysis:
 - cache hit rates across workflows
 - cost efficiency trends
 
+Note that the protocol defines how metrics are *submitted*, not how they are retrieved or aggregated. v0 defines no endpoint that returns stored metrics, so retrieval and aggregation are implementation-defined — via server-side export, a log pipeline, or direct store access.
+
 ## Best practices
 
 ### Always include tokens and model version on LLM calls
@@ -260,7 +265,7 @@ These fields are optional but recommended. They turn budget accounting from raw 
 
 ## Server-side operational metrics
 
-The metrics above describe the **execution-context fields** a client attaches to each commit or event. They are stored with the protocol record and surface on commit / event responses and in admin audit trails.
+The metrics above describe the **execution-context fields** a client attaches to each commit or event. They are stored with the protocol record and surface in admin audit trails — they are not echoed on commit or event responses.
 
 Cycles also exposes **Prometheus metrics** on each service's `/actuator/prometheus` endpoint for operational monitoring. These are aggregate counters and histograms — they do not replace per-request metrics, they complement them.
 
@@ -289,4 +294,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)
