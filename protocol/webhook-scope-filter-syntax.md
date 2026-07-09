@@ -1,15 +1,25 @@
 ---
 title: "Webhook Scope Filter Syntax"
-description: "How to filter webhook events by scope using scope_filter on subscriptions — exact match and trailing wildcard syntax with examples."
+description: "How to filter webhook events by scope using scope_filter on subscriptions — spec wildcard syntax, plus the reference implementation's prefix-match divergence."
 ---
 
 # Webhook Scope Filter Syntax
 
-Webhook subscriptions can filter events by scope path using the `scope_filter` field. When set, only events whose `scope` matches the filter are delivered to your endpoint. Events without a scope (some system events) are never delivered to subscriptions with a scope filter.
+Webhook subscriptions can filter events by scope path using the `scope_filter` field. When set, only events whose `scope` matches the filter are delivered to your endpoint.
 
-## Matching rules
+::: danger Reference implementation divergence — as of cycles-server-admin 0.1.25.48
+The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The reference implementation's matcher (`WebhookRepository.matchesScope`) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences when running against the reference server:
 
-The scope filter supports two modes:
+1. **Trailing-`/*` filters match nothing.** A filter like `tenant:acme-corp/*` is compared literally, and real scopes never contain a `*` character — so no event will ever match it. Use the bare prefix `tenant:acme-corp/` instead.
+2. **A filter without `*` is a prefix, not an exact match.** `tenant:acme-corp/workspace:prod` also matches `tenant:acme-corp/workspace:prod/workflow:support` (and even `tenant:acme-corp/workspace:prod-eu`, since matching is character-wise). End the filter with `/` to bound it to child scopes.
+3. **Events with a null scope ARE delivered** to scope-filtered subscriptions (a null scope matches every filter), rather than being excluded.
+
+Filters written in the spec's `prefix/*` form will start matching once the reference matcher implements the spec; until then, use the bare-prefix form shown in the examples below.
+:::
+
+## Matching rules (spec semantics — normative)
+
+Per the admin OpenAPI spec, the scope filter supports two modes:
 
 ### Exact match (no wildcard)
 
@@ -21,7 +31,7 @@ The event scope must exactly equal the filter string.
 }
 ```
 
-This delivers events **only** when the event scope is exactly `tenant:acme-corp/workspace:prod`. Events scoped to `tenant:acme-corp/workspace:prod/workflow:support` would **not** match.
+Under spec semantics this delivers events **only** when the event scope is exactly `tenant:acme-corp/workspace:prod`; events scoped to `tenant:acme-corp/workspace:prod/workflow:support` would **not** match. **Reference implementation:** this filter is treated as a prefix, so child scopes *do* match (consequence 2 above).
 
 ### Prefix match (trailing wildcard)
 
@@ -33,14 +43,16 @@ A filter ending with `*` matches any event scope that starts with the prefix bef
 }
 ```
 
-This delivers events for any scope under `tenant:acme-corp/`, including:
+Under spec semantics this delivers events for any scope under `tenant:acme-corp/`, including:
 - `tenant:acme-corp/workspace:prod`
 - `tenant:acme-corp/workspace:prod/workflow:support`
 - `tenant:acme-corp/workspace:staging/agent:bot-1`
 
+**Reference implementation:** the `*` is compared literally, so this filter matches nothing (consequence 1 above). Use `tenant:acme-corp/` for the same intent against the reference server.
+
 ### No filter (default)
 
-If `scope_filter` is null, empty, or not provided, the subscription matches **all events** regardless of scope.
+If `scope_filter` is null, empty, or not provided, the subscription matches **all events** regardless of scope. Both semantics agree on this.
 
 ```json
 {
@@ -50,25 +62,29 @@ If `scope_filter` is null, empty, or not provided, the subscription matches **al
 
 ## Syntax summary
 
-| Filter | Matches |
-|---|---|
-| `null` / empty | All events (no filtering) |
-| `tenant:acme-corp` | Only events with scope exactly `tenant:acme-corp` |
-| `tenant:acme-corp/*` | Events with scope starting with `tenant:acme-corp/` |
-| `tenant:acme-corp/workspace:prod` | Only events with that exact scope |
-| `tenant:acme-corp/workspace:prod/*` | Events with scope starting with `tenant:acme-corp/workspace:prod/` |
+| Filter | Spec semantics (normative) | Reference implementation (prefix match) |
+|---|---|---|
+| `null` / empty / blank | All events | All events |
+| `tenant:acme-corp` | Only scope exactly `tenant:acme-corp` | Any scope starting with `tenant:acme-corp` (including `tenant:acme-corpX`) |
+| `tenant:acme-corp/` | Only scope exactly `tenant:acme-corp/` (unlikely to exist) | Any scope starting with `tenant:acme-corp/` |
+| `tenant:acme-corp/*` | Scopes starting with `tenant:acme-corp/` | Nothing (literal `*` never appears in real scopes) |
+| `tenant:acme-corp/workspace:prod` | Only that exact scope | That scope and anything starting with it |
+| `*` | Undefined by spec (a `*`-only wildcard is not exact match) | All events |
+| *(any filter)* vs. null-scope event | Not delivered | Delivered |
 
 ## What's NOT supported
 
-- **Mid-string wildcards** — `tenant:*/workspace:prod` does not work. The `*` is only meaningful at the end of the filter string.
-- **Multiple wildcards** — `tenant:acme-corp/*/workflow:*` is not valid. Only one trailing `*` is supported.
+- **Mid-string wildcards** — `tenant:*/workspace:prod` does not work. In the spec, `*` is only meaningful at the end of the filter string; the reference implementation treats any `*` as a literal character.
+- **Multiple wildcards** — `tenant:acme-corp/*/workflow:*` is not valid.
 - **Regex** — no regular expression matching is supported.
 - **Glob patterns** — `?`, `[a-z]`, and other glob characters are treated as literal characters.
 - **Multiple scope filters per subscription** — each subscription has a single `scope_filter` string. Create multiple subscriptions if you need to watch multiple unrelated scopes.
 
-If a `*` appears anywhere other than the end of the filter string, it is treated as a **literal character** in an exact-match comparison (which almost certainly won't match any real scope).
+Under spec semantics, a `*` anywhere other than the end of the filter string is treated as a **literal character** in an exact-match comparison (which almost certainly won't match any real scope). Under the reference implementation, every `*` is literal, including a trailing one.
 
 ## Examples
+
+The examples below use the bare-prefix form (trailing `/`, no `*`), which works against the reference server today. Under strict spec semantics the same intent is written with a trailing `/*` — e.g. `tenant:acme-corp/*` instead of `tenant:acme-corp/`.
 
 ### Subscribe to all events for one tenant
 
@@ -79,7 +95,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/cycles-events",
     "event_types": [],
-    "scope_filter": "tenant:acme-corp/*"
+    "scope_filter": "tenant:acme-corp/"
   }'
 ```
 
@@ -92,7 +108,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/prod-alerts",
     "event_types": ["budget.exhausted", "reservation.denied"],
-    "scope_filter": "tenant:acme-corp/workspace:prod/*"
+    "scope_filter": "tenant:acme-corp/workspace:prod/"
   }'
 ```
 
@@ -123,7 +139,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/cost-alerts",
     "event_types": ["budget.exhausted", "budget.over_limit_entered"],
-    "scope_filter": "tenant:acme-corp/workspace:prod/*"
+    "scope_filter": "tenant:acme-corp/workspace:prod/"
   }'
 ```
 
@@ -131,16 +147,19 @@ This delivers only `budget.exhausted` **or** `budget.over_limit_entered` events 
 
 ## Events without scope
 
-Some events may not have a `scope` field (null). When `scope_filter` is set on a subscription and an event has a null scope, the event is **not delivered** to that subscription. Use a separate subscription without a scope filter to capture unscoped events.
+Some events may not have a `scope` field (null). The two semantics differ:
+
+- **Spec semantics (normative):** when `scope_filter` is set and an event has a null scope, the event is **not delivered** to that subscription. Use a separate subscription without a scope filter to capture unscoped events.
+- **Reference implementation:** a null event scope matches **every** filter, so unscoped events are delivered to scope-filtered subscriptions too.
 
 ::: tip Note on `reservation.commit_overage`
-As of v0.1.25, the `reservation.commit_overage` event is emitted with a null envelope scope. Scope-filtered subscriptions will not match this event. Use a subscription without a scope filter (or filtered by event type only) to capture commit overage events.
+As of v0.1.25, the `reservation.commit_overage` event is emitted with a null envelope scope. Under spec semantics, scope-filtered subscriptions would not match it; the reference implementation **does** deliver it to scope-filtered subscriptions (null scope matches every filter). If you rely on strict spec behavior, also keep a subscription without a scope filter (or filtered by event type only) to capture commit overage events.
 :::
 
 ## Edge cases
 
-- **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events.
-- **Filter `"*"` alone**: Matches all events that have a non-null scope (equivalent to "has any scope").
+- **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events (both semantics).
+- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The reference implementation special-cases it to match **all** events, including null-scope events. Prefer omitting `scope_filter` entirely to mean "everything".
 - **Events with some scope fields emitted as null**: Only `null` scope is checked — an empty string scope (`""`) is not treated as missing.
 
 ## Related

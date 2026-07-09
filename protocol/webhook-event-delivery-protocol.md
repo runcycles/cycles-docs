@@ -14,7 +14,7 @@ Every webhook delivery includes these HTTP headers:
 | Header | Value | Description |
 |--------|-------|-------------|
 | `Content-Type` | `application/json` | Always JSON |
-| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. If no secret was provided when the subscription was created, the server-generated secret is used. |
+| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. Present whenever the subscription has a signing secret (if no secret was provided when the subscription was created, the server-generated secret is used); omitted when the subscription has no signing secret. |
 | `X-Cycles-Event-Id` | `evt_abc123...` | Unique event ID. Use for deduplication. |
 | `X-Cycles-Event-Type` | `budget.exhausted` | Dot-notation event type for routing. |
 | `X-Cycles-Trace-Id` | `0af7651916cd43dd8448eb211c80319c` | 32-hex W3C Trace Context identifier for the logical operation this event belongs to. Always present on deliveries from v0.1.25.7+ events services. |
@@ -65,6 +65,10 @@ Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and
 ## Event types (47)
 
 The current v0.1.25 Admin API `EventType` enum registers 47 event types across seven categories: budget (16), reservation (5), tenant (6), api_key (6), policy (3), webhook (6), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully.
+
+::: info Count note
+The 47-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
+:::
 
 ### Budget events (16)
 
@@ -154,7 +158,7 @@ Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budge
 
 ### Tenant-close cascade fan-out
 
-The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). Treat these as additive implementation events and ignore any unrecognized event type gracefully:
+The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). These names are absent from the published admin-openapi enum (they do not count toward the 47 registered types) but are registered as first-class constants in the reference implementation's `EventType.java`. Treat them as additive implementation events and ignore any unrecognized event type gracefully:
 
 - `budget.closed_via_tenant_cascade` — one per owned `BudgetLedger`.
 - `reservation.released_via_tenant_cascade` — one per open owned reservation. Reason `tenant_closed`; no overage debt.
