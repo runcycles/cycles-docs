@@ -16,7 +16,7 @@ The protocol defines how budgets are reserved before execution, committed after,
 - **Open specification** — Apache 2.0, multiple OpenAPI YAMLs in [`runcycles/cycles-protocol`](https://github.com/runcycles/cycles-protocol).
 - **Explicit conformance criteria** — current MUST / SHOULD / MAY breakdown lives in [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md). Start there for the authoritative surface against the current conformance target.
 - **Reserve-commit lifecycle** — atomic budget locking before action, commit on completion, release on cancel, with TTL heartbeat for long-running operations.
-- **Hierarchical scopes** — tenant → workspace → app → workflow → agent → toolset, evaluated atomically in one operation (run-level budgets are modeled via `dimensions`, not a scope level).
+- **Hierarchical scopes** — tenant → workspace → app → workflow → agent → toolset, evaluated atomically in one operation (run-level budgets are modeled by encoding the run id in a Subject field such as `workflow:run-{id}` — `dimensions` are metadata and never derive scopes).
 - **Three-way decisions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY`. Implementations return constraints (`max_tokens`, `tool_denylist`, `max_steps_remaining`) that let the agent self-regulate, not just stop.
 - **Concurrency-safe enforcement** — shared budgets MUST NOT be oversubscribed under concurrent reserve calls.
 - **Idempotent commit and release** — retries are safe; the same action MUST NOT settle twice.

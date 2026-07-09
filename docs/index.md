@@ -23,7 +23,7 @@ description: "Cycles documentation — quickstart guides, integration tutorials,
 
 ## Integrations
 
-27 integrations — [view all](/how-to/integrations-overview)
+28 integrations — [view all](/how-to/integrations-overview)
 
 **LLM Providers:** [OpenAI](/how-to/integrating-cycles-with-openai) · [OpenAI (TS)](/how-to/integrating-cycles-with-openai-typescript) · [Anthropic](/how-to/integrating-cycles-with-anthropic) · [Anthropic (TS)](/how-to/integrating-cycles-with-anthropic-typescript) · [AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock) · [Google Gemini](/how-to/integrating-cycles-with-google-gemini) · [Groq](/how-to/integrating-cycles-with-groq) · [Ollama](/how-to/integrating-cycles-with-ollama)
 

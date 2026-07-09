@@ -94,6 +94,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
+      # Same key as the admin server - used for admin-on-behalf-of
+      # endpoints and the protected actuator/API-docs surface (unset,
+      # those endpoints return 500 server-misconfiguration, not 401)
+      ADMIN_API_KEY: admin-bootstrap-key
     depends_on:
       redis: { condition: service_healthy }
 COMPOSE

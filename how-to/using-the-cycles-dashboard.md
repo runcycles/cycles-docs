@@ -140,7 +140,7 @@ Tenant detail pages show a **Parent** link when the tenant has a `parent_tenant_
 
 ### RESET_SPENT inline funding
 
-On the Budgets page, every row has a funding dropdown. Alongside `CREDIT`, `DEBIT`, `REPAY_DEBT`, and `RESET`, the dropdown exposes `RESET_SPENT` — the v0.1.25.18+ funding operation that clears `spent` without touching `allocated`, `reserved`, or `debt`. Picking it opens a confirmation dialog where you can either leave the new `spent` value at zero (monthly rollover) or enter an explicit starting value (prorated correction).
+On the Budgets page, every row has a funding dropdown. Alongside `CREDIT`, `DEBIT`, `REPAY_DEBT`, and `RESET`, the dropdown exposes `RESET_SPENT` — the v0.1.25.18+ funding operation that sets `allocated` to the supplied amount and resets `spent` (to zero, or an explicit override) while preserving `reserved` and `debt`. Picking it opens a confirmation dialog where you enter the new allocation and can either leave `spent` at zero (monthly rollover) or enter an explicit starting value (prorated correction).
 
 See [Rolling Over Billing Periods with RESET_SPENT](/how-to/rolling-over-billing-periods-with-reset-spent) for when to use each pattern.
 
