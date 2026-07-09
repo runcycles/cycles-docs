@@ -12,11 +12,13 @@ Cycles emits **events** for every observable state change — budget exhaustion,
 ### Events
 
 An event is an immutable record of a state change. Every event has:
+- **event_id** — unique identifier; the key consumers dedupe on
 - **event_type** — dotted format like `budget.exhausted` or `reservation.denied`
 - **category** — one of: budget, reservation, tenant, api_key, policy, webhook, system
+- **timestamp** — when the event occurred
 - **tenant_id** — which tenant is affected
-- **source** — which service emitted it (`cycles-server`, `cycles-admin`, `expiry-sweeper`)
-- **data** — event-specific payload (varies by type)
+- **source** — which service emitted it (an open string; e.g. `cycles-server`, `cycles-admin`, `expiry-sweeper`, `anomaly-detector`)
+- **data** — optional event-specific payload (varies by type)
 
 Events are stored in Redis with a 90-day TTL (configurable).
 
@@ -26,12 +28,13 @@ A subscription defines which events to deliver and where:
 - **url** — HTTPS endpoint to receive HTTP POST requests
 - **event_types** — specific events to receive (e.g., `["budget.exhausted", "reservation.denied"]`)
 - **event_categories** — receive all events in a category (additive with event_types)
+- **scope_filter** — optional scope-path filter; only events whose scope matches are delivered (see [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax))
 - **signing_secret** — HMAC-SHA256 key for payload verification
 
 ### Delivery Semantics
 
 - **At-least-once** — events may be delivered more than once. Deduplicate using `event_id`.
-- **Ordered within tenant** — events for the same tenant are dispatched in order.
+- **Best-effort ordering** — first-attempt deliveries are dispatched from a single FIFO queue, but retried deliveries may arrive out of order. Consumers should dedupe and sequence on `event_id` and timestamp.
 - **Non-blocking** — webhook delivery never blocks the API operation that produced the event.
 - **Retry with backoff** — failed deliveries retry with exponential backoff (default: 5 retries).
 - **Auto-disable** — subscriptions are disabled after consecutive failures (default: 10).
@@ -61,7 +64,7 @@ Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires 
 ## Security
 
 - **HMAC-SHA256** — every delivery includes `X-Cycles-Signature: sha256=<hex>` for payload verification
-- **Encryption at rest** — signing secrets encrypted in Redis with AES-256-GCM
+- **Encryption at rest** — signing secrets encrypted in Redis with AES-256-GCM when `WEBHOOK_SECRET_ENCRYPTION_KEY` is configured (stored in plaintext otherwise)
 - **SSRF prevention** — private IP ranges blocked by default, HTTPS required in production
 
 ## Learn More

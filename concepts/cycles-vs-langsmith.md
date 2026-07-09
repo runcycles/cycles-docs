@@ -86,7 +86,7 @@ Neither tool can do the other's job. LangSmith cannot block an LLM call. Cycles 
 
 ### Feeding Cycles data into LangSmith
 
-The `CyclesMetrics` attached to each commit (tokens, latency, model version) are available through the Cycles API. Teams that want unified dashboards can:
+The commit metrics (`StandardMetrics` — tokens, latency, model version) attached to each commit are available through the Cycles API. Teams that want unified dashboards can:
 
 - Tag LangSmith traces with the Cycles `reservation_id` for cross-referencing
 - Use LangSmith's custom metadata to include Cycles decision outcomes (`ALLOW`, `DENY`, `ALLOW_WITH_CAPS`)

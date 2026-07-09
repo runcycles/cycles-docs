@@ -190,7 +190,7 @@ Runtime authority governs the total exposure of execution. It prevents overspend
 
 An AI agent that respects rate limits can still create unbounded cost.
 
-An AI agent governed by Cycles cannot exceed its budget, regardless of how fast or slow it operates.
+An AI agent governed by Cycles cannot exceed its budget envelope — overages under `ALLOW_WITH_OVERDRAFT` surface as bounded, tracked debt — regardless of how fast or slow it operates.
 
 Rate limiting answers **how fast?**
 

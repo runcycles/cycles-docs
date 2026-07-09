@@ -51,7 +51,7 @@ The event log is queryable two ways: through the [Cycles Admin Dashboard](/how-t
 
 ## Regulatory context
 
-The applicability of these frameworks depends on your system's risk classification, jurisdiction, and intended use. Cycles provides the runtime enforcement layer — one component of the governance infrastructure these frameworks require, not the full organizational governance system.
+The applicability of these frameworks depends on your system's risk classification, jurisdiction, and intended use. The June 2026 Digital Omnibus moved the EU AI Act's Annex III high-risk obligations (Articles 9, 12, 14 below) to December 2, 2027, while Article 50 transparency and GPAI enforcement still apply from August 2, 2026 — see [what actually happens on August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). Cycles provides the runtime enforcement layer — one component of the governance infrastructure these frameworks require, not the full organizational governance system.
 
 | Framework | What it requires | What Cycles provides |
 |---|---|---|
