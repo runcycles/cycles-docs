@@ -428,7 +428,7 @@ For each `with_cycles()` call or `ReservationGuard`:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: `Error::BudgetExceeded` is returned, operation does not run
-5. Heartbeat extension is scheduled (background tokio task at TTL/2)
+5. Heartbeat extension is scheduled (background tokio task at TTL/2, minimum 1s)
 6. Operation executes
 7. On success: commit is sent with actual amount and optional metrics
 8. On error: reservation is released to return budget

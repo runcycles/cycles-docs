@@ -101,7 +101,7 @@ To try the server without a running Cycles stack, set `CYCLES_MOCK: "true"` inst
 }
 ```
 
-### Running the server over HTTP / SSE
+### Running the server over HTTP
 
 For a shared remote MCP gateway (multi-developer team, cloud deploy, sidecar in CI), see [Running the MCP server over HTTP](/how-to/running-the-mcp-server-over-http). STDIO is the right default for a single developer on a local machine.
 
@@ -121,7 +121,7 @@ The core pattern is **reserve → execute → commit**, or **release** if the op
 
 > "Reserve 500,000 USD_MICROCENTS for an OpenAI GPT-4o call"
 
-The agent calls `cycles_reserve` and gets back a `reservation_id` and a `decision`. If the decision is `ALLOW`, the budget is locked and the agent can proceed.
+The agent calls `cycles_reserve` and gets back a `reservationId` and a `decision`. If the decision is `ALLOW`, the budget is locked and the agent can proceed.
 
 **Step 2 — Execute** the operation (the LLM call, API request, etc.)
 
@@ -140,7 +140,7 @@ When you call `cycles_reserve` or `cycles_decide`, the server returns one of thr
 | Decision | Meaning | Agent should… |
 |----------|---------|---------------|
 | `ALLOW` | Budget is available, proceed normally | Execute the operation |
-| `ALLOW_WITH_CAPS` | Budget is tight, proceed with constraints | Reduce scope — use a cheaper model, fewer tokens, or skip optional tools. The `caps` field contains `maxTokens`, `toolAllowlist`, and `cooldownMs` hints |
+| `ALLOW_WITH_CAPS` | Budget is tight, proceed with constraints | Reduce scope — use a cheaper model, fewer tokens, or skip optional tools. The `caps` field contains hints such as `maxTokens`, `maxStepsRemaining`, `toolAllowlist`, `toolDenylist`, and `cooldownMs` |
 | `DENY` | Budget exhausted or insufficient | Stop, inform the user, or switch to a free fallback |
 
 ## Available tools

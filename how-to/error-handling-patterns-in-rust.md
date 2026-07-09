@@ -37,7 +37,8 @@ Every `Error` variant exposes convenience methods:
 use runcycles::Error;
 
 fn handle(err: &Error) {
-    err.is_retryable()       // true for Transport, 5xx, or BudgetExceeded with retry_after
+    err.is_retryable()       // true for Transport, 5xx, BudgetExceeded with retry_after,
+                             // or Api with a retryable code (INTERNAL_ERROR / unrecognized)
     err.is_budget_exceeded() // true for BudgetExceeded or Api with code BudgetExceeded
     err.retry_after()        // Option<Duration> — server-suggested delay
     err.request_id()         // Option<&str> — server-assigned request ID
@@ -73,7 +74,7 @@ match result {
 }
 ```
 
-The closure receives a `GuardContext` (with `decision`, `caps`, `reservation_id`, `affected_scopes`) and must return `Result<(T, Amount), Box<dyn Error>>` — the value plus the actual cost for commit.
+The closure receives a `GuardContext` (with `decision`, `caps`, `reservation_id`, `affected_scopes`) and must return `Result<(T, Amount), Box<dyn std::error::Error + Send + Sync>>` (note: not `runcycles::Error`) — the value plus the actual cost for commit.
 
 ### With retry delay
 
@@ -185,15 +186,12 @@ match result {
     Err(Error::Api { status, code, message, request_id, .. }) => {
         match status {
             409 => {
-                // Could be debt outstanding, overdraft exceeded, reservation finalized
+                // Note: the client converts 409s carrying BUDGET_EXCEEDED,
+                // DEBT_OUTSTANDING, or OVERDRAFT_LIMIT_EXCEEDED into
+                // Error::BudgetExceeded before they reach this arm — see
+                // "Handling budget denials" above. Only non-budget 409s
+                // (e.g. RESERVATION_FINALIZED) arrive as Error::Api.
                 match code {
-                    Some(ErrorCode::DebtOutstanding) => {
-                        tracing::warn!("Scope has outstanding debt");
-                        alert_operator("Budget funding required").await;
-                    }
-                    Some(ErrorCode::OverdraftLimitExceeded) => {
-                        tracing::error!("Overdraft limit exceeded");
-                    }
                     Some(ErrorCode::ReservationFinalized) => {
                         tracing::warn!("Reservation already finalized — no action needed");
                     }
@@ -259,20 +257,23 @@ let result = with_cycles(&client, config, |ctx| async move {
 match result {
     Ok(value) => Ok(value),
 
-    // Budget denied — degrade
+    // Budget denied — degrade. This also covers 409s the client
+    // collapses into BudgetExceeded (DEBT_OUTSTANDING,
+    // OVERDRAFT_LIMIT_EXCEEDED); inspect `message` if you need
+    // to tell them apart.
     Err(Error::BudgetExceeded { message, .. }) => {
         tracing::info!("Budget exceeded: {message}");
         Ok(fallback_value())
     }
 
     // Server/protocol error — check retryability
-    Err(ref e @ Error::Api { .. }) if e.is_retryable() => {
+    Err(e @ Error::Api { .. }) if e.is_retryable() => {
         tracing::warn!("Retryable API error: {e}");
         Err(e)
     }
 
     // Network failure — retry
-    Err(ref e @ Error::Transport(_)) => {
+    Err(e @ Error::Transport(_)) => {
         tracing::warn!("Transport error: {e}");
         Err(e)
     }
@@ -311,14 +312,9 @@ impl IntoResponse for AppError {
                 ).into_response()
             }
 
-            Error::Api { code: Some(ErrorCode::DebtOutstanding), .. }
-            | Error::Api { code: Some(ErrorCode::OverdraftLimitExceeded), .. } => {
-                (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({"error": "service_unavailable", "message": "Service paused due to budget constraints."})),
-                ).into_response()
-            }
-
+            // Debt and overdraft 409s arrive as Error::BudgetExceeded
+            // (the client collapses those codes), so they are handled by
+            // the arm above. Remaining Api errors:
             _ => {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -340,8 +336,8 @@ impl From<Error> for AppError {
 | Error | Retryable? | Action |
 |---|---|---|
 | `BudgetExceeded` (409) | Maybe | Budget may free up. Check `retry_after`. Retry or degrade. |
-| `Api` with `DebtOutstanding` (409) | Wait | Requires operator to fund the scope. |
-| `Api` with `OverdraftLimitExceeded` (409) | Wait | Requires operator intervention. |
+| `BudgetExceeded` carrying a debt message (409 `DEBT_OUTSTANDING`) | Wait | Requires operator to fund the scope; the client collapses this code into `BudgetExceeded`. |
+| `BudgetExceeded` carrying an overdraft message (409 `OVERDRAFT_LIMIT_EXCEEDED`) | Wait | Requires operator intervention; also collapsed into `BudgetExceeded`. |
 | `Api` with `ReservationExpired` (410) | No | Create a new reservation or record as event. |
 | `Api` with `ReservationFinalized` (409) | No | Already settled. No action needed. |
 | `Api` with 5xx | Yes | Retry with exponential backoff. |

@@ -75,7 +75,7 @@ claude mcp list
 
 ## Common gotchas
 
-- **Env vars not captured automatically.** `claude mcp add` records the command but does NOT capture your current shell env. Either pass `--env KEY=VALUE` flags at registration (recommended) or use a project `.mcp.json` with `${VAR}` expansion.
+- **Env vars not captured automatically.** `claude mcp add` records the command but does not persist your current shell env into the config (a stdio server still inherits the environment of the shell that launched `claude`; `--env` makes the values deterministic). Either pass `--env KEY=VALUE` flags at registration (recommended) or use a project `.mcp.json` with `${VAR}` expansion.
 - **CLI option order matters.** `--transport`, `--env`, and `--scope` must come before the server name (`cycles`). Arguments after `--` are passed to `@runcycles/mcp-server`.
 - **Native Windows needs a wrapper.** If Claude Code runs on native Windows rather than WSL, use `-- cmd /c npx -y @runcycles/mcp-server` after the server name so Windows can launch `npx`.
 - **Three scopes, not two.** `local` is the default and applies only to the current project, stored in your user config. `project` writes a shared `.mcp.json` in the project root. `user` applies in every project. If the same server name appears in multiple scopes, Claude Code uses the highest-precedence definition: **local → project → user**.
