@@ -71,7 +71,7 @@ All Cycles services run on the internal network. Only the load balancer is expos
 
 Two hardening changes on the runtime server tighten this surface further:
 
-- **Actuator and API docs require the admin key** — as of cycles-server v0.1.25.45, `/actuator/*` and the OpenAPI docs endpoints require `X-Admin-API-Key`; they are no longer anonymously readable on the internal network.
+- **Actuator and API docs require the admin key** — as of cycles-server v0.1.25.45, the aggregate `/actuator/health`, `/actuator/info`, `/actuator/prometheus`, and the OpenAPI/Swagger endpoints require `X-Admin-API-Key`; they are no longer anonymously readable on the internal network. The Kubernetes probes (`/actuator/health/liveness`, `/actuator/health/readiness`) remain public.
 - **Public endpoints are rate-limited** — as of cycles-server v0.1.25.46, the unauthenticated evidence and JWKS endpoints are rate-limited (default 300 requests/minute per client, `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE`); excess requests receive `429 LIMIT_EXCEEDED`.
 
 ### API key security
