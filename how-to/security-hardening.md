@@ -88,7 +88,7 @@ Restrict the Cycles service account to the key patterns the services actually us
 
 ```conf
 # redis.conf
-user cycles on >${REDIS_PASSWORD} ~tenant:* ~budget:* ~budgets:* ~reservation:* ~reserve:* ~idem:* ~apikey:* ~apikeys:* ~policy:* ~policies:* ~audit:* ~event:* ~events:* ~delivery:* ~deliveries:* ~dispatch:* ~webhook:* ~webhooks:* ~evidence:* ~config:* ~replay:* +@all
+user cycles on >${REDIS_PASSWORD} ~tenant:* ~budget:* ~budgets:* ~reservation:* ~reserve:* ~idem:* ~idempotency:* ~apikey:* ~apikeys:* ~policy:* ~policies:* ~audit:* ~event:* ~events:* ~delivery:* ~deliveries:* ~dispatch:* ~webhook:* ~webhooks:* ~evidence:* ~config:* ~replay:* +@all
 user default off
 ```
 

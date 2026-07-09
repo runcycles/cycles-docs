@@ -201,7 +201,7 @@ New event-driven observability system spanning all three services.
 - `reservation.commit_overage` on commit with actual > estimated
 
 **Events delivery service (`cycles-server-events`, internal app port 7980):**
-- Async webhook delivery via BRPOP from shared Redis dispatch queue
+- Async webhook delivery via BLMOVE claim/ack from the shared Redis dispatch queue (BRPOP before v0.1.25.18)
 - HMAC-SHA256 payload signing (`X-Cycles-Signature: sha256=<hex>`)
 - Exponential backoff retry, auto-disable after consecutive failures
 - Stale delivery protection (>24h deliveries auto-fail on pickup)

@@ -403,7 +403,7 @@ export CYCLES_API_KEY="cyc_live_..."   # paste the key from the response
 
 ## Step 4: Create a budget
 
-Create a budget ledger for the tenant. Without a budget, all reservations will be denied with `BUDGET_EXCEEDED`:
+Create a budget ledger for the tenant. Without a budget at any derived scope, reservations fail with `404 NOT_FOUND` ("Budget not found for provided scope"):
 
 ```bash
 curl -s -X POST http://localhost:7979/v1/admin/budgets \
@@ -683,9 +683,9 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 
 ## Troubleshooting
 
-### "BUDGET_EXCEEDED" on first reservation
+### "NOT_FOUND" (no budget) or "BUDGET_EXCEEDED" on first reservation
 
-No budget exists for the scope. Create a budget ledger via the admin API (Step 4). Every scope in the subject hierarchy needs an allocated budget.
+`404 NOT_FOUND` means no budget exists at any derived scope — create a budget ledger via the admin API (Step 4); at least one scope in the subject hierarchy needs an allocated budget. `409 BUDGET_EXCEEDED` means a budget exists but the estimate exceeds what remains.
 
 ### "UNAUTHORIZED" or 401
 

@@ -12,7 +12,7 @@ Cycles' Micrometer instrumentation uses dotted source names (`cycles.*`) which P
 ::: info Tenant-tag cardinality flag
 Every counter tagged with `tenant` respects a per-service toggle, `cycles.metrics.tenant-tag.enabled` (env `CYCLES_METRICS_TENANT_TAG_ENABLED`) — but the **defaults differ by service**: `cycles-server` (runtime) defaults to `true`, while `cycles-server-events` defaults to `false`. The admin server's `cycles_admin_*` counters carry no `tenant` tag at all, so the flag doesn't apply there. Deployments with many thousands of tenants can flip the runtime flag to `false` to drop the per-tenant series and keep Prometheus cardinality bounded; deployments that want per-tenant webhook drill-downs must explicitly enable it on the events service. Set the flag consistently across the two services so dashboards can share the same tag schema.
 
-Null or blank tag values are normalised to the sentinel `UNKNOWN`. Missing tags would otherwise collapse series — making it look like traffic moved when the upstream data actually just got sparse.
+For the operation counters below, null or blank tag values are normalised to the sentinel `UNKNOWN` (exception: `cycles.evidence.emit_failed` uses lowercase `unknown` for a null `artifact_type` and does not normalise blanks). Missing tags would otherwise collapse series — making it look like traffic moved when the upstream data actually just got sparse.
 :::
 
 ## Scrape targets
@@ -33,7 +33,7 @@ Introduced in v0.1.25.10. All counters live under the `cycles.*` namespace.
 |---|---|---|---|---|
 | `cycles.reservations.reserve` | `cycles_reservations_reserve_total` | Counter | `tenant`, `decision`, `reason`, `overage_policy` | Every `POST /v1/reservations` outcome. |
 | `cycles.reservations.commit` | `cycles_reservations_commit_total` | Counter | `tenant`, `decision`, `reason`, `overage_policy` | Every `POST /v1/reservations/{id}/commit` outcome. |
-| `cycles.reservations.release` | `cycles_reservations_release_total` | Counter | `tenant`, `actor_type`, `decision`, `reason` | Every successful release. `actor_type` distinguishes tenant-driven releases from v0.1.25.8 admin-on-behalf-of releases. |
+| `cycles.reservations.release` | `cycles_reservations_release_total` | Counter | `tenant`, `actor_type`, `decision`, `reason` | Every release outcome (`decision` is `RELEASED` or `DENY`). `actor_type` distinguishes tenant-driven releases from v0.1.25.8 admin-on-behalf-of releases. |
 | `cycles.reservations.extend` | `cycles_reservations_extend_total` | Counter | `tenant`, `decision`, `reason` | Every `POST /v1/reservations/{id}/extend` outcome. |
 | `cycles.reservations.expired` | `cycles_reservations_expired_total` | Counter | `tenant` | Each reservation the expiry sweep actually marks EXPIRED. Skipped reservations (still in grace, already finalised) do not increment. |
 | `cycles.events` | `cycles_events_total` | Counter | `tenant`, `decision`, `reason`, `overage_policy` | Every `POST /v1/events` outcome. |

@@ -42,7 +42,7 @@ Map your pricing tiers to budget allocations:
 | Pro | $50 (5,000,000,000 microcents) | $5 overdraft | 5 |
 | Enterprise | $500 (50,000,000,000 microcents) | $50 overdraft | Unlimited |
 
-When a customer hits their budget limit, Cycles returns `DENY` on the next reservation. Your application decides what happens: show an upgrade prompt, queue the request, or degrade to a cheaper model. See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for patterns.
+When a customer hits their budget limit, the next live reservation fails with `409 BUDGET_EXCEEDED` (a `/v1/decide` or dry-run check returns `DENY`). Your application decides what happens: show an upgrade prompt, queue the request, or degrade to a cheaper model. See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for patterns.
 
 ## Customer onboarding workflow
 

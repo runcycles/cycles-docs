@@ -77,7 +77,7 @@ A constraint applied to execution when budget is running low but not yet exhaust
 
 ### Three-Way Decision
 
-The three possible outcomes of a budget evaluation: **ALLOW** (proceed normally), **ALLOW_WITH_CAPS** (proceed with reduced limits), or **DENY** (reject the request). `decision=DENY` appears only on `/decide` responses and `dry_run` reservations; a live (non-dry-run) reservation that lacks budget is rejected with HTTP `409 BUDGET_EXCEEDED` instead of a `DENY` decision. This model enables graceful degradation instead of hard pass/fail. See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
+The three possible outcomes of a budget evaluation: **ALLOW** (proceed normally), **ALLOW_WITH_CAPS** (proceed with reduced limits), or **DENY** (reject the request). `decision=DENY` appears only on `/decide` responses and `dry_run` reservations; a live (non-dry-run) reservation against an existing but insufficient budget is rejected with HTTP `409 BUDGET_EXCEEDED`; if no derived scope has a budget at all, the server returns `404 NOT_FOUND` (dry-run and `/decide` return `DENY` with `reason_code=BUDGET_NOT_FOUND`). This model enables graceful degradation instead of hard pass/fail. See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
 
 ### Overage Policy
 

@@ -244,6 +244,7 @@ This limits total retry spend per document to the workflow budget, regardless of
 Before each retry, use `decide` to check if budget is available without creating a reservation. This avoids creating reservations you'll immediately release:
 
 ```python
+import os
 import uuid
 
 from runcycles import (
