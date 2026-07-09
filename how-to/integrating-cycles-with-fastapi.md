@@ -112,7 +112,7 @@ async def budget_preflight(request: Request, call_next):
 
 ## Per-tenant isolation
 
-Use Cycles' subject hierarchy to isolate budgets per tenant. Extract the tenant from request headers:
+Use Cycles' subject hierarchy to isolate budgets per tenant. Extract the tenant from request headers, and pass it through to a subject callable on the decorator — subject fields on `@cycles` accept callables (runcycles 0.4.0+) that are invoked with the decorated function's arguments at reservation time:
 
 ```python
 from fastapi import Header, Depends
@@ -127,11 +127,11 @@ def get_tenant(x_tenant_id: str = Header(default="acme")) -> str:
     action_kind="llm.completion",
     action_name="gpt-4o",
     unit="USD_MICROCENTS",
+    # Resolved from this call's kwargs; returning None falls back to the
+    # client-config default (CYCLES_TENANT)
+    tenant=lambda prompt, **kw: kw.get("tenant", "acme"),
 )
 async def guarded_llm_call(prompt: str, tenant: str = "acme") -> dict:
-    # The tenant is passed as a function argument, and the decorator's
-    # subject defaults (from set_default_client) apply automatically.
-    # For per-tenant isolation, use the programmatic client instead.
     ...
 
 @app.get("/chat")
@@ -140,7 +140,7 @@ async def chat(prompt: str, tenant: str = Depends(get_tenant)):
     return {"response": result["content"]}
 ```
 
-Each tenant's requests are charged against their own budget scope.
+Each tenant's requests are charged against their own budget scope. If you need control beyond what the decorator offers (custom reservation lifecycles, streaming), drop down to the programmatic client — see [Handling Streaming Responses](/how-to/handling-streaming-responses-with-cycles).
 
 ## Budget dashboard endpoint
 

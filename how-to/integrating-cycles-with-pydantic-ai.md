@@ -24,6 +24,8 @@ export OPENAI_API_KEY="sk-..."         # or whichever provider your agent uses
 
 > **Need an API key?** Create one via the Admin Server — see [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key) or [API Key Management](/how-to/api-key-management-in-cycles).
 
+> **Note:** The snippets on this page target pydantic-ai 1.x (`result.output`, `output_type=`, `input_tokens`/`output_tokens`). Pre-1.0 releases used `result.data`, `result_type=`, and `request_tokens`/`response_tokens`.
+
 ::: tip 60-Second Quick Start
 ```python
 from pydantic_ai import Agent
@@ -36,7 +38,7 @@ agent = Agent("openai:gpt-4o", system_prompt="You are a helpful assistant.")
 @cycles(estimate=1_500_000, action_kind="llm.completion", action_name="gpt-4o")
 def ask(prompt: str) -> str:
     result = agent.run_sync(prompt)
-    return result.data
+    return result.output
 
 print(ask("What is budget authority?"))
 ```
@@ -78,15 +80,15 @@ def research(question: str) -> dict:
     ctx = get_cycles_context()
     if ctx:
         ctx.metrics = CyclesMetrics(
-            tokens_input=result.usage().request_tokens,
-            tokens_output=result.usage().response_tokens,
+            tokens_input=result.usage().input_tokens,
+            tokens_output=result.usage().output_tokens,
         )
 
     return {
-        "answer": result.data,
+        "answer": result.output,
         "usage": {
-            "input_tokens": result.usage().request_tokens,
-            "output_tokens": result.usage().response_tokens,
+            "input_tokens": result.usage().input_tokens,
+            "output_tokens": result.usage().output_tokens,
         },
     }
 ```
@@ -116,7 +118,7 @@ def lookup_database(ctx: RunContext[None], record_id: str) -> str:
 @cycles(estimate=2_000_000, action_kind="llm.completion", action_name="gpt-4o")
 def ask_with_tools(prompt: str) -> str:
     result = agent.run_sync(prompt)
-    return result.data
+    return result.output
 ```
 
 Each tool call gets its own reservation, so you have fine-grained visibility into what the agent spends on LLM calls versus tool invocations.
@@ -137,14 +139,14 @@ class MovieReview(BaseModel):
 
 review_agent = Agent(
     "openai:gpt-4o",
-    result_type=MovieReview,
+    output_type=MovieReview,
     system_prompt="You are a film critic. Return structured reviews.",
 )
 
 @cycles(estimate=1_500_000, action_kind="llm.completion", action_name="gpt-4o")
 def review_movie(movie_name: str) -> MovieReview:
     result = review_agent.run_sync(f"Review the movie: {movie_name}")
-    return result.data
+    return result.output
 ```
 
 The decorator does not interfere with the return type. Your function still returns a `MovieReview` instance; Cycles only manages the budget lifecycle around it.

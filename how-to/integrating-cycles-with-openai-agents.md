@@ -61,12 +61,12 @@ The plugin implements the SDK's `RunHooks` interface. Every hook in the agent li
 | Hook | Cycles API Call | Blocking | Detail |
 |------|----------------|----------|--------|
 | `on_tool_start` | `create_reservation` (tool estimate) | Raises on DENY | Budget reserved based on tool estimate map |
-| `on_tool_end` | `commit_reservation` | No | Actual amount committed |
+| `on_tool_end` | `commit_reservation` | No | Commits at the tool's reserved estimate |
 | `on_llm_start` | `create_reservation` (LLM estimate) | Raises on DENY | Budget reserved before each LLM call |
-| `on_llm_end` | `commit_reservation` (actual tokens) | No | Real token count from `response.usage` committed |
+| `on_llm_end` | `commit_reservation` | No | Commits at the reserved estimate — or at the actual token count when `llm_unit=Unit.TOKENS`. Token counts from `response.usage` are always recorded in `CyclesMetrics` |
 | `on_handoff` | `create_event` (audit trail) | No | Handoff recorded in Cycles ledger |
 
-Reservations include automatic heartbeat — long-running tools won't silently expire.
+Reservations include automatic heartbeat — long-running tools won't silently expire. (Heartbeat is skipped when `ttl_ms` is below 2000, since the minimum 1-second extend interval would exceed the TTL window.)
 
 ## Tool estimate mapping
 
