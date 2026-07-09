@@ -96,7 +96,7 @@ The intermediate levels (`workspace`, `app`, `workflow`) are not present and are
 
 ### Custom dimensions
 
-For budgeting dimensions that do not fit the standard hierarchy, the Subject supports a `dimensions` field with custom key-value pairs:
+For attribution facets that do not fit the standard hierarchy, the Subject supports a `dimensions` field with custom key-value pairs:
 
 ```json
 {
@@ -111,7 +111,7 @@ For budgeting dimensions that do not fit the standard hierarchy, the Subject sup
 }
 ```
 
-This is how concepts like **run budgets** are modeled — by passing a unique run identifier through dimensions, each execution gets its own scope.
+Dimensions are metadata for reporting and policy taxonomies only — they never derive scopes, and servers MAY ignore them for budgeting decisions. To give each execution an enforceable **run budget**, encode the run identifier in a standard Subject field instead (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
 
 For the full technical specification, see [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles).
 
@@ -261,7 +261,7 @@ When deciding which scopes to use, ask:
 | "How much can this type of process consume?" | `workflow` |
 | "How much can this individual agent use?" | `agent` |
 | "How much can this set of tools cost?" | `toolset` |
-| "How much can this single execution consume?" | `workflow:run-id` or `dimensions.run` |
+| "How much can this single execution consume?" | `workflow: "run-{id}"` (a standard field — `dimensions` are not enforceable) |
 
 You do not need all of them. Most teams start with tenant + one or two additional levels.
 

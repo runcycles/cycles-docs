@@ -358,7 +358,7 @@ Scope budgets to individual users or sessions:
 
 User and session identifiers can also be set dynamically via `ctx.metadata.userId` and `ctx.metadata.sessionId` at runtime — context values override static config.
 
-These identifiers are threaded into Cycles reservation subjects as dimensions, enabling per-user or per-session budget enforcement.
+These identifiers are threaded into Cycles reservation subjects as `dimensions` for attribution and reporting. Note that dimensions never derive budget scopes — to *enforce* a per-user or per-session budget, the identifier must be mapped to a standard Subject field (e.g. `agent` or `workflow`) with a budget at that scope.
 
 ## Reservation settings
 
