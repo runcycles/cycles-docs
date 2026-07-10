@@ -33,7 +33,7 @@ Every response — error or success — also carries an `X-Cycles-Trace-Id` HTTP
 
 ## The error codes
 
-The runtime protocol defines 16 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec — `LIMIT_EXCEEDED` was added in spec v0.1.25.12). This page documents those 16 plus the admin-plane `TENANT_CLOSED` lifecycle error — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — totalling 17 codes covered here. The admin-plane error enum has additional codes that aren't part of the runtime wire contract; see the admin OpenAPI spec for the full set.
+The runtime protocol defines 17 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec — `LIMIT_EXCEEDED` was added in spec v0.1.25.12, `TENANT_CLOSED` in spec v0.1.25.13). `TENANT_CLOSED` mirrors the governance/admin plane's lifecycle error of the same name — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — so all 17 codes covered here are now part of the runtime wire contract. The admin-plane error enum has additional codes that aren't; see the admin OpenAPI spec for the full set.
 
 Each code has a specific HTTP status code and meaning.
 
@@ -124,6 +124,8 @@ The budget scope has been permanently closed. No further budget operations are a
 The owning tenant has been permanently closed. Every mutating admin-plane operation on any object owned by a closed tenant — budgets, reservations, API keys, webhook subscriptions, policies — is rejected with this code. GET endpoints remain available for post-mortem audit reads.
 
 This error is issued by the **Rule 2 — Terminal-Owner Mutation Guard** half of the cascade contract (governance-admin spec v0.1.25.29, shipped in `cycles-server-admin` v0.1.25.35; full coverage v0.1.25.36). Rule 2's counterpart — **Rule 1 — Close Cascade** — runs at tenant-close time and automatically drives owned objects to terminal states (`BudgetLedger → CLOSED`, `ApiKey → REVOKED`, open reservations → `RELEASED`, `WebhookSubscription → DISABLED`), so by the time you see this error the owned objects are already terminal. There is no way to "undo" a close; this is not a race condition that will resolve on retry.
+
+**On the runtime plane** (runtime spec v0.1.25.13, shipped in `cycles-server` 0.1.25.47): the persisting reservation mutations — create (`dry_run` absent or `false`), commit, release, extend — return `409 TENANT_CLOSED` once the owning tenant's `CLOSED` flip is durable. For non-replay mutations it takes precedence over the reservation-state errors (`RESERVATION_FINALIZED`, `RESERVATION_EXPIRED`); same-key replays of mutations that succeeded before the close return their original stored response. Fresh (non-replay) `dry_run=true` create and `POST /v1/decide` evaluations never 409 for this condition — they return `200` with `decision=DENY` and `reason_code=TENANT_CLOSED` (see [Decision reason codes](#decision-reason-codes)). A present-but-malformed tenant record (undecodable JSON, missing or unrecognized `status`) fails closed with `500 INTERNAL_ERROR` before any mutation; deployments with no tenant records at all are not guarded. A mutation-surface `409 TENANT_CLOSED` on the evidence endpoints (persisting create, commit, release) emits an `error` CyclesEvidence envelope and stamps `cycles_evidence` on the response. Note that the cascade also revokes the tenant's API keys and the runtime auth filter rejects CLOSED-tenant keys per request, so tenant-key calls usually fail with `401` first — the 409 surfaces mainly on admin-key mutations and in the post-flip/pre-revocation window. `cycles-server` 0.1.25.46 and earlier surface closed tenants on the runtime plane only as `401`s (revoked/rejected keys) or budget-state errors such as `BUDGET_CLOSED`.
 
 **What to do:** the tenant and its owned objects are read-only. Create a new tenant or escalate. **Not retryable against any object owned by this tenant** — unlike `BUDGET_FROZEN` (which an operator may unfreeze), `TENANT_CLOSED` is terminal. Implement no retry logic for this error.
 
@@ -222,6 +224,8 @@ The 429 response carries throttling headers alongside the standard correlation h
 
 An unexpected server error occurred.
 
+Since `cycles-server` 0.1.25.47 this is also the deliberate fail-closed response when a tenant record exists but its status cannot be determined (undecodable JSON, non-object, missing or unrecognized `status`) — the closed-tenant guard refuses to treat a corrupt governance record as an open tenant, on the dry-run/decide surface too. That variant will not resolve on retry; the operator must repair the tenant record.
+
 **What to do:** retry with exponential backoff. If the error persists, contact the Cycles server operator.
 
 ## Error handling by operation
@@ -233,7 +237,7 @@ An unexpected server error occurred.
 | BUDGET_EXCEEDED | 409 | Insufficient budget |
 | BUDGET_FROZEN | 409 | Budget scope is frozen |
 | BUDGET_CLOSED | 409 | Budget scope is permanently closed |
-| TENANT_CLOSED | 409 | Owning tenant is closed (v0.1.25.35+); every mutation on owned objects rejects |
+| TENANT_CLOSED | 409 | Owning tenant is closed (cycles-server 0.1.25.47+, spec v0.1.25.13). Persisting create only — a fresh `dry_run=true` returns `200 decision=DENY reason_code=TENANT_CLOSED` instead |
 | OVERDRAFT_LIMIT_EXCEEDED | 409 | Scope is over-limit |
 | DEBT_OUTSTANDING | 409 | Scope has unresolved debt (no overdraft limit configured) |
 | IDEMPOTENCY_MISMATCH | 409 | Same key, different payload |
@@ -253,7 +257,7 @@ An unexpected server error occurred.
 | FORBIDDEN | 403 | Tenant mismatch |
 | IDEMPOTENCY_MISMATCH | 409 | Same key, different payload |
 
-Note: decide returns `200` with `decision: DENY` for budget-state conditions (insufficient remaining, debt, overdraft, and the "no budget exists at any scope" case — surfaced via `reason_code` from the [DecisionReasonCode enum](#decision-reason-codes)), not a `409` or `404` error. Request-validity errors like `UNIT_MISMATCH` are still returned as 400. The same applies to `POST /v1/reservations` when `dry_run=true`.
+Note: decide returns `200` with `decision: DENY` for budget-state conditions (insufficient remaining, debt, overdraft, and the "no budget exists at any scope" case — surfaced via `reason_code` from the [DecisionReasonCode enum](#decision-reason-codes)), not a `409` or `404` error. The same holds for a closed owning tenant (cycles-server 0.1.25.47+, spec v0.1.25.13): a fresh (non-replay) evaluation returns `200 decision=DENY reason_code=TENANT_CLOSED`, never `409 TENANT_CLOSED` — though a present-but-malformed tenant record fails closed with `500 INTERNAL_ERROR`. Request-validity errors like `UNIT_MISMATCH` are still returned as 400. The same applies to `POST /v1/reservations` when `dry_run=true`.
 
 ### Commit errors
 
@@ -262,7 +266,7 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | BUDGET_EXCEEDED | 409 | Actual exceeds budget (REJECT only) |
 | BUDGET_FROZEN | 409 | Budget scope is frozen |
 | BUDGET_CLOSED | 409 | Budget scope is permanently closed |
-| TENANT_CLOSED | 409 | Owning tenant is closed (v0.1.25.35+) |
+| TENANT_CLOSED | 409 | Owning tenant is closed (cycles-server 0.1.25.47+, spec v0.1.25.13); takes precedence over reservation-state errors for non-replay requests |
 | OVERDRAFT_LIMIT_EXCEEDED | 409 | Debt would exceed limit (ALLOW_WITH_OVERDRAFT) |
 | RESERVATION_EXPIRED | 410 | Past TTL + grace period |
 | RESERVATION_FINALIZED | 409 | Already committed or released |
@@ -276,7 +280,7 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 
 | Error | HTTP | Meaning |
 |---|---|---|
-| TENANT_CLOSED | 409 | Owning tenant is closed (v0.1.25.35+) |
+| TENANT_CLOSED | 409 | Owning tenant is closed (cycles-server 0.1.25.47+, spec v0.1.25.13); takes precedence over reservation-state errors for non-replay requests |
 | RESERVATION_EXPIRED | 410 | Past TTL + grace period |
 | RESERVATION_FINALIZED | 409 | Already committed or released |
 | IDEMPOTENCY_MISMATCH | 409 | Same key, different payload |
@@ -289,7 +293,7 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | Error | HTTP | Meaning |
 |---|---|---|
 | INVALID_REQUEST | 400 | Missing or invalid fields |
-| TENANT_CLOSED | 409 | Owning tenant is closed (v0.1.25.35+) |
+| TENANT_CLOSED | 409 | Owning tenant is closed (cycles-server 0.1.25.47+, spec v0.1.25.13); takes precedence over reservation-state errors for non-replay requests |
 | RESERVATION_EXPIRED | 410 | Past TTL (no grace period for extend) |
 | RESERVATION_FINALIZED | 409 | Already committed or released |
 | MAX_EXTENSIONS_EXCEEDED | 409 | Tenant max_reservation_extensions limit reached |
@@ -305,7 +309,6 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | BUDGET_EXCEEDED | 409 | Insufficient budget (REJECT only) |
 | BUDGET_FROZEN | 409 | Budget scope is frozen |
 | BUDGET_CLOSED | 409 | Budget scope is permanently closed |
-| TENANT_CLOSED | 409 | Owning tenant is closed (v0.1.25.35+) |
 | OVERDRAFT_LIMIT_EXCEEDED | 409 | Debt would exceed limit (ALLOW_WITH_OVERDRAFT) |
 | NOT_FOUND | 404 | No budget exists at any derived scope in any unit (message: `"Budget not found for provided scope: ..."`) |
 | UNIT_MISMATCH | 400 | `actual.unit` does not match any budget at the target scope (budget exists in a different unit) |
@@ -313,6 +316,8 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | UNAUTHORIZED | 401 | Invalid API key |
 | FORBIDDEN | 403 | Tenant mismatch |
 | IDEMPOTENCY_MISMATCH | 409 | Same key, different payload |
+
+Note: `/v1/events` is not part of the closed-tenant mutation guard's surface — the runtime spec's `TENANT_CLOSED` binding covers the persisting reservation mutations (create/commit/release/extend) only. A closed owning tenant surfaces on `/v1/events` as `401` (the auth filter rejects revoked/CLOSED-tenant keys) or `BUDGET_CLOSED` (the cascade closes the tenant's budgets).
 
 ## Decision reason codes
 
@@ -326,6 +331,7 @@ Separately from the 4xx error code list, `POST /v1/decide` and `POST /v1/reserva
 | `BUDGET_NOT_FOUND` | No budget exists at any derived scope in the requested unit. On non-dry reserve and `/v1/events` paths this same underlying condition surfaces as `HTTP 404` with `error=NOT_FOUND` instead. |
 | `OVERDRAFT_LIMIT_EXCEEDED` | Either `debt + delta > overdraft_limit` on commit, OR the scope is in over-limit state (`is_over_limit=true`) and no new reservations are permitted until reconciled. |
 | `DEBT_OUTSTANDING` | A derived scope has `debt > 0` and `overdraft_limit == 0` (no policy permits further debt accrual). |
+| `TENANT_CLOSED` | The owning tenant's status is `CLOSED` (deployments with a governance plane; added in spec v0.1.25.13, emitted by cycles-server 0.1.25.47+ on fresh dry-run/decide evaluations). The persisting mutation surface reports the same condition as `HTTP 409` with `error=TENANT_CLOSED` instead — see [TENANT_CLOSED (409)](#tenant-closed-409). |
 
 **Why this is a separate enum.** The 4xx error codes surface request-level failures in the `error` field. Decision reason codes surface budget-state outcomes in the `reason_code` field on successful HTTP responses. Some labels overlap (e.g. `BUDGET_EXCEEDED`) because the same underlying condition is reported differently depending on the endpoint: `/decide` and dry-run reserve surface it as a non-4xx DENY decision, while non-dry reserve surfaces it as a `409` error.
 

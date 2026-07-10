@@ -15,8 +15,8 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | Component | Version | Release date |
 |---|---|---|
-| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.12) | 2026-05-22 |
-| Governance spec (admin) | v0.1.25.34 | 2026-04-20 |
+| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.13) | 2026-07-10 |
+| Governance spec (admin) | v0.1.25.37 | 2026-07-10 |
 | `cycles-server` (runtime) | v0.1.25.46 | 2026-07-04 |
 | `cycles-server-admin` | v0.1.25.48 | 2026-07-04 |
 | `cycles-server-events` | v0.1.25.22 | 2026-07-04 |
@@ -40,6 +40,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Protocol spec suite (v0.1.26)
 
+- **Runtime spec document revision v0.1.25.13** (2026-07-10) — adds `TENANT_CLOSED` to the runtime `ErrorCode` enum with a normative closed-tenant binding in §ERROR SEMANTICS: persisting reservation create/commit/release/extend MUST return `409 TENANT_CLOSED` on a closed owning tenant (taking precedence over reservation-state errors for non-replay attempts), while fresh `dry_run=true` / `/v1/decide` evaluations MUST return `200 decision=DENY reason_code=TENANT_CLOSED` (new `DecisionReasonCode` known value); present-but-malformed tenant records fail closed with `500 INTERNAL_ERROR`. Companion revisions: evidence spec 0.2.1 (declares `TENANT_CLOSED` in the evidence ErrorResponseMirror), protocol-extensions 0.1.27, governance 0.1.25.37 (adds `TENANT_CLOSED` to the `reservation.denied` event's documented `reason_code` values). Implemented by `cycles-server` 0.1.25.47.
 - The cycles-protocol repo added [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) — a formal MUST / SHOULD / MAY statement of what a conformant Cycles implementation has to do. The active v0.1.25 target requires 12 MUST operations: 4 core runtime reservation operations plus 8 cross-plane event / webhook / balance / auth-introspection operations. Four more runtime operations (`decide`, list/get reservations, direct-debit events) are SHOULD-level and implemented by the reference servers.
 - The README repositioned the spec suite around upcoming **v0.1.26** extensions (runtime base still v0.1.25). Action-kinds, action-quotas, observe mode, DenyDetail, and `ACTION_QUOTA_EXCEEDED` / `ACTION_KIND_DENIED` / `ACTION_KIND_NOT_ALLOWED` reason codes are SHOULD-level today and **not yet enforced** in runcycles' reference servers. They become MUST only when `CONFORMANCE.md` promotes v0.1.26 to the active target.
 - Spec-only trace_id alignment bumps on extension specs (`cycles-action-kinds`, `cycles-governance-extensions` to v0.1.27) — declare `trace_id` on `ErrorResponse` and `X-Cycles-Trace-Id` on `components.headers` for OpenAPI tooling consistency. Behavioral contract unchanged from what's documented in [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).

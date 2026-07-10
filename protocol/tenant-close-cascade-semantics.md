@@ -29,6 +29,7 @@ The cascade contract, formalized at spec document revision 0.1.25.31 and shippin
 | Rule 1 cascade (budgets + reservations) | `cycles-server-admin` v0.1.25.35 | Closing a tenant cascades budgets → CLOSED and open reservations → RELEASED |
 | Rule 2 guard (budget operations, webhook create/update) | `cycles-server-admin` v0.1.25.35 | Admin-plane mutations against closed-tenant budgets, and webhook create/update, return `409 TENANT_CLOSED` |
 | Rule 2 full coverage (policies, api-keys, remaining webhook mutations) | `cycles-server-admin` v0.1.25.36 | All remaining admin-plane mutation endpoints also return `409 TENANT_CLOSED` |
+| Rule 2 runtime guard (reservation create/commit/release/extend) | `cycles-server` v0.1.25.47 (runtime spec v0.1.25.13) | Persisting reservation mutations on a closed tenant return `409 TENANT_CLOSED`; fresh dry-run/decide evaluations return `200 decision=DENY reason_code=TENANT_CLOSED` |
 | Dashboard tombstone + cascade preview UI | `cycles-dashboard` v0.1.25.43 | Banner, CLOSE dialog preview, humanized errors, cascade audit/event chip |
 
 **Pre-v0.1.25.35 admin servers do not cascade** — operators must manually freeze budgets, revoke keys, and disable webhooks before or after closing the tenant.
@@ -127,16 +128,18 @@ The spec's Rule 2 scopes the guard to **every mutating admin-plane operation** w
 
 ### What the runtime plane sees
 
-**Spec (normative):** Rule 2's scope explicitly includes runtime reservation mutations — "any reservation create/commit/release/extend" — so a conformant server MUST reject them with `409 TENANT_CLOSED` once the CLOSED flip is durable.
+**Spec (normative):** Rule 2's scope explicitly includes runtime reservation mutations — "any reservation create/commit/release/extend" — so a conformant server MUST reject them with `409 TENANT_CLOSED` once the CLOSED flip is durable. Runtime spec revision v0.1.25.13 binds this directly on the runtime plane: `TENANT_CLOSED` is now part of the runtime `ErrorCode` enum, with a normative closed-tenant binding in the runtime spec's ERROR SEMANTICS. `cycles-server` 0.1.25.47 implements it — the reference-implementation gap this section previously documented is closed. Shipped behavior:
 
-::: warning Reference implementation gap
-The runtime reference server's `ErrorCode` enum does not yet include `TENANT_CLOSED` (it exists in the governance-admin spec's shared enum, whose normative scope covers these routes). Until the runtime server adopts it, a closed tenant is observable on the runtime plane only through the cascade's effects:
-:::
+- **Persisting mutations → `409 TENANT_CLOSED`.** Reservation create (`dry_run` absent or `false`), commit, release, and extend against a `CLOSED` owning tenant return `409` with `error=TENANT_CLOSED` once the flip is durable. The check runs inside the same Lua scripts as the budget mutations, so a post-flip request can never partially succeed, and it is not subject to any config-cache TTL.
+- **Precedence.** For non-replay mutations, `TENANT_CLOSED` takes precedence over the reservation-state errors (`RESERVATION_FINALIZED`, `RESERVATION_EXPIRED`) — Rule 2 rejects regardless of the child's own current status. Same-key replays of mutations that succeeded before the close are the exception: they retain replay precedence and return the original stored response.
+- **Non-persisting evaluations never 409.** A fresh (non-replay) `dry_run=true` create or `POST /v1/decide` on a closed tenant returns `200` with `decision=DENY` and `reason_code=TENANT_CLOSED` — dry-run and decide outcomes are attestations of what live execution would do (and may be captured as signed CyclesEvidence), so they reflect the closed tenant as-if-live instead of erroring. Same-key replays of pre-close evaluations return their original payload.
+- **Fail-closed on malformed tenant records.** A tenant record that is present but whose status cannot be determined (undecodable JSON, non-object, missing or non-string `status`, unknown status string) returns `500 INTERNAL_ERROR` before any mutation — on the non-persisting surface too, because the server cannot attest against corrupt governance state. A subject tenant with **no** tenant record at all (runtime-only deployments without a governance plane) is not guarded.
+- **Evidence receipts.** A mutation-surface `409 TENANT_CLOSED` on the evidence endpoints — persisting create, commit, release — emits an `error` CyclesEvidence envelope and stamps `cycles_evidence` on the response, like the other live denial codes (extend is not an evidence endpoint).
+- **Reads unaffected.** `GET /v1/reservations` and `GET /v1/reservations/{id}` keep working on a closed tenant's reservations for post-close audit, mirroring Rule 2's read-access rule.
 
-- **`401 UNAUTHORIZED`** — the cascade revokes the tenant's API keys, so calls authenticated with those keys fail authentication.
-- **`BUDGET_CLOSED`** — the cascade closes the tenant's budgets, so any operation that reaches a cascaded budget is rejected as a closed-budget mutation.
+**Observability note:** the close cascade revokes the tenant's API keys, and the runtime auth filter rejects CLOSED-tenant keys per request — so tenant-key calls usually still fail with `401 UNAUTHORIZED` before the guard is consulted. In practice `409 TENANT_CLOSED` surfaces mainly on **admin-key mutations** against a closed tenant's reservations and in the post-flip/pre-revocation race window.
 
-Client code handling runtime errors should therefore treat "tenant was closed" as a `401`/`BUDGET_CLOSED` scenario, not a `TENANT_CLOSED` one.
+**Version scope:** `cycles-server` 0.1.25.46 and earlier surface closed tenants on the runtime plane only as `401`s (revoked/rejected keys) or budget-state errors (`BUDGET_CLOSED` on cascaded budgets). Client code on those versions should treat "tenant was closed" as a `401`/`BUDGET_CLOSED` scenario; on 0.1.25.47+ handle `409 TENANT_CLOSED` as well.
 
 ## Operator recipe — closing a tenant
 
@@ -186,6 +189,7 @@ See [Using the Cycles Dashboard](/how-to/using-the-cycles-dashboard#closed-tenan
 - Pre-v0.1.25.35 servers do NOT return `409 TENANT_CLOSED` — they return the previous per-endpoint error (`409 BUDGET_FROZEN`, `403 FORBIDDEN`, etc.) or may accept mutations against orphaned objects.
 - Pre-v0.1.25.36 servers have partial Rule 2 coverage — `.35` guarded budget operations and webhook create/update; `.36` completed policies, api-keys, the remaining webhook mutations, and per-row bulk-action.
 - Pre-v0.1.25.43 dashboards render TENANT_CLOSED as a raw 409 error without the humanizer and without the cascade-preview dialog.
+- `cycles-server` (runtime) 0.1.25.46 and earlier do NOT return `409 TENANT_CLOSED` on reservation mutations — closed tenants surface there only as `401`s (revoked/rejected keys) or `BUDGET_CLOSED`. The runtime guard ships in 0.1.25.47 (runtime spec v0.1.25.13).
 
 **Re-issuing close on an already-CLOSED tenant** is idempotent at the tenant level across all versions — it returns the current state and emits no duplicate audit entries for already-terminal children. Under Mode B it is not a pure no-op: a re-close completes any outstanding child transitions left by an interrupted cascade.
 

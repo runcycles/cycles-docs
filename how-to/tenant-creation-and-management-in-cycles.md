@@ -306,7 +306,7 @@ curl -s "http://localhost:7979/v1/admin/events?correlation_id=<id>" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, data}'
 ```
 
-After the cascade, mutating any owned object returns `409 TENANT_CLOSED` (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
+After the cascade, mutating any owned object returns `409 TENANT_CLOSED` (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for post-mortem audit reads. On the runtime plane, `cycles-server` 0.1.25.47+ enforces the same guard on persisting reservation create/commit/release/extend (runtime spec v0.1.25.13) — fresh dry-run and `/v1/decide` evaluations return `200 decision=DENY reason_code=TENANT_CLOSED` instead of a 409; runtime 0.1.25.46 and earlier surface closure there only as `401`s from revoked keys or `BUDGET_CLOSED`. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
 
 ::: warning Don't pre-freeze before closing
 On admin v0.1.25.35+, the cascade runs automatically and atomically from the operator's perspective (via Rule 2). **Do not** freeze budgets, revoke keys, or disable webhooks before closing — it's unnecessary, generates audit clutter, and (on future Mode A implementations) can cause cascades to roll back if a pre-freeze step fails. Just close the tenant; the cascade handles everything.
@@ -821,6 +821,8 @@ curl -s -X PATCH http://localhost:7979/v1/admin/tenants/acme-corp \
 ### TENANT_CLOSED
 
 The tenant has been permanently closed. This cannot be reversed. If you need a new tenant, create one with a different `tenant_id`.
+
+Returned by every mutating admin-plane operation on the closed tenant's owned objects (admin v0.1.25.35+, full coverage v0.1.25.36+) and, since `cycles-server` 0.1.25.47, by persisting reservation create/commit/release/extend on the runtime plane (runtime spec v0.1.25.13).
 
 ### 403 FORBIDDEN (tenant mismatch)
 

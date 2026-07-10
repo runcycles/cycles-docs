@@ -293,7 +293,7 @@ Two reserved `tenant_id` values on audit-log entries (v0.1.25.28+): `__admin__` 
 
 ### TENANT_CLOSED
 
-A `409` error code (introduced in v0.1.25.35; full coverage across every mutating admin-plane operation as of v0.1.25.36) returned when mutating an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract; GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
+A `409` error code returned when mutating an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract: on the admin plane since `cycles-server-admin` v0.1.25.35 (full coverage across every mutating admin-plane operation as of v0.1.25.36), and on the runtime plane since `cycles-server` 0.1.25.47 (runtime spec v0.1.25.13) for persisting reservation create/commit/release/extend — where fresh dry-run and `/v1/decide` evaluations instead return `200 decision=DENY` with `reason_code=TENANT_CLOSED`. GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
 
 ### Tenant-Close Cascade
 

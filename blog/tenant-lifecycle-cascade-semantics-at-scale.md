@@ -116,10 +116,12 @@ curl -s -H "X-Admin-API-Key: $ADMIN_KEY" \
 
 You'll see one record per owned object — one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription — plus one **ledger-level** `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0`, carrying the aggregate `released_amount` (not one event per reservation). The corresponding event rows all share the server-composed cascade `correlation_id`, which is how an auditor reconstructs the cascade without having to cross-join on timestamp (audit rows join via the originating `request_id`).
 
-A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane — the spec's Rule 2 explicitly scopes reservation create/commit/release/extend, so the `409 TENANT_CLOSED` below is the normative contract (note: the current runtime reference server's error enum does not yet include `TENANT_CLOSED`; today it surfaces closed tenants as `401`s from revoked keys or `BUDGET_CLOSED`):
+A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane — the spec's Rule 2 explicitly scopes reservation create/commit/release/extend, so the `409 TENANT_CLOSED` below is the normative contract — implemented in `cycles-server` 0.1.25.47, which added `TENANT_CLOSED` to the runtime error enum per spec revision v0.1.25.13 (on 0.1.25.46 and earlier, the runtime plane surfaces closed tenants only as `401`s from revoked keys or `BUDGET_CLOSED`):
 
 ```bash
 # Mutation on a released reservation under a closed tenant
+# (a not-yet-revoked tenant key in the post-flip window, or an admin key —
+# once the cascade revokes the key, the 401 below wins first)
 curl -i -X POST \
   -H "X-Cycles-API-Key: $TENANT_KEY" \
   "http://localhost:7878/v1/reservations/res-xyz/commit"

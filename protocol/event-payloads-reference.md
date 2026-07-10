@@ -135,7 +135,7 @@ The `reservation.denied` event model defines 9 fields, but the current server em
 | Field | Type | Populated | Description |
 |---|---|---|---|
 | `scope` | string | Yes | Scope path that denied the reservation |
-| `reason_code` | string | Yes | Why denied. Known values: `BUDGET_EXCEEDED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `BUDGET_FROZEN`, `BUDGET_CLOSED`. Open string — extensions (v0.1.26+) may emit additional values such as `ACTION_QUOTA_EXCEEDED`, `ACTION_KIND_DENIED`, `ACTION_KIND_NOT_ALLOWED`. |
+| `reason_code` | string | Yes | Why denied. Known values: `BUDGET_EXCEEDED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, and — from cycles-server 0.1.25.47 (spec v0.1.25.13) — `TENANT_CLOSED` on fresh dry-run/decide DENYs for a closed owning tenant. Open string — extensions (v0.1.26+) may emit additional values such as `ACTION_QUOTA_EXCEEDED`, `ACTION_KIND_DENIED`, `ACTION_KIND_NOT_ALLOWED`. |
 | `requested_amount` | number | Yes | Amount the reservation requested |
 | `unit` | string | Not yet | Budget unit (`USD_MICROCENTS`, `TOKENS`, `CREDITS`, `RISK_POINTS`) |
 | `remaining` | number | Not yet | Budget remaining at the scope that denied |

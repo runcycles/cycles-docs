@@ -8,9 +8,9 @@ description: "How to filter webhook events by scope using scope_filter on subscr
 Webhook subscriptions can filter events by scope path using the `scope_filter` field. When set, only events whose `scope` matches the filter are delivered to your endpoint.
 
 ::: danger Reference implementation divergence — cycles-server-admin 0.1.25.48 and earlier
-**Scope of the divergence:** it applies only to **admin-plane-emitted events** (tenant, api_key, policy, webhook lifecycle, and admin-initiated budget events) plus **replay**. Runtime-emitted events (reservations, runtime budget events — the bulk of webhook volume) have always been matched by the runtime server's own matcher, which already implements the spec semantics below (exact match, trailing-`*` prefix, null scope excluded). In other words: on 0.1.25.48 and earlier, the *same filter* matched differently depending on which plane emitted the event.
+**Scope of the divergence:** it applies only to **admin-plane-emitted events** (tenant, api_key, policy, webhook lifecycle, and admin-initiated budget events) plus **replay**. Runtime-emitted events (reservations, runtime budget events — the bulk of webhook volume) have always been matched by the runtime server's own matcher, which already implements the spec semantics below (exact match, trailing-`*` prefix, null scope excluded; two edge cases refined in cycles-server 0.1.25.47 — see [Edge cases](#edge-cases)). In other words: on 0.1.25.48 and earlier, the *same filter* matched differently depending on which plane emitted the event.
 
-**Update:** a spec-conformance fix is queued for the next cycles-server-admin release, after which both planes match identically per the spec (with one refinement on the admin side: a blank or null event scope is treated as unscoped, and the replay path applies the same filter).
+**Update:** a spec-conformance fix is queued for the next cycles-server-admin release, and cycles-server 0.1.25.47 refined the runtime matcher's two edge cases to the same semantics (blank/whitespace-only event scopes are treated as unscoped and excluded from filtered subscriptions; trailing-`/*` filters require a non-empty child segment). The runtime 0.1.25.47 matcher and the queued admin matcher are pinned to the same table of (filter, scope, expected) test cases, so once the admin release ships, both planes match identically per the spec and cannot drift.
 
 The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The **admin server's** matcher (`WebhookRepository.matchesScope`, 0.1.25.48 and earlier) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences for admin-plane events on those versions:
 
@@ -71,9 +71,9 @@ If `scope_filter` is null, empty, or not provided, the subscription matches **al
 | `null` / empty / blank | All events | All events |
 | `tenant:acme-corp` | Only scope exactly `tenant:acme-corp` | Any scope starting with `tenant:acme-corp` (including `tenant:acme-corpX`) |
 | `tenant:acme-corp/` | Only scope exactly `tenant:acme-corp/` (unlikely to exist) | Any scope starting with `tenant:acme-corp/` |
-| `tenant:acme-corp/*` | Scopes starting with `tenant:acme-corp/` | Nothing (literal `*` never appears in real scopes) |
+| `tenant:acme-corp/*` | Scopes **under** `tenant:acme-corp/` — a non-empty child segment is required from cycles-server 0.1.25.47 onward (the degenerate empty-child scope `tenant:acme-corp/` matched on 0.1.25.46 and earlier) | Nothing (literal `*` never appears in real scopes) |
 | `tenant:acme-corp/workspace:prod` | Only that exact scope | That scope and anything starting with it |
-| `*` | Undefined by spec; the runtime matcher treats it as an empty-prefix trailing wildcard — any non-null scope matches, including blank `""` | All events (including null-scope) |
+| `*` | Undefined by spec; the runtime matcher treats it as an empty-prefix trailing wildcard — any non-blank scope matches from cycles-server 0.1.25.47 onward (on 0.1.25.46 and earlier a blank `""` scope also matched, via the empty-prefix comparison) | All events (including null-scope) |
 | *(any filter)* vs. null-scope event | Not delivered | Delivered |
 
 ## What's NOT supported
@@ -163,8 +163,9 @@ As of cycles-server v0.1.25.46, `reservation.commit_overage` is emitted **with**
 ## Edge cases
 
 - **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events (both semantics).
-- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The runtime matcher treats it as "match any non-null-scope event" (a blank `""` scope still matches, via the empty-prefix comparison); the queued admin fix excludes both null and blank scopes; only the admin plane on 0.1.25.48 and earlier matches **all** events including null-scope ones. Prefer omitting `scope_filter` entirely to mean "everything".
-- **Events with some scope fields emitted as null**: On 0.1.25.48 and earlier, only `null` scope is checked — an empty string scope (`""`) is not treated as missing. From the conformance fix onward, blank and null scopes are both treated as unscoped (excluded from scope-filtered subscriptions).
+- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The runtime matcher treats it as "match any scoped event": from cycles-server 0.1.25.47 onward, blank/whitespace-only scopes are treated as unscoped and excluded — the same semantics as the queued admin fix; on runtime 0.1.25.46 and earlier, a blank `""` scope still matched via the empty-prefix comparison. Only the admin plane on 0.1.25.48 and earlier matches **all** events including null-scope ones. Prefer omitting `scope_filter` entirely to mean "everything".
+- **Blank event scopes** (`""` or whitespace-only): From cycles-server 0.1.25.47 (runtime) and the queued admin conformance fix onward, blank and null scopes are both treated as unscoped — excluded from every scope-filtered subscription. On runtime 0.1.25.46 and earlier, only `null` was checked (a blank scope could match the bare `*` filter); on admin 0.1.25.48 and earlier, null-scope events match every filter.
+- **Empty-child scopes against trailing `/*`** (e.g., event scope `tenant:acme-corp/` against filter `tenant:acme-corp/*`): From cycles-server 0.1.25.47 onward, the runtime matcher requires a non-empty remainder after the prefix — `tenant:acme-corp/` no longer matches (the spec says "all scopes **under** acme-corp"). On 0.1.25.46 and earlier it matched via plain `startsWith`. Unchanged on both: the bare base scope `tenant:acme-corp` (no trailing slash) never matches a `…/*` filter on the runtime plane.
 
 ## Related
 
