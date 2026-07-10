@@ -289,7 +289,7 @@ Closing a tenant is irreversible. If you need a temporary block, use SUSPENDED i
 
 #### What cascades automatically (v0.1.25.35+)
 
-Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had to separately drain reservations, freeze budgets, revoke API keys, and disable webhooks by hand. Today, `cycles-server-admin` runs the full cascade in one transaction:
+Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had to separately drain reservations, freeze budgets, revoke API keys, and disable webhooks by hand. Today, `cycles-server-admin` runs the cascade automatically and inline during the close (Mode B: the status flip commits first, then per-child terminal transitions complete before the response returns — not a single transaction):
 
 | Owned object | Cascade action | Event kind |
 |---|---|---|
@@ -323,7 +323,7 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 | Your admin version | What happens |
 |---|---|
 | **v0.1.25.36+** (recommended) | Rule 1 cascade runs; Rule 2 guard active on every mutation endpoint. Budgets, API keys, reservations, and webhooks all reach terminal state automatically. Any mutation attempt returns `409 TENANT_CLOSED`. |
-| **v0.1.25.35** | Rule 1 cascade runs; Rule 2 guard covers budget + reservation mutations only. Policy, API key, and webhook-admin mutations against the now-closed tenant slip through silently until you upgrade. Cascade itself still completes correctly. |
+| **v0.1.25.35** | Rule 1 cascade runs; Rule 2 guard covers budget operations plus webhook create/update only. Policy, API key, remaining webhook, and bulk-action-row mutations against the now-closed tenant slip through silently until you upgrade (all completed in .36). Cascade itself still completes correctly. |
 | **Pre-v0.1.25.35** | No cascade. Dashboard banner still renders (it's purely UI state), but owned objects stay in their pre-close state until you manually freeze / revoke / disable them. |
 
 **Mode B timing.** runcycles' reference server uses Mode B (flip-first with guarded cascade) — `tenant.status` flips to `CLOSED` first, then children cascade inline. A GET against an owned budget in the milliseconds between flip and cascade-completion may still return the pre-terminal status, but any mutation will already be rejected by the Rule 2 guard. The observable window is typically sub-second on a healthy Redis; if it lingers longer, check the admin server's event-emission queue.

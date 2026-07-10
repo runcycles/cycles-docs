@@ -127,9 +127,11 @@ The spec's Rule 2 scopes the guard to **every mutating admin-plane operation** w
 
 ### What the runtime plane sees
 
-Runtime endpoints (`POST /v1/reservations`, commit / release / extend, `POST /v1/events`) **never return `TENANT_CLOSED`** — the code does not exist in the runtime protocol spec's `ErrorCode` enum at all. `TENANT_CLOSED` lives only in the governance-admin spec's shared ErrorCode enum.
+**Spec (normative):** Rule 2's scope explicitly includes runtime reservation mutations — "any reservation create/commit/release/extend" — so a conformant server MUST reject them with `409 TENANT_CLOSED` once the CLOSED flip is durable.
 
-A closed tenant is observable on the runtime plane only through the cascade's effects:
+::: warning Reference implementation gap
+The runtime reference server's `ErrorCode` enum does not yet include `TENANT_CLOSED` (it exists in the governance-admin spec's shared enum, whose normative scope covers these routes). Until the runtime server adopts it, a closed tenant is observable on the runtime plane only through the cascade's effects:
+:::
 
 - **`401 UNAUTHORIZED`** — the cascade revokes the tenant's API keys, so calls authenticated with those keys fail authentication.
 - **`BUDGET_CLOSED`** — the cascade closes the tenant's budgets, so any operation that reaches a cascaded budget is rejected as a closed-budget mutation.

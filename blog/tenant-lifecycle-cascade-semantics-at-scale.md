@@ -116,7 +116,7 @@ curl -s -H "X-Admin-API-Key: $ADMIN_KEY" \
 
 You'll see one record per owned object — one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription — plus one **ledger-level** `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0`, carrying the aggregate `released_amount` (not one event per reservation). The corresponding event rows all share the server-composed cascade `correlation_id`, which is how an auditor reconstructs the cascade without having to cross-join on timestamp (audit rows join via the originating `request_id`).
 
-A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane:
+A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane — the spec's Rule 2 explicitly scopes reservation create/commit/release/extend, so the `409 TENANT_CLOSED` below is the normative contract (note: the current runtime reference server's error enum does not yet include `TENANT_CLOSED`; today it surfaces closed tenants as `401`s from revoked keys or `BUDGET_CLOSED`):
 
 ```bash
 # Mutation on a released reservation under a closed tenant
@@ -150,7 +150,7 @@ The cascade pattern isn't novel. It's the default in well-designed multi-tenant 
 | **Stripe Connect** | Account rejection via `POST /v1/accounts/:id/reject` | Charges refused, payouts held, API keys de-scoped | One-way after rejection |
 | **Okta** | Tenant deletion | SSO sessions terminated, service accounts deprovisioned | One-way after hard delete |
 | **Slack** | Channel archival (workspace-level has its own process) | Channels made read-only, integrations disabled | Channel archival is reversible (archive/unarchive) |
-| **Cycles** | Tenant CLOSED via two-rule cascade | Budgets, keys, reservations, webhook subscriptions, policies | One-way; use `SUSPENDED` for reversible block |
+| **Cycles** | Tenant CLOSED via two-rule cascade | Budgets, keys, reservation aggregates, webhook subscriptions (policy rows are not terminal-transitioned; their mutations are blocked by Rule 2) | One-way; use `SUSPENDED` for reversible block |
 
 The pattern is consistent: *terminal states must enforce themselves against the whole subtree*, and operators need a distinct *suspended* state for the much more common case of "pause this customer without terminating anything."
 
