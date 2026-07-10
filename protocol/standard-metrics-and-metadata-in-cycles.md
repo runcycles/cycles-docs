@@ -140,9 +140,9 @@ Metadata is accepted on several other operations beyond commits and events:
 
 This means a full reservation lifecycle can carry metadata from creation through commit:
 
-1. Create reservation with `metadata: { "trace_id": "..." }`
+1. Create reservation with `metadata: { "external_trace_id": "..." }`
 2. Extend with `metadata: { "heartbeat_seq": "3" }`
-3. Commit with `metadata: { "request_id": "..." }` and `metrics: { ... }`
+3. Commit with `metadata: { "app_request_id": "..." }` and `metrics: { ... }`
 
 Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field, which is returned on the same response — so the metadata attached at reserve and commit time is auditable after the fact, not just sent and forgotten.
 
@@ -166,8 +166,8 @@ def chat(prompt: str) -> str:
         model_version=response.model,
     )
     ctx.commit_metadata = {
-        "request_id": request_id,
-        "trace_id": trace_id,
+        "app_request_id": app_request_id,
+        "external_trace_id": otel_trace_id,
     }
 
     return response.text
@@ -187,8 +187,8 @@ public ChatResponse chat(String prompt) {
     ctx.setMetrics(metrics);
 
     ctx.setCommitMetadata(Map.of(
-        "request_id", requestId,
-        "trace_id", traceId
+        "app_request_id", appRequestId,
+        "external_trace_id", otelTraceId
     ));
 
     return response;

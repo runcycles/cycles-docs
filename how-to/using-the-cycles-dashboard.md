@@ -183,7 +183,7 @@ Force-release uses dual authentication — the dashboard's nginx routes `/v1/res
 
 The Events page is correlation-first, not time-first:
 
-- Every row has a `correlation_id` (request-scoped) and `request_id` (hop-scoped). Clicking either filters to the full graph of related events across budgets, reservations, webhooks, and audit.
+- Every row has a `correlation_id` (event-stream cluster — groups related events like threshold → trip → reset chains or one admin operation's fan-out) and `request_id` (the originating HTTP request). Clicking either filters to the full graph of related events across budgets, reservations, webhooks, and audit.
 - Expandable detail rows show the full event payload — including `data`, `actor`, `metadata`, and delivery outcome if the event went out over a webhook.
 - Filters: event type, category, tenant, scope, time range, correlation ID.
 
