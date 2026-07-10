@@ -55,7 +55,7 @@ The budgeting scope. At least one standard field is required.
 }
 ```
 
-All fields are optional except that at least one of `tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset` must be present. The `dimensions` field allows arbitrary key-value pairs for custom budgeting dimensions.
+All fields are optional except that at least one of `tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset` must be present. The `dimensions` field allows arbitrary key-value pairs for alternative taxonomies — attribution, reporting, and policy facets. Dimensions never derive budget scopes, and v0 servers MAY ignore them for budgeting decisions; anything that needs an enforceable budget belongs in one of the six standard fields.
 
 ### Amount
 

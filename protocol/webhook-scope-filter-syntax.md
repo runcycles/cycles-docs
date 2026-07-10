@@ -73,7 +73,7 @@ If `scope_filter` is null, empty, or not provided, the subscription matches **al
 | `tenant:acme-corp/` | Only scope exactly `tenant:acme-corp/` (unlikely to exist) | Any scope starting with `tenant:acme-corp/` |
 | `tenant:acme-corp/*` | Scopes starting with `tenant:acme-corp/` | Nothing (literal `*` never appears in real scopes) |
 | `tenant:acme-corp/workspace:prod` | Only that exact scope | That scope and anything starting with it |
-| `*` | Undefined by spec (a `*`-only wildcard is not exact match) | All events |
+| `*` | Undefined by spec; the runtime matcher treats it as an empty-prefix trailing wildcard — any non-null scope matches, including blank `""` | All events (including null-scope) |
 | *(any filter)* vs. null-scope event | Not delivered | Delivered |
 
 ## What's NOT supported

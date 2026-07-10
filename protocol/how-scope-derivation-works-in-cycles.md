@@ -158,7 +158,7 @@ For example:
 }
 ```
 
-In v0, servers may or may not use dimensions for budgeting decisions. But they must accept and round-trip the data.
+In v0, servers MAY ignore dimensions for budgeting decisions entirely (the reference server does — scopes derive only from the six standard fields), but they must accept and round-trip the data.
 
 Dimensions have hard limits: at most 16 keys, and each value at most 256 characters. Keys SHOULD be lowercase and match `^[a-z0-9_.-]+$` for stable canonicalization; values are opaque strings.
 
