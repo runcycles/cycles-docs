@@ -302,7 +302,7 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Server (runtime) | v0.1.25.47 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.49 | Governance spec v0.1.25.34 |
+| Cycles Admin Server | v0.1.25.49 | Governance spec v0.1.25.37 |
 | Cycles Events Service | v0.1.25.22 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
