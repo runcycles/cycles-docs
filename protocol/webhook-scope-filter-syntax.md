@@ -1,6 +1,6 @@
 ---
 title: "Webhook Scope Filter Syntax"
-description: "How to filter webhook events by scope using scope_filter on subscriptions — spec wildcard syntax, plus the reference implementation's prefix-match divergence."
+description: "How to filter webhook events by scope using scope_filter on subscriptions — spec wildcard syntax, plus the admin plane's pre-fix prefix-match divergence."
 ---
 
 # Webhook Scope Filter Syntax
@@ -12,7 +12,7 @@ Webhook subscriptions can filter events by scope path using the `scope_filter` f
 
 **Update:** a spec-conformance fix is queued for the next cycles-server-admin release, after which both planes match identically per the spec (with one refinement on the admin side: a blank or null event scope is treated as unscoped, and the replay path applies the same filter).
 
-The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The reference implementation's matcher (`WebhookRepository.matchesScope`) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences when running against the reference server:
+The admin OpenAPI spec (normative, and described first below) defines exact-match semantics with an optional trailing `*` wildcard. The **admin server's** matcher (`WebhookRepository.matchesScope`, 0.1.25.48 and earlier) instead does **literal prefix matching**: a blank filter matches everything, a null event scope always matches, and otherwise the event scope must `startsWith(scope_filter)` — with a bare `"*"` filter special-cased to match everything. Three practical consequences for admin-plane events on those versions:
 
 1. **Trailing-`/*` filters match no admin-plane events.** The admin matcher compares the `*` literally, and real scopes never contain a `*` — so a spec-form filter delivers runtime events but silently misses admin-plane events until the fix ships.
 2. **A filter without `*` is a prefix, not an exact match.** `tenant:acme-corp/workspace:prod` also matches `tenant:acme-corp/workspace:prod/workflow:support` (and even `tenant:acme-corp/workspace:prod-eu`, since matching is character-wise). End the filter with `/` to bound it to child scopes.
@@ -78,13 +78,13 @@ If `scope_filter` is null, empty, or not provided, the subscription matches **al
 
 ## What's NOT supported
 
-- **Mid-string wildcards** — `tenant:*/workspace:prod` does not work. In the spec, `*` is only meaningful at the end of the filter string; the reference implementation treats any `*` as a literal character.
+- **Mid-string wildcards** — `tenant:*/workspace:prod` does not work. In the spec, `*` is only meaningful at the end of the filter string; a mid-string `*` is treated as a literal character on both planes (and the pre-fix admin matcher treats even a trailing `*` as literal).
 - **Multiple wildcards** — `tenant:acme-corp/*/workflow:*` is not valid.
 - **Regex** — no regular expression matching is supported.
 - **Glob patterns** — `?`, `[a-z]`, and other glob characters are treated as literal characters.
 - **Multiple scope filters per subscription** — each subscription has a single `scope_filter` string. Create multiple subscriptions if you need to watch multiple unrelated scopes.
 
-Under spec semantics, a `*` anywhere other than the end of the filter string is treated as a **literal character** in an exact-match comparison (which almost certainly won't match any real scope). Under the reference implementation, every `*` is literal, including a trailing one.
+Under spec semantics — and the runtime matcher — a `*` anywhere other than the end of the filter string is treated as a **literal character** in an exact-match comparison (which almost certainly won't match any real scope). The pre-fix admin matcher (0.1.25.48 and earlier) treats every `*` as literal, including a trailing one.
 
 ## Examples
 
@@ -163,7 +163,7 @@ As of cycles-server v0.1.25.46, `reservation.commit_overage` is emitted **with**
 ## Edge cases
 
 - **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events (both semantics).
-- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The reference implementation special-cases it to match **all** events, including null-scope events. Prefer omitting `scope_filter` entirely to mean "everything".
+- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The runtime matcher — and the queued admin fix — treat it as "match any **scoped** event" (null/blank scopes excluded); only the admin plane on 0.1.25.48 and earlier matches **all** events including null-scope ones. Prefer omitting `scope_filter` entirely to mean "everything".
 - **Events with some scope fields emitted as null**: On 0.1.25.48 and earlier, only `null` scope is checked — an empty string scope (`""`) is not treated as missing. From the conformance fix onward, blank and null scopes are both treated as unscoped (excluded from scope-filtered subscriptions).
 
 ## Related
