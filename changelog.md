@@ -17,8 +17,8 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.13) | 2026-07-10 |
 | Governance spec (admin) | v0.1.25.37 | 2026-07-10 |
-| `cycles-server` (runtime) | v0.1.25.46 | 2026-07-04 |
-| `cycles-server-admin` | v0.1.25.48 | 2026-07-04 |
+| `cycles-server` (runtime) | v0.1.25.47 | 2026-07-10 |
+| `cycles-server-admin` | v0.1.25.49 | 2026-07-10 |
 | `cycles-server-events` | v0.1.25.22 | 2026-07-04 |
 | `cycles-dashboard` | v0.1.25.67 | 2026-07-04 |
 
@@ -47,6 +47,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Runtime server (`cycles-server`)
 
+- **v0.1.25.47** (2026-07-10) — **TENANT_CLOSED Rule 2 guard + webhook matcher parity.** The four reservation mutations (create/commit/release/extend) now reject with `409 TENANT_CLOSED` when the owning tenant's `CLOSED` flip is durable (governance CASCADE SEMANTICS Rule 2 / Mode B invariant (a); runtime spec v0.1.25.13) — checked inside the Lua scripts, atomic with the budget mutations, taking precedence over reservation-state errors for non-replay attempts. Fresh `dry_run`//v1/decide evaluations on a closed tenant return `200 decision=DENY reason_code=TENANT_CLOSED`; malformed tenant records fail closed with `500`; deployments without tenant records are unaffected. Mutation-surface 409s emit `error` CyclesEvidence (create/commit/release). Also refreshes the webhook `scope_filter` dispatch matcher to be byte-identical to the admin plane's spec-conformant matcher: blank event scopes are treated as unscoped, and trailing-`/*` filters require a non-empty child segment. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax).
 - **v0.1.25.46** (2026-07-04) — **Public-endpoint rate limiting.** The unauthenticated `GET /v1/evidence/*` and CyclesEvidence JWKS endpoints are now rate-limited per client IP (default 300 requests/minute, `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE`; kill switch `CYCLES_PUBLIC_RATE_LIMIT_ENABLED`). Over-limit requests receive `429` with `error=LIMIT_EXCEEDED` (new runtime ErrorCode, spec v0.1.25.12).
 - **v0.1.25.45** (2026-06-27) — **Operational endpoints require the admin key.** `/actuator/prometheus`, `/actuator/info`, aggregate `/actuator/health`, and the API docs / Swagger endpoints now require `X-Admin-API-Key`; liveness/readiness probes and the protocol-public CyclesEvidence/JWKS endpoints stay unauthenticated. Also bounds the event-emission executor queue and adds correlation headers on auth-filter errors.
 - **v0.1.25.44** (2026-06-26) — Deployment hardening: production Compose disables tenant labels on Prometheus metrics and public SpringDoc/Swagger; `exec java` PID-1 entrypoint. No API change.
@@ -74,6 +75,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Admin server (`cycles-server-admin`)
 
+- **v0.1.25.49** (2026-07-10) — **Spec-conformant webhook `scope_filter` matching + replay filtering.** BEHAVIOR CHANGE: the admin matcher (`WebhookRepository.matchesScope`) moves from literal prefix matching to the spec's exact-match-with-trailing-`*` semantics — bare-prefix filters must be rewritten as `…/*` to keep matching child scopes, "base + descendants" coverage now needs two subscriptions, and null/blank-scope events are excluded from every scope-filtered subscription. Webhook replay now applies the same matcher (previously it bypassed scope matching entirely). Converges with the runtime matcher shipped in `cycles-server` v0.1.25.47 — both planes now match identically and are pinned to the same test table. See the [migration notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.49) and [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax).
 - **v0.1.25.48** (2026-07-04) — Cascade event payloads now map to a typed `EventDataTenantCascade` class (the four `*_via_tenant_cascade` event types). Internal validation/registry only — no wire change.
 - **v0.1.25.47** (2026-06-26) — Admin image readiness healthcheck + `exec java $JAVA_OPTS` entrypoint; full-stack compose pins refreshed; README/OPERATIONS deployment doc refresh.
 - **v0.1.25.46** (2026-06-26) — Dependency currency: Jedis 7.5.0 → 7.5.2, springdoc-openapi 2.8.16 → 2.8.17. No code change.
@@ -299,8 +301,8 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `cycles-client-java-spring` | 0.2.5 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Server (runtime) | v0.1.25.46 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.48 | Governance spec v0.1.25.34 |
+| Cycles Server (runtime) | v0.1.25.47 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.49 | Governance spec v0.1.25.34 |
 | Cycles Events Service | v0.1.25.22 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
