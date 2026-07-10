@@ -298,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-The `*_via_tenant_cascade` identifiers are **reserved audit `event_kind` values** in the governance spec — they are not members of the spec's `EventType` enum, so do not rely on `event_type=` filtering to find them. Instead, all four cascade entries share the `correlation_id` of the originating `tenant.closed` entry — you can find every side effect of a close with one query:
+The `*_via_tenant_cascade` identifiers are **reserved audit `event_kind` values** in the governance spec — they are not members of the spec's `EventType` enum, so do not rely on `event_type=` filtering to find them. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
 
 ```bash
 # All cascade events for one close

@@ -165,7 +165,7 @@ The reference implementation also emits cascade fan-out event names with the `_v
 - `api_key.revoked_via_tenant_cascade` — one per owned API key.
 - `webhook.disabled_via_tenant_cascade` — one per owned webhook subscription.
 
-All four carry the `correlation_id` of the originating `tenant.closed` audit entry, letting subscribers correlate cascade side effects to the operator action that triggered them. The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
+All four carry a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`, letting subscribers correlate cascade side effects to the operator action that triggered them (audit rows for the operation join via `request_id`/`trace_id`). The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
 
 See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
 
