@@ -154,10 +154,10 @@ This delivers only `budget.exhausted` **or** `budget.over_limit_entered` events 
 Some events may not have a `scope` field (null). The two semantics differ:
 
 - **Spec semantics (normative):** when `scope_filter` is set and an event has a null scope, the event is **not delivered** to that subscription. Use a separate subscription without a scope filter to capture unscoped events.
-- **Reference implementation:** a null event scope matches **every** filter, so unscoped events are delivered to scope-filtered subscriptions too.
+- **Reference implementation:** the runtime plane follows the spec (null scope excluded from filtered subscriptions — `EventEmitterRepository.matchesScope`); the admin plane on 0.1.25.48 and earlier delivers null-scope events to every filter (fixed by the queued conformance change).
 
 ::: tip Note on `reservation.commit_overage`
-As of v0.1.25, the `reservation.commit_overage` event is emitted with a null envelope scope. Under spec semantics, scope-filtered subscriptions would not match it; the reference implementation **does** deliver it to scope-filtered subscriptions (null scope matches every filter). If you rely on strict spec behavior, also keep a subscription without a scope filter (or filtered by event type only) to capture commit overage events.
+As of cycles-server v0.1.25.46, `reservation.commit_overage` is emitted **with** the reservation's scope path on the envelope, so it participates in scope filtering like any other scoped event. (Earlier releases emitted it with a null envelope scope, in which case the null-scope rules above applied.)
 :::
 
 ## Edge cases

@@ -338,7 +338,7 @@ This helps models self-regulate — choosing cheaper tools, shorter responses, o
 
 ## Per-user and per-session attribution
 
-Scope budgets to individual users or sessions:
+Attach user and session identifiers to reservations for attribution and reporting:
 
 ```json
 {

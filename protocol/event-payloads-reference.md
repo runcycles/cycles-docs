@@ -155,27 +155,34 @@ The `reservation.denied` event model defines 9 fields, but the current server em
 ```json
 {
   "event_type": "reservation.commit_overage",
+  "scope": "tenant:acme/workflow:support",
   "data": {
     "reservation_id": "res_a1b2c3d4",
-    "actual_amount": 480000
+    "scope": "tenant:acme/workflow:support",
+    "unit": "USD_MICROCENTS",
+    "estimated_amount": 400000,
+    "actual_amount": 480000,
+    "overage": 80000,
+    "overage_policy": "ALLOW_IF_AVAILABLE",
+    "debt_incurred": 0
   }
 }
 ```
 
 ::: tip Fields populated at emission time
-The `reservation.commit_overage` event model defines 8 fields, but the current server emission populates `reservation_id` and `actual_amount`. The remaining 6 fields are defined in the model and may be populated in future releases. Note: the envelope `scope` field is also not set for this event. Under spec scope-filter semantics that would exclude it from scope-filtered subscriptions, but the reference implementation's matcher delivers null-scope events to **every** subscription, so scope-filtered subscriptions do receive `commit_overage` events — see [Webhook Scope Filter Syntax — events without scope](/protocol/webhook-scope-filter-syntax#events-without-scope).
+As of cycles-server v0.1.25.46, the emission populates **all 8** data fields and sets the envelope `scope` to the reservation's scope path — so `commit_overage` participates in scope filtering like any other scoped event. (Earlier releases populated only `reservation_id` and `actual_amount`, with a null envelope scope.)
 :::
 
 | Field | Type | Populated | Description |
 |---|---|---|---|
 | `reservation_id` | string | Yes | The reservation that exceeded its estimate |
+| `scope` | string | Yes | Affected scope path (also set on the envelope) |
+| `unit` | string | Yes | Budget unit |
+| `estimated_amount` | number | Yes | Original reservation estimate |
 | `actual_amount` | number | Yes | Actual cost committed |
-| `scope` | string | Not yet | Affected scope path |
-| `unit` | string | Not yet | Budget unit |
-| `estimated_amount` | number | Not yet | Original reservation estimate |
-| `overage` | number | Not yet | Amount by which actual exceeded estimate |
-| `overage_policy` | string | Not yet | Policy applied: `REJECT`, `ALLOW_IF_AVAILABLE`, `ALLOW_WITH_OVERDRAFT` |
-| `debt_incurred` | number | Not yet | Debt created (only for `ALLOW_WITH_OVERDRAFT`) |
+| `overage` | number | Yes | Amount by which actual exceeded estimate |
+| `overage_policy` | string | Yes | Policy applied: `REJECT`, `ALLOW_IF_AVAILABLE`, `ALLOW_WITH_OVERDRAFT` |
+| `debt_incurred` | number | Yes | Debt created (0 unless `ALLOW_WITH_OVERDRAFT`) |
 
 ---
 
