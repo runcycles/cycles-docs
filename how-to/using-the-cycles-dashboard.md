@@ -93,7 +93,7 @@ See [Using Bulk Actions](/how-to/using-bulk-actions-for-tenants-and-webhooks) fo
 
 ### Cross-surface correlation chip (v0.1.25.39)
 
-Rows on the Events and Audit views, event-timeline entries, and the delivery-history rows on the webhook detail page carry **correlation chips** for up to three identifiers — `trace_id`, `request_id`, `correlation_id` (see [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles) for what each one scopes). Clicking a chip pivots to the other view with that identifier pre-applied as a filter:
+Rows on the Events and Audit views and event-timeline entries carry **correlation chips** for up to three identifiers — `trace_id`, `request_id`, `correlation_id` (see [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles) for what each one scopes). Webhook delivery-history rows do not render the chip affordance; the delivery **export** includes `trace_id` for offline joins. Clicking a chip pivots to the other view with that identifier pre-applied as a filter:
 
 - Click `trace_id` on an Audit row → EventsView filtered to the same trace.
 - Click `trace_id` on an Events row → AuditView filtered to the originating entry.
@@ -189,7 +189,7 @@ The Events page is correlation-first, not time-first:
 
 Events poll every 15 seconds (the most aggressive of any page) because incident response typically starts here.
 
-Per-row **Copy JSON** (v0.1.25.37+) is available on every surface rendering an event, audit entry, event-timeline entry, or webhook delivery — part of the shared triage affordances extracted to the icon library in v0.1.25.40. Correlation chips render per row type: `trace_id`/`request_id` on audit and delivery rows; `correlation_id` additionally on Event and event-timeline rows when present.
+Per-row **Copy JSON** (v0.1.25.37+) is available on every surface rendering an event, audit entry, event-timeline entry, or webhook delivery — part of the shared triage affordances extracted to the icon library in v0.1.25.40. Correlation chips render per row type: `trace_id`/`request_id` on Audit rows; `correlation_id` additionally on Event and event-timeline rows when present. Delivery rows carry `trace_id` in the export rather than a chip.
 
 ## Audit page
 

@@ -342,7 +342,7 @@ curl -s "http://localhost:7979/v1/admin/events?correlation_id=$CID" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, resource: .data}'
 ```
 
-You should see one event per owned object — `budget.closed_via_tenant_cascade` per ledger, `api_key.revoked_via_tenant_cascade` per key, `webhook.disabled_via_tenant_cascade` per subscription — and one ledger-level `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0` (aggregate `released_amount`, not per-reservation). If the count is short, either the cascade is still draining (wait a second and re-query) or you're on pre-v0.1.25.35 admin.
+You should see one event per owned object — `budget.closed_via_tenant_cascade` per ledger, `api_key.revoked_via_tenant_cascade` per key, `webhook.disabled_via_tenant_cascade` per subscription — and one ledger-level `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0` (aggregate `released_amount`, not per-reservation). If the count is short: the runcycles server cascades inline before the PATCH response returns, so a shortfall there usually means a pre-v0.1.25.35 admin; on reconciler-based Mode B implementations the cascade may still be draining — wait a moment and re-query.
 
 ::: info Why tenants cannot be deleted
 The admin API intentionally has no `DELETE /v1/admin/tenants/{tenant_id}` endpoint. Tenants are referenced by ID throughout the system — budgets, API keys, reservations, and audit logs all carry a `tenant_id`. Hard deletion would orphan these records and break audit trails.

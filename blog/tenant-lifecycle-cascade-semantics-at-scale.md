@@ -105,7 +105,7 @@ curl -X PATCH \
   "http://localhost:7979/v1/admin/tenants/acme-corp"
 ```
 
-The response acknowledges the status flip. Under Mode B, it returns once the flip is durable — the cascade across owned objects may still be completing. A follow-up query confirms the aftermath — either the audit trail (`operation=tenant_close_cascade`, inspecting `resource_type`/`resource_id`) or the events API (`correlation_id=tenant_close_cascade:<tenant_id>:<request_id>` for the dotted event types):
+The response acknowledges the status flip. Mode B permits an implementation to return once the flip is durable while a reconciler completes the cascade in the background — but note the runcycles Redis-backed server flips first and then runs the cascade **inline, before responding**, so by the time you read the PATCH response the cascade is done. A follow-up query confirms the aftermath — either the audit trail (`operation=tenant_close_cascade`, inspecting `resource_type`/`resource_id`) or the events API (`correlation_id=tenant_close_cascade:<tenant_id>:<request_id>` for the dotted event types):
 
 ```bash
 # Pull cascade audit entries tied to this close
@@ -162,7 +162,7 @@ Before you close a tenant in production, the five things worth checking:
 2. **Drain known long-running workflows.** In-flight reservations will be released automatically with `reason: tenant_closed`, but if your system equates "reservation released" with "agent must retry," now is the time to signal the agent stack that a close is coming.
 3. **Snapshot what will be terminated.** List the tenant's open budgets, API keys, and webhook subscriptions via the admin `GET` endpoints before the close. These rows stay readable forever, but downstream reports sometimes aggregate only on `ACTIVE` rows — a pre-close snapshot avoids a surprise gap in month-end reconciliation.
 4. **Use a dedicated `Idempotency-Key`.** Close is idempotent — re-issuing on an already-`CLOSED` tenant is a no-op — but the idempotency key lets you safely retry across network flaps.
-5. **Verify cascade completion.** Query the audit trail for the tenant and confirm one `*_via_tenant_cascade` record per owned object — the event rows share the cascade `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`). Rule 2 is already active at the moment of the flip, so any lag between the flip and the audit entries is an enforcement-safe interval — but it's still a signal worth paging the operator channel on.
+5. **Verify cascade completion.** Query the audit trail for the tenant and confirm one `*_via_tenant_cascade` record per owned object — the event rows share the cascade `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`). Rule 2 is already active at the moment of the flip, so on reconciler-based Mode B implementations any lag between the flip and the cascade records is an enforcement-safe interval (the runcycles server cascades inline before responding, so there should be no lag) — a persistent shortfall is a signal worth paging the operator channel on.
 
 ## The takeaway
 
