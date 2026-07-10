@@ -111,7 +111,7 @@ For attribution facets that do not fit the standard hierarchy, the Subject suppo
 }
 ```
 
-Dimensions are metadata for reporting and policy taxonomies only — they never derive scopes, and servers MAY ignore them for budgeting decisions. To give each execution an enforceable **run budget**, encode the run identifier in a standard Subject field instead (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
+Dimensions are not budget-scope fields — they never derive scopes and servers MAY ignore them for budgeting decisions, but they do serve reporting, enterprise taxonomies, and policy uses (including the v0.1.26 `per_run` action-quota window, which keys off `dimensions.run_id`). To give each execution an enforceable **run budget**, encode the run identifier in a standard Subject field instead (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
 
 For the full technical specification, see [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles).
 

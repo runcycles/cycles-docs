@@ -164,7 +164,7 @@ Dimensions have hard limits: at most 16 keys, and each value at most 256 charact
 
 Dimensions never replace the standard fields. A Subject containing only `dimensions` — with no tenant, workspace, app, workflow, agent, or toolset — is invalid, and the server MUST return `400 INVALID_REQUEST`.
 
-Dimensions are for attribution and analytics only. To give each run an enforceable budget, encode the run id in a Subject field (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
+Dimensions are not budget-scope fields — they serve enterprise taxonomies, attribution/reporting, and policy uses (the v0.1.26 action-quota preview keys its `per_run` window off `dimensions.run_id`). To give each run an enforceable budget, encode the run id in a Subject field (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
 
 ## Scope derivation and balances
 

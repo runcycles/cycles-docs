@@ -505,7 +505,7 @@ Budget allocation in Cycles:
 - Is enforced atomically across the full scope hierarchy for each reservation
 - Can be adjusted at any time with immediate effect
 - Requires explicit allocation at every scope level you want to control
-- Supports flat, hierarchical, per-run, and per-agent patterns (scopes derive from the six standard Subject fields; `dimensions` is reporting-only)
+- Supports flat, hierarchical, per-run, and per-agent patterns (scopes derive from the six standard Subject fields; `dimensions` never derive scopes — they serve reporting, taxonomies, and policy/quota uses)
 
 ## Next steps
 

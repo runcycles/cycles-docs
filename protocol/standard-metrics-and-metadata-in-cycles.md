@@ -241,7 +241,7 @@ These are the minimum metrics that make budget data actionable. Without them, co
 
 ### Use metadata for correlation IDs
 
-Attach `request_id`, `trace_id`, or `session_id` to every commit. This makes it possible to join budget data with application logs and distributed traces.
+Attach your own correlation keys — e.g. `app_request_id`, `external_trace_id`, or `session_id` — to every commit. This makes it possible to join budget data with application logs and distributed traces. (Use distinct names rather than `request_id`/`trace_id`, which are server-managed and should not be duplicated into metadata — see the trace-context note above.)
 
 ### Keep custom metrics stable
 
