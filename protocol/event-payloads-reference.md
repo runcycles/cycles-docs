@@ -438,7 +438,7 @@ Emitted once per owned `BudgetLedger` when the tenant closes. The per-budget `Bu
 
 ### `reservation.released_via_tenant_cascade`
 
-Emitted once per open owned `Reservation` when the tenant closes. Reason `tenant_closed`; no overage debt is recorded; the full reserved amount returns to the (now-closed) budget's balance snapshot.
+Emitted as a **ledger-level aggregate** when the tenant closes: one event per closed budget with `reserved > 0`, carrying the aggregate `released_amount` (not one per reservation). Reason `tenant_closed`; no overage debt is recorded; the full reserved amount returns to the (now-closed) budget's balance snapshot.
 
 ```json
 {
