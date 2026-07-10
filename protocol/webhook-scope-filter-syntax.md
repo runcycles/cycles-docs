@@ -92,13 +92,16 @@ The examples below use the spec `/*` form — correct for runtime-emitted events
 
 ### Subscribe to all events for one tenant
 
+`event_types` is required with at least one entry (`minItems: 1` in the spec; the server rejects an empty list with `400`). To cover whole categories, use `event_categories` — it is additive (union) with `event_types`, so include a representative type alongside the category wildcard. See [Category-based subscriptions](/how-to/managing-webhooks#category-based-subscriptions).
+
 ```bash
 curl -X POST http://localhost:7979/v1/admin/webhooks \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://ops.example.com/cycles-events",
-    "event_types": [],
+    "event_types": ["budget.exhausted"],
+    "event_categories": ["budget", "reservation", "tenant", "api_key", "policy", "webhook", "system"],
     "scope_filter": "tenant:acme-corp/*"
   }'
 ```
@@ -126,11 +129,12 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://ops.example.com/all-events",
-    "event_types": []
+    "event_types": ["budget.exhausted"],
+    "event_categories": ["budget", "reservation", "tenant", "api_key", "policy", "webhook", "system"]
   }'
 ```
 
-Both `event_types` and `scope_filter` omitted — this subscription receives all events from all scopes.
+`scope_filter` omitted — this subscription receives matching events from all scopes (including unscoped events). All-categories `event_categories` plus a representative `event_types` entry is the "everything" form: `event_types` cannot be empty or omitted (required, `minItems: 1`), and the category filter is a union with the type list.
 
 ### Combining event type filter with scope filter
 

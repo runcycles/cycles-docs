@@ -73,7 +73,7 @@ Introduced in v0.1.25.6. Mirrors the runtime's conventions: `cycles.webhook.*` r
 
 | Tag | Values |
 |---|---|
-| `event_type` | Event kind from the [Event Payloads Reference](/protocol/event-payloads-reference) (e.g. `reservation.denied`, `budget.exhausted`, `webhook.disabled`). Up to 47 registered values, plus additive implementation events over time. |
+| `event_type` | Event kind from the [Event Payloads Reference](/protocol/event-payloads-reference) (e.g. `reservation.denied`, `budget.exhausted`, `webhook.disabled`). Up to 51 registered values, plus additive implementation events over time. |
 | `status_code_family` | `2xx` (success bucket). Non-2xx responses land on `cycles_webhook_delivery_failed_total` with `reason` instead. |
 | `reason` (on `_failed_total`) | `event_not_found`, `subscription_not_found`, `subscription_inactive`, `http_4xx`, `http_5xx`, `transport_error` (timeouts, connection resets, DNS/SSL failures — status code 0), `ssrf_blocked`. |
 
@@ -124,7 +124,7 @@ The `tenant` tag is the dominant cardinality driver. A deployment with 10,000 te
 2. **Aggregate at scrape time** with `metric_relabel_configs` to drop the tag selectively on high-cardinality metrics while keeping it on the ones you still want tenant-sliced.
 3. **Keep per-tenant on Timer, drop on Counters** if delivery-latency-per-tenant is the signal you care about most.
 
-`event_type` is bounded by the spec (47 registered values today, additive over time). `reason` and `decision` are enum-bounded and safe.
+`event_type` is bounded by the spec (51 registered values today, additive over time). `reason` and `decision` are enum-bounded and safe.
 
 ## Quick alert recipes
 

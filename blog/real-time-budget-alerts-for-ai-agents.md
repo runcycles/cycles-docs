@@ -40,7 +40,7 @@ This is why we built a webhook event system into Cycles v0.1.25.
 
 ## 41 event types across 6 categories
 
-> **As of post date.** The current Admin API `EventType` enum registers **47 event types across 7 categories** (the `webhook` category was added later). For the live count and per-category breakdown, see the [Event Payloads Reference](/protocol/event-payloads-reference).
+> **As of post date.** The current Admin API `EventType` enum registers **51 event types across 7 categories** (the `webhook` category and the tenant-close cascade types were added later). For the live count and per-category breakdown, see the [Event Payloads Reference](/protocol/event-payloads-reference).
 
 Every observable state change in the system produces an event. We organized them into 6 categories covering the full lifecycle:
 
@@ -172,7 +172,7 @@ The response includes a signing secret (returned once — store it). Your middle
 
 We have full integration guides with code examples for [PagerDuty, Slack, Datadog, Microsoft Teams, Opsgenie, and ServiceNow](/how-to/webhook-integrations), plus a [custom receiver pattern](/how-to/webhook-integrations#integration-custom-receiver-direct) with signature verification in Python, Node.js, and Go.
 
-Tenants can also create their own webhook subscriptions via `/v1/webhooks` using their API key — restricted to budget, reservation, and tenant events (27 of 41 types as of post date; the live count is 27 of 47 — see the [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol#tenant-accessible-events) for current category eligibility). Admin-only events (api_key, policy, webhook, system) require admin key access.
+Tenants can also create their own webhook subscriptions via `/v1/webhooks` using their API key — restricted to budget, reservation, and tenant events (27 of 41 types as of post date; the live count is 29 of 51 — see the [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol#tenant-accessible-events) for current category eligibility). Admin-only events (api_key, policy, webhook, system) require admin key access.
 
 Webhook URLs are validated at creation time with SSRF protection enabled by default: RFC 1918 private IP ranges, loopback, and link-local addresses are blocked, and HTTPS is required in production. These can be configured via `PUT /v1/admin/config/webhook-security` for environments that need internal endpoint access.
 

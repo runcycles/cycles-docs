@@ -79,7 +79,7 @@ How these rules are implemented can vary. A protocol spec that only accepted one
 - Convergence within a documented bound.
 - Observable reads of non-terminal children remain consistent until the cascade reaches them.
 
-The important property is that both modes produce the same *client-observable* outcome: once the tenant is `CLOSED`, every mutation against any owned object returns a `409` with `error: "TENANT_CLOSED"`, regardless of which per-object row flipped first. The mode is an implementation detail the spec deliberately leaves open — a transactional SQL backend can deliver Mode A cleanly, while a Redis-backed admin can opt into Mode B as long as the guard activates at or before the flip's durability.
+The important property is that both modes produce the same *client-observable* outcome: once the tenant is `CLOSED`, every admin-plane mutation against any owned object returns a `409` with `error: "TENANT_CLOSED"`, regardless of which per-object row flipped first — and the same guard holds post-auth on the runtime plane, where a revoked tenant key is rejected with `401` before the guard is ever consulted (the close walkthrough below shows both doors). The mode is an implementation detail the spec deliberately leaves open — a transactional SQL backend can deliver Mode A cleanly, while a Redis-backed admin can opt into Mode B as long as the guard activates at or before the flip's durability.
 
 ## Where operators actually trip
 

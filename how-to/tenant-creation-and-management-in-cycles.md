@@ -298,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s by the reference server (registered enum constants there, but absent from the published spec's `EventType` enum — so do not rely on cross-server `event_type=` filtering). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
+The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s (declared in the governance spec's `EventType` enum since document revision v0.1.25.35, so `event_type=` filtering on them is spec-valid — though Event emission is SHOULD-level, so non-reference servers may not emit them). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. All four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
 
 ```bash
 # All cascade events for one close

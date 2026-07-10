@@ -70,7 +70,7 @@ The generated secret (e.g., `whsec_dGVzdC1zZWNy...`) is in the response. Copy it
 Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: `event_types` is always required (at least one), so include a representative type alongside the category wildcard.
 
 ```bash
-# All budget events (16 types) + all reservation events (5 types)
+# All budget events (17 types) + all reservation events (6 types)
 curl -X POST http://localhost:7979/v1/admin/webhooks \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
