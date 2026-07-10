@@ -336,7 +336,7 @@ The hint includes:
 
 This helps models self-regulate — choosing cheaper tools, shorter responses, or skipping optional steps when budget is tight.
 
-## Per-user and per-session scoping
+## Per-user and per-session attribution
 
 Scope budgets to individual users or sessions:
 
@@ -715,12 +715,12 @@ With `logLevel: "debug"`, you'll see per-call activity:
 | `dryRun` | boolean | `false` | Use in-memory simulated budget |
 | `dryRunBudget` | number | `100000000` | Starting budget for dry-run mode |
 
-### Per-user/session scoping
+### Per-user/session attribution
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `userId` | string | — | User ID for budget scoping (overridable via `ctx.metadata.userId`) |
-| `sessionId` | string | — | Session ID for budget scoping (overridable via `ctx.metadata.sessionId`) |
+| `userId` | string | — | User ID recorded in `dimensions` for attribution/reporting — not budget-enforcing (overridable via `ctx.metadata.userId`) |
+| `sessionId` | string | — | Session ID recorded in `dimensions` for attribution/reporting — not budget-enforcing (overridable via `ctx.metadata.sessionId`) |
 
 ### Budget transitions
 

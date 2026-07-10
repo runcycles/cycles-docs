@@ -143,11 +143,11 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/cost-alerts",
     "event_types": ["budget.exhausted", "budget.over_limit_entered"],
-    "scope_filter": "tenant:acme-corp/workspace:prod/"
+    "scope_filter": "tenant:acme-corp/workspace:prod/*"
   }'
 ```
 
-This delivers only `budget.exhausted` **or** `budget.over_limit_entered` events **and** only when the scope starts with `tenant:acme-corp/workspace:prod/`.
+This delivers only `budget.exhausted` **or** `budget.over_limit_entered` events (runtime-emitted) **and** only when the scope starts with `tenant:acme-corp/workspace:prod/`.
 
 ## Events without scope
 

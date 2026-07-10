@@ -240,7 +240,7 @@ tenant:acme-corp/workspace:prod/app:research-agent  → $50
 
 ### Add per-execution budgets for safety
 
-Use the `workflow` field or custom dimensions to cap individual runs:
+Use the `workflow` field to cap individual runs (a standard field is required — `dimensions` are not enforceable):
 
 ```
 tenant:acme-corp                           → $100  (tenant cap)
@@ -472,7 +472,7 @@ This shows the remaining and reserved amounts at every scope level — giving yo
 - **Start with the fewest scope levels that solve your problem.** Tenant-only is a valid starting point. Add workspace, app, or workflow levels only when you need finer control.
 - **Keep Subject fields consistent across all code paths.** If some requests include `workspace` and others do not, enforcement becomes inconsistent — some requests bypass the workspace-level check. See [Scope Misconfiguration and Budget Leaks](/incidents/scope-misconfiguration-and-budget-leaks).
 - **Use the canonical hierarchy.** The protocol defines `tenant → workspace → app → workflow → agent → toolset`. Map your concepts to these standard levels rather than fighting the ordering.
-- **Prefer standard fields over custom dimensions.** Standard fields have built-in scope derivation support. Use `dimensions` only for concepts that truly do not fit (e.g., per-run IDs, cost centers).
+- **Prefer standard fields over custom dimensions.** Standard fields have built-in scope derivation support. Use `dimensions` only for reporting facets that never need enforcement (e.g., cost centers, regions) — anything you want to budget, including per-run IDs, belongs in a standard field.
 - **Validate scope consistency in tests.** Write tests that verify all code paths for the same operation include the same Subject fields. Inconsistencies cause silent budget bypasses.
 - **Only create budgets at scopes you need to enforce.** You do not need a budget at every level — scopes without budgets are skipped during enforcement.
 

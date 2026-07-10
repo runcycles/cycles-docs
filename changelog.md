@@ -292,16 +292,16 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 
 | SDK / Component | Version | Compatible server |
 |---|---|---|
-| `runcycles` (Python) | 0.3.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `runcycles` (TypeScript) | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `runcycles` (Rust) | 0.2.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `cycles-client-java-spring` | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `@runcycles/mcp-server` | 0.2.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `@runcycles/openclaw-budget-guard` | 0.8.2 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Server (runtime) | v0.1.25.39 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.42 | Governance spec v0.1.25.34 |
-| Cycles Events Service | v0.1.25.15 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
-| Cycles Dashboard | v0.1.25.63 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
+| `runcycles` (Python) | 0.4.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `runcycles` (TypeScript) | 0.3.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `runcycles` (Rust) | 0.2.6 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `cycles-client-java-spring` | 0.2.5 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| Cycles Server (runtime) | v0.1.25.46 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.48 | Governance spec v0.1.25.34 |
+| Cycles Events Service | v0.1.25.22 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
+| Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
 All current SDK versions are backward-compatible with server v0.1.23. New v0.1.24 features (budget patch, policy patch, capped `ALLOW_IF_AVAILABLE` commits) require server v0.1.24+. New v0.1.25 features (event emission, webhook delivery, events service, `policy_id` / `deny_detail` on `reservation.denied`) require server v0.1.25.
 
