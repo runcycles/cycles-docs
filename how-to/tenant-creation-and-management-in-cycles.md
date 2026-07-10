@@ -298,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-The `*_via_tenant_cascade` identifiers are **reserved audit `event_kind` values** in the governance spec — they are not members of the spec's `EventType` enum, so do not rely on `event_type=` filtering to find them. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
+The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s by the reference server (registered enum constants there, but absent from the published spec's `EventType` enum — so do not rely on cross-server `event_type=` filtering). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
 
 ```bash
 # All cascade events for one close
@@ -342,7 +342,7 @@ curl -s "http://localhost:7979/v1/admin/events?correlation_id=$CID" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, resource: .data}'
 ```
 
-You should see one event per owned object — `budget.closed_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade`. If the count is short, either the cascade is still draining (wait a second and re-query) or you're on pre-v0.1.25.35 admin.
+You should see one event per owned object — `budget.closed_via_tenant_cascade` per ledger, `api_key.revoked_via_tenant_cascade` per key, `webhook.disabled_via_tenant_cascade` per subscription — and one ledger-level `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0` (aggregate `released_amount`, not per-reservation). If the count is short, either the cascade is still draining (wait a second and re-query) or you're on pre-v0.1.25.35 admin.
 
 ::: info Why tenants cannot be deleted
 The admin API intentionally has no `DELETE /v1/admin/tenants/{tenant_id}` endpoint. Tenants are referenced by ID throughout the system — budgets, API keys, reservations, and audit logs all carry a `tenant_id`. Hard deletion would orphan these records and break audit trails.

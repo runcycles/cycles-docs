@@ -58,7 +58,7 @@ The Cycles governance-admin spec addresses this directly with a two-rule contrac
 3. Disable webhook subscriptions and revoke API keys (either order).
 4. Flip `tenant.status` to `CLOSED` last.
 
-Each mutated object writes a dedicated audit entry using a reserved `event_kind` value — `budget.closed_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade` — all sharing a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`) on the emitted event rows, so an auditor can reconstruct the cascade in a single events query (audit rows join via `request_id`/`trace_id`).
+Each mutated object produces a dedicated record: an Event row under a reserved dotted name — `budget.closed_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `reservation.released_via_tenant_cascade` (ledger-level), `webhook.disabled_via_tenant_cascade` — plus an audit row written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. The event rows all share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`) on the emitted event rows, so an auditor can reconstruct the cascade in a single events query (audit rows join via `request_id`/`trace_id`).
 
 **Rule 2 — Terminal-Owner Mutation Guard.** Every mutating endpoint on an owned object first checks the parent tenant's status. If the tenant is `CLOSED`, the endpoint returns `409 Conflict` with `error: "TENANT_CLOSED"`, regardless of the per-object terminal state. The guard applies across the budget, reservation, policy, API key, and webhook planes. `GET` endpoints remain available — closed-tenant state is readable for post-mortems and compliance evidence.
 
@@ -105,15 +105,16 @@ curl -X PATCH \
   "http://localhost:7979/v1/admin/tenants/acme-corp"
 ```
 
-The response acknowledges the status flip. Under Mode B, it returns once the flip is durable — the cascade across owned objects may still be completing. A follow-up query against the audit trail confirms the aftermath, since the cascade entries are reserved audit `event_kind` values, not event-stream types:
+The response acknowledges the status flip. Under Mode B, it returns once the flip is durable — the cascade across owned objects may still be completing. A follow-up query confirms the aftermath — either the audit trail (`operation=tenant_close_cascade`, inspecting `resource_type`/`resource_id`) or the events API (`correlation_id=tenant_close_cascade:<tenant_id>:<request_id>` for the dotted event types):
 
 ```bash
 # Pull cascade audit entries tied to this close
 curl -s -H "X-Admin-API-Key: $ADMIN_KEY" \
-  "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&limit=50" | jq
+  "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=tenant_close_cascade" \
+  | jq '.logs[] | {operation, resource_type, resource_id}'
 ```
 
-You'll see one audit entry per owned object: one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription, and one `reservation.released_via_tenant_cascade` per open reservation that was drained. The corresponding event rows all share the server-composed cascade `correlation_id`, which is how an auditor reconstructs the cascade without having to cross-join on timestamp (audit rows join via the originating `request_id`).
+You'll see one record per owned object — one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription — plus one **ledger-level** `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0`, carrying the aggregate `released_amount` (not one event per reservation). The corresponding event rows all share the server-composed cascade `correlation_id`, which is how an auditor reconstructs the cascade without having to cross-join on timestamp (audit rows join via the originating `request_id`).
 
 A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane:
 

@@ -161,7 +161,7 @@ Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budge
 The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). These names are absent from the published admin-openapi enum (they do not count toward the 47 registered types) but are registered as first-class constants in the reference implementation's `EventType.java`. Treat them as additive implementation events and ignore any unrecognized event type gracefully:
 
 - `budget.closed_via_tenant_cascade` — one per owned `BudgetLedger`.
-- `reservation.released_via_tenant_cascade` — one per open owned reservation. Reason `tenant_closed`; no overage debt.
+- `reservation.released_via_tenant_cascade` — a **ledger-level aggregate**: one per closed budget with `reserved > 0`, carrying `released_amount`. Reason `tenant_closed`; no overage debt.
 - `api_key.revoked_via_tenant_cascade` — one per owned API key.
 - `webhook.disabled_via_tenant_cascade` — one per owned webhook subscription.
 

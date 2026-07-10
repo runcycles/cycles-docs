@@ -55,7 +55,7 @@ On any `* → CLOSED` tenant transition (via `PATCH /v1/admin/tenants/{id}` or `
 
 Mode B (see below) inverts this by design — the tenant flip commits **first**, and children converge afterward under the Rule 2 guard. Since runcycles' reference server implements Mode B, do not rely on this ordering in practice.
 
-**Audit and event emission.** One record per mutated owned object. The emitted **Event rows** share a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>` — query `GET /v1/admin/events?correlation_id=...` to reconstruct the cascade. **Audit rows** carry `request_id`/`trace_id` (the AuditLogEntry schema has no correlation field); join them via the originating request's `request_id`. Reserved `event_kind` values:
+**Audit and event emission.** One record per mutated owned object. The emitted **Event rows** share a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>` — query `GET /v1/admin/events?correlation_id=...` to reconstruct the cascade. **Audit rows** carry `request_id`/`trace_id` (the AuditLogEntry schema has no correlation field); join them via the originating request's `request_id`. The dotted `*_via_tenant_cascade` names are emitted as Event `event_type`s (registered enum constants in the reference implementation, absent from the published spec enum); the matching audit rows are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id` identifying the mutated object. Reserved dotted names:
 
 - `budget.closed_via_tenant_cascade`
 - `webhook.disabled_via_tenant_cascade`
@@ -160,9 +160,9 @@ curl -X PATCH http://localhost:7979/v1/admin/tenants/acme-corp \
   -d '{"status": "CLOSED"}'
 
 # 3. Verify the cascade audit entries
-curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&from=$(date -u -Iseconds -d '5 min ago')" \
+curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=tenant_close_cascade" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.logs[] | {operation, event_kind: .metadata.event_kind, resource_id}'
+  | jq '.logs[] | {operation, resource_type, resource_id}'
 ```
 
 If the `/admin/overview` dashboard still shows frozen budgets on the closed tenant after a few seconds, your admin server is on a pre-v0.1.25.35 version — the cascade hasn't shipped and you need to upgrade. See the [Admin API Guide — Tenant close and cascade semantics](/admin-api/guide).
