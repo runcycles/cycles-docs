@@ -402,6 +402,8 @@ These four event names are **absent from the published admin-openapi `EventType`
 
 Shipped in `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage).
 
+All four kinds share one payload shape (`EventDataTenantCascade`, governance spec v0.1.25.35): exactly one of `ledger_id` / `subscription_id` / `key_id` identifies the transitioned object (matching the event's category), alongside `prior_status` / `new_status` and `cascade_reason: "tenant_closed"`. The reservation aggregate is the exception — it identifies the drained budget via `ledger_id` and carries `released_amount` instead of a status transition.
+
 ### `budget.closed_via_tenant_cascade`
 
 Emitted once per owned `BudgetLedger` when the tenant closes. The per-budget `BudgetLedger.status` flips to `CLOSED` and `closed_at` is stamped; the final balance snapshot is preserved for audit.
@@ -416,20 +418,15 @@ Emitted once per owned `BudgetLedger` when the tenant closes. The per-budget `Bu
   "scope": "tenant:acme-corp/workspace:prod",
   "source": "cycles-admin",
   "actor": {
-    "type": "api_key",
-    "key_id": "admin_key_...",
-    "source_ip": "..."
+    "type": "admin"
   },
   "data": {
     "ledger_id": "led_...",
     "scope": "tenant:acme-corp/workspace:prod",
     "unit": "USD_MICROCENTS",
-    "final_allocated": 10000000,
-    "final_spent": 8234000,
-    "final_reserved": 0,
-    "final_debt": 0,
-    "closed_at": "2026-04-20T12:00:00Z",
-    "cascade_origin": "tenant.closed"
+    "prior_status": "ACTIVE",
+    "new_status": "CLOSED",
+    "cascade_reason": "tenant_closed"
   },
   "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
@@ -447,11 +444,11 @@ Emitted as a **ledger-level aggregate** when the tenant closes: one event per cl
   "category": "reservation",
   "tenant_id": "acme-corp",
   "data": {
-    "reservation_id": "rsv_...",
-    "scope": "tenant:acme-corp/...",
-    "reserved": { "amount": 1000, "unit": "TOKENS" },
-    "release_reason": "tenant_closed",
-    "cascade_origin": "tenant.closed"
+    "ledger_id": "led_...",
+    "scope": "tenant:acme-corp/workspace:prod",
+    "unit": "USD_MICROCENTS",
+    "released_amount": 250000,
+    "cascade_reason": "tenant_closed"
   },
   "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
@@ -470,9 +467,10 @@ Emitted once per owned `ApiKey` when the tenant closes. The per-key `ApiKey.stat
   "tenant_id": "acme-corp",
   "data": {
     "key_id": "key_...",
+    "prior_status": "ACTIVE",
+    "new_status": "REVOKED",
     "name": "production",
-    "revoked_at": "2026-04-20T12:00:00Z",
-    "cascade_origin": "tenant.closed"
+    "cascade_reason": "tenant_closed"
   },
   "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
@@ -491,9 +489,10 @@ Emitted once per owned `WebhookSubscription` when the tenant closes. Status flip
   "tenant_id": "acme-corp",
   "data": {
     "subscription_id": "whsub_...",
-    "url": "https://...",
-    "disabled_at": "2026-04-20T12:00:00Z",
-    "cascade_origin": "tenant.closed"
+    "prior_status": "ACTIVE",
+    "new_status": "DISABLED",
+    "name": "ops-alerts",
+    "cascade_reason": "tenant_closed"
   },
   "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"

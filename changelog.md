@@ -312,7 +312,8 @@ All current SDK versions are backward-compatible with server v0.1.23. New v0.1.2
 |---|---|
 | Dashboard Evidence viewer and reservation "View evidence" links | `cycles-dashboard` v0.1.25.63+; `cycles-server` v0.1.25.37+ for `include=evidence`; `cycles-server-events` v0.1.25.14+ to sign envelopes |
 | Unconfigured CyclesEvidence disabled mode (no queueing or dead-lettering when identity is blank) | `cycles-server` v0.1.25.38, `cycles-server-events` v0.1.25.15 |
-| Tenant-close cascade + `TENANT_CLOSED` (409) error code + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |
+| Tenant-close cascade + `TENANT_CLOSED` (409) on the admin plane + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |
+| `TENANT_CLOSED` (409) runtime guard on reservation create/commit/release/extend + `reason_code=TENANT_CLOSED` on fresh dry-run / `/v1/decide` DENYs | `cycles-server` v0.1.25.47 (runtime spec v0.1.25.13) |
 | W3C Trace Context (`trace_id` on responses + audit/events filter) | `cycles-server` v0.1.25.14, `cycles-server-admin` v0.1.25.31, `cycles-server-events` v0.1.25.7, `cycles-dashboard` v0.1.25.39 |
 | Runtime audit-log retention TTL (`AUDIT_RETENTION_DAYS`) | `cycles-server` v0.1.25.15 |
 | Events service management port split (9980) | `cycles-server-events` v0.1.25.9 |

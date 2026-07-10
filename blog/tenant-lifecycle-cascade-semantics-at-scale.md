@@ -51,12 +51,14 @@ Any combination of these carries real operational and security risk: silent post
 
 The Cycles governance-admin spec addresses this directly with a two-rule contract, formalized in the `CASCADE SEMANTICS` section of the v0.1.25 governance-admin yaml.
 
-**Rule 1 — Close Cascade.** When a tenant transitions to `CLOSED`, the server performs a strictly ordered sequence against every owned object:
+**Rule 1 — Close Cascade.** When a tenant transitions to `CLOSED`, the server drives every owned object to its terminal state. In the atomic presentation (Mode A, below), the spec's recommended order within the single transaction is:
 
 1. Drain open reservations (released with reason `tenant_closed`; no overage debt recorded).
 2. Close budget ledgers (final balance snapshot preserved for audit; no new reservations accepted).
 3. Disable webhook subscriptions and revoke API keys (either order).
 4. Flip `tenant.status` to `CLOSED` last.
+
+Mode B (below) inverts this by design — the tenant flip commits *first*, and the children converge afterward under the Rule 2 guard. Since the runcycles reference server implements Mode B, don't build tooling that depends on this ordering; depend on the terminal states and the guard.
 
 Each mutated object produces a dedicated record: an Event row under a reserved dotted name — `budget.closed_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `reservation.released_via_tenant_cascade` (ledger-level), `webhook.disabled_via_tenant_cascade` — plus an audit row written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. The event rows all share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`) on the emitted event rows, so an auditor can reconstruct the cascade in a single events query (audit rows join via `request_id`/`trace_id`).
 
