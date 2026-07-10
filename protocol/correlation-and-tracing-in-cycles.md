@@ -84,7 +84,7 @@ Standard event payloads carry:
 |---|---|
 | `request_id` | Populated on every event causally downstream of an HTTP request — including async and queued work that spans thread / process boundaries. Pre-v0.1.25 events may lack it. |
 | `trace_id` | OPTIONAL on the schema; populated by conformant v0.1.25.14+ runtime servers. |
-| `correlation_id` | Server-set: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)`. Groups related events in the stream. |
+| `correlation_id` | Server-set, two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (`webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, cascade IDs) for governance/admin operations. Groups related events in the stream. |
 
 ### Inside audit-log entries
 

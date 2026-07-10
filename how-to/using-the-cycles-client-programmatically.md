@@ -163,7 +163,7 @@ client.commit_reservation(reservation_id, CommitRequest(
         latency_ms=320,
         model_version="gpt-4o-2024-08-06",
     ),
-    metadata={"request_id": "req-abc-123"},
+    metadata={"app_request_id": "req-abc-123"},
 ))
 ```
 ```java [Java]
@@ -177,7 +177,7 @@ CommitRequest commitRequest = CommitRequest.builder()
     .idempotencyKey("commit-" + UUID.randomUUID())
     .actual(new Amount(Unit.USD_MICROCENTS, 3200L))
     .metrics(metrics)
-    .metadata(Map.of("request_id", "req-abc-123"))
+    .metadata(Map.of("app_request_id", "req-abc-123"))
     .build();
 
 CyclesResponse<Map<String, Object>> commitResponse =

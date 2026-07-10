@@ -34,7 +34,7 @@ Subject fields are evaluated before the guarded method runs, so `#result` is del
 The `metadata` attribute is evaluated after the method returns and must yield a `Map<String, Object>`:
 
 ```java
-@Cycles(value = "1000", metadata = "{'request_id': #requestId, 'model': #result.model}")
+@Cycles(value = "1000", metadata = "{'app_request_id': #requestId, 'model': #result.model}")
 public LlmResponse call(String requestId, String prompt) { ... }
 ```
 

@@ -46,7 +46,7 @@ Every event shares this envelope structure. The `data` field varies by event typ
     "source_ip": "10.0.1.50"
   },
   "data": { },
-  "correlation_id": "req_789",
+  "correlation_id": "3f2a9c14e0b7d5a1",
   "request_id": "req_789",
   "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
   "metadata": {}
@@ -66,7 +66,7 @@ Every event shares this envelope structure. The `data` field varies by event typ
 | `source` | string | Yes | Emitting service: `cycles-server` (runtime events), `cycles-admin` (admin-plane events including bulk-action emits and webhook lifecycle events since v0.1.25.38/.39), or `cycles-events` (dispatcher-emitted `webhook.disabled` on auto-disable, v0.1.25.11). |
 | `actor` | object | When applicable | Who triggered: `type` (`api_key`, `admin`, `system`, `scheduler`), `key_id`, `source_ip` |
 | `data` | object | Varies | Event-specific payload (see below). Some events emit `null`. |
-| `correlation_id` | string | When provided | Links related events across a workflow |
+| `correlation_id` | string | When applicable | Server-set family key — deterministic hash for event-stream clusters, explicit operation IDs (`webhook_create:<id>` etc.) for admin operations |
 | `request_id` | string | When provided | From `X-Request-Id` header on originating request |
 | `trace_id` | string | When provided | W3C Trace Context-compatible correlation identifier (32 lowercase hex characters). Links the event to the originating request, its audit entry, and sibling events within the same logical operation. |
 | `metadata` | object | When provided | Operator-defined key-value pairs |

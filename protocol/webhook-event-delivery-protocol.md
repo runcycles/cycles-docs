@@ -51,7 +51,7 @@ The body is a JSON-serialized Event object:
     "remaining": 0,
     "spent": 10000
   },
-  "correlation_id": "batch_nightly_2026_04_18",
+  "correlation_id": "3f2a9c14e0b7d5a1",
   "request_id": "req_789",
   "trace_id": "0af7651916cd43dd8448eb211c80319c",
   "metadata": {}
@@ -60,7 +60,7 @@ The body is a JSON-serialized Event object:
 
 Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and `metadata` are optional (omitted when null).
 
-**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` is operator-populated and groups a family of related events. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` groups a family of related events — it is server-set in one of two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`) for governance/admin operations. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ## Event types (47)
 

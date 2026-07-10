@@ -271,7 +271,7 @@ The W3C Trace Context HTTP header (`00-<trace_id>-<span_id>-<flags>`). Cycles ac
 
 ### correlation_id
 
-A server-set identifier that groups a family of related events in the event stream. Cycles computes it as a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` so that threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs can be joined without an operator supplying anything. Scoped to the event stream only. Distinct from `trace_id` (logical-operation grain, W3C-compatible) and `request_id` (one HTTP request) — both of which are also server-managed but answer different questions.
+A server-set identifier that groups a family of related events in the event stream, in one of two shapes: for protocol event-stream clusters, a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` — so threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs join without an operator supplying anything; for governance/admin operations, an explicit server-composed operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, tenant-cascade IDs). Scoped to the event stream only. Distinct from `trace_id` (logical-operation grain, W3C-compatible) and `request_id` (one HTTP request) — both of which are also server-managed but answer different questions.
 
 ## Admin Plane
 

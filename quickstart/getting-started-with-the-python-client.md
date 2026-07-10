@@ -209,7 +209,7 @@ def process(text: str) -> str:
     )
 
     # Attach metadata for audit
-    ctx.commit_metadata = {"request_id": "req-abc-123"}
+    ctx.commit_metadata = {"app_request_id": "req-abc-123"}
 
     return call_llm(text)
 ```

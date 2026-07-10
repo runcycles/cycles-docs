@@ -394,7 +394,7 @@ Evaluates the reservation without actually holding budget. The guarded method do
 ### Commit metadata
 
 ```java
-@Cycles(value = "1000", metadata = "{'request_id': #requestId, 'model': #result.model}")
+@Cycles(value = "1000", metadata = "{'app_request_id': #requestId, 'model': #result.model}")
 ```
 
 Since 0.2.5. The `metadata` SpEL expression is evaluated after the method returns — `#result` is available — and must yield a `Map<String, Object>`. The result is merged with metadata set programmatically via `CyclesContextHolder`; programmatic metadata wins on key conflicts.
@@ -435,7 +435,7 @@ public String process(String input) {
     ctx.setMetrics(metrics);
 
     // Attach metadata for audit
-    ctx.setCommitMetadata(Map.of("request_id", "req-abc-123"));
+    ctx.setCommitMetadata(Map.of("app_request_id", "req-abc-123"));
 
     return chatModel.call(input);
 }
