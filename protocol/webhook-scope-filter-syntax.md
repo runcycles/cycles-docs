@@ -35,7 +35,7 @@ The event scope must exactly equal the filter string.
 }
 ```
 
-Under spec semantics this delivers events **only** when the event scope is exactly `tenant:acme-corp/workspace:prod`; events scoped to `tenant:acme-corp/workspace:prod/workflow:support` would **not** match. **Reference implementation:** this filter is treated as a prefix, so child scopes *do* match (consequence 2 above).
+Under spec semantics this delivers events **only** when the event scope is exactly `tenant:acme-corp/workspace:prod`; events scoped to `tenant:acme-corp/workspace:prod/workflow:support` would **not** match. **Admin plane, 0.1.25.48 and earlier:** this filter is treated as a prefix, so child-scope admin events *do* match (consequence 2 above). The runtime matcher applies the exact-match spec semantics.
 
 ### Prefix match (trailing wildcard)
 
@@ -52,7 +52,7 @@ Under spec semantics this delivers events for any scope under `tenant:acme-corp/
 - `tenant:acme-corp/workspace:prod/workflow:support`
 - `tenant:acme-corp/workspace:staging/agent:bot-1`
 
-**Reference implementation (0.1.25.48 and earlier):** the runtime plane matches this correctly; the admin plane compares the `*` literally and delivers nothing (consequence 1 above).
+**Per plane (0.1.25.48 and earlier):** the runtime matcher handles this correctly; the admin matcher compares the `*` literally and delivers nothing (consequence 1 above).
 
 ### No filter (default)
 
@@ -154,7 +154,7 @@ This delivers only `budget.exhausted` **or** `budget.over_limit_entered` events 
 Some events may not have a `scope` field (null). The two semantics differ:
 
 - **Spec semantics (normative):** when `scope_filter` is set and an event has a null scope, the event is **not delivered** to that subscription. Use a separate subscription without a scope filter to capture unscoped events.
-- **Reference implementation:** the runtime plane follows the spec (null scope excluded from filtered subscriptions — `EventEmitterRepository.matchesScope`); the admin plane on 0.1.25.48 and earlier delivers null-scope events to every filter (fixed by the queued conformance change).
+- **Per plane:** the runtime matcher follows the spec (null scope excluded from filtered subscriptions — `EventEmitterRepository.matchesScope`); the admin plane on 0.1.25.48 and earlier delivers null-scope events to every filter (fixed by the queued conformance change).
 
 ::: tip Note on `reservation.commit_overage`
 As of cycles-server v0.1.25.46, `reservation.commit_overage` is emitted **with** the reservation's scope path on the envelope, so it participates in scope filtering like any other scoped event. (Earlier releases emitted it with a null envelope scope, in which case the null-scope rules above applied.)
@@ -163,7 +163,7 @@ As of cycles-server v0.1.25.46, `reservation.commit_overage` is emitted **with**
 ## Edge cases
 
 - **Whitespace-only filter** (e.g., `"   "`): Treated the same as null — matches all events (both semantics).
-- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The runtime matcher — and the queued admin fix — treat it as "match any **scoped** event" (null/blank scopes excluded); only the admin plane on 0.1.25.48 and earlier matches **all** events including null-scope ones. Prefer omitting `scope_filter` entirely to mean "everything".
+- **Filter `"*"` alone**: Under spec semantics this is undefined (arguably an exact match against a scope literally equal to `*`). The runtime matcher treats it as "match any non-null-scope event" (a blank `""` scope still matches, via the empty-prefix comparison); the queued admin fix excludes both null and blank scopes; only the admin plane on 0.1.25.48 and earlier matches **all** events including null-scope ones. Prefer omitting `scope_filter` entirely to mean "everything".
 - **Events with some scope fields emitted as null**: On 0.1.25.48 and earlier, only `null` scope is checked — an empty string scope (`""`) is not treated as missing. From the conformance fix onward, blank and null scopes are both treated as unscoped (excluded from scope-filtered subscriptions).
 
 ## Related
