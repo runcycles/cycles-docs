@@ -33,7 +33,7 @@ Every response — error or success — also carries an `X-Cycles-Trace-Id` HTTP
 
 ## The error codes
 
-The runtime protocol defines 15 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec). This page documents those 15 plus the admin-plane `TENANT_CLOSED` lifecycle error — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — totalling 16 codes covered here. The admin-plane error enum has additional codes that aren't part of the runtime wire contract; see the admin OpenAPI spec for the full set.
+The runtime protocol defines 16 wire error codes (the `ErrorCode` enum in the runtime OpenAPI spec — `LIMIT_EXCEEDED` was added in spec v0.1.25.12). This page documents those 16 plus the admin-plane `TENANT_CLOSED` lifecycle error — raised by the [tenant-close cascade](/protocol/tenant-close-cascade-semantics) against objects owned by closed tenants — totalling 17 codes covered here. The admin-plane error enum has additional codes that aren't part of the runtime wire contract; see the admin OpenAPI spec for the full set.
 
 Each code has a specific HTTP status code and meaning.
 
@@ -206,6 +206,18 @@ The tenant's `max_reservation_extensions` limit has been reached for this reserv
 
 **What to do:** commit or release the reservation. If more time is needed, create a new reservation after committing the current one.
 
+### LIMIT_EXCEEDED (429)
+
+The client has exceeded the server's rate limit. Added in spec v0.1.25.12, mirroring the governance-plane code of the same name; the reference runtime server enforces it on the **public (unauthenticated)** endpoints — `GET /v1/evidence/*` and the CyclesEvidence JWKS — since v0.1.25.46 (default 300 requests/minute per client IP, per instance; see [Public endpoint rate limiting](/configuration/server-configuration-reference-for-cycles#public-endpoint-rate-limiting-v0-1-25-46)). Authenticated `/v1` endpoints are not rate limited by the reference server (abuse there is key-attributable).
+
+The 429 response carries throttling headers alongside the standard correlation headers:
+
+- `Retry-After` — seconds to wait before retrying
+- `X-RateLimit-Reset` — when the current window resets
+- `X-RateLimit-Remaining: 0`
+
+**What to do:** wait for the `Retry-After` interval, then retry. If you hit this limit during legitimate operation, raise `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE` or rate-limit at your ingress instead.
+
 ### INTERNAL_ERROR (500)
 
 An unexpected server error occurred.
@@ -346,7 +358,7 @@ GET /v1/admin/events?trace_id=<32-hex>
 
 ## Summary
 
-Cycles provides 16 specific error codes that tell the client exactly what went wrong:
+Cycles provides 17 specific error codes that tell the client exactly what went wrong:
 
 - **400** for request validation issues (INVALID_REQUEST, UNIT_MISMATCH)
 - **401** for authentication failures (UNAUTHORIZED)
@@ -354,6 +366,7 @@ Cycles provides 16 specific error codes that tell the client exactly what went w
 - **404** for missing resources (NOT_FOUND) — covers both missing reservations and missing budgets, distinguished by the `message` field
 - **409** for budget and state conflicts (BUDGET_EXCEEDED, BUDGET_FROZEN, BUDGET_CLOSED, TENANT_CLOSED, OVERDRAFT_LIMIT_EXCEEDED, DEBT_OUTSTANDING, RESERVATION_FINALIZED, IDEMPOTENCY_MISMATCH, MAX_EXTENSIONS_EXCEEDED)
 - **410** for expired reservations (RESERVATION_EXPIRED)
+- **429** for rate limiting on public endpoints (LIMIT_EXCEEDED)
 - **500** for server errors (INTERNAL_ERROR)
 
 Additionally, `/v1/decide` and dry-run reserve surface budget-state conditions via a `reason_code` field on `200 DENY` responses rather than as 4xx errors. These values come from a separate [DecisionReasonCode](#decision-reason-codes) enum — distinct from the 4xx error code list.
@@ -382,4 +395,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

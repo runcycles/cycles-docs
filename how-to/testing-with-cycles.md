@@ -91,7 +91,7 @@ def test_release_on_failure():
 For integration-style tests, use `pytest-httpx` to mock HTTP responses:
 
 ```python
-from runcycles import CyclesClient, CyclesConfig, ReservationCreateRequest
+from runcycles import CyclesClient, CyclesConfig
 
 def test_full_lifecycle(httpx_mock):
     httpx_mock.add_response(
@@ -114,6 +114,12 @@ def test_full_lifecycle(httpx_mock):
     )
 
     config = CyclesConfig(base_url="http://localhost:7878", api_key="test-key")
+    request = {
+        "idempotency_key": "test-001",
+        "subject": {"tenant": "test"},
+        "action": {"kind": "test", "name": "integration"},
+        "estimate": {"unit": "USD_MICROCENTS", "amount": 100},
+    }
     with CyclesClient(config) as client:
         response = client.create_reservation(request)
         assert response.is_success
@@ -161,6 +167,12 @@ async def test_async_reservation(httpx_mock):
     )
 
     config = CyclesConfig(base_url="http://localhost:7878", api_key="test-key")
+    request = {
+        "idempotency_key": "test-async-001",
+        "subject": {"tenant": "test"},
+        "action": {"kind": "test", "name": "integration"},
+        "estimate": {"unit": "USD_MICROCENTS", "amount": 100},
+    }
     async with AsyncCyclesClient(config) as client:
         response = await client.create_reservation(request)
         assert response.is_success
@@ -223,8 +235,9 @@ class DocumentProcessorTest {
     @Test
     void testBudgetDenied() {
         when(cyclesClient.createReservation(any()))
-            .thenReturn(CyclesResponse.error(409, "BUDGET_EXCEEDED",
-                "Insufficient remaining balance"));
+            .thenReturn(CyclesResponse.httpError(409, "Insufficient remaining balance",
+                Map.of("error", "BUDGET_EXCEEDED",
+                       "message", "Insufficient remaining balance")));
 
         String result = processor.processDocument("doc-1", "content");
 
@@ -295,8 +308,9 @@ class CyclesIntegrationTest {
 
     @Test
     void testAnnotatedMethodWithDeny() {
+        // A live (non-dry-run) denial is a 409 BUDGET_EXCEEDED error body —
+        // there is no "decision" field on 4xx responses
         Map<String, Object> denyBody = Map.of(
-            "decision", "DENY",
             "error", "BUDGET_EXCEEDED",
             "message", "Insufficient budget"
         );
@@ -311,20 +325,34 @@ class CyclesIntegrationTest {
 
 ### Integration testing with a real Cycles server
 
-For end-to-end tests, use Testcontainers to spin up Redis and the Cycles server:
+For end-to-end tests, use Testcontainers to spin up Redis and the Cycles server (`ghcr.io/runcycles/cycles-server`) on a shared network:
 
 ```java
 @SpringBootTest
 @Testcontainers
 class FullIntegrationTest {
 
+    static Network network = Network.newNetwork();
+
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
+        .withNetwork(network)
+        .withNetworkAliases("redis")
         .withExposedPorts(6379);
+
+    @Container
+    static GenericContainer<?> cyclesServer =
+        new GenericContainer<>("ghcr.io/runcycles/cycles-server:latest")
+            .withNetwork(network)
+            .withEnv("REDIS_HOST", "redis")
+            .withEnv("REDIS_PORT", "6379")
+            .withExposedPorts(7878)
+            .dependsOn(redis);
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("cycles.base-url", () -> "http://localhost:7878");
+        registry.add("cycles.base-url", () ->
+            "http://" + cyclesServer.getHost() + ":" + cyclesServer.getMappedPort(7878));
         registry.add("cycles.api-key", () -> "test-key");
         registry.add("cycles.tenant", () -> "test-tenant");
     }
@@ -349,6 +377,10 @@ class FullIntegrationTest {
 }
 ```
 
+::: warning Provision test data first
+The server authenticates `X-Cycles-API-Key` against keys stored in Redis and enforces budgets seeded there. Seed a test API key and a budget for `test-tenant` (for example via the Cycles Admin API, or the seeding scripts in the [cycles-server repo](https://github.com/runcycles/cycles-server)) before the reservation assertion above will pass.
+:::
+
 ### Testing CyclesFieldResolver implementations
 
 Test custom field resolvers directly:
@@ -372,7 +404,7 @@ Test that your SpEL expressions evaluate correctly:
 
 ```java
 @Test
-void testEstimateExpression() {
+void testEstimateExpression() throws NoSuchMethodException {
     CyclesExpressionEvaluator evaluator = new CyclesExpressionEvaluator();
 
     Method method = LlmService.class.getMethod("generate", int.class);
@@ -696,7 +728,7 @@ describe("reserveForStream", () => {
 - **Test both ALLOW and DENY paths**: ensure your code handles budget denial gracefully
 - **Test error paths**: verify release is called when functions/methods throw
 - **Use HTTP mocking for integration tests**: `pytest-httpx` for Python, Testcontainers for Java, `vi.stubGlobal("fetch")` for TypeScript
-- **Python-specific**: use `pytest-httpx` for sync and `respx` for async HTTP mocking
+- **Python-specific**: `pytest-httpx` mocks both the sync `CyclesClient` and the async `AsyncCyclesClient` (its `httpx_mock` fixture works with async httpx clients too); `respx` is an alternative if you prefer its API
 - **TypeScript-specific**: mock `fetch` globally with Vitest's `vi.stubGlobal()` or use `msw` (Mock Service Worker) for more realistic HTTP mocking
 
 ## Next steps

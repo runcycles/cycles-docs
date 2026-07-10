@@ -176,9 +176,13 @@ POST /your-webhook-endpoint HTTP/1.1
 Content-Type: application/json
 X-Cycles-Event-Id: evt_a1b2c3d4e5f67890
 X-Cycles-Event-Type: reservation.denied
+X-Cycles-Trace-Id: 4bf92f3577b34da6a3ce929d0e0e4736
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 X-Cycles-Signature: sha256=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
-User-Agent: cycles-server-events/0.1.25.5
+User-Agent: cycles-server-events/0.1.25.22
 ```
+
+`X-Cycles-Trace-Id` and W3C `traceparent` are always present — use them to join the delivery back to the originating request across the audit log, events, and delivery records. Two headers are conditional: `X-Request-Id` is sent when the originating event carries a `request_id`, and `X-Cycles-Signature` is sent when the subscription has a signing secret. Any custom headers configured on the subscription are also included, except names that collide with the reserved set above (reserved names are ignored with a warning). The `User-Agent` version tracks the deployed events-service version.
 
 ## Signature Verification
 
@@ -413,7 +417,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (15 types including `budget.created`, `budget.debited`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
+> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (16 types including `budget.created`, `budget.debited`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
 
 ### Middleware (Node.js)
 
@@ -982,13 +986,13 @@ curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
 | `budget.debt_incurred` | Runtime server | `cycles-server` | Info: commit created debt via ALLOW_WITH_OVERDRAFT |
 | `reservation.denied` | Runtime server | `cycles-server` | Warning: agent couldn't reserve budget |
 | `reservation.commit_overage` | Runtime server | `cycles-server` | Info: actual spend exceeded estimated amount |
-| `reservation.expired` | Expiry sweeper | `expiry-sweeper` | Info: reservation TTL expired without commit/release |
+| `reservation.expired` | Runtime server (expiry sweep) | `cycles-server` | Info: reservation TTL expired without commit/release |
 | `tenant.suspended` | Admin server | `cycles-admin` | Alert: tenant operations paused |
 | `tenant.closed` | Admin server | `cycles-admin` | Alert: tenant permanently closed |
 | `api_key.auth_failed` | Admin server | `cycles-admin` | Security: authentication failure |
 | `api_key.revoked` | Admin server | `cycles-admin` | Security: key access removed |
 | `system.store_connection_lost` | Any service | `cycles-server` | Critical: Redis connection failure |
-| `system.webhook_delivery_failed` | Events service | `cycles-server-events` | Meta: webhook delivery permanently failed after all retries |
+| `system.webhook_delivery_failed` | Events service | `cycles-events` | Meta: webhook delivery permanently failed after all retries |
 
 ## Next steps
 

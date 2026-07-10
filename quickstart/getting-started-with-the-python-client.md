@@ -144,23 +144,40 @@ def chat(prompt: str) -> str:
 |---|---|---|
 | `estimate` | (required) | `int` or callable returning `int`. Estimated amount. |
 | `actual` | `None` | `int` or callable receiving the return value. Defaults to estimate. |
-| `action_kind` | `None` | Action category (e.g. `"llm.completion"`). |
-| `action_name` | `None` | Action identifier (e.g. `"gpt-4"`). |
-| `action_tags` | `None` | List of tags for filtering/reporting. |
+| `action_kind` | `None` | Action category (e.g. `"llm.completion"`). `str` or callable. |
+| `action_name` | `None` | Action identifier (e.g. `"gpt-4"`). `str` or callable. |
+| `action_tags` | `None` | List of tags for filtering/reporting. `list[str]` or callable. |
 | `unit` | `USD_MICROCENTS` | Budget unit: `USD_MICROCENTS`, `TOKENS`, `CREDITS`, `RISK_POINTS`. |
 | `ttl_ms` | `60000` | Reservation TTL in milliseconds. |
 | `grace_period_ms` | `None` | Grace period after TTL expiry. When `None`, server default (5000ms) applies. |
 | `overage_policy` | `"ALLOW_IF_AVAILABLE"` | `"REJECT"`, `"ALLOW_IF_AVAILABLE"`, or `"ALLOW_WITH_OVERDRAFT"`. |
 | `dry_run` | `False` | If `True`, evaluate without persisting. Function does not execute. |
-| `tenant` | `None` | Subject tenant override. |
-| `workspace` | `None` | Subject workspace override. |
-| `app` | `None` | Subject app override. |
-| `workflow` | `None` | Subject workflow override. |
-| `agent` | `None` | Subject agent override. |
-| `toolset` | `None` | Subject toolset override. |
-| `dimensions` | `None` | Custom dimensions dict. |
+| `tenant` | `None` | Subject tenant override. `str` or callable. |
+| `workspace` | `None` | Subject workspace override. `str` or callable. |
+| `app` | `None` | Subject app override. `str` or callable. |
+| `workflow` | `None` | Subject workflow override. `str` or callable. |
+| `agent` | `None` | Subject agent override. `str` or callable. |
+| `toolset` | `None` | Subject toolset override. `str` or callable. |
+| `dimensions` | `None` | Custom dimensions dict. `dict[str, str]` or callable. |
 | `client` | `None` | Explicit client. Falls back to module default. |
 | `use_estimate_if_actual_not_provided` | `True` | If `True` and `actual` is `None`, use estimate as actual at commit. |
+
+### Dynamic subject and action fields
+
+Since 0.4.0, `action_kind`, `action_name`, `action_tags`, the six subject parameters (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`), and `dimensions` also accept a callable. The callable is invoked with the decorated function's `*args, **kwargs` at reservation time, so subject and action can be routed per call:
+
+```python
+@cycles(
+    estimate=1000,
+    workspace=lambda req, workspace_id: workspace_id, # [!code focus]
+    action_kind=lambda req, *_: f"llm.{req.provider}", # [!code focus]
+    action_name=lambda req, *_: req.model, # [!code focus]
+)
+def run_request(req: Request, workspace_id: str) -> Response:
+    ...
+```
+
+A falsy result (e.g. `None`) falls through: subject fields fall back to the config default, `action_kind`/`action_name` fall back to `"unknown"`, and `action_tags`/`dimensions` are omitted from the request.
 
 ## Accessing reservation context at runtime
 
@@ -192,7 +209,7 @@ def process(text: str) -> str:
     )
 
     # Attach metadata for audit
-    ctx.commit_metadata = {"request_id": "req-abc-123"}
+    ctx.commit_metadata = {"app_request_id": "req-abc-123"}
 
     return call_llm(text)
 ```
@@ -203,7 +220,7 @@ When the reservation decision comes back, the decorator handles each case:
 
 - **ALLOW** — the function runs normally.
 - **ALLOW_WITH_CAPS** — the function runs. Caps are available through `get_cycles_context()` for the function to inspect and respect.
-- **DENY** — the function does not run. A `BudgetExceededError` (or appropriate subclass) is raised.
+- **DENY** — the function does not run. `CyclesProtocolError` is raised, with `reason_code` set. A specific subclass (e.g. `BudgetExceededError`) is raised only when the server returns a matching HTTP error code; a 200 response with `decision=DENY` raises the plain `CyclesProtocolError`.
 
 ```python
 from runcycles import BudgetExceededError, CyclesProtocolError
@@ -259,6 +276,14 @@ with CyclesClient(config) as client:
     if not response.is_success:
         raise RuntimeError(f"Reservation failed: {response.error_message}")
 
+    # Defensive: a conformant server returns 409 on live budget denial, but
+    # dry-run responses (and lenient servers) return 200 with decision=DENY
+    # and no reservation_id - check before using it
+    if response.get_body_attribute("decision") == "DENY":
+        raise RuntimeError(
+            f"Reservation denied: {response.get_body_attribute('reason_code')}"
+        )
+
     reservation_id = response.get_body_attribute("reservation_id")
 
     # 2. Execute
@@ -293,7 +318,7 @@ response = client.decide(DecisionRequest( # [!code focus]
     estimate=Amount(unit=Unit.USD_MICROCENTS, amount=500_000),
 ))
 
-decision = response.get_body_attribute("decision")  # "ALLOW" or "DENY"
+decision = response.get_body_attribute("decision")  # "ALLOW", "ALLOW_WITH_CAPS", or "DENY"
 ```
 
 ### Querying balances
@@ -302,6 +327,8 @@ decision = response.get_body_attribute("decision")  # "ALLOW" or "DENY"
 response = client.get_balances(tenant="acme")
 print(response.body)
 ```
+
+At least one subject filter kwarg (`tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset`) is required — calling `get_balances()` with none raises `ValueError`.
 
 ### Recording events (direct debit)
 
@@ -424,7 +451,7 @@ For each `@cycles`-decorated function call:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: exception is raised, function does not run
-5. Heartbeat extension is scheduled (background thread)
+5. Heartbeat extension is scheduled (background thread; asyncio task for async functions)
 6. Function executes
 7. Actual usage is evaluated (callable, fixed value, or estimate)
 8. Commit is sent with actual amount and optional metrics

@@ -81,33 +81,36 @@ Track reservation lifecycle events:
 
 ### Server health metrics
 
-All three Cycles services expose Spring Boot Actuator. The exposed endpoints are `health`, `info`, and `prometheus`:
+All three Cycles services expose Spring Boot Actuator. The exposed endpoints are `health`, `info`, and `prometheus`. On the runtime and admin servers (since `cycles-server` 0.1.25.45 and the matching admin release), the aggregate `/actuator/health` and `/actuator/prometheus` endpoints require the `X-Admin-API-Key` header; only the liveness/readiness probe sub-paths stay public for orchestrators:
 
 ```bash
-# Cycles Server (runtime)
-curl http://localhost:7878/actuator/health
-curl http://localhost:7878/actuator/prometheus
+# Cycles Server (runtime) — aggregate health + prometheus need the admin key
+curl -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7878/actuator/health
+curl -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7878/actuator/prometheus
+curl http://localhost:7878/actuator/health/liveness    # public
+curl http://localhost:7878/actuator/health/readiness   # public
 
-# Admin Server — also exposes Kubernetes liveness/readiness probes
-curl http://localhost:7979/actuator/health
-curl http://localhost:7979/actuator/health/liveness
-curl http://localhost:7979/actuator/health/readiness
-curl http://localhost:7979/actuator/prometheus
+# Admin Server — same auth model
+curl -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7979/actuator/health
+curl http://localhost:7979/actuator/health/liveness    # public
+curl http://localhost:7979/actuator/health/readiness   # public
+curl -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7979/actuator/prometheus
 
-# Events Service
+# Events Service — management port 9980, no auth filter in the reference
+# deployment; restrict it at the network layer
 curl http://localhost:9980/actuator/health
 curl http://localhost:9980/actuator/prometheus
 ```
 
 ::: tip Liveness/readiness probes
-Only the Admin Server enables Spring's liveness/readiness probes (`management.endpoint.health.probes.enabled=true`). The runtime server and events service expose only the aggregate `/actuator/health` endpoint.
+All three services enable Spring's liveness/readiness probes (`management.endpoint.health.probes.enabled=true`), exposing `/actuator/health/liveness` and `/actuator/health/readiness`. The readiness group includes the Redis health indicator. These probe paths are deliberately exempt from the admin-key requirement so Kubernetes can call them.
 :::
 
 Key server metrics (all derived from Spring Boot's default Micrometer registrations — see [Observability Setup](/how-to/observability-setup) for the full metric list):
 
 | Metric | Component | Threshold |
 |---|---|---|
-| Response latency (p99) — `http_server_requests_seconds_bucket` | Cycles Server | Alert if > 50ms |
+| Response latency — `http_server_requests_seconds_max` (or p99 from `_bucket` if you enable percentile histograms) | Cycles Server | Alert if > 50ms |
 | Error rate (5xx) — `http_server_requests_seconds_count{status=~"5.."}` | Cycles Server, Admin Server | Alert if > 1% |
 | JVM heap usage — `jvm_memory_used_bytes{area="heap"}` / `jvm_memory_max_bytes{area="heap"}` | All services | Alert if > 80% |
 | Redis connection pool usage | All services | No server-side metric exposed today — monitor via Redis `CLIENT LIST` or a Redis exporter. |
@@ -127,18 +130,23 @@ The Events Service delivers webhooks asynchronously. Its management port is 9980
 ## Alerting rules
 
 ::: info Custom `cycles_*` metrics ship with the server
-Runtime `cycles-server` ≥ `0.1.25.8` and admin `cycles-server-admin` ≥ `0.1.25.18` emit custom Micrometer counters under the `cycles.*` namespace, exposed at `/actuator/prometheus` as `cycles_*`. See [Custom Cycles metrics](./observability-setup#custom-cycles-metrics) for the full catalogue (reservation lifecycle, events, overdraft, admin webhooks/events).
+Runtime `cycles-server` ≥ `0.1.25.10` emits the reservation-lifecycle counters (`cycles_reservations_*_total`, `cycles_events_total`, `cycles_overdraft_incurred_total`). Admin `cycles-server-admin` ≥ `0.1.25.9` emits `cycles_admin_events_emitted_total` and `cycles_admin_webhook_dispatched_total`; `cycles_admin_events_payload_invalid_total` arrived in `0.1.25.12` and `cycles_admin_audit_writes_total` in `0.1.25.20`. All are exposed at `/actuator/prometheus`. See [Custom Cycles metrics](./observability-setup#custom-cycles-metrics) for the full catalogue (reservation lifecycle, events, overdraft, admin webhooks/events).
 
 The alert rules below use these counters directly where they exist. For signals without a first-class counter (budget utilization, active-reservation count, dispatch-queue depth), derive from balance polling or Redis directly — shown where relevant.
 :::
 
 ### Prometheus example (using default metrics)
 
+::: warning Percentile histograms are off by default
+None of the three services enable Micrometer percentile histograms out of the box, so `http_server_requests_seconds_bucket` series do not exist and `histogram_quantile()` returns nothing. Either enable them (`management.metrics.distribution.percentiles-histogram.http.server.requests=true`) to use the p99 rule below, or alert on `http_server_requests_seconds_max` instead. Also note the `application` tag values: runtime is `cycles-protocol-service`, admin is `cycles-admin-service`, and the events service sets **no** `application` tag — `application=~"cycles-.*"` selectors will not match its series.
+:::
+
 ```yaml
 groups:
   - name: cycles
     rules:
-      # Latency — default Spring Boot HTTP histogram
+      # Latency — requires percentile histograms enabled (see note above);
+      # otherwise use: max_over_time(http_server_requests_seconds_max{...}[5m]) > 0.05
       - alert: CyclesServerLatency
         expr: histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application="cycles-protocol-service",uri=~"/v1/reservations.*|/v1/decide"}[5m]))) > 0.05
         for: 5m
@@ -175,7 +183,7 @@ groups:
 ### Denial-rate and overdraft alerts (from `cycles_*` counters)
 
 ::: tip Why denial rate can't come from `http_server_requests_seconds*`
-`POST /v1/reservations` always returns **HTTP 200** — the DENY outcome is surfaced as `"decision": "DENY"` in the response body. The default Spring Boot HTTP histogram has no body-content label. Use the `cycles_reservations_reserve_total` counter instead: its `decision` tag carries `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`, and `reason` carries the deny/caps code. (`ALLOW_WITH_OVERDRAFT` is a value on the separate `overage_policy` tag — the budget's commit-overage policy — not a reservation decision.)
+A live `POST /v1/reservations` denial returns **HTTP 409** with `error: BUDGET_EXCEEDED` — but 409 also covers idempotency mismatches, frozen budgets, and other conflicts, so HTTP status alone can't isolate budget denials. (Only `/v1/decide` and dry-run reserve surface denials as HTTP 200 with `"decision": "DENY"` in the body, which the HTTP histogram can't see at all.) Use the `cycles_reservations_reserve_total` counter instead: its `decision` tag carries `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`, and `reason` carries the deny code (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, …). (`ALLOW_WITH_OVERDRAFT` is a value on the separate `overage_policy` tag — the budget's commit-overage policy — not a reservation decision.)
 :::
 
 ```yaml
@@ -189,7 +197,10 @@ groups:
     severity: warning
   annotations:
     summary: "Over 10% of reservations being denied for {{ $labels.tenant }}"
-    description: "Top deny reasons: {{ $labels.reason }}"
+    # Note: the `reason` label is aggregated away by `sum by (tenant)` and is
+    # not available in annotations here. To see top deny reasons, run
+    # `topk(5, sum by (reason) (rate(cycles_reservations_reserve_total{decision="DENY"}[5m])))`
+    # in the Prometheus UI, or alert per-reason with `sum by (tenant, reason)`.
 
 - alert: CyclesOverdraftSpike
   expr: |
@@ -216,11 +227,11 @@ Some operational questions don't have a direct counter — point-in-time utiliza
 
 ### Webhook delivery queue depth
 
-The events service has no `cycles_dispatch_pending_length` gauge yet. Scrape Redis directly with `redis_exporter` — the exporter exposes `redis_list_length{list="dispatch:pending"}` when configured with `--check-single-keys=dispatch:pending`:
+The events service has no `cycles_dispatch_pending_length` gauge yet. Scrape Redis directly with `redis_exporter` — when configured with `--check-single-keys=dispatch:pending`, the exporter exposes the list length as `redis_key_size{key="dispatch:pending"}`:
 
 ```yaml
 - alert: CyclesWebhookQueueBacklog
-  expr: redis_list_length{list="dispatch:pending"} > 100
+  expr: redis_key_size{key="dispatch:pending"} > 100
   for: 5m
   labels:
     severity: warning
@@ -276,17 +287,22 @@ Display for each tenant/scope:
 If you don't have a metrics pipeline, monitor from server logs:
 
 ```bash
-# Watch for budget exhaustion events
-docker compose logs -f cycles-server | grep "BUDGET_EXCEEDED"
+# Watch for budget-denied requests (409s are logged as
+# "Cycles protocol exception handled: ... error=BUDGET_EXCEEDED ...")
+docker compose logs -f cycles-server | grep "error=BUDGET_EXCEEDED"
 
-# Watch for reservation expiry
-docker compose logs -f cycles-server | grep "RESERVATION_EXPIRED"
+# Watch for clients hitting already-expired reservations (410s).
+# Note: the expiry sweep itself logs successful expirations at DEBUG only —
+# use the cycles_reservations_expired_total counter or reservation.expired
+# events for expiry-rate monitoring rather than logs.
+docker compose logs -f cycles-server | grep "error=RESERVATION_EXPIRED"
 
-# Watch for webhook delivery failures
-docker compose logs -f cycles-events | grep "DELIVERY_FAILED"
+# Watch for webhook delivery failures (terminal and transport-level)
+docker compose logs -f cycles-events | grep "Webhook delivery permanently failed"
+docker compose logs -f cycles-events | grep "Webhook delivery transport failed"
 
 # Watch for auto-disabled subscriptions
-docker compose logs -f cycles-events | grep "SUBSCRIPTION_DISABLED"
+docker compose logs -f cycles-events | grep "Webhook subscription auto-disabled"
 
 # Watch for errors across all services
 docker compose logs -f cycles-server cycles-admin cycles-events | grep "ERROR"

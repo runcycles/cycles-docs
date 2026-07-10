@@ -17,14 +17,14 @@ Cycles carries three correlation identifiers, each with a different grain.
 |---|---|---|
 | `request_id` | One HTTP request | Per-request |
 | `trace_id` | One logical operation (may span many requests) | Per-operation |
-| `correlation_id` | An event-stream cluster (groups related events) | Operator-defined |
+| `correlation_id` | An event-stream cluster (groups related events) | Server-set: deterministic hash (protocol clusters) or operation ID (admin operations) |
 
 - **`request_id`** is server-generated for every inbound HTTP request. It appears in every error response, audit-log entry, and event that is causally downstream of that request. Use it to correlate the side effects of one specific HTTP call.
 - **`trace_id`** identifies a logical operation that may cross several HTTP boundaries (for example: a client's reserve → multiple provider retries → commit). It is a 32-hex-character W3C Trace Context-compatible identifier. Use it to reconstruct the full operation across planes.
-- **`correlation_id`** is an opaque, operator-populated identifier that groups a family of emitted events (for example: all events related to a scheduled batch run). Cycles does not derive or inspect it — it only carries it through faithfully on event payloads.
+- **`correlation_id`** is set by the server, in one of two shapes depending on the emitting plane. **Protocol event-stream clusters** use a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` — every event for the same cluster carries the same value, which is what lets you JOIN threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs. **Governance/admin operations** (lifecycle, bulk actions, webhook management, tenant-close cascades) use explicit server-composed operation IDs such as `webhook_create:<id>` or `webhook_bulk_action:<action>:<request_id>` — see the [event payload reference](/protocol/event-payloads-reference) for the shapes. Either way it is scoped to the event stream only — it does not appear on responses or audit rows.
 
 ::: warning Don't confuse with `metadata.trace_id`
-[Standard Metrics and Metadata](/protocol/standard-metrics-and-metadata-in-cycles) documents an application-level `metadata.trace_id` that callers can put in the `metadata` map on commits and events. That is a free-form string the server stores but does not interpret. The `trace_id` described on this page is the separate, server-managed 32-hex W3C identifier that flows on response headers, error bodies, events, audit rows, and webhook deliveries. They can coexist: the application `metadata.trace_id` is useful for joining Cycles data with your own distributed tracing, while the server `trace_id` joins across Cycles planes.
+[Standard Metrics and Metadata](/protocol/standard-metrics-and-metadata-in-cycles) documents application-level correlation keys that callers can put in the `metadata` map on commits and events — free-form strings the server stores but does not interpret. Name them distinctly (e.g. `external_trace_id`, `app_request_id`) rather than reusing `trace_id`/`request_id`, which are the server-managed identifiers described on this page (32-hex W3C, flowing on response headers, error bodies, events, audit rows, and webhook deliveries). The two coexist: your `metadata.external_trace_id` joins Cycles data with your own distributed tracing, while the server `trace_id` joins across Cycles planes.
 :::
 
 ## Inbound header precedence
@@ -64,17 +64,17 @@ The `trace_id` field is OPTIONAL on the schema. Conformant v0.1.25.14+ runtime s
 
 ### On webhook deliveries
 
-Every webhook delivery emitted by the events service carries three cross-surface headers on top of the existing delivery headers:
+Every webhook delivery emitted by the events service carries two cross-surface headers on top of the existing delivery headers:
 
 ```http
 X-Cycles-Trace-Id: <32-hex-lowercase>
 traceparent: 00-<trace_id>-<16-hex-span>-<trace-flags>
-X-Request-Id: <request_id>
 ```
 
 - `X-Cycles-Trace-Id` — always present. Matches `X-Cycles-Trace-Id` on the originating response.
 - `traceparent` — always present. W3C Trace Context v00. The `span-id` is freshly generated per outbound delivery (NOT reused from the inbound request). The `trace-flags` byte preserves the inbound W3C `traceparent` sampling decision when one was present; otherwise defaults to `01` (sampled).
-- `X-Request-Id` — present when the originating event carries a `request_id`.
+
+These two are the normative delivery headers per the spec's required-header list. The reference implementation additionally sends an `X-Request-Id` header when the originating event carries a `request_id`, but that header is not part of the spec's required set — the normative carrier for `request_id` is the event envelope body.
 
 ### Inside emitted events
 
@@ -84,7 +84,7 @@ Standard event payloads carry:
 |---|---|
 | `request_id` | Populated on every event causally downstream of an HTTP request — including async and queued work that spans thread / process boundaries. Pre-v0.1.25 events may lack it. |
 | `trace_id` | OPTIONAL on the schema; populated by conformant v0.1.25.14+ runtime servers. |
-| `correlation_id` | Operator-populated, opaque. Carried through faithfully. |
+| `correlation_id` | Server-set, two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (`webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, cascade IDs) for governance/admin operations. Groups related events in the stream. |
 
 ### Inside audit-log entries
 
@@ -128,6 +128,8 @@ The admin plane supports exact-match filters on correlation identifiers:
 | `trace_id=<32-hex>` | Narrows to audit rows for one logical operation. |
 | `request_id=<id>` | Narrows to audit rows for one specific HTTP request. |
 
+These are the only two admin endpoints with server-side correlation filters. The webhook-delivery list endpoints (`GET /v1/admin/webhooks/{subscription_id}/deliveries` and the tenant-scoped variant) accept only `status` / `from` / `to` / pagination parameters — there is no `trace_id` query parameter. To join deliveries into a trace, filter client-side on the `trace_id` field of each `WebhookDelivery` record.
+
 Both filters are post-hydration predicates applied null-safely — entries with null field values (historical writes, off-request emissions, internal sweeper work) cannot satisfy a supplied filter value. Pre-v0.1.25.14 runtime entries and pre-v0.1.25.31 admin entries may lack `trace_id` and silently drop out of these joins; use `request_id` for those (the `request_id` contract predates `trace_id`).
 
 ### Phased-rollout tolerance
@@ -147,7 +149,7 @@ If you can't upgrade every plane at once, pin `trace_id`-based alerting to queri
 
 ## A practical join
 
-Given a single failing request, an operator can reconstruct the entire operation by reading the `trace_id` out of the error response, then walking the three admin endpoints:
+Given a single failing request, an operator can reconstruct the entire operation by reading the `trace_id` out of the error response, then walking the two admin endpoints that accept a `trace_id` filter — and filtering the delivery list client-side:
 
 ```bash
 TID=0af7651916cd43dd8448eb211c80319c
@@ -163,12 +165,13 @@ curl -s "http://localhost:7979/v1/admin/events?trace_id=$TID" \
   | jq '.events[] | {event_type, data}'
 
 # 3. What webhook deliveries went out as a consequence?
-curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries?trace_id=$TID" \
+#    (no trace_id query parameter here — filter client-side on the record's trace_id field)
+curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
-  | jq '.deliveries[] | {status, response_status, url, trace_flags}'
+  | jq --arg tid "$TID" '.deliveries[] | select(.trace_id == $tid) | {status, response_status, trace_flags}'
 ```
 
-Three calls, one ID, full causal picture across runtime response → audit row → emitted events → webhook fan-out.
+Three calls, one ID — two server-side filters plus one client-side filter — full causal picture across runtime response → audit row → emitted events → webhook fan-out.
 
 ## Logging `trace_id` in client code
 
@@ -207,7 +210,7 @@ The correlation contract is purely additive:
 
 - No new REQUIRED fields on existing schemas.
 - Old clients silently ignore the new `X-Cycles-Trace-Id` response header.
-- Old webhook subscribers silently ignore the new outbound `X-Cycles-Trace-Id`, `traceparent`, and `X-Request-Id` headers.
+- Old webhook subscribers silently ignore the new outbound `X-Cycles-Trace-Id` and `traceparent` headers (and the reference implementation's `X-Request-Id`).
 - Servers that predate the contract (runtime below v0.1.25.14, admin below v0.1.25.31, events below v0.1.25.7) remain wire-compatible: `trace_id` is an OPTIONAL property, and `ErrorResponse.additionalProperties: false` is preserved because `trace_id` is a DECLARED property, not an undeclared extra.
 
 ## Next steps

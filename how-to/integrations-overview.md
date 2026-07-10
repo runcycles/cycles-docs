@@ -35,6 +35,7 @@ Cycles integrates with LLM providers, agent frameworks, and web servers. Each in
 | [MCP Server](/how-to/integrating-cycles-with-mcp) | TypeScript (Node.js) | — | MCP tools |
 | [OpenAI Agents](/how-to/integrating-cycles-with-openai-agents) | Python | — | RunHooks (lifecycle hooks) |
 | [OpenClaw](/how-to/integrating-cycles-with-openclaw) | TypeScript | Yes | Plugin (lifecycle hooks) |
+| [AP2 (Agent Payments Protocol)](https://pypi.org/project/runcycles-ap2/) | Python | — | Payment-mandate guard ([`runcycles-ap2`](https://pypi.org/project/runcycles-ap2/)) — reserve / commit / release around AP2 mandates for consume-once and double-spend prevention |
 | **Runtime SDKs** | | | |
 | [Rust](/how-to/integrating-cycles-with-rust) | Rust | Yes | Tokio async client + RAII guards |
 | **Web Frameworks** | | | |
@@ -74,7 +75,7 @@ Best for: multi-agent workflows, tool governance, agent handoff tracking.
 
 ### Agent middleware (LangChain 1.x)
 
-For LangChain agents built with `langchain.agents.create_agent`. The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides `AgentMiddleware` subclasses (`CyclesToolGate`, `CyclesFanOutGate`) that intercept tool calls and model turns *before* execution — denial returns a `ToolMessage` so the agent recovers gracefully, and fan-out can be capped at the model-turn level.
+For LangChain agents built with `langchain.agents.create_agent`. The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides `AgentMiddleware` subclasses (`CyclesModelGate`, `CyclesToolGate`, `CyclesFanOutGate`) that intercept model calls, tool calls, and model turns *before* execution — denial returns a `ToolMessage` so the agent recovers gracefully, and fan-out can be capped at the model-turn level.
 
 Best for: production LangChain agents, anything using `create_agent`, agent-style LangGraph nodes.
 

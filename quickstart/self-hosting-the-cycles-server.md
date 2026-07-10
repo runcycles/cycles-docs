@@ -35,10 +35,10 @@ cd cycles-server
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-This pulls `ghcr.io/runcycles/cycles-server:latest` and starts it with Redis.
+This pulls `ghcr.io/runcycles/cycles-server:0.1.25.46` (the version pinned in `docker-compose.prod.yml`) and starts it with Redis. The prod compose file requires `REDIS_PASSWORD` and `ADMIN_API_KEY` to be set and fails fast if either is missing.
 
 ::: tip Pinning versions
-Replace `:latest` with a specific version tag (e.g., `:0.1.25.8`) in `docker-compose.prod.yml` for reproducible deployments. Check [GitHub releases](https://github.com/runcycles/cycles-server/releases) for the current stable version.
+`docker-compose.prod.yml` pins a specific version tag so deployments are reproducible. To upgrade, update the existing pin to the new tag and re-run `docker compose -f docker-compose.prod.yml up -d`. Check [GitHub releases](https://github.com/runcycles/cycles-server/releases) for the current stable version.
 :::
 
 ### Building from source with Docker
@@ -62,15 +62,17 @@ docker compose -f docker-compose.full-stack.yml up -d       # build from source
 docker compose -f docker-compose.full-stack.prod.yml up -d   # use GHCR images
 ```
 
-The full-stack compose files expect `cycles-server-admin` to be cloned alongside as a sibling directory.
+The full-stack compose files expect `cycles-server-admin` and `cycles-server-events` to be cloned alongside as sibling directories.
 
 The server is available at `http://localhost:7878`.
 
 Verify it is running:
 
 ```bash
-curl http://localhost:7878/actuator/health
+curl http://localhost:7878/actuator/health/readiness
 ```
+
+Since cycles-server 0.1.25.45 the aggregate `/actuator/health`, `/actuator/prometheus`, and the API docs/Swagger UI require an `X-Admin-API-Key` header — only the liveness/readiness probes stay public.
 
 ## Running from source
 
@@ -107,10 +109,17 @@ The server is configured via environment variables or `application.properties`.
 | `REDIS_HOST` | `localhost` | Redis server hostname |
 | `REDIS_PORT` | `6379` | Redis server port |
 | `REDIS_PASSWORD` | (empty) | Redis password (optional) |
+| `ADMIN_API_KEY` | (empty) | Admin key for the protected operational endpoints and admin-on-behalf-of dual-auth paths. Required (`:?`) in the prod compose files |
+| `DASHBOARD_CORS_ORIGIN` | (empty) | Comma-separated browser origin(s) allowed for the Cycles dashboard. Passed through in the stack compose files; set the same value on the admin server |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | Encryption key for webhook secrets, shared with `cycles-server-admin` and `cycles-server-events` |
+| `CYCLES_PUBLIC_RATE_LIMIT_ENABLED` | `true` | Per-IP 429 rate limiting on the public evidence/JWKS endpoints (since 0.1.25.46) |
+| `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE` | `300` | Fixed-window per-IP request budget for the public endpoints |
 | `server.port` | `7878` | HTTP server port |
 | `cycles.expiry.interval-ms` | `5000` | Interval for the background reservation expiry sweep (ms) |
 
-### Full application properties
+### Application properties (excerpt)
+
+The most commonly tuned properties from `application.properties`. See the [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) for the full list, including evidence signing, audit retention, and event emitter settings:
 
 ```properties
 # Server
@@ -121,13 +130,18 @@ redis.host=${REDIS_HOST:localhost}
 redis.port=${REDIS_PORT:6379}
 redis.password=${REDIS_PASSWORD:}
 
-# JSON serialization
-spring.jackson.serialization.write-dates-as-timestamps=false
-spring.jackson.deserialization.fail-on-unknown-properties=true
-spring.jackson.default-property-inclusion=non_null
+# Admin key for protected operational endpoints + dual-auth paths
+admin.api-key=${ADMIN_API_KEY:}
+
+# Webhook secret encryption (shared key with cycles-server-admin)
+webhook.secret.encryption-key=${WEBHOOK_SECRET_ENCRYPTION_KEY:}
 
 # Reservation expiry sweep interval
 cycles.expiry.interval-ms=5000
+
+# Public evidence/JWKS endpoint rate limit (since 0.1.25.46)
+cycles.public-rate-limit.enabled=${CYCLES_PUBLIC_RATE_LIMIT_ENABLED:true}
+cycles.public-rate-limit.requests-per-minute=${CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE:300}
 
 # Logging
 logging.level.root=INFO
@@ -138,14 +152,15 @@ springdoc.api-docs.path=/api-docs
 springdoc.swagger-ui.path=/swagger-ui.html
 springdoc.swagger-ui.enabled=true
 
-# Actuator
-management.endpoints.web.exposure.include=health,info
+# Actuator (liveness/readiness probe groups enabled)
+management.endpoints.web.exposure.include=health,info,prometheus
 management.endpoint.health.show-details=when-authorized
+management.endpoint.health.probes.enabled=true
 ```
 
 ## Redis connection
 
-The server uses a JedisPool with a default maximum of 50 connections. Redis 7+ is required because the Lua scripts use features not available in earlier versions.
+The server uses a JedisPool with a default maximum of 128 connections (32 max idle, 16 min idle, 2000 ms max wait). Redis 7+ is required because the Lua scripts use features not available in earlier versions.
 
 ### Redis with authentication
 
@@ -157,7 +172,7 @@ REDIS_PASSWORD=your-redis-password java -jar cycles-protocol-service-api-*.jar
 
 ### Redis connection pool
 
-The default pool configuration uses 50 max connections, which is sufficient for most workloads. For high-throughput deployments, tune the pool size by modifying the `RedisConfig` class or providing a custom `JedisPool` bean.
+The default pool configuration (128 max total, 32 max idle, 16 min idle, 2000 ms max wait) is sufficient for most workloads. For high-throughput deployments, tune it with the `redis.pool.max-total`, `redis.pool.max-idle`, `redis.pool.min-idle`, and `redis.pool.max-wait-ms` properties — no code change required.
 
 ## Background expiry sweep
 
@@ -171,15 +186,20 @@ This ensures abandoned reservations (from crashed clients or network failures) d
 
 ## Health checks
 
-The server exposes Spring Boot Actuator health endpoints:
+The server exposes Spring Boot Actuator health endpoints. The Kubernetes-style probes are public; readiness includes the Redis dependency:
 
 ```bash
-# Basic health check
-curl http://localhost:7878/actuator/health
+# Liveness (process only)
+curl http://localhost:7878/actuator/health/liveness
 
-# Detailed health (when authorized)
-curl http://localhost:7878/actuator/health
+# Readiness (includes Redis)
+curl http://localhost:7878/actuator/health/readiness
+
+# Aggregate health — requires the admin key since 0.1.25.45
+curl -H "X-Admin-API-Key: $ADMIN_API_KEY" http://localhost:7878/actuator/health
 ```
+
+Since 0.1.25.45, the aggregate `/actuator/health`, `/actuator/prometheus`, `/actuator/info`, and the API docs/Swagger UI require the `X-Admin-API-Key` header. Only `/actuator/health/liveness` and `/actuator/health/readiness` remain public for orchestrators.
 
 ## Swagger UI
 
@@ -194,6 +214,10 @@ The raw OpenAPI spec is available at:
 ```
 http://localhost:7878/api-docs
 ```
+
+::: warning Admin key required; disabled in the prod compose
+Since 0.1.25.45, Swagger UI and `/api-docs` require the `X-Admin-API-Key` header. The production compose files additionally disable them entirely via `SPRINGDOC_API_DOCS_ENABLED=false` and `SPRINGDOC_SWAGGER_UI_ENABLED=false`.
+:::
 
 ## Production considerations
 

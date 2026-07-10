@@ -45,6 +45,24 @@ The expiry sweep scans for reservations past their TTL and marks them as `EXPIRE
 
 For most deployments, the default 5000ms is a good balance.
 
+## Public endpoint rate limiting (v0.1.25.46)
+
+The runtime server applies a fixed-window per-client-IP rate limit to the **public (unauthenticated)** endpoints only — `GET /v1/evidence/*` and the CyclesEvidence JWKS — implementing the spec's SHOULD-level 429 throttling (`error=LIMIT_EXCEEDED` with `Retry-After` and `X-RateLimit-Reset`). Authenticated `/v1` endpoints are not covered.
+
+| Property | Default | Env Variable | Description |
+|---|---|---|---|
+| `cycles.public-rate-limit.enabled` | `true` | `CYCLES_PUBLIC_RATE_LIMIT_ENABLED` | Enable the public-endpoint rate limiter. |
+| `cycles.public-rate-limit.requests-per-minute` | `300` | `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE` | Fixed 60s window per client IP, per instance. Keyed on the socket peer address — behind an ingress that terminates connections, prefer rate limiting there and/or raise this limit. |
+
+## Event emission (v0.1.25.45)
+
+The runtime emits webhook/event side effects through a bounded, non-blocking executor so a dispatch Redis outage or slow event persistence cannot grow heap without limit.
+
+| Property | Default | Env Variable | Description |
+|---|---|---|---|
+| `cycles.events.emit.threads` | `0` | `CYCLES_EVENTS_EMIT_THREADS` | Worker threads for the non-blocking runtime event emitter. |
+| `cycles.events.emit.queue-capacity` | `10000` | `CYCLES_EVENTS_EMIT_QUEUE_CAPACITY` | Bounded queue capacity; under sustained event-persistence outage, side effects past this bound are dropped (ledger mutations are unaffected). |
+
 ## Runtime audit log retention (v0.1.25.15)
 
 The runtime server writes audit entries for admin-on-behalf-of operations (force-release) to `audit:log:{id}` keys in Redis. v0.1.25.15 adds TTL-based retention so these rows respect the same 400-day authenticated tier as the admin plane.
@@ -62,7 +80,7 @@ Runtime audit rows never use the admin-plane `__admin__` / `__unauth__` sentinel
 |---|---|---|---|
 | `cycles.metrics.tenant-tag.enabled` | `true` | `CYCLES_METRICS_TENANT_TAG_ENABLED` | When `true`, Prometheus counters include a `tenant` label. Set to `false` in deployments with many thousands of tenants to bound series cardinality. |
 
-The runtime server publishes seven domain counters under `cycles_*_total` (introduced in v0.1.25.10); the events service publishes `cycles_webhook_*` counters plus a latency timer. The `tenant-tag.enabled` toggle is mirrored on both services so they can be flipped together. For the full metric enumeration, tag definitions, scrape targets, and alert recipes, see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference).
+The runtime server publishes seven domain counters under `cycles_*_total` (introduced in v0.1.25.10); the events service publishes `cycles_webhook_*` counters plus a latency timer. The `tenant-tag.enabled` toggle is mirrored on both services, but note the defaults differ: `true` on the runtime, `false` on the events service. For the full metric enumeration, tag definitions, scrape targets, and alert recipes, see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference).
 
 ## JSON serialization
 
@@ -79,7 +97,7 @@ These settings enforce strict request validation and clean responses.
 | Property | Default | Description |
 |---|---|---|
 | `logging.level.root` | `INFO` | Root log level |
-| `logging.level.io.runcycles.protocol` | `DEBUG` | Cycles-specific log level |
+| `logging.level.io.runcycles.protocol` | `INFO` | Cycles-specific log level |
 | `logging.pattern.console` | `%d{...} [%thread] %-5level %logger{36} - %msg%n` | Log format |
 
 ### Recommended production settings
@@ -141,7 +159,7 @@ GET /actuator/info        — application info
 GET /actuator/prometheus  — Micrometer metrics in Prometheus exposition format
 ```
 
-The runtime server also whitelists `/actuator/prometheus` in `SecurityConfig` so it can be scraped without an API key. The admin server requires default Spring Security on its actuator paths.
+Since v0.1.25.45 (2026-06-27), the runtime server's `OperationalEndpointAuthFilter` protects the operational endpoints with the configured admin key: `/actuator/prometheus`, `/actuator/info`, and aggregate `/actuator/health` require `X-Admin-API-Key`. Only the liveness/readiness probe paths (`/actuator/health/liveness`, `/actuator/health/readiness`) remain unauthenticated for orchestrators. Prometheus scrapers must send `X-Admin-API-Key` on the scrape request, or have a trusted ingress inject it.
 
 ### Adding more endpoints
 
@@ -153,17 +171,21 @@ management.endpoints.web.exposure.include=health,info,prometheus,metrics,loggers
 
 ## Security configuration
 
-The server's security is configured in `SecurityConfig.java`. The following paths are public (no API key required):
+The server's security is configured in `SecurityConfig.java` plus, since v0.1.25.45 (2026-06-27), `OperationalEndpointAuthFilter.java`, which moved the operational/docs endpoints behind the admin key.
 
-- `/api-docs/**` — OpenAPI spec
-- `/swagger-ui/**` — Swagger UI
-- `/swagger-ui.html` — Swagger UI entry point
-- `/swagger-resources/**` — Swagger resource endpoints
-- `/v3/api-docs/**` — OpenAPI v3 spec
-- `/webjars/**` — WebJar resources
+Truly public paths (no key of any kind required):
+
+- `/actuator/health/liveness`, `/actuator/health/readiness` — Kubernetes-style probes
+- `/.well-known/**` — Well-known endpoints, including the CyclesEvidence JWKS
+- `/v1/evidence/**` — Public evidence retrieval (rate-limited; see [Public endpoint rate limiting](#public-endpoint-rate-limiting-v0-1-25-46))
 - `/favicon.ico` — Favicon
-- `/.well-known/**` — Well-known endpoints
-- `/actuator/health` — Health check (exact path only, not sub-paths)
+
+Admin-key-protected paths (require `X-Admin-API-Key`):
+
+- `/actuator/**` — All other actuator endpoints, including `/actuator/prometheus`, `/actuator/info`, and aggregate `/actuator/health`
+- `/api-docs/**`, `/v3/api-docs/**` — OpenAPI spec
+- `/swagger*` — Swagger UI and resources
+- `/webjars/**` — WebJar resources
 
 All other paths require a valid `X-Cycles-API-Key` header.
 
@@ -188,7 +210,7 @@ spring.jackson.default-property-inclusion=non_null
 
 # Logging
 logging.level.root=INFO
-logging.level.io.runcycles.protocol=DEBUG
+logging.level.io.runcycles.protocol=INFO
 
 # Swagger
 springdoc.api-docs.path=/api-docs
@@ -211,6 +233,10 @@ Quick reference for setting all properties via environment variables:
 | `REDIS_PASSWORD` | `redis.password` |
 | `SERVER_PORT` | `server.port` |
 | `CYCLES_EXPIRY_INTERVAL_MS` | `cycles.expiry.interval-ms` |
+| `CYCLES_PUBLIC_RATE_LIMIT_ENABLED` | `cycles.public-rate-limit.enabled` |
+| `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE` | `cycles.public-rate-limit.requests-per-minute` |
+| `CYCLES_EVENTS_EMIT_THREADS` | `cycles.events.emit.threads` |
+| `CYCLES_EVENTS_EMIT_QUEUE_CAPACITY` | `cycles.events.emit.queue-capacity` |
 | `EVIDENCE_SERVER_ID` | `cycles.evidence.server-id` |
 | `EVIDENCE_SIGNING_SIGNER_DID` | `cycles.evidence.signing.signer-did` |
 | `EVIDENCE_SIGNING_KID` | `cycles.evidence.signing.kid` |
@@ -236,6 +262,10 @@ The Cycles Admin Server (`cycles-admin-service`) is a separate service that mana
 | `redis.password` | (required) | `REDIS_PASSWORD` | Redis password (set empty string if none) |
 | `dashboard.cors.origin` | `http://localhost:5173` | `DASHBOARD_CORS_ORIGIN` | Allowed CORS origin for the [admin dashboard](/quickstart/deploying-the-cycles-dashboard). Only needed when the browser calls the admin server directly (dev mode); unused in standard production (nginx reverse-proxies same-origin). |
 | `springdoc.swagger-ui.enabled` | `false` | `SWAGGER_ENABLED` | Swagger UI is disabled by default on the admin server; set to `true` to enable. |
+| `springdoc.api-docs.enabled` | `false` | `API_DOCS_ENABLED` | OpenAPI JSON spec endpoint (`/api-docs`) is disabled by default on the admin server; set to `true` to enable. |
+| `auth.failure-rate-limit.enabled` | `false` | `AUTH_FAILURE_RATE_LIMIT_ENABLED` | Optional in-process guard for repeated 401/403 failures from the same source. Disabled by default for local/test parity; enable in production. |
+| `auth.failure-rate-limit.max-per-minute` | `300` | `AUTH_FAILURE_RATE_LIMIT_MAX_PER_MINUTE` | Max auth failures per source per minute before throttling, when the guard is enabled. |
+| `webhook.secret.encryption-required` | `false` | `WEBHOOK_SECRET_ENCRYPTION_REQUIRED` | When `true`, refuse to store webhook signing secrets unless `WEBHOOK_SECRET_ENCRYPTION_KEY` is configured (no plaintext fallback). |
 | `logging.level.io.runcycles.admin` | `INFO` | `LOG_LEVEL` | Admin-specific log level. |
 
 ### Audit log retention
@@ -247,7 +277,7 @@ Introduced in `cycles-server-admin` v0.1.25.20 for SOC2-compliant defaults. Fail
 | `audit.retention.authenticated.days` | `400` | `AUDIT_RETENTION_AUTHENTICATED_DAYS` | TTL on authenticated audit entries (success + authenticated failures). `400` covers the SOC2 Type II 12-month lookback + 1-month auditor-engagement buffer. Set to `0` for indefinite retention (legal hold, HIPAA-adjacent). |
 | `audit.retention.unauthenticated.days` | `30` | `AUDIT_RETENTION_UNAUTHENTICATED_DAYS` | TTL on pre-auth failures (sentinel tenant `<unauthenticated>`). Enough for brute-force / credential-stuffing post-mortem. Aggregate volume stays visible via Prometheus regardless of TTL. Set to `0` for indefinite. |
 | `audit.sample.unauthenticated` | `1` | `AUDIT_SAMPLE_UNAUTHENTICATED` | Sampling rate on unauthenticated entries (`1` = every entry, `100` = 1 in 100). Opt-in hardening against failed-auth floods on internet-exposed admin endpoints. Authenticated entries are **never** sampled. |
-| `audit.sweep.cron` | `0 0 3 * * *` | — | Cron for the daily audit-index sweep. Purges TTL-expired pointers from the `audit:logs:_all` + per-tenant sorted-set indexes. Skipped entirely when `audit.retention.authenticated.days=0`. |
+| `audit.sweep.cron` | `0 0 3 * * *` | `AUDIT_SWEEP_CRON` | Cron for the daily audit-index sweep. Purges TTL-expired pointers from the `audit:logs:_all` + per-tenant sorted-set indexes. Skipped entirely when `audit.retention.authenticated.days=0`. |
 
 **Alerting.** The Prometheus counter `cycles_admin_audit_writes_total{path_class, outcome}` tracks audit-write health. Alert on `outcome=error` nonzero — audit writes are non-fatal to the request, but silent coverage loss is the exact failure mode the tiered TTL is designed to prevent:
 
@@ -259,7 +289,7 @@ sum(rate(cycles_admin_audit_writes_total{outcome="error"}[5m])) > 0
 
 ### Admin server Kubernetes probes
 
-Unlike the runtime and events services, the admin server enables Spring Boot's liveness/readiness probes out of the box (`management.endpoint.health.probes.enabled=true`). In Kubernetes, wire probes to these paths:
+Like the runtime and events services, the admin server enables Spring Boot's liveness/readiness probes out of the box (`management.endpoint.health.probes.enabled=true`). In Kubernetes, wire probes to these paths:
 
 ```yaml
 livenessProbe:
@@ -353,7 +383,9 @@ Do not publish either port to the internet. Keep `9980` on an internal-only Clus
 | `EVIDENCE_SERVER_ID` | (empty) | Issuer base URL including `/v1`. Blank disables evidence signing and leaves pending evidence-source records untouched. Must match the runtime server when evidence is enabled. |
 | `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Raw-hex Ed25519 public key. Must match the runtime server's public signer identity when evidence is enabled. |
 | `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex Ed25519 private key used to sign evidence envelopes. Secret; deploy only to `cycles-server-events`. |
-| `dispatch.pending.timeout-seconds` | 5 | BRPOP blocking timeout |
+| `EVIDENCE_ALLOW_EPHEMERAL_SIGNING_KEY` | `false` | Allow the worker to generate an ephemeral signing key when no keypair is configured. Development-only; leave `false` in production. |
+| `EVIDENCE_STORE_BACKEND` | `redis` | Durable envelope store backend (content-addressed by `evidence_id`). `redis` is the default, shared with `cycles-server` which serves `GET /v1/evidence/{id}`; `s3` / `gcs` backends can replace it. |
+| `dispatch.pending.timeout-seconds` | 5 | BLMOVE blocking timeout (reliable-queue pattern) |
 | `dispatch.retry.poll-interval-ms` | 5000 | Retry queue poll interval (ms) |
 | `dispatch.retry.batch-size` / `RETRY_BATCH_SIZE` | 100 | Max ready-for-retry deliveries processed per poll tick |
 | `dispatch.http.timeout-seconds` | 30 | HTTP request timeout for webhook delivery |
@@ -362,7 +394,7 @@ Do not publish either port to the internet. Keep `9980` on an internal-only Clus
 | `events.retention.event-ttl-days` / `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
 | `events.retention.delivery-ttl-days` / `DELIVERY_TTL_DAYS` | 14 | Redis TTL for delivery records |
 | `events.retention.cleanup-interval-ms` / `RETENTION_CLEANUP_INTERVAL_MS` | 3600000 | ZSET index cleanup interval (1h) |
-| `cycles.metrics.tenant-tag.enabled` | `true` | Same toggle as the runtime. When `false`, `cycles_webhook_*` counters drop the `tenant` label to bound cardinality. |
+| `cycles.metrics.tenant-tag.enabled` | `false` | Same toggle as the runtime, but the events service defaults to `false` (the runtime defaults to `true`). When `false`, `cycles_webhook_*` counters drop the `tenant` label to bound cardinality. |
 
 ### Per-subscription retry policy
 

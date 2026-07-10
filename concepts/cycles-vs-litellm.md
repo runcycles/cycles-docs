@@ -56,7 +56,7 @@ An agent that sends 200 emails costs $1.40 in tokens. LiteLLM's budget wouldn't 
 
 LiteLLM supports budgets across multiple proxy-layer scopes: keys, teams, internal users, end users/customers, and model/provider/tag dimensions. This is meaningful coverage for proxy-level cost governance.
 
-However, these are proxy-layer spend-tracking scopes, not runtime authority scopes. Cycles supports hierarchical scope derivation (tenant → workspace → app → workflow → agent → toolset) where each level can have its own persistent cumulative budget and [authority attenuates](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) at each delegation hop — a sub-agent always gets less authority than its parent.
+However, these are proxy-layer spend-tracking scopes, not runtime authority scopes. Cycles supports hierarchical scope derivation (tenant → workspace → app → workflow → agent → toolset) where each level can have its own persistent cumulative budget, making [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) a pattern you can build: carve a narrower sub-budget for each delegation hop, so a sub-agent draws from a smaller allocation than its parent. Action masks and delegation-depth limits are orchestration logic on top of those scopes — not protocol primitives.
 
 The difference matters in multi-agent systems where a single user request fans out into dozens of sub-agent calls. LiteLLM sees each call as an independent model request at the proxy layer. Cycles sees the delegation chain and enforces aggregate limits across the full scope hierarchy.
 
@@ -92,7 +92,7 @@ Request flow:
 | Atomic per-action budget enforcement | Cycles |
 | Model access restrictions (which models) | LiteLLM |
 | Tool access restrictions (which actions) | Cycles |
-| Delegation attenuation for sub-agents | Cycles |
+| Delegation attenuation for sub-agents | Cycles (pattern via hierarchical scopes) |
 | Provider failover and retry | LiteLLM |
 
 **Concrete integration scenario:** Your agent gets ALLOW_WITH_CAPS from Cycles (budget is low). The caps include a model downgrade hint. Your application passes that hint to LiteLLM, which routes to a cheaper model (GPT-4o-mini instead of GPT-4o). The agent completes the task at lower cost, and both systems record the outcome. Neither tool alone enables this graceful degradation pattern — Cycles decides the constraint, LiteLLM executes the downgrade.

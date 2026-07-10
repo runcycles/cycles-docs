@@ -1,16 +1,16 @@
 ---
-title: "Running the Cycles MCP Server over HTTP / SSE"
-description: "When to use Streamable HTTP/SSE instead of STDIO for the Cycles MCP server, and how to deploy it as a shared remote MCP gateway."
+title: "Running the Cycles MCP Server over HTTP"
+description: "When to use Streamable HTTP instead of STDIO for the Cycles MCP server, and how to deploy it as a shared remote MCP gateway."
 ---
 
-# Running the Cycles MCP Server over Streamable HTTP / SSE
+# Running the Cycles MCP Server over Streamable HTTP
 
 The Cycles MCP server supports two transports:
 
 - **STDIO** (default) — the AI client launches the server as a subprocess via `npx`. One server per developer, per machine.
-- **Streamable HTTP / SSE** — the server runs as a long-lived process and clients connect remotely. One server, many clients. Streamable HTTP is the current MCP transport; SSE is the older shape, still supported for legacy clients.
+- **Streamable HTTP** — the server runs as a long-lived process and clients connect remotely. One server, many clients. This is the current MCP remote transport; the older standalone HTTP+SSE transport is not implemented.
 
-This page covers the HTTP-based transports. For STDIO setup with each AI client, see the per-client quickstarts: [Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf).
+This page covers the Streamable HTTP transport. For STDIO setup with each AI client, see the per-client quickstarts: [Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf).
 
 ## When to use HTTP instead of STDIO
 
@@ -36,8 +36,8 @@ The server starts on port `3000` and exposes:
 |---|---|---|
 | `/health` | GET | Liveness probe — returns `{"status": "ok", "version": "..."}` |
 | `/mcp` | POST | MCP Streamable HTTP endpoint (preferred for new clients) |
-| `/mcp` | GET | MCP SSE endpoint (legacy / browser-compatible) |
-| `/mcp` | DELETE | Session cleanup |
+| `/mcp` | GET | Streamable HTTP SSE stream (server-to-client notifications) |
+| `/mcp` | DELETE | Part of the Streamable HTTP surface; effectively a no-op — the server is stateless |
 
 ### Configuration
 
@@ -159,7 +159,7 @@ Windsurf documents stdio, HTTP, and SSE transports. Claude Code supports remote 
 
 - **No built-in per-user auth.** As above — auth is layered in front. If the goal is per-developer attribution, STDIO is currently the simpler answer (each developer has their own API key).
 - **No first-party container image.** A pinned GHCR image will land once HTTP demand is validated. Until then, the Dockerfile above is the recommended pattern — pin the package version in production rather than `@latest`.
-- **Session lifetime is in-memory.** Restarting the server drops sessions. If you need durable sessions, run a single replica or front the server with a sticky-session load balancer.
+- **The server is stateless.** It issues no session IDs, so any replica can serve any request — no sticky sessions needed. Restarts are safe from a transport perspective; in-flight tool calls fail and can simply be retried.
 
 ## Next steps
 

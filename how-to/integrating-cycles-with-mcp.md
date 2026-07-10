@@ -276,7 +276,7 @@ Recommends scope hierarchy, budget limits, units, TTL settings, and degradation 
 The Cycles MCP server supports two transports:
 
 - **STDIO** *(default)* — the AI client launches the server as a subprocess via `npx`. One server per developer, per machine. This is what every per-client quickstart uses ([Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf)).
-- **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; SSE is the older shape, supported for legacy clients. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
+- **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; the older standalone HTTP+SSE transport is not implemented. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
 
 Quick HTTP start:
 
@@ -288,8 +288,8 @@ The server starts on port 3000 (configurable via `PORT`) with:
 
 - `GET /health` — health check (`{"status": "ok", "version": "..."}`)
 - `POST /mcp` — MCP Streamable HTTP endpoint
-- `GET /mcp` — MCP SSE endpoint
-- `DELETE /mcp` — MCP session cleanup
+- `GET /mcp` — Streamable HTTP SSE stream (server-to-client notifications)
+- `DELETE /mcp` — part of the Streamable HTTP surface; no-op (the server is stateless)
 
 For the full decision tree, docker-compose example, and auth/scope behavior, see **[Running the MCP server over Streamable HTTP / SSE](/how-to/running-the-mcp-server-over-http)**.
 

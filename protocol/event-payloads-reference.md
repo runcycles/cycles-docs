@@ -18,7 +18,7 @@ The v0.1.25 Admin API `EventType` enum registers **47 event types** total across
 - **Webhook:** `webhook.created`, `webhook.updated`, `webhook.paused`, `webhook.resumed`, `webhook.deleted` (admin v0.1.25.39+); `webhook.disabled` (events service auto-disable v0.1.25.11+). All six webhook lifecycle types were added in spec v0.1.25.33 — see the [Webhook Lifecycle Events](#webhook-lifecycle-events) section below.
 - **API key, policy, system:** 0 registered enum values currently emitted; all planned.
 
-**Additive reference-server payloads** (observable in the reference implementation but not part of the registered enum — consumers must ignore unrecognized event types gracefully):
+**Additive reference-server payloads** (observable in the reference implementation but not part of the published admin-openapi enum — consumers must ignore unrecognized event types gracefully):
 
 - Reservation lifecycle samples: `reservation.reserved`, `reservation.committed`, `reservation.released`, `reservation.extended`.
 - Runtime ledger application: `event.applied`.
@@ -46,8 +46,9 @@ Every event shares this envelope structure. The `data` field varies by event typ
     "source_ip": "10.0.1.50"
   },
   "data": { },
-  "correlation_id": "req_789",
+  "correlation_id": "3f2a9c14e0b7d5a1",
   "request_id": "req_789",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
   "metadata": {}
 }
 ```
@@ -63,10 +64,11 @@ Every event shares this envelope structure. The `data` field varies by event typ
 | `tenant_id` | string | Yes | Tenant ID (system events use `__system__`) |
 | `scope` | string | When applicable | Full scope path (e.g., `tenant:acme-corp/workspace:prod`) |
 | `source` | string | Yes | Emitting service: `cycles-server` (runtime events), `cycles-admin` (admin-plane events including bulk-action emits and webhook lifecycle events since v0.1.25.38/.39), or `cycles-events` (dispatcher-emitted `webhook.disabled` on auto-disable, v0.1.25.11). |
-| `actor` | object | When applicable | Who triggered: `type` (`api_key`, `admin`, `system`), `key_id`, `source_ip` |
+| `actor` | object | When applicable | Who triggered: `type` (`api_key`, `admin`, `system`, `scheduler`), `key_id`, `source_ip` |
 | `data` | object | Varies | Event-specific payload (see below). Some events emit `null`. |
-| `correlation_id` | string | When provided | Links related events across a workflow |
+| `correlation_id` | string | When applicable | Server-set family key — deterministic hash for event-stream clusters, explicit operation IDs (`webhook_create:<id>` etc.) for admin operations |
 | `request_id` | string | When provided | From `X-Request-Id` header on originating request |
+| `trace_id` | string | When provided | W3C Trace Context-compatible correlation identifier (32 lowercase hex characters). Links the event to the originating request, its audit entry, and sibling events within the same logical operation. |
 | `metadata` | object | When provided | Operator-defined key-value pairs |
 
 ---
@@ -140,7 +142,7 @@ The `reservation.denied` event model defines 9 fields, but the current server em
 | `action` | object | Not yet | Action metadata from the reservation request |
 | `subject` | object | Not yet | Subject metadata from the reservation request |
 | `policy_id` | string | Not yet | Policy ID that caused the denial, when applicable (added v0.1.25.8) |
-| `deny_detail` | object | Not yet | Operator-grade structured context (added v0.1.25.8). Populated by extensions; may include `quota_violation`, `blocked_by_policy`, `blocked_by_scope`, `suggested_fix`. |
+| `deny_detail` | object | Not yet | Operator-grade structured context (added v0.1.25.8). Populated by extensions; may include `quota_violation`, `blocked_by_policy`, `blocked_by_scope`, `suggested_fix`, `budget_remaining`. |
 
 ---
 
@@ -153,27 +155,34 @@ The `reservation.denied` event model defines 9 fields, but the current server em
 ```json
 {
   "event_type": "reservation.commit_overage",
+  "scope": "tenant:acme/workflow:support",
   "data": {
     "reservation_id": "res_a1b2c3d4",
-    "actual_amount": 480000
+    "scope": "tenant:acme/workflow:support",
+    "unit": "USD_MICROCENTS",
+    "estimated_amount": 400000,
+    "actual_amount": 480000,
+    "overage": 80000,
+    "overage_policy": "ALLOW_IF_AVAILABLE",
+    "debt_incurred": 0
   }
 }
 ```
 
 ::: tip Fields populated at emission time
-The `reservation.commit_overage` event model defines 8 fields, but the current server emission populates `reservation_id` and `actual_amount`. The remaining 6 fields are defined in the model and may be populated in future releases. Note: the envelope `scope` field is also not set for this event — scope-filtered subscriptions will not match `commit_overage` events.
+As of cycles-server v0.1.25.46, the emission populates **all 8** data fields and sets the envelope `scope` to the reservation's scope path — so `commit_overage` participates in scope filtering like any other scoped event. (Earlier releases populated only `reservation_id` and `actual_amount`, with a null envelope scope.)
 :::
 
 | Field | Type | Populated | Description |
 |---|---|---|---|
 | `reservation_id` | string | Yes | The reservation that exceeded its estimate |
+| `scope` | string | Yes | Affected scope path (also set on the envelope) |
+| `unit` | string | Yes | Budget unit |
+| `estimated_amount` | number | Yes | Original reservation estimate |
 | `actual_amount` | number | Yes | Actual cost committed |
-| `scope` | string | Not yet | Affected scope path |
-| `unit` | string | Not yet | Budget unit |
-| `estimated_amount` | number | Not yet | Original reservation estimate |
-| `overage` | number | Not yet | Amount by which actual exceeded estimate |
-| `overage_policy` | string | Not yet | Policy applied: `REJECT`, `ALLOW_IF_AVAILABLE`, `ALLOW_WITH_OVERDRAFT` |
-| `debt_incurred` | number | Not yet | Debt created (only for `ALLOW_WITH_OVERDRAFT`) |
+| `overage` | number | Yes | Amount by which actual exceeded estimate |
+| `overage_policy` | string | Yes | Policy applied: `REJECT`, `ALLOW_IF_AVAILABLE`, `ALLOW_WITH_OVERDRAFT` |
+| `debt_incurred` | number | Yes | Debt created (0 unless `ALLOW_WITH_OVERDRAFT`) |
 
 ---
 
@@ -387,9 +396,9 @@ The following budget events are defined in the protocol but not yet emitted. The
 
 ## Tenant-Close Cascade Events — Additive Reference-Server Payloads (v0.1.25.35+)
 
-Four event kinds are emitted by the reference admin server as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade; see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full contract). All four share the `_via_tenant_cascade` suffix and carry the `correlation_id` of the originating `tenant.closed` audit entry so subscribers can correlate cascade side effects to the operator action that triggered them.
+Four event kinds are emitted by the reference admin server as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade; see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full contract). All four share the `_via_tenant_cascade` suffix and carry a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`, so subscribers can correlate cascade side effects to the operator action that triggered them (audit rows for the same operation join via `request_id`/`trace_id`).
 
-These four event names are **not part of the registered 47-event `EventType` enum** — they are additive reference-server payloads. Consumers must ignore unrecognized event types gracefully and should not assume non-reference servers emit them. Tenant self-service subscriptions filter by category, so a tenant subscribed to `budget` or `reservation` events will receive the corresponding cascade events from the reference server in practice.
+These four event names are **absent from the published admin-openapi `EventType` enum** (they do not count toward the 47 registered types), but they are registered as first-class constants in the reference implementation's `EventType.java`. Consumers must ignore unrecognized event types gracefully and should not assume non-reference servers emit them. Tenant self-service subscriptions filter by category, so a tenant subscribed to `budget` or `reservation` events will receive the corresponding cascade events from the reference server in practice.
 
 Shipped in `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage).
 
@@ -422,14 +431,14 @@ Emitted once per owned `BudgetLedger` when the tenant closes. The per-budget `Bu
     "closed_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating tenant.closed>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
 
 ### `reservation.released_via_tenant_cascade`
 
-Emitted once per open owned `Reservation` when the tenant closes. Reason `tenant_closed`; no overage debt is recorded; the full reserved amount returns to the (now-closed) budget's balance snapshot.
+Emitted as a **ledger-level aggregate** when the tenant closes: one event per closed budget with `reserved > 0`, carrying the aggregate `released_amount` (not one per reservation). Reason `tenant_closed`; no overage debt is recorded; the full reserved amount returns to the (now-closed) budget's balance snapshot.
 
 ```json
 {
@@ -444,7 +453,7 @@ Emitted once per open owned `Reservation` when the tenant closes. Reason `tenant
     "release_reason": "tenant_closed",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
@@ -465,7 +474,7 @@ Emitted once per owned `ApiKey` when the tenant closes. The per-key `ApiKey.stat
     "revoked_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
@@ -486,7 +495,7 @@ Emitted once per owned `WebhookSubscription` when the tenant closes. Status flip
     "disabled_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```

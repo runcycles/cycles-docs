@@ -27,14 +27,15 @@ Each customer maps to a Cycles tenant. Each tenant has its own budget, its own A
 # Your onboarding logic (see Multi-Tenant SaaS Guide for full implementation)
 onboard_customer("customer-47", plan="pro")  # creates tenant + API key + $50/month budget
 
-# Every agent call is scoped to the requesting tenant
+# Every agent call is scoped to the requesting tenant — the callable
+# is evaluated per call, at reservation time
 @cycles(
     estimate=2_000_000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    tenant=request.headers["X-Tenant-ID"],
+    tenant=lambda request, prompt: request.headers["X-Tenant-ID"],
 )
-async def handle_chat(prompt: str) -> str:
+async def handle_chat(request: Request, prompt: str) -> str:
     ...
 ```
 

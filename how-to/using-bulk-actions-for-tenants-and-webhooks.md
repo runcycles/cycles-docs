@@ -62,14 +62,14 @@ curl -X POST http://localhost:7979/v1/admin/tenants/bulk-action \
   "failed": [
     {
       "id": "tenant-ghi",
-      "code": "INVALID_TRANSITION",
+      "error_code": "INVALID_TRANSITION",
       "message": "cannot SUSPEND from CLOSED"
     }
   ],
   "skipped": [
     {
       "id": "tenant-jkl",
-      "code": "ALREADY_IN_TARGET_STATE"
+      "reason": "ALREADY_IN_TARGET_STATE"
     }
   ]
 }
@@ -77,9 +77,9 @@ curl -X POST http://localhost:7979/v1/admin/tenants/bulk-action \
 
 Every row ends in exactly one of the three buckets:
 
-- **`succeeded`** — the row transitioned to the target state.
-- **`failed`** — the row matched the filter but the action could not apply (typically `INVALID_TRANSITION` — e.g., resuming a `DISABLED` webhook, suspending a `CLOSED` tenant).
-- **`skipped`** — the row matched the filter but was already in the target state (e.g., a tenant already suspended when `action=SUSPEND`, a webhook already paused). Not an error — the bulk action is idempotent per row.
+- **`succeeded`** — the row transitioned to the target state. Rows carry `id` only.
+- **`failed`** — the row matched the filter but the action could not apply (typically `INVALID_TRANSITION` — e.g., resuming a `DISABLED` webhook, suspending a `CLOSED` tenant). Rows carry `error_code` and `message`.
+- **`skipped`** — the row matched the filter but was already in the target state (e.g., a tenant already suspended when `action=SUSPEND`, a webhook already paused). Rows carry `reason` (`ALREADY_IN_TARGET_STATE` or `ALREADY_DELETED`). Not an error — the bulk action is idempotent per row.
 
 `total_matched` equals `succeeded.length + failed.length + skipped.length`. If you supplied `expected_count`, they are guaranteed equal — otherwise the call returned `409 COUNT_MISMATCH` before any row executed.
 
@@ -87,17 +87,18 @@ Every row ends in exactly one of the three buckets:
 
 ### 500-row ceiling — `LIMIT_EXCEEDED`
 
-Bulk actions cap at **500 matched rows per call**. If your filter resolves to more than 500 rows, the server returns HTTP 400 with `error_code: LIMIT_EXCEEDED`:
+Bulk actions cap at **500 matched rows per call**. If your filter resolves to more than 500 rows, the server returns HTTP 400 with `error: LIMIT_EXCEEDED`:
 
 ```json
 {
-  "error_code": "LIMIT_EXCEEDED",
+  "error": "LIMIT_EXCEEDED",
   "message": "filter matches more than 500 tenants; narrow the filter and retry",
+  "request_id": "req_...",
   "details": { "total_matched": 501 }
 }
 ```
 
-`total_matched` in the error details is a sentinel — the server fetches up to `cap + 1` rows and reports "501" to signal "over the limit" without hydrating the full set. No rows are touched. To proceed, narrow the filter (add `status`, `search`, or a scoping field) and run multiple calls with distinct idempotency keys.
+In the reference implementation, `total_matched` in the error details acts as a sentinel — the server fetches only up to one row past the cap, so "501" means "over the limit" rather than an exact count. Treat any value above 500 as "too many", not a precise total. No rows are touched. To proceed, narrow the filter (add `status`, `search`, or a scoping field) and run multiple calls with distinct idempotency keys.
 
 ### Count mismatch — `COUNT_MISMATCH`
 
@@ -105,8 +106,9 @@ If `expected_count` is provided and disagrees with the resolved match, the call 
 
 ```json
 {
-  "error_code": "COUNT_MISMATCH",
+  "error": "COUNT_MISMATCH",
   "message": "expected_count 42 differs from server-counted matches 40",
+  "request_id": "req_...",
   "details": { "total_matched": 40 }
 }
 ```
@@ -259,13 +261,14 @@ The Tenants and Webhooks pages in the [dashboard](/quickstart/deploying-the-cycl
 
 ## Error reference
 
-| HTTP | `error_code` | Meaning |
-|------|--------------|---------|
+| HTTP | `error` | Meaning |
+|------|---------|---------|
 | 400 | `LIMIT_EXCEEDED` | Filter matched more than 500 rows. Narrow the filter. |
 | 400 | `INVALID_REQUEST` | Unknown `action`, empty `filter`, unknown filter key (strict `additionalProperties: false`), or missing `idempotency_key`. |
 | 401 | `UNAUTHORIZED` | Invalid or missing `X-Admin-API-Key`. |
 | 409 | `COUNT_MISMATCH` | `expected_count` disagreed with resolved match count. Re-preview. |
-| Per-row `code` | `INVALID_TRANSITION`, `ALREADY_IN_TARGET_STATE`, `ALREADY_DELETED` | Bucketed into `failed[]` or `skipped[]` — HTTP status is still 200. |
+| Per-row (`error_code` in `failed[]`) | `INVALID_TRANSITION`, `NOT_FOUND`, `PERMISSION_DENIED`, `BUDGET_EXCEEDED`, `INTERNAL_ERROR` | Row-level failure — HTTP status is still 200. |
+| Per-row (`reason` in `skipped[]`) | `ALREADY_IN_TARGET_STATE`, `ALREADY_DELETED` | Row-level no-op skip — HTTP status is still 200. |
 
 ## Next steps
 

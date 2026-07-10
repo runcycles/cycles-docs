@@ -17,6 +17,14 @@ When a reservation or decide request is evaluated, the server returns one of thr
 
 The middle option — ALLOW_WITH_CAPS — is what makes Cycles more useful than a simple gate.
 
+## Where DENY appears
+
+One wire-level detail matters here: `decision: DENY` only ever appears on responses that do not hold budget — `POST /v1/decide` responses and dry-run (`dry_run: true`) reservation responses.
+
+A live (non-dry-run) reservation never returns `decision: DENY`. When budget is insufficient, the server rejects the request with an HTTP `409` error — `BUDGET_EXCEEDED`, or another 409 code such as `OVERDRAFT_LIMIT_EXCEEDED` or `DEBT_OUTSTANDING` — instead of a 200 response carrying a DENY decision.
+
+Where callers find the denial reason follows the same split. On a DENY decision (decide or dry run), the response's `reason_code` field carries the machine-readable reason — `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, or `DEBT_OUTSTANDING`. On a live denial, the equivalent information is in the 409 error response's `error` field. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+
 ## Why binary decisions are not enough
 
 In practice, many autonomous actions can still produce value in a constrained mode.
@@ -212,4 +220,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

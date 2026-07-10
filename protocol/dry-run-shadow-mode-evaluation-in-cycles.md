@@ -78,8 +78,8 @@ Both dry run and the decide endpoint (`POST /v1/decide`) evaluate budget without
 
 ### Budget denial semantics
 
-- **decide** always returns a 200 response with a decision value, even for debt or over-limit conditions
-- **dry_run** may return DENY as the decision value for insufficient budget (unlike a live reservation, which would return `409 BUDGET_EXCEEDED`)
+- **decide** returns a 200 response with a decision value for budget-state conditions — insufficient budget, debt, and over-limit all surface as `decision: DENY`, never as a 409. Request-validity errors are the exception to this pattern: a wrong unit still returns `400 UNIT_MISMATCH`, and malformed or unauthorized requests return their usual 4xx errors
+- **dry_run** may return DENY as the decision value for insufficient budget (unlike a live reservation, which would return `409 BUDGET_EXCEEDED`); as with decide, request-validity errors still return 4xx
 
 This is a subtle but important distinction: a live reservation with insufficient budget fails with a 409 error. A dry run with insufficient budget succeeds with a 200 response containing `decision: DENY`.
 
@@ -197,4 +197,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

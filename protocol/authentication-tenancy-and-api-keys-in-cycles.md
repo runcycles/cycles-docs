@@ -21,6 +21,15 @@ X-Cycles-API-Key: your-api-key
 
 There is no session, no token exchange, no OAuth flow. Authentication is a single header on every request.
 
+### Public endpoints (no API key)
+
+Two endpoints are explicitly public (declared with `security: []` in the protocol spec) and require no API key, both on the evidence surface:
+
+- `GET /v1/evidence/{evidence_id}` — signed-envelope retrieval. The `evidence_id` is an unguessable content-hash capability, and the envelope is content-addressed and signed, so public read cannot forge or alter it.
+- `GET /v1/.well-known/cycles-jwks.json` — the signer's public JWK Set (public keys only, the standard posture for a verification key set), used to verify evidence signatures.
+
+Every other endpoint requires authentication.
+
 ## The effective tenant
 
 From the API key (or other auth context), the server determines an **effective tenant**.
@@ -81,6 +90,16 @@ The reservation listing endpoint (`GET /v1/reservations`) follows the same tenan
 
 This ensures that listing and recovery operations are always tenant-isolated.
 
+## Admin access on behalf of a tenant
+
+Three runtime reservation endpoints also accept the admin key header `X-Admin-API-Key` (the `AdminKeyAuth` scheme — the same header the governance-admin spec uses), so admin operators can authenticate against the runtime plane with one key:
+
+- `GET /v1/reservations` (list) — the admin caller has no effective tenant, so the `tenant` query parameter is **required** and is used as a filter, not validation. Omitting it returns `400 INVALID_REQUEST`.
+- `GET /v1/reservations/{reservation_id}` (get) — admin operators can read any reservation regardless of owning tenant; the reservation ID already pins the owner, so no extra parameter is needed.
+- `POST /v1/reservations/{reservation_id}/release` — admin operators can release any reservation regardless of owning tenant (the ops use case is force-expiring a hung reservation during incident response). The audit-log entry for an admin-driven release must record `actor_type=admin_on_behalf_of`, so security review can distinguish admin-driven releases from tenant self-service releases.
+
+Create, commit, and extend do not accept the admin key — they remain tenant-key-only operations.
+
 ## The decide endpoint and tenancy
 
 The decide endpoint (`POST /v1/decide`) follows the same rule: `subject.tenant` must match the effective tenant.
@@ -103,7 +122,11 @@ This header is optional in v0 implementations.
 
 ## API key permissions (governance layer)
 
-When using the Cycles governance server (admin API), API keys can carry granular permissions that restrict which operations they can perform. The available permissions are:
+When using the Cycles governance server (admin API), API keys can carry granular permissions that restrict which operations they can perform. The governance spec's `Permission` enum defines 27 values in three groups.
+
+### Tenant permissions (13)
+
+Tenant-scoped keys should carry only these permissions:
 
 | Permission | Operations |
 |---|---|
@@ -113,12 +136,37 @@ When using the Cycles governance server (admin API), API keys can carry granular
 | `reservations:extend` | Extend reservations |
 | `reservations:list` | List and get reservations |
 | `balances:read` | Query balances |
-| `admin:read` | List budgets and policies |
-| `admin:write` | Create, update, and fund budgets; create and update policies |
+| `budgets:read` | List and read budgets |
+| `budgets:write` | Create, update, and fund budgets |
+| `policies:read` | List and read policies |
+| `policies:write` | Create and update policies |
+| `webhooks:read` | Read webhook subscriptions and deliveries (self-service) |
+| `webhooks:write` | Create, update, and delete webhook subscriptions (self-service) |
+| `events:read` | Read the tenant's event stream |
 
-When `permissions` is omitted from the API key creation request, the server assigns a default set: `[reservations:create, reservations:commit, reservations:release, reservations:extend, reservations:list, balances:read]`. To include admin operations, explicitly add `admin:read` and/or `admin:write`.
+### Legacy wildcard admin permissions (2)
+
+`admin:read` and `admin:write` are reserved for backward compatibility with legacy keys and SHOULD NOT be assigned to new tenant keys — use the granular tenant permissions above instead. Their wildcard semantics are normative:
+
+- `admin:write` satisfies any `*:write` requirement (`budgets:write`, `policies:write`, `webhooks:write`, etc.)
+- `admin:read` satisfies any `*:read` requirement (`budgets:read`, `policies:read`, `events:read`, `balances:read`, etc.)
+- `admin:read` does **not** satisfy `*:write`
+
+### Granular admin permissions (12)
+
+Admin-plane operations use granular admin permissions rather than the legacy wildcards: `admin:tenants:read`, `admin:tenants:write`, `admin:budgets:read`, `admin:budgets:write`, `admin:policies:read`, `admin:policies:write`, `admin:apikeys:read`, `admin:apikeys:write`, `admin:webhooks:read`, `admin:webhooks:write`, `admin:events:read`, and `admin:audit:read`.
+
+### Default permission set
+
+When `permissions` is omitted from the API key creation request, the server assigns the default set for tenant keys — 10 permissions: `[reservations:create, reservations:commit, reservations:release, reservations:extend, reservations:list, balances:read, budgets:read, budgets:write, policies:read, policies:write]`.
+
+Only the webhook and event self-service permissions (`webhooks:read`, `webhooks:write`, `events:read`) are excluded from the default set and must be explicitly granted.
 
 If a request requires a permission the API key does not have, the governance server returns `403` with error code `INSUFFICIENT_PERMISSIONS` (defined in the governance spec, not the protocol spec).
+
+### Key prefixes
+
+Tenant keys are issued in the format `cyc_live_{random}` or `cyc_test_{random}`. Only the visible `key_prefix` (e.g., `cyc_live_abc123`) is returned for identification after creation — the full key secret is returned exactly once, at creation time, and is stored server-side only as a hash.
 
 ## Scope filter (governance layer)
 

@@ -23,7 +23,7 @@ CyclesError (base)
 │   ├── DebtOutstandingError
 │   ├── ReservationExpiredError
 │   └── ReservationFinalizedError
-└── CyclesTransportError (network-level failure)
+└── CyclesTransportError (exported for user code; not thrown by the SDK)
 ```
 
 ## CyclesProtocolError
@@ -52,20 +52,35 @@ e.isUnitMismatch();
 e.isRetryable();           // true for INTERNAL_ERROR, UNKNOWN, or 5xx status
 ```
 
-## CyclesTransportError
+## Transport failures (status -1)
 
-Thrown when the HTTP connection itself fails (DNS failure, timeout, connection refused):
+Transport failures (DNS failure, timeout, connection refused) do not surface as a distinct exception class. The SDK never throws `CyclesTransportError` itself — the class is exported for use in your own code. Instead:
+
+- **`withCycles` / `reserveForStream`** throw `CyclesProtocolError` with `status === -1` and `errorCode` `undefined`.
+- **Programmatic `CyclesClient` calls** never throw on transport failure — they return a `CyclesResponse` with `isTransportError` set and `status` of `-1`.
+
+Detect transport failures by checking the status:
 
 ```typescript
-import { CyclesTransportError } from "runcycles";
+import { CyclesProtocolError } from "runcycles";
 
 try {
   result = await guardedFunc();
 } catch (err) {
-  if (err instanceof CyclesTransportError) {
+  if (err instanceof CyclesProtocolError && err.status === -1) {
+    // Network-level failure — the server was never reached
     console.error(`Transport error: ${err.message}`);
-    console.error(`Cause: ${err.cause}`);
   }
+}
+```
+
+For the programmatic client:
+
+```typescript
+const response = await client.createReservation(body);
+if (response.isTransportError) {
+  console.error(`Transport error: ${response.errorMessage}`);
+  console.error(`Cause: ${response.transportError}`);
 }
 ```
 

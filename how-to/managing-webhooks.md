@@ -70,7 +70,7 @@ The generated secret (e.g., `whsec_dGVzdC1zZWNy...`) is in the response. Copy it
 Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: `event_types` is always required (at least one), so include a representative type alongside the category wildcard.
 
 ```bash
-# All budget events (15 types) + all reservation events (5 types)
+# All budget events (16 types) + all reservation events (5 types)
 curl -X POST http://localhost:7979/v1/admin/webhooks \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
@@ -210,12 +210,12 @@ If `dispatch:pending` grows continuously, the events service may be down or over
 
 ### Prometheus metrics (v0.1.25.6+)
 
-The events service publishes webhook delivery metrics on `/actuator/prometheus` under the `cycles_webhook_*` namespace. The operationally most useful alerts:
+The events service publishes webhook delivery metrics on `/actuator/prometheus` (management port `9980`, which is unauthenticated in the reference deployment — restrict it at the network layer) under the `cycles_webhook_*` namespace. The operationally most useful alerts:
 
 - **`cycles_webhook_subscription_auto_disabled_total`** — any increase means a receiver has gone from healthy to dead. Page on `rate(cycles_webhook_subscription_auto_disabled_total[5m]) > 0`.
-- **`cycles_webhook_delivery_failed_total`** — failed delivery attempts, tagged by `reason`. Spikes in non-client-error reasons (`connect_timeout`, `read_timeout`, `5xx`) signal either a widespread receiver outage or a configuration regression.
+- **`cycles_webhook_delivery_failed_total`** — failed delivery attempts, tagged by `reason`. The reason values are `event_not_found`, `subscription_not_found`, `subscription_inactive`, `http_4xx`, `http_5xx`, `transport_error`, and `ssrf_blocked`. Spikes in `http_5xx` or `transport_error` (connect/read timeouts, DNS failures) signal either a widespread receiver outage or a configuration regression.
 - **`cycles_webhook_delivery_stale_total`** — non-zero means the `MAX_DELIVERY_AGE_MS` gate (default 24h) is firing. Usually benign after an events-service outage; persistently firing means dispatch is not catching up.
-- **`cycles_webhook_delivery_latency_seconds`** — Timer with `outcome` tag. Watch p99 — a creeping tail latency is often the first signal that a receiver is degrading before it starts outright failing.
+- **`cycles_webhook_delivery_latency_seconds`** — Timer with `outcome` tag. Percentile histograms are not enabled by default, so no `_bucket` series exist and `histogram_quantile()` won't work out of the box — watch `cycles_webhook_delivery_latency_seconds_max` and the `_sum`/`_count` average instead. A creeping `_max` is often the first signal that a receiver is degrading before it starts outright failing. (To get true percentiles, enable percentile histograms for this timer via Micrometer configuration.)
 
 See [Deploying the Events Service](/quickstart/deploying-the-events-service#prometheus-metrics) for the full metric inventory.
 
@@ -226,8 +226,8 @@ See [Deploying the Events Service](/quickstart/deploying-the-events-service#prom
 | Status | Meaning | Deliveries | How to fix |
 |---|---|---|---|
 | `ACTIVE` | Normal operation | Delivering | — |
-| `PAUSED` | Manually paused | Queued but not delivered | `PATCH` status to `ACTIVE` |
-| `DISABLED` | Auto-disabled after consecutive failures | Stopped | Fix endpoint, then `PATCH` status to `ACTIVE` |
+| `PAUSED` | Manually paused | **Not queued** — events emitted during the pause are dropped for this subscription, not held for later | `PATCH` status to `ACTIVE`, then [replay](#replaying-events) the pause window to backfill |
+| `DISABLED` | Auto-disabled after consecutive failures | **Not queued** | Fix endpoint, then `PATCH` status to `ACTIVE`; replay to backfill |
 
 ### Re-enabling a disabled subscription
 
@@ -345,7 +345,7 @@ curl -X DELETE http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 ```
 
-Returns `204 No Content`. Pending deliveries for this subscription will fail when processed (subscription not found).
+Returns `204 No Content`. Deletion is irreversible, and pending deliveries for the subscription are cancelled.
 
 ## Querying Events
 

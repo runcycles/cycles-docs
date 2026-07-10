@@ -319,9 +319,7 @@ from runcycles import (
     BudgetExceededError,
     DebtOutstandingError,
     OverdraftLimitExceededError,
-    ReservationExpiredError,
     CyclesProtocolError,
-    CyclesTransportError,
 )
 
 try:
@@ -333,14 +331,17 @@ except DebtOutstandingError:
     result = "Service paused"
 except OverdraftLimitExceededError:
     result = "Budget limit reached"
-except ReservationExpiredError:
-    record_as_event(data)
 except CyclesProtocolError as e:
-    logger.error("Protocol error: %s (code=%s, status=%d)", e, e.error_code, e.status)
+    if e.status == -1:
+        # Transport failure — the request never got an HTTP response
+        logger.error("Transport failure: %s", e)
+    else:
+        logger.error("Protocol error: %s (code=%s, status=%d)", e, e.error_code, e.status)
     raise
-except CyclesTransportError as e:
-    logger.error("Transport error: %s (cause=%s)", e, e.cause)
-    raise
+
+# Note: commit-time RESERVATION_EXPIRED is logged and swallowed by the
+# decorator (the function result is returned; spend is not recorded) —
+# see the Python error-handling guide for detection options.
 ```
 ```java [Java]
 try {
@@ -369,7 +370,6 @@ import {
   OverdraftLimitExceededError,
   ReservationExpiredError,
   CyclesProtocolError,
-  CyclesTransportError,
 } from "runcycles";
 
 try {
@@ -384,11 +384,13 @@ try {
     result = "Budget limit reached";
   } else if (err instanceof ReservationExpiredError) {
     await recordAsEvent(data);
-  } else if (err instanceof CyclesTransportError) {
-    console.error(`Transport error: ${err.message} (cause=${err.cause})`);
-    throw err;
   } else if (err instanceof CyclesProtocolError) {
-    console.error(`Protocol error: ${err.message} (code=${err.errorCode}, status=${err.status})`);
+    if (err.status === -1) {
+      // Transport failure — the request never got an HTTP response
+      console.error(`Transport failure: ${err.message}`);
+    } else {
+      console.error(`Protocol error: ${err.message} (code=${err.errorCode}, status=${err.status})`);
+    }
     throw err;
   } else {
     throw err;

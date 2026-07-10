@@ -23,6 +23,8 @@ docker compose -f docker-compose.full-stack.yml up
 
 Services: Redis (6379), Admin (7979), Runtime (7878), Events app port (7980), Events management/actuator (9980).
 
+Note that the admin repo's dev full-stack compose publishes the app port `7980` but not the management port `9980` — the actuator endpoints are only reachable from inside the compose network unless you add a `9980:9980` port mapping.
+
 ## Standalone deployment
 
 ### From pre-built image
@@ -33,7 +35,7 @@ docker run -d --name cycles-events \
   -e REDIS_PORT=6379 \
   -e REDIS_PASSWORD=your-redis-password \
   -e WEBHOOK_SECRET_ENCRYPTION_KEY=your-base64-key \
-  ghcr.io/runcycles/cycles-server-events:0.1.25.15
+  ghcr.io/runcycles/cycles-server-events:0.1.25.22
 ```
 
 The service does not need inbound traffic from applications or webhook targets; it sends webhook HTTP requests outbound. For local inspection, temporarily add `-p 9980:9980` and query the management endpoint from the host. In production, scrape `9980` from Prometheus on an internal network path and leave `7980` unpublished unless you have a specific internal use for the app port.
@@ -80,16 +82,23 @@ The runtime server also publishes public JWKS metadata with `EVIDENCE_SIGNING_KI
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `dispatch.pending.timeout-seconds` | 5 | BRPOP blocking timeout (seconds) |
-| `dispatch.retry.poll-interval-ms` | 5000 | How often to check for ready retries (ms) |
-| `dispatch.http.timeout-seconds` | 30 | HTTP request timeout for webhook delivery |
-| `dispatch.http.connect-timeout-seconds` | 5 | HTTP connect timeout |
+| `dispatch.pending.timeout-seconds` | 5 | BLMOVE blocking timeout for the delivery queue (seconds; property, not env var) |
+| `dispatch.retry.poll-interval-ms` | 5000 | How often to check for ready retries (ms; property, not env var) |
+| `dispatch.http.timeout-seconds` | 30 | HTTP request timeout for webhook delivery (property, not env var) |
+| `dispatch.http.connect-timeout-seconds` | 5 | HTTP connect timeout (property, not env var) |
+| `RETRY_BATCH_SIZE` | 100 | Max due retries claimed per retry poll |
+| `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` | 120000 | Idle window before in-flight deliveries on the processing list are recovered back to pending |
+| `MANAGEMENT_PORT` | 9980 | Separate management port for the actuator endpoints |
 | `MAX_DELIVERY_AGE_MS` | 86400000 | Deliveries older than this auto-fail (24h) |
 | `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
 | `DELIVERY_TTL_DAYS` | 14 | Redis TTL for delivery records |
 | `RETENTION_CLEANUP_INTERVAL_MS` | 3600000 | ZSET index cleanup interval (1h) |
+| `EVIDENCE_POP_TIMEOUT_SECONDS` | 5 | BLMOVE blocking timeout for the evidence queue (seconds) |
+| `EVIDENCE_FAILED_MAX_LEN` | 10000 | Max length of the evidence dead-letter queue (newest kept) |
 
 ### Full configuration example
+
+Environment variables (Docker `-e` flags or the shell environment):
 
 ```bash
 REDIS_HOST=redis.example.com
@@ -99,14 +108,22 @@ WEBHOOK_SECRET_ENCRYPTION_KEY=K7x2mP9qR4sT6wB1cD3fG5hJ8kL0nA2=
 EVIDENCE_SERVER_ID=https://cycles.example.com/v1
 EVIDENCE_SIGNING_SIGNER_DID=b10554...c522
 EVIDENCE_SIGNING_PRIVATE_KEY_HEX=4f9c...d20a
-dispatch.pending.timeout-seconds=5
-dispatch.retry.poll-interval-ms=5000
-dispatch.http.timeout-seconds=30
-dispatch.http.connect-timeout-seconds=5
+MANAGEMENT_PORT=9980
+RETRY_BATCH_SIZE=100
+DISPATCH_PROCESSING_RECOVERY_IDLE_MS=120000
 MAX_DELIVERY_AGE_MS=86400000
 EVENT_TTL_DAYS=90
 DELIVERY_TTL_DAYS=14
 RETENTION_CLEANUP_INTERVAL_MS=3600000
+```
+
+Application properties (only overridable via `application.properties` or `-D` system properties — they have no env-var mapping):
+
+```properties
+dispatch.pending.timeout-seconds=5
+dispatch.retry.poll-interval-ms=5000
+dispatch.http.timeout-seconds=30
+dispatch.http.connect-timeout-seconds=5
 ```
 
 ## Health check
@@ -127,7 +144,7 @@ Pre-v0.1.25.9 deployments exposed `/actuator/health` on the application port 798
 3. **Redis memory is bounded** — TTLs ensure keys auto-expire even if never consumed
 4. **When the events service restarts:**
    - Stale deliveries (older than `MAX_DELIVERY_AGE_MS`, default 24h) are immediately marked FAILED
-   - Fresh deliveries are processed normally via BRPOP
+   - Fresh deliveries are processed normally via the BLMOVE reliable queue — claimed jobs sit on `dispatch:processing` until acknowledged, and orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 120000 ms) are recovered back to pending
    - `RetentionCleanupService` trims orphaned ZSET index entries hourly
 5. **No data loss for events** — event records persist in Redis for 90 days regardless of delivery status
 6. **Evidence may be temporarily unavailable** — responses can still include `cycles_evidence`, but `GET /v1/evidence/{id}` may return transient `404` until the events service signs and stores the envelope
@@ -155,13 +172,13 @@ The events service publishes webhook delivery metrics under the `cycles_webhook_
 | `cycles_webhook_delivery_latency_seconds` | `tenant`, `event_type`, `outcome` | Timer — HTTP RTT per delivery attempt |
 | `cycles_webhook_events_payload_invalid_total` | `type`, `rule` | Event payload validation discrepancies (no tenant tag — shape issue, not traffic) |
 
-The `tenant` tag on all counters is gated by `cycles.metrics.tenant-tag.enabled` (default `true`) — set to `false` in deployments with many thousands of tenants to bound Prometheus cardinality.
+The `tenant` tag on all counters is gated by `cycles.metrics.tenant-tag.enabled` (default `false` to bound Prometheus cardinality) — set `CYCLES_METRICS_TENANT_TAG_ENABLED=true` to break metrics out per tenant in smaller deployments.
 
 Alert on `cycles_webhook_subscription_auto_disabled_total` (any increase is a receiver health issue) and on a sustained rise in `cycles_webhook_delivery_failed_total{reason=!~"client_4xx"}` (non-client-error failures indicate dispatch issues).
 
 ## Scaling
 
-Multiple events service instances can safely BRPOP from the same `dispatch:pending` list — BRPOP is atomic, so each delivery is processed by exactly one consumer. No distributed locking is needed.
+Multiple events service instances can safely consume the same `dispatch:pending` list — the BLMOVE reliable-queue claim is atomic, so each delivery is processed by exactly one consumer, and claimed jobs are parked on `dispatch:processing` until acknowledged (orphans idle past `DISPATCH_PROCESSING_RECOVERY_IDLE_MS`, default 120000 ms, are recovered to pending). No distributed locking is needed.
 
 ## Next steps
 

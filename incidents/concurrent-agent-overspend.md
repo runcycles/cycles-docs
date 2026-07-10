@@ -43,32 +43,45 @@ Time 0: Budget = $10.00
 Agent A reserves $3.00 → ALLOW ($7.00 remaining, $3.00 reserved)
 Agent B reserves $3.00 → ALLOW ($4.00 remaining, $6.00 reserved)
 Agent C reserves $3.00 → ALLOW ($1.00 remaining, $9.00 reserved)
-Agent D reserves $3.00 → DENY  (only $1.00 remaining)
-Agent E reserves $3.00 → DENY  (only $1.00 remaining)
+Agent D reserves $3.00 → DENIED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
+Agent E reserves $3.00 → DENIED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
 ```
 
-Agents D and E are denied *before any LLM call is made*. The budget is never exceeded.
+Agents D and E are denied *before any LLM call is made*. The budget is never exceeded. On the wire, a live denial is an HTTP `409` error response with `error: BUDGET_EXCEEDED` — the `DENY` decision value appears only on dry-run and `decide` responses, which return `200` with the decision in the body.
 
 ### Python example
 
 ```python
-from runcycles import cycles, BudgetExceededError
+import os
 
-@cycles(
-    estimate=3000000,
-    action_kind="llm.completion",
-    action_name="gpt-4o",
+from runcycles import (
+    BudgetExceededError,
+    CyclesClient,
+    CyclesConfig,
+    cycles,
+    set_default_client,
+)
+
+set_default_client(CyclesClient(CyclesConfig(
+    base_url=os.environ["CYCLES_BASE_URL"],
+    api_key=os.environ["CYCLES_API_KEY"],
     tenant="acme-corp",
     workspace="prod",
-    agent=lambda agent_id: agent_id,
+)))
+
+@cycles(
+    estimate=3_000_000,
+    action_kind="llm.completion",
+    action_name="gpt-4o",
+    # Subject callables receive the decorated function's *args/**kwargs
+    agent=lambda *args, **kwargs: kwargs.get("agent_id"),
 )
 def call_llm_safe(prompt: str, agent_id: str) -> str:
     return call_llm(prompt)
 
 def agent_task(agent_id: str, task: str):
     try:
-        result = call_llm_safe(task, agent_id=agent_id)
-        return result
+        return call_llm_safe(task, agent_id=agent_id)
     except BudgetExceededError:
         return fallback_response(task)
 ```
@@ -76,7 +89,20 @@ def agent_task(agent_id: str, task: str):
 ### TypeScript example
 
 ```typescript
-import { withCycles, BudgetExceededError } from "runcycles";
+import {
+  BudgetExceededError,
+  CyclesClient,
+  CyclesConfig,
+  setDefaultClient,
+  withCycles,
+} from "runcycles";
+
+setDefaultClient(new CyclesClient(new CyclesConfig({
+  baseUrl: process.env.CYCLES_BASE_URL!,
+  apiKey: process.env.CYCLES_API_KEY!,
+  tenant: "acme-corp",
+  workspace: "prod",
+})));
 
 const callLlmSafe = withCycles(
   {
@@ -172,7 +198,7 @@ curl -s "http://localhost:7878/v1/balances?tenant=acme-corp" \
 ### Alerting rules
 
 ::: warning Planned metrics — not yet registered
-`cycles_scope_spent_total`, `cycles_scope_allocated_total`, `cycles_scope_remaining_total`, and `cycles_active_reservations_count` are on the roadmap but are not emitted by the current server builds (runtime 0.1.25.8). Build these alerts from a balance-polling sidecar that pushes `GET /v1/balances` fields as gauges — see [Query balances for monitoring](/how-to/monitoring-and-alerting#query-balances-for-monitoring). Once the sidecar pushes `cycles_budget_spent` / `cycles_budget_allocated` / `cycles_budget_remaining` / `cycles_active_reservations`, the rules below apply as-is against your own gauge names.
+`cycles_scope_spent_total`, `cycles_scope_allocated_total`, `cycles_scope_remaining_total`, and `cycles_active_reservations_count` are on the roadmap but are not emitted by the current server builds (runtime 0.1.25.46 registers request-driven `cycles.*` counters — reservations, events, overdraft — but no balance or active-reservation gauges). Build these alerts from a balance-polling sidecar that pushes `GET /v1/balances` fields as gauges — see [Query balances for monitoring](/how-to/monitoring-and-alerting#query-balances-for-monitoring). Once the sidecar pushes `cycles_budget_spent` / `cycles_budget_allocated` / `cycles_budget_remaining` / `cycles_active_reservations`, the rules below apply as-is against your own gauge names.
 :::
 
 ```yaml
@@ -219,32 +245,49 @@ Concurrency bugs are hard to reproduce in unit tests. Use these strategies to ve
 
 ```python
 import asyncio
-from runcycles import reserve, commit, release
+import uuid
+
+from runcycles import (
+    Action,
+    Amount,
+    AsyncCyclesClient,
+    CommitRequest,
+    CyclesConfig,
+    ReservationCreateRequest,
+    Subject,
+    Unit,
+)
 
 async def test_concurrent_budget_safety():
     """Verify that concurrent reservations never exceed the budget."""
-    budget_allocated = 10_000_000  # 10M microcredits
-    cost_per_call = 3_000_000     # 3M microcredits each
+    budget_allocated = 10_000_000  # 10M microcents
+    cost_per_call = 3_000_000      # 3M microcents each
     num_agents = 5
 
-    async def agent_reserve():
-        try:
-            reservation = await reserve(
-                estimate=cost_per_call,
-                action_kind="llm.completion",
-                action_name="gpt-4o",
-                tenant="test-tenant",
-            )
+    config = CyclesConfig(base_url="http://localhost:7878", api_key="test-key")
+    async with AsyncCyclesClient(config) as client:
+
+        async def agent_reserve() -> str:
+            resp = await client.create_reservation(ReservationCreateRequest(
+                idempotency_key=f"test-{uuid.uuid4()}",
+                subject=Subject(tenant="test-tenant"),
+                action=Action(kind="llm.completion", name="gpt-4o"),
+                estimate=Amount(amount=cost_per_call, unit=Unit.USD_MICROCENTS),
+            ))
+            if resp.status == 409:  # BUDGET_EXCEEDED — denied before any spend
+                return "denied"
+            reservation_id = resp.body["reservation_id"]
             # Simulate work
             await asyncio.sleep(0.1)
-            await commit(reservation.id, actual=cost_per_call)
+            await client.commit_reservation(reservation_id, CommitRequest(
+                idempotency_key=f"commit-{reservation_id}",
+                actual=Amount(amount=cost_per_call, unit=Unit.USD_MICROCENTS),
+            ))
             return "committed"
-        except BudgetExceededError:
-            return "denied"
 
-    results = await asyncio.gather(
-        *[agent_reserve() for _ in range(num_agents)]
-    )
+        results = await asyncio.gather(
+            *[agent_reserve() for _ in range(num_agents)]
+        )
 
     committed = results.count("committed")
     denied = results.count("denied")
@@ -259,28 +302,35 @@ async def test_concurrent_budget_safety():
 ### TypeScript concurrency test
 
 ```typescript
-import { reserve, commit, BudgetExceededError } from "runcycles";
+import { randomUUID } from "node:crypto";
+import { CyclesClient, CyclesConfig } from "runcycles";
 
 async function testConcurrentBudgetSafety() {
   const budgetAllocated = 10_000_000;
   const costPerCall = 3_000_000;
   const numAgents = 5;
 
+  const client = new CyclesClient(new CyclesConfig({
+    baseUrl: "http://localhost:7878",
+    apiKey: "test-key",
+  }));
+
   const agentReserve = async (): Promise<"committed" | "denied"> => {
-    try {
-      const reservation = await reserve({
-        estimate: costPerCall,
-        actionKind: "llm.completion",
-        actionName: "gpt-4o",
-        tenant: "test-tenant",
-      });
-      await new Promise((r) => setTimeout(r, 100));
-      await commit(reservation.id, { actual: costPerCall });
-      return "committed";
-    } catch (err) {
-      if (err instanceof BudgetExceededError) return "denied";
-      throw err;
-    }
+    // createReservation takes the raw snake_case wire body
+    const resp = await client.createReservation({
+      idempotency_key: `test-${randomUUID()}`,
+      subject: { tenant: "test-tenant" },
+      action: { kind: "llm.completion", name: "gpt-4o" },
+      estimate: { amount: costPerCall, unit: "USD_MICROCENTS" },
+    });
+    if (resp.status === 409) return "denied"; // BUDGET_EXCEEDED
+    const reservationId = resp.body!.reservation_id as string;
+    await new Promise((r) => setTimeout(r, 100));
+    await client.commitReservation(reservationId, {
+      idempotency_key: `commit-${reservationId}`,
+      actual: { amount: costPerCall, unit: "USD_MICROCENTS" },
+    });
+    return "committed";
   };
 
   const results = await Promise.all(

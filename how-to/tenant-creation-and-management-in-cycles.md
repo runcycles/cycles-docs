@@ -91,7 +91,7 @@ The accepted optional fields on creation are:
 | `default_reservation_ttl_ms` | `60000` (60s) | Default TTL when a reservation request does not specify `ttl_ms` |
 | `max_reservation_ttl_ms` | `3600000` (1h) | Maximum allowed TTL; requests exceeding this are capped |
 | `max_reservation_extensions` | `10` | Maximum TTL extensions per reservation |
-| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled: `AUTO_RELEASE`, `MANUAL_CLEANUP`, or `GRACE_ONLY` |
+| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled: `AUTO_RELEASE`, `MANUAL_CLEANUP`, or `GRACE_ONLY`. **Creation-only** — it cannot be changed via `PATCH` afterwards |
 | `metadata` | — | Key-value pairs for external references (up to 32 keys) |
 
 Each of these fields is covered in detail in the sections below.
@@ -138,8 +138,13 @@ Response:
 |---|---|
 | `status` | Filter by status: `ACTIVE`, `SUSPENDED`, or `CLOSED` |
 | `parent_tenant_id` | Filter by parent tenant (for hierarchical tenants) |
+| `observe_mode` | Filter by observe-mode flag (`true`/`false`) |
+| `search` | Case-insensitive substring match over `tenant_id` and `name` |
+| `sort_by` / `sort_dir` | Sort key and direction (default: `created_at` descending) |
 | `cursor` | Pagination cursor from a previous response |
 | `limit` | Page size (default: 50, max: 100) |
+
+See [Searching and Sorting Admin List Endpoints](/how-to/searching-and-sorting-admin-list-endpoints) for the shared `search`/`sort_by`/`sort_dir` parameter vocabulary.
 
 ### Cursor-based pagination
 
@@ -284,7 +289,7 @@ Closing a tenant is irreversible. If you need a temporary block, use SUSPENDED i
 
 #### What cascades automatically (v0.1.25.35+)
 
-Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had to separately drain reservations, freeze budgets, revoke API keys, and disable webhooks by hand. Today, `cycles-server-admin` runs the full cascade in one transaction:
+Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had to separately drain reservations, freeze budgets, revoke API keys, and disable webhooks by hand. Today, `cycles-server-admin` runs the cascade automatically and inline during the close (Mode B: the status flip commits first, then per-child terminal transitions complete before the response returns — not a single transaction):
 
 | Owned object | Cascade action | Event kind |
 |---|---|---|
@@ -293,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-All four cascade events share the `correlation_id` of the originating `tenant.closed` entry — you can find every side effect of a close with one query:
+The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s by the reference server (registered enum constants there, but absent from the published spec's `EventType` enum — so do not rely on cross-server `event_type=` filtering). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
 
 ```bash
 # All cascade events for one close
@@ -318,7 +323,7 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 | Your admin version | What happens |
 |---|---|
 | **v0.1.25.36+** (recommended) | Rule 1 cascade runs; Rule 2 guard active on every mutation endpoint. Budgets, API keys, reservations, and webhooks all reach terminal state automatically. Any mutation attempt returns `409 TENANT_CLOSED`. |
-| **v0.1.25.35** | Rule 1 cascade runs; Rule 2 guard covers budget + reservation mutations only. Policy, API key, and webhook-admin mutations against the now-closed tenant slip through silently until you upgrade. Cascade itself still completes correctly. |
+| **v0.1.25.35** | Rule 1 cascade runs; Rule 2 guard covers budget operations plus webhook create/update only. Policy, API key, remaining webhook, and bulk-action-row mutations against the now-closed tenant slip through silently until you upgrade (all completed in .36). Cascade itself still completes correctly. |
 | **Pre-v0.1.25.35** | No cascade. Dashboard banner still renders (it's purely UI state), but owned objects stay in their pre-close state until you manually freeze / revoke / disable them. |
 
 **Mode B timing.** runcycles' reference server uses Mode B (flip-first with guarded cascade) — `tenant.status` flips to `CLOSED` first, then children cascade inline. A GET against an owned budget in the milliseconds between flip and cascade-completion may still return the pre-terminal status, but any mutation will already be rejected by the Rule 2 guard. The observable window is typically sub-second on a healthy Redis; if it lingers longer, check the admin server's event-emission queue.
@@ -326,16 +331,18 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 **Verify the cascade finished.** One audit query confirms every side effect:
 
 ```bash
-# Get the correlation_id of your tenant.closed audit entry
-CID=$(curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=updateTenant&limit=1" \
-  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.logs[0].metadata.correlation_id')
+# Audit rows carry request_id/trace_id (no correlation_id field); the
+# cascade correlation_id is composed as tenant_close_cascade:<tenant_id>:<request_id>
+RID=$(curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=updateTenant&limit=1" \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.logs[0].request_id')
+CID="tenant_close_cascade:acme-corp:$RID"
 
 # Pull every cascade event under that correlation_id
 curl -s "http://localhost:7979/v1/admin/events?correlation_id=$CID" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, resource: .data}'
 ```
 
-You should see one event per owned object — `budget.closed_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade`. If the count is short, either the cascade is still draining (wait a second and re-query) or you're on pre-v0.1.25.35 admin.
+You should see one event per owned object — `budget.closed_via_tenant_cascade` per ledger, `api_key.revoked_via_tenant_cascade` per key, `webhook.disabled_via_tenant_cascade` per subscription — and one ledger-level `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0` (aggregate `released_amount`, not per-reservation). If the count is short: the runcycles server cascades inline before the PATCH response returns, so a shortfall there usually means a pre-v0.1.25.35 admin; on reconciler-based Mode B implementations the cascade may still be draining — wait a moment and re-query.
 
 ::: info Why tenants cannot be deleted
 The admin API intentionally has no `DELETE /v1/admin/tenants/{tenant_id}` endpoint. Tenants are referenced by ID throughout the system — budgets, API keys, reservations, and audit logs all carry a `tenant_id`. Hard deletion would orphan these records and break audit trails.
@@ -355,7 +362,7 @@ curl -X POST http://localhost:7979/v1/admin/tenants/bulk-action \
   }' | jq '{succeeded: (.succeeded | length), failed: .failed}'
 ```
 
-The cascade runs per-row — each closed tenant's owned objects terminate under its own `correlation_id`. Failed rows (e.g., a tenant already CLOSED) land in `failed[]` with a per-row reason; the rest of the batch proceeds.
+The cascade runs per-row — each closed tenant's owned objects terminate under its own `correlation_id`. Rows already in the target state (e.g., a tenant that is already CLOSED) land in `skipped[]` with `reason: "ALREADY_IN_TARGET_STATE"`; genuine failures land in `failed[]` with a per-row `error_code` and `message`. The rest of the batch proceeds either way.
 
 The data footprint of a closed tenant is minimal.
 :::
@@ -369,7 +376,7 @@ The server rejects invalid status transitions with `400 INVALID_REQUEST`:
 
 ## Configuring tenant defaults
 
-Each tenant has configuration that governs how reservations behave. These properties can be set at creation or updated via `PATCH`.
+Each tenant has configuration that governs how reservations behave. These properties are set at creation; all except `reservation_expiry_policy` can also be updated later via `PATCH`.
 
 ### Settable per tenant
 
@@ -379,7 +386,9 @@ Each tenant has configuration that governs how reservations behave. These proper
 | `default_reservation_ttl_ms` | `60000` (60s) | Default TTL when a reservation request does not specify `ttl_ms` |
 | `max_reservation_ttl_ms` | `3600000` (1h) | Maximum allowed TTL; requests exceeding this are capped |
 | `max_reservation_extensions` | `10` | Maximum TTL extensions per reservation (prevents zombie reservations) |
-| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled |
+| `reservation_expiry_policy` | `AUTO_RELEASE` | How expired reservations are handled. **Creation-only** — not updatable via `PATCH` |
+
+All of these except `reservation_expiry_policy` can also be updated later via `PATCH /v1/admin/tenants/{tenant_id}`. The expiry policy is fixed at creation; to change it you would need a new tenant.
 
 ### Commit overage policies
 
@@ -561,12 +570,18 @@ API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
       "reservations:release",
       "reservations:extend",
       "reservations:list",
-      "balances:read"
+      "balances:read",
+      "budgets:read",
+      "budgets:write"
     ]
   }' | jq -r '.key_secret')
 
 echo "API Key: $API_KEY"
 ```
+
+::: warning Explicit permissions replace the defaults
+An explicit `permissions` array **replaces** the default set — it is not merged with it. A key created with only the six runtime permissions cannot call the budget endpoints in Step 3 (`POST /v1/admin/budgets` requires `budgets:write`). Either include `budgets:read`/`budgets:write` as shown, or omit `permissions` entirely to get the 10-permission default set, which includes them.
+:::
 
 Save this key — the full secret is only returned once. See [API Key Management](/how-to/api-key-management-in-cycles) for rotation and security practices.
 
@@ -769,8 +784,12 @@ curl -s -X POST http://localhost:7979/v1/admin/tenants \
 API_KEY=$(curl -s -X POST http://localhost:7979/v1/admin/api-keys \
   -H "Content-Type: application/json" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" \
-  -d "{\"tenant_id\": \"$TENANT_ID\", \"name\": \"prod-key\", \"permissions\": [\"reservations:create\",\"reservations:commit\",\"reservations:release\",\"balances:read\"]}" \
+  -d "{\"tenant_id\": \"$TENANT_ID\", \"name\": \"prod-key\", \"permissions\": [\"reservations:create\",\"reservations:commit\",\"reservations:release\",\"balances:read\",\"budgets:read\",\"budgets:write\"]}" \
   | jq -r '.key_secret')
+
+# budgets:read/budgets:write are required for the budget call below —
+# an explicit permissions array REPLACES the defaults, it is not merged.
+# Alternatively, omit "permissions" to get the default set (which includes them).
 
 curl -s -X POST http://localhost:7979/v1/admin/budgets \
   -H "Content-Type: application/json" \

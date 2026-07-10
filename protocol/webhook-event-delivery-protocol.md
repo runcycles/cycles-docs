@@ -14,7 +14,7 @@ Every webhook delivery includes these HTTP headers:
 | Header | Value | Description |
 |--------|-------|-------------|
 | `Content-Type` | `application/json` | Always JSON |
-| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. If no secret was provided when the subscription was created, the server-generated secret is used. |
+| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. Present whenever the subscription has a signing secret (if no secret was provided when the subscription was created, the server-generated secret is used); omitted when the subscription has no signing secret. |
 | `X-Cycles-Event-Id` | `evt_abc123...` | Unique event ID. Use for deduplication. |
 | `X-Cycles-Event-Type` | `budget.exhausted` | Dot-notation event type for routing. |
 | `X-Cycles-Trace-Id` | `0af7651916cd43dd8448eb211c80319c` | 32-hex W3C Trace Context identifier for the logical operation this event belongs to. Always present on deliveries from v0.1.25.7+ events services. |
@@ -51,7 +51,7 @@ The body is a JSON-serialized Event object:
     "remaining": 0,
     "spent": 10000
   },
-  "correlation_id": "batch_nightly_2026_04_18",
+  "correlation_id": "3f2a9c14e0b7d5a1",
   "request_id": "req_789",
   "trace_id": "0af7651916cd43dd8448eb211c80319c",
   "metadata": {}
@@ -60,11 +60,15 @@ The body is a JSON-serialized Event object:
 
 Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and `metadata` are optional (omitted when null).
 
-**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` is operator-populated and groups a family of related events. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` groups a family of related events — it is server-set in one of two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`) for governance/admin operations. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ## Event types (47)
 
 The current v0.1.25 Admin API `EventType` enum registers 47 event types across seven categories: budget (16), reservation (5), tenant (6), api_key (6), policy (3), webhook (6), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully.
+
+::: info Count note
+The 47-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
+:::
 
 ### Budget events (16)
 
@@ -154,14 +158,14 @@ Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budge
 
 ### Tenant-close cascade fan-out
 
-The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). Treat these as additive implementation events and ignore any unrecognized event type gracefully:
+The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). These names are absent from the published admin-openapi enum (they do not count toward the 47 registered types) but are registered as first-class constants in the reference implementation's `EventType.java`. Treat them as additive implementation events and ignore any unrecognized event type gracefully:
 
 - `budget.closed_via_tenant_cascade` — one per owned `BudgetLedger`.
-- `reservation.released_via_tenant_cascade` — one per open owned reservation. Reason `tenant_closed`; no overage debt.
+- `reservation.released_via_tenant_cascade` — a **ledger-level aggregate**: one per closed budget with `reserved > 0`, carrying `released_amount`. Reason `tenant_closed`; no overage debt.
 - `api_key.revoked_via_tenant_cascade` — one per owned API key.
 - `webhook.disabled_via_tenant_cascade` — one per owned webhook subscription.
 
-All four carry the `correlation_id` of the originating `tenant.closed` audit entry, letting subscribers correlate cascade side effects to the operator action that triggered them. The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
+All four carry a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`, letting subscribers correlate cascade side effects to the operator action that triggered them (audit rows for the operation join via `request_id`/`trace_id`). The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
 
 See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
 

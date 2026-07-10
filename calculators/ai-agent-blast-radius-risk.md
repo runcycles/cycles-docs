@@ -86,7 +86,7 @@ The two calculators answer two halves of the same question:
 | Inputs | tokens, calls, model rates | actions, reversibility, visibility, error rate |
 | Output | $ per call / day / month / year | $ blast radius per month |
 | Output type | expected spend | risk exposure (not a prediction) |
-| Persuasion column | "Cheapest model — save 30×" | "Δ — monthly risk reduction from containment" |
+| Persuasion column | "Cheapest model — save 24×" | "Δ — monthly risk reduction from containment" |
 | Maps to Cycles dimension | Cost runtime control | Action runtime authority |
 
 A real production AI workload has both. Cost is bounded by a [budget](/guides/llm-cost-runtime-control). Damage is bounded by [what you do not let the agent do in the first place](/guides/risk-and-blast-radius). Cycles enforces both at the same runtime gate.

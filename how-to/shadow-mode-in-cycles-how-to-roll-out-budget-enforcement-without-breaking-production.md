@@ -40,7 +40,7 @@ Shadow mode is the bridge between those two states.
 
 ## What shadow mode is
 
-In the Cycles protocol, shadow mode is enabled by setting `dry_run: true` on a reservation request. The server evaluates the same reservation and budget logic it would use in enforcement mode, but instead of blocking execution, it records what **would have happened**. No budget is actually held.
+In the Cycles protocol, shadow mode is enabled by setting `dry_run: true` on a reservation request. The server evaluates the same reservation and budget logic it would use in enforcement mode, but instead of blocking execution, it returns what **would have happened** — the decision, caps, and affected scopes — in the response. The server must not persist anything for a dry run: no balances are modified, no reservation is created, and no commit or release is required. Recording those would-be outcomes for analysis is the caller's job.
 
 That means your system can answer questions like:
 
@@ -51,6 +51,8 @@ That means your system can answer questions like:
 - how accurate are our estimates versus actual usage?
 
 In other words, shadow mode gives you production-grade policy feedback without introducing production-grade disruption.
+
+As a fleet-wide complement to per-request `dry_run`, servers implementing the v0.1.26 admin extension also preview a tenant-level `observe_mode` setting, which lets operators put an entire tenant into shadow evaluation without changing any call sites.
 
 ## What shadow mode is not
 
@@ -382,5 +384,5 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)
 - [AI Agent Cost Management: The Complete Guide](/blog/ai-agent-cost-management-guide) — the five-tier maturity model including shadow mode rollout

@@ -90,6 +90,9 @@ Implementations MUST return the exact HTTP status + `error` code pairs from `cyc
 - `UNIT_MISMATCH` — 400
 - `NOT_FOUND` — 404
 - `DEBT_OUTSTANDING` — 409
+- `LIMIT_EXCEEDED` — 429 (server-side throttling / rate limiting, optional in v0 and never used for deterministic budget exhaustion; added to the ErrorCode enum in spec v0.1.25.12, revision 2026-07-04). 429 responses carry the `Retry-After` and `X-RateLimit-Reset` headers.
+
+One `RESERVATION_EXPIRED` subtlety, clarified in the 2026-07-03 spec revision: `GET /v1/reservations/{reservation_id}` MUST return 410 `RESERVATION_EXPIRED` when the reservation exists but its status is EXPIRED — the pre-revision text enumerated only commit/release/extend, leaving the GET case ambiguous. EXPIRED reservations remain discoverable via `listReservations`, which returns them as normal 200 rows with `status=EXPIRED`; the 410 applies only to the single-resource GET.
 
 Clients route on these codes — returning a generic 500 or a custom error string breaks the protocol contract even if the underlying behavior is correct.
 
@@ -98,6 +101,10 @@ Action-governance error codes (`ACTION_QUOTA_EXCEEDED`, `ACTION_KIND_NOT_ALLOWED
 ## Authentication and tenancy
 
 Authenticate via the `X-Cycles-API-Key` header, per [`cycles-protocol-v0.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-protocol-v0.yaml) §AUTH & TENANCY. How API keys are provisioned, rotated, or scoped to permission sets is implementation-specific — but tenant isolation MUST be enforced.
+
+Two exceptions are deliberately public (`security: []`): `GET /v1/evidence/{evidence_id}`, where the unguessable sha256 `evidence_id` acts as a capability, and `GET /v1/.well-known/cycles-jwks.json`, which serves the public verification-key set that is itself the trust anchor. Servers SHOULD rate-limit both (they declare 429 responses with `Retry-After` / `X-RateLimit-Reset`).
+
+Three reservation operations additionally accept admin dual auth via `AdminKeyAuth` (`X-Admin-API-Key` header, the same header the governance-admin spec uses): `listReservations` (`GET /v1/reservations`), `getReservation` (`GET /v1/reservations/{reservation_id}`), and `releaseReservation` (`POST /v1/reservations/{reservation_id}/release`) — the operator use case is inspecting and force-releasing reservations across tenants, with the admin-driven release audited as `actor_type=admin_on_behalf_of`.
 
 The reference server uses a permissions model with named scopes (`reservations:create`, `balances:read`, `admin:write`, etc.). Alternative implementations can use any equivalent authorization model as long as tenant isolation holds.
 

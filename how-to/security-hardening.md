@@ -55,7 +55,13 @@ cycles-server:
 cycles-admin:
   environment:
     REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+cycles-events:
+  environment:
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
 ```
+
+All three services — Server, Admin Server, and Events Service — connect to the same Redis, so all three need `REDIS_PASSWORD` set.
 
 Generate a strong password:
 
@@ -78,13 +84,21 @@ tls-ca-cert-file /etc/redis/tls/ca.crt
 
 ### Redis ACLs
 
-Restrict the Cycles service account to only the commands it needs:
+Restrict the Cycles service account to the key patterns the services actually use. All three services (Server, Admin Server, Events Service) share this account, so the pattern list must cover every prefix — omitting the event/delivery/dispatch/evidence prefixes breaks the Events Service:
 
 ```conf
 # redis.conf
-user cycles on >${REDIS_PASSWORD} ~cycles:* ~budget:* ~reservation:* ~tenant:* ~apikey:* ~audit:* +@all
+user cycles on >${REDIS_PASSWORD} ~tenant:* ~budget:* ~budgets:* ~reservation:* ~reserve:* ~idem:* ~idempotency:* ~apikey:* ~apikeys:* ~policy:* ~policies:* ~audit:* ~event:* ~events:* ~delivery:* ~deliveries:* ~dispatch:* ~webhook:* ~webhooks:* ~evidence:* ~config:* ~replay:* +@all
 user default off
 ```
+
+Key prefixes by service:
+
+| Service | Key prefixes |
+|---|---|
+| Cycles Server | `tenant:`, `budget:`, `reservation:`, `reserve:`, `idem:`, `apikey:`, `audit:`, `event:`, `events:`, `delivery:`, `deliveries:`, `dispatch:`, `webhook:`, `webhooks:`, `evidence:` |
+| Admin Server | `tenant:`, `budget:`, `budgets:`, `apikey:`, `apikeys:`, `policy:`, `policies:`, `audit:`, `event:`, `events:`, `delivery:`, `deliveries:`, `dispatch:`, `webhook:`, `webhooks:`, `replay:`, `idem:`, `config:` |
+| Events Service | `event:`, `events:`, `delivery:`, `deliveries:`, `dispatch:`, `webhook:`, `evidence:`, `config:` |
 
 ### Disable dangerous commands
 
@@ -173,10 +187,18 @@ curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&limit=50"
 
 ### Retention policy
 
-- **Hot storage (Redis):** 90 days — queryable via the API
+- **Hot storage (Redis):** 400 days for authenticated admin operations, 30 days for unauthenticated (failed-auth) entries — queryable via the API. Configurable via `AUDIT_RETENTION_AUTHENTICATED_DAYS` and `AUDIT_RETENTION_UNAUTHENTICATED_DAYS`.
 - **Cold storage:** Export to S3/GCS/etc. for long-term retention (1+ year recommended for compliance)
 
+Don't confuse audit retention with event retention: 90 days is the event TTL (`EVENT_TTL_DAYS`), not the audit log retention.
+
 Set up a periodic export job to archive audit logs before they expire from Redis.
+
+## Actuator authentication
+
+Since Cycles Server `0.1.25.45`, operational endpoints — `/actuator/prometheus`, `/actuator/info`, the aggregate `/actuator/health`, API docs, and Swagger — require the `X-Admin-API-Key` header. Only the orchestrator probes `/actuator/health/liveness` and `/actuator/health/readiness` remain public. The Admin Server enforces the same rule. Prometheus scrapers that read these endpoints must send the header.
+
+The Events Service exposes its actuator on a separate management port (9980), which is unauthenticated by design — the separate port is its isolation mechanism. Never publish port 9980 to the host or expose it beyond the internal network; isolate it at the network layer and scrape Prometheus from inside that boundary.
 
 ## TLS for client-to-server communication
 
@@ -188,10 +210,10 @@ For service-to-service communication within a trusted network (e.g., Kubernetes 
 
 ### Run as non-root
 
-The Cycles Server Docker images run as a non-root user by default. Verify:
+The Cycles Server Docker images run as a non-root user by default. Verify (the image's entrypoint launches the Java server, so `whoami` must be passed with `--entrypoint` — appending it as a command argument is ignored):
 
 ```bash
-docker run --rm ghcr.io/runcycles/cycles-server:latest whoami
+docker run --rm --entrypoint whoami ghcr.io/runcycles/cycles-server:0.1.25.46
 ```
 
 ### Pin image versions
@@ -199,7 +221,7 @@ docker run --rm ghcr.io/runcycles/cycles-server:latest whoami
 Use specific version tags, not `latest`:
 
 ```yaml
-image: ghcr.io/runcycles/cycles-server:0.1.25.39  # Pinned
+image: ghcr.io/runcycles/cycles-server:0.1.25.46  # Pinned
 # NOT: ghcr.io/runcycles/cycles-server:latest   # Unpinned
 ```
 
@@ -209,7 +231,7 @@ Mount the container filesystem as read-only:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.39
+  image: ghcr.io/runcycles/cycles-server:0.1.25.46
   read_only: true
   tmpfs:
     - /tmp
@@ -227,6 +249,8 @@ cycles-server:
 - [ ] Audit log retention policy defined
 - [ ] Key rotation schedule established
 - [ ] Dangerous Redis commands disabled
+- [ ] Actuator/management endpoints protected: `X-Admin-API-Key` required, Events Service port 9980 not published
+- [ ] `allow_http=false` in webhook security config (all environments)
 - [ ] `WEBHOOK_SECRET_ENCRYPTION_KEY` generated and stored in secrets manager
 - [ ] Webhook URL security: HTTPS enforced, private CIDR ranges blocked
 - [ ] Signing secret rotation procedure documented
@@ -239,7 +263,7 @@ Webhook signing secrets are encrypted in Redis using AES-256-GCM. All three serv
 
 ### SSRF prevention
 
-Webhook URLs resolving to private IPs are blocked by default (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, loopback, link-local). HTTP rejected in production. Configure via `PUT /v1/admin/config/webhook-security`.
+Webhook URLs resolving to private IPs are blocked by default (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, loopback, link-local). HTTP is rejected by default — keep `allow_http=false` **always**, in every environment, not just production. Configure via `PUT /v1/admin/config/webhook-security`.
 
 ### Signing secret rotation
 
