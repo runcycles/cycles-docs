@@ -396,7 +396,7 @@ The following budget events are defined in the protocol but not yet emitted. The
 
 ## Tenant-Close Cascade Events — Additive Reference-Server Payloads (v0.1.25.35+)
 
-Four event kinds are emitted by the reference admin server as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade; see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full contract). All four share the `_via_tenant_cascade` suffix and carry the `correlation_id` of the originating `tenant.closed` audit entry so subscribers can correlate cascade side effects to the operator action that triggered them.
+Four event kinds are emitted by the reference admin server as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade; see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full contract). All four share the `_via_tenant_cascade` suffix and carry a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`, so subscribers can correlate cascade side effects to the operator action that triggered them (audit rows for the same operation join via `request_id`/`trace_id`).
 
 These four event names are **absent from the published admin-openapi `EventType` enum** (they do not count toward the 47 registered types), but they are registered as first-class constants in the reference implementation's `EventType.java`. Consumers must ignore unrecognized event types gracefully and should not assume non-reference servers emit them. Tenant self-service subscriptions filter by category, so a tenant subscribed to `budget` or `reservation` events will receive the corresponding cascade events from the reference server in practice.
 
@@ -431,7 +431,7 @@ Emitted once per owned `BudgetLedger` when the tenant closes. The per-budget `Bu
     "closed_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating tenant.closed>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
@@ -453,7 +453,7 @@ Emitted once per open owned `Reservation` when the tenant closes. Reason `tenant
     "release_reason": "tenant_closed",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
@@ -474,7 +474,7 @@ Emitted once per owned `ApiKey` when the tenant closes. The per-key `ApiKey.stat
     "revoked_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```
@@ -495,7 +495,7 @@ Emitted once per owned `WebhookSubscription` when the tenant closes. Status flip
     "disabled_at": "2026-04-20T12:00:00Z",
     "cascade_origin": "tenant.closed"
   },
-  "correlation_id": "<same as originating>",
+  "correlation_id": "tenant_close_cascade:acme-corp:req_...",
   "trace_id": "<same as originating>"
 }
 ```

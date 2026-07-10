@@ -17,7 +17,7 @@ Cycles carries three correlation identifiers, each with a different grain.
 |---|---|---|
 | `request_id` | One HTTP request | Per-request |
 | `trace_id` | One logical operation (may span many requests) | Per-operation |
-| `correlation_id` | An event-stream cluster (groups related events) | Server-derived, deterministic |
+| `correlation_id` | An event-stream cluster (groups related events) | Server-set: deterministic hash (protocol clusters) or operation ID (admin operations) |
 
 - **`request_id`** is server-generated for every inbound HTTP request. It appears in every error response, audit-log entry, and event that is causally downstream of that request. Use it to correlate the side effects of one specific HTTP call.
 - **`trace_id`** identifies a logical operation that may cross several HTTP boundaries (for example: a client's reserve → multiple provider retries → commit). It is a 32-hex-character W3C Trace Context-compatible identifier. Use it to reconstruct the full operation across planes.

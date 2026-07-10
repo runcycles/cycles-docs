@@ -90,7 +90,7 @@ Closing a tenant is not just a status flip. As of `cycles-server-admin` v0.1.25.
 | Open `Reservation` | `RELEASED` (reason `tenant_closed`) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | `DISABLED` | `webhook.disabled_via_tenant_cascade` |
 
-All cascade events share the `correlation_id` of the originating `tenant.closed` audit entry. After the cascade completes, every mutating admin-plane operation on the closed tenant's owned objects returns **`409 TENANT_CLOSED`** (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for audit reads. runcycles' server uses the Mode B (flip-first-with-guarded-cascade) cascade implementation; both Mode A (atomic) and Mode B are conformant per spec v0.1.25.31.
+All cascade Event rows share a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`; audit rows join via `request_id`/`trace_id` (AuditLogEntry has no correlation field). After the cascade completes, every mutating admin-plane operation on the closed tenant's owned objects returns **`409 TENANT_CLOSED`** (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for audit reads. runcycles' server uses the Mode B (flip-first-with-guarded-cascade) cascade implementation; both Mode A (atomic) and Mode B are conformant per spec v0.1.25.31.
 
 See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract, affected endpoints, and operator recipes.
 

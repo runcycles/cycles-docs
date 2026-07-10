@@ -55,7 +55,7 @@ On any `* → CLOSED` tenant transition (via `PATCH /v1/admin/tenants/{id}` or `
 
 Mode B (see below) inverts this by design — the tenant flip commits **first**, and children converge afterward under the Rule 2 guard. Since runcycles' reference server implements Mode B, do not rely on this ordering in practice.
 
-**Audit emission.** One audit entry per mutated owned object, all sharing the `correlation_id` of the originating `tenant.closed` entry. Reserved `event_kind` values:
+**Audit and event emission.** One record per mutated owned object. The emitted **Event rows** share a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>` — query `GET /v1/admin/events?correlation_id=...` to reconstruct the cascade. **Audit rows** carry `request_id`/`trace_id` (the AuditLogEntry schema has no correlation field); join them via the originating request's `request_id`. Reserved `event_kind` values:
 
 - `budget.closed_via_tenant_cascade`
 - `webhook.disabled_via_tenant_cascade`

@@ -193,7 +193,7 @@ await client.commitReservation(reservationId, {
     latency_ms: 320,
     model_version: "gpt-4o-2024-08-06",
   },
-  metadata: { request_id: "req-abc-123" },
+  metadata: { app_request_id: "req-abc-123" },
 });
 ```
 :::

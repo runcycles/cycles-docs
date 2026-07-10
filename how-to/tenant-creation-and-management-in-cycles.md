@@ -331,9 +331,11 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 **Verify the cascade finished.** One audit query confirms every side effect:
 
 ```bash
-# Get the correlation_id of your tenant.closed audit entry
-CID=$(curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=updateTenant&limit=1" \
-  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.logs[0].metadata.correlation_id')
+# Audit rows carry request_id/trace_id (no correlation_id field); the
+# cascade correlation_id is composed as tenant_close_cascade:<tenant_id>:<request_id>
+RID=$(curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=updateTenant&limit=1" \
+  -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq -r '.logs[0].request_id')
+CID="tenant_close_cascade:acme-corp:$RID"
 
 # Pull every cascade event under that correlation_id
 curl -s "http://localhost:7979/v1/admin/events?correlation_id=$CID" \
