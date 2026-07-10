@@ -122,8 +122,10 @@ A subsequent attempt to mutate an owned object under the closed tenant returns t
 
 ```bash
 # Mutation on a released reservation under a closed tenant
-# (a not-yet-revoked tenant key in the post-flip window, or an admin key —
-# once the cascade revokes the key, the 401 below wins first)
+# (reachable with a not-yet-revoked tenant key in the post-flip window —
+# once the cascade revokes the key, the 401 below wins first. Of the four
+# guarded mutations only release also accepts an admin key on the runtime
+# plane, so an admin-on-behalf-of release hits this 409 with no race.)
 curl -i -X POST \
   -H "X-Cycles-API-Key: $TENANT_KEY" \
   "http://localhost:7878/v1/reservations/res-xyz/commit"
