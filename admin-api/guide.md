@@ -420,7 +420,7 @@ curl -X POST http://localhost:7979/v1/webhooks \
   }'
 ```
 
-See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for the full 47-event-type reference and delivery specification. See [Webhook Integrations](/how-to/webhook-integrations) for PagerDuty, Slack, and ServiceNow examples.
+See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for the full 51-event-type reference and delivery specification. See [Webhook Integrations](/how-to/webhook-integrations) for PagerDuty, Slack, and ServiceNow examples.
 
 ## List-endpoint features (v0.1.25.22+)
 

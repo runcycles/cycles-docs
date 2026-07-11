@@ -997,6 +997,6 @@ curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
 ## Next steps
 
 - [Managing Webhooks](/how-to/managing-webhooks) — create, test, replay, and monitor webhook subscriptions
-- [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) — full 47-event-type catalog, delivery headers, retry policy, and status lifecycle
+- [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) — full 51-event-type catalog, delivery headers, retry policy, and status lifecycle
 - [Deploying the Events Service](/quickstart/deploying-the-events-service) — deploy the async webhook delivery service
 - [Security](/security#webhook-security) — SSRF protection, signing secret encryption, and deduplication

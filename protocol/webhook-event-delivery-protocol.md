@@ -154,7 +154,7 @@ The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's
 
 ### Tenant-accessible events
 
-Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` cascade fan-out events the admin server emits on tenant close (see the next section). API key, policy, webhook lifecycle, and system events are admin-only.
+Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` cascade fan-out events the admin server emits on tenant close (see the next section). API key, policy, webhook lifecycle, and system events are admin-only. The boundary is normative in governance spec revision v0.1.25.38: on `POST /v1/webhooks` and `PATCH /v1/webhooks/{id}`, both `event_types` **and** `event_categories` are validated against the tenant-accessible set, and an admin-only entry is rejected with `400 INVALID_REQUEST` — `event_categories` is additive with `event_types` in delivery matching, so validating types alone would leave the door open. cycles-server-admin **0.1.25.50** enforces the category check (and closes the legacy update path that left both arrays empty, matching every event class); **0.1.25.49 and earlier validated `event_types` only** — operators upgrading should audit existing tenant subscriptions for admin-only categories (see the [0.1.25.50 release notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.50) for the audit one-liner).
 
 ### Tenant-close cascade fan-out
 
