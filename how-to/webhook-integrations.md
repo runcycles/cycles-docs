@@ -417,7 +417,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (16 types including `budget.created`, `budget.debited`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
+> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (17 types including `budget.created`, `budget.debited`, `budget.closed_via_tenant_cascade`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
 
 ### Middleware (Node.js)
 
@@ -916,7 +916,7 @@ def handle():
 
 ## Tenant Self-Service Webhooks
 
-Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 27 of 47 registered types, plus the additive `_via_tenant_cascade` fan-out events the reference admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants.
+Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 29 of 51 registered types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants.
 
 **Required API key permissions:**
 - `webhooks:write` — create, update, delete, and test subscriptions
@@ -997,6 +997,6 @@ curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
 ## Next steps
 
 - [Managing Webhooks](/how-to/managing-webhooks) — create, test, replay, and monitor webhook subscriptions
-- [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) — full 47-event-type catalog, delivery headers, retry policy, and status lifecycle
+- [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) — full 51-event-type catalog, delivery headers, retry policy, and status lifecycle
 - [Deploying the Events Service](/quickstart/deploying-the-events-service) — deploy the async webhook delivery service
 - [Security](/security#webhook-security) — SSRF protection, signing secret encryption, and deduplication

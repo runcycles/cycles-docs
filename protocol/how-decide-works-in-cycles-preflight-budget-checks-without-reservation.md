@@ -87,6 +87,7 @@ Only `decision` is required in the response — every other field is conditional
 | `BUDGET_NOT_FOUND` | No budget exists at any derived scope in the requested unit (on non-dry reserve and `/v1/events`, this same condition surfaces as `HTTP 404` with `error=NOT_FOUND`) |
 | `OVERDRAFT_LIMIT_EXCEEDED` | Either `debt + delta > overdraft_limit`, or the scope is in over-limit state (`is_over_limit=true`) |
 | `DEBT_OUTSTANDING` | A derived scope has `debt > 0` and `overdraft_limit == 0` |
+| `TENANT_CLOSED` | The owning tenant's status is `CLOSED` (deployments with a governance plane; added in spec v0.1.25.13, emitted by cycles-server 0.1.25.47+ on fresh evaluations — the persisting reservation mutations surface the same condition as `HTTP 409` with `error=TENANT_CLOSED`) |
 
 `DecisionReasonCode` was widened from a closed enum to an open string in v0.1.25 so future extension specs can add new reason codes without a breaking protocol bump. **Clients MUST handle unknown values gracefully** (treat as DENY, log the raw string, do not crash on enum parsing). Known values above are stable; future values will always be additive. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics.
 

@@ -206,9 +206,10 @@ curl -X POST http://localhost:7878/v1/reservations \
 | 409 | `BUDGET_CLOSED` | Budget scope is permanently closed |
 | 409 | `OVERDRAFT_LIMIT_EXCEEDED` | Scope is over-limit |
 | 409 | `DEBT_OUTSTANDING` | Scope has unpaid debt (no overdraft limit configured) |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (persisting create only, `dry_run` absent or `false`; deployments with a governance plane — spec v0.1.25.13, cycles-server 0.1.25.47+) |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 
-**Dry run:** when `dry_run=true`, budget-state conditions (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, and the 404 "no budget at any scope" case) surface as `200 OK` with `decision: DENY` and a `reason_code` field — `DecisionReasonCode` is an open string (as of v0.1.25); clients MUST handle unknown values gracefully — not as 4xx/409 errors. Request-validity errors (`INVALID_REQUEST`, `UNIT_MISMATCH`, `UNAUTHORIZED`, `FORBIDDEN`, `IDEMPOTENCY_MISMATCH`) are still returned as 4xx on dry-run. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+**Dry run:** when `dry_run=true`, budget-state conditions (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` on a closed owning tenant, and the 404 "no budget at any scope" case) surface as `200 OK` with `decision: DENY` and a `reason_code` field — `DecisionReasonCode` is an open string (as of v0.1.25); clients MUST handle unknown values gracefully — not as 4xx/409 errors. Request-validity errors (`INVALID_REQUEST`, `UNIT_MISMATCH`, `UNAUTHORIZED`, `FORBIDDEN`, `IDEMPOTENCY_MISMATCH`) are still returned as 4xx on dry-run. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
 
 ---
 
@@ -293,6 +294,7 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/commit \
 | 409 | `BUDGET_CLOSED` | Budget scope is permanently closed |
 | 409 | `OVERDRAFT_LIMIT_EXCEEDED` | Debt would exceed limit (ALLOW_WITH_OVERDRAFT) |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 410 | `RESERVATION_EXPIRED` | TTL + grace period elapsed |
 
@@ -352,6 +354,7 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/release \
 | 403 | `FORBIDDEN` | Reservation owned by different tenant |
 | 404 | `NOT_FOUND` | Reservation does not exist |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 410 | `RESERVATION_EXPIRED` | TTL + grace period elapsed |
 
@@ -406,6 +409,7 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/extend \
 | 403 | `FORBIDDEN` | Reservation owned by different tenant |
 | 404 | `NOT_FOUND` | Reservation does not exist |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 409 | `MAX_EXTENSIONS_EXCEEDED` | Tenant `max_reservation_extensions` limit reached |
 | 410 | `RESERVATION_EXPIRED` | Past TTL (no grace period for extend) |
@@ -573,7 +577,7 @@ Evaluate a budget decision without creating a reservation. Useful for preflight 
 }
 ```
 
-The `reason_code` and `retry_after_ms` fields are present when the decision is `DENY`. `reason_code` is `DecisionReasonCode` — an open string (as of v0.1.25) with six documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`. Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+The `reason_code` and `retry_after_ms` fields are present when the decision is `DENY`. `reason_code` is `DecisionReasonCode` — an open string (as of v0.1.25) with seven documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` (added in spec v0.1.25.13 for closed owning tenants). Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
 
 ### Example
 
@@ -599,7 +603,7 @@ curl -X POST http://localhost:7878/v1/decide \
 | 403 | `FORBIDDEN` | Tenant mismatch |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 
-Note: decide returns `200` with `decision: DENY` for all budget-state conditions — insufficient remaining, debt, overdraft, frozen, closed, and the "no budget exists at any scope" case — not a `409` or `404`. The specific reason is surfaced in the `reason_code` field. `DecisionReasonCode` is an open string (as of v0.1.25) with six documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`. Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics. Request-validity errors like `UNIT_MISMATCH` are still returned as `400`.
+Note: decide returns `200` with `decision: DENY` for all budget-state conditions — insufficient remaining, debt, overdraft, frozen, closed, the "no budget exists at any scope" case, and a closed owning tenant — not a `409` or `404`. The specific reason is surfaced in the `reason_code` field. `DecisionReasonCode` is an open string (as of v0.1.25) with seven documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` (spec v0.1.25.13; fresh evaluations on a closed owning tenant — never `409 TENANT_CLOSED` on this endpoint, though a present-but-malformed tenant record fails closed with `500 INTERNAL_ERROR`). Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics. Request-validity errors like `UNIT_MISMATCH` are still returned as `400`.
 
 ---
 

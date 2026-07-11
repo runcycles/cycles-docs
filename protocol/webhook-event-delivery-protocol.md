@@ -1,6 +1,6 @@
 ---
 title: "Webhook Event Delivery Protocol"
-description: "Complete reference for Cycles webhook delivery: 47 registered event types, HTTP headers, payload format, HMAC-SHA256 signing, retry policy, delivery status lifecycle, and at-least-once guarantees."
+description: "Complete reference for Cycles webhook delivery: 51 registered event types, HTTP headers, payload format, HMAC-SHA256 signing, retry policy, delivery status lifecycle, and at-least-once guarantees."
 ---
 
 # Webhook Event Delivery Protocol
@@ -62,12 +62,12 @@ Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and
 
 **Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` groups a family of related events — it is server-set in one of two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`) for governance/admin operations. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
-## Event types (47)
+## Event types (51)
 
-The current v0.1.25 Admin API `EventType` enum registers 47 event types across seven categories: budget (16), reservation (5), tenant (6), api_key (6), policy (3), webhook (6), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully.
+The current v0.1.25 Admin API `EventType` enum registers 51 event types across seven categories: budget (17), reservation (6), tenant (6), api_key (7), policy (3), webhook (7), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully. The per-category tables below list the 47 non-cascade types; the four `*_via_tenant_cascade` types (one each in the budget, reservation, api_key, and webhook categories, added to the enum in governance revision v0.1.25.35) are covered in [Tenant-close cascade fan-out](#tenant-close-cascade-fan-out).
 
 ::: info Count note
-The 47-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
+The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
 :::
 
 ### Budget events (16)
@@ -154,11 +154,11 @@ The 47-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's
 
 ### Tenant-accessible events
 
-Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budget, reservation, and tenant events: 27 of the 47 registered event types. They will also receive the additive `_via_tenant_cascade` fan-out events that the reference admin server emits in those same categories on tenant close — see the next section. API key, policy, webhook lifecycle, and system events are admin-only.
+Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` cascade fan-out events the admin server emits on tenant close (see the next section). API key, policy, webhook lifecycle, and system events are admin-only. The boundary is normative in governance spec revision v0.1.25.38: on `POST /v1/webhooks` and `PATCH /v1/webhooks/{id}`, both `event_types` **and** `event_categories` are validated against the tenant-accessible set, and an admin-only entry is rejected with `400 INVALID_REQUEST` — `event_categories` is additive with `event_types` in delivery matching, so validating types alone would leave the door open. cycles-server-admin **0.1.25.50** enforces the category check (and closes the legacy update path that left both arrays empty, matching every event class); **0.1.25.49 and earlier validated `event_types` only** — operators upgrading should audit existing tenant subscriptions for admin-only categories (see the [0.1.25.50 release notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.50) for the audit one-liner).
 
 ### Tenant-close cascade fan-out
 
-The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). These names are absent from the published admin-openapi enum (they do not count toward the 47 registered types) but are registered as first-class constants in the reference implementation's `EventType.java`. Treat them as additive implementation events and ignore any unrecognized event type gracefully:
+The admin server emits cascade fan-out events with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). All four names are declared in the governance spec's `EventType` enum since document revision v0.1.25.35, so they count toward the 51 registered types and are filterable like any other lifecycle event. Emission is SHOULD-level in the spec (the matching per-object audit entries are a MUST), so non-reference servers may not emit them — keep ignoring unrecognized event types gracefully:
 
 - `budget.closed_via_tenant_cascade` — one per owned `BudgetLedger`.
 - `reservation.released_via_tenant_cascade` — a **ledger-level aggregate**: one per closed budget with `reserved > 0`, carrying `released_amount`. Reason `tenant_closed`; no overage debt.

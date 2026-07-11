@@ -15,10 +15,10 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | Component | Version | Release date |
 |---|---|---|
-| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.12) | 2026-05-22 |
-| Governance spec (admin) | v0.1.25.34 | 2026-04-20 |
-| `cycles-server` (runtime) | v0.1.25.46 | 2026-07-04 |
-| `cycles-server-admin` | v0.1.25.48 | 2026-07-04 |
+| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.13) | 2026-07-10 |
+| Governance spec (admin) | v0.1.25.39 | 2026-07-11 |
+| `cycles-server` (runtime) | v0.1.25.47 | 2026-07-10 |
+| `cycles-server-admin` | v0.1.25.50 | 2026-07-10 |
 | `cycles-server-events` | v0.1.25.22 | 2026-07-04 |
 | `cycles-dashboard` | v0.1.25.67 | 2026-07-04 |
 
@@ -40,12 +40,14 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Protocol spec suite (v0.1.26)
 
+- **Runtime spec document revision v0.1.25.13** (2026-07-10) — adds `TENANT_CLOSED` to the runtime `ErrorCode` enum with a normative closed-tenant binding in §ERROR SEMANTICS: persisting reservation create/commit/release/extend MUST return `409 TENANT_CLOSED` on a closed owning tenant (taking precedence over reservation-state errors for non-replay attempts), while fresh `dry_run=true` / `/v1/decide` evaluations MUST return `200 decision=DENY reason_code=TENANT_CLOSED` (new `DecisionReasonCode` known value); present-but-malformed tenant records fail closed with `500 INTERNAL_ERROR`. Companion revisions: evidence spec 0.2.1 (declares `TENANT_CLOSED` in the evidence ErrorResponseMirror), protocol-extensions 0.1.27, governance 0.1.25.37 (adds `TENANT_CLOSED` to the `reservation.denied` event's documented `reason_code` values). Implemented by `cycles-server` 0.1.25.47.
 - The cycles-protocol repo added [`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md) — a formal MUST / SHOULD / MAY statement of what a conformant Cycles implementation has to do. The active v0.1.25 target requires 12 MUST operations: 4 core runtime reservation operations plus 8 cross-plane event / webhook / balance / auth-introspection operations. Four more runtime operations (`decide`, list/get reservations, direct-debit events) are SHOULD-level and implemented by the reference servers.
 - The README repositioned the spec suite around upcoming **v0.1.26** extensions (runtime base still v0.1.25). Action-kinds, action-quotas, observe mode, DenyDetail, and `ACTION_QUOTA_EXCEEDED` / `ACTION_KIND_DENIED` / `ACTION_KIND_NOT_ALLOWED` reason codes are SHOULD-level today and **not yet enforced** in runcycles' reference servers. They become MUST only when `CONFORMANCE.md` promotes v0.1.26 to the active target.
 - Spec-only trace_id alignment bumps on extension specs (`cycles-action-kinds`, `cycles-governance-extensions` to v0.1.27) — declare `trace_id` on `ErrorResponse` and `X-Cycles-Trace-Id` on `components.headers` for OpenAPI tooling consistency. Behavioral contract unchanged from what's documented in [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ### Runtime server (`cycles-server`)
 
+- **v0.1.25.47** (2026-07-10) — **TENANT_CLOSED Rule 2 guard + webhook matcher parity.** The four reservation mutations (create/commit/release/extend) now reject with `409 TENANT_CLOSED` when the owning tenant's `CLOSED` flip is durable (governance CASCADE SEMANTICS Rule 2 / Mode B invariant (a); runtime spec v0.1.25.13) — checked inside the Lua scripts, atomic with the budget mutations, taking precedence over reservation-state errors for non-replay attempts. Fresh `dry_run` / `/v1/decide` evaluations on a closed tenant return `200 decision=DENY reason_code=TENANT_CLOSED`; malformed tenant records fail closed with `500`; deployments without tenant records are unaffected. Mutation-surface 409s emit `error` CyclesEvidence (create/commit/release). In practice tenant-key calls usually still `401` at the auth filter; the 409 surfaces mainly on admin-on-behalf-of release and the post-flip/pre-revocation race window. Also refreshes the webhook `scope_filter` dispatch matcher to be byte-identical to the admin plane's spec-conformant matcher: blank event scopes are treated as unscoped, and trailing-`/*` filters require a non-empty child segment. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax).
 - **v0.1.25.46** (2026-07-04) — **Public-endpoint rate limiting.** The unauthenticated `GET /v1/evidence/*` and CyclesEvidence JWKS endpoints are now rate-limited per client IP (default 300 requests/minute, `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE`; kill switch `CYCLES_PUBLIC_RATE_LIMIT_ENABLED`). Over-limit requests receive `429` with `error=LIMIT_EXCEEDED` (new runtime ErrorCode, spec v0.1.25.12).
 - **v0.1.25.45** (2026-06-27) — **Operational endpoints require the admin key.** `/actuator/prometheus`, `/actuator/info`, aggregate `/actuator/health`, and the API docs / Swagger endpoints now require `X-Admin-API-Key`; liveness/readiness probes and the protocol-public CyclesEvidence/JWKS endpoints stay unauthenticated. Also bounds the event-emission executor queue and adds correlation headers on auth-filter errors.
 - **v0.1.25.44** (2026-06-26) — Deployment hardening: production Compose disables tenant labels on Prometheus metrics and public SpringDoc/Swagger; `exec java` PID-1 entrypoint. No API change.
@@ -73,6 +75,8 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Admin server (`cycles-server-admin`)
 
+- **v0.1.25.50** (2026-07-10) — **SECURITY: tenant-plane webhook `event_categories` validated against the tenant-accessible boundary.** `POST /v1/webhooks` and `PATCH /v1/webhooks/{id}` validated `event_types` (budget/reservation/tenant only) but never `event_categories` — and delivery matching treats categories as an additive union with types, so a tenant key could subscribe to an admin-only category (`api_key`, `policy`, `webhook`, `system`) and receive admin event classes for its tenant. Both paths now reject an admin-only category with `400 INVALID_REQUEST` (governance spec revision v0.1.25.38). The update path also closes a legacy door where clearing both `event_types` and `event_categories` produced a delivery-side match-ALL subscription. **Upgrade past 0.1.25.49** and audit existing tenant subscriptions for admin-only categories and empty-both state — see the [release notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.50) for the audit one-liner. (Category-only subscriptions — empty `event_types` with non-empty `event_categories` — remain valid on update per governance v0.1.25.39.) Residual event-provenance hardening tracked as cycles-server-admin#209.
+- **v0.1.25.49** (2026-07-10) — **Spec-conformant webhook `scope_filter` matching + replay filtering.** BEHAVIOR CHANGE: the admin matcher (`WebhookRepository.matchesScope`) moves from literal prefix matching to the spec's exact-match-with-trailing-`*` semantics — bare-prefix filters must be rewritten as `…/*` to keep matching child scopes, "base + descendants" coverage now needs two subscriptions, and null/blank-scope events are excluded from every scope-filtered subscription. Webhook replay now applies the same matcher (previously it bypassed scope matching entirely). Converges with the runtime matcher shipped in `cycles-server` v0.1.25.47 — both planes now match identically and are pinned to the same test table. See the [migration notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.49) and [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax).
 - **v0.1.25.48** (2026-07-04) — Cascade event payloads now map to a typed `EventDataTenantCascade` class (the four `*_via_tenant_cascade` event types). Internal validation/registry only — no wire change.
 - **v0.1.25.47** (2026-06-26) — Admin image readiness healthcheck + `exec java $JAVA_OPTS` entrypoint; full-stack compose pins refreshed; README/OPERATIONS deployment doc refresh.
 - **v0.1.25.46** (2026-06-26) — Dependency currency: Jedis 7.5.0 → 7.5.2, springdoc-openapi 2.8.16 → 2.8.17. No code change.
@@ -298,8 +302,8 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `cycles-client-java-spring` | 0.2.5 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Server (runtime) | v0.1.25.46 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.48 | Governance spec v0.1.25.34 |
+| Cycles Server (runtime) | v0.1.25.47 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.50 | Governance spec v0.1.25.39 |
 | Cycles Events Service | v0.1.25.22 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
@@ -311,7 +315,8 @@ All current SDK versions are backward-compatible with server v0.1.23. New v0.1.2
 |---|---|
 | Dashboard Evidence viewer and reservation "View evidence" links | `cycles-dashboard` v0.1.25.63+; `cycles-server` v0.1.25.37+ for `include=evidence`; `cycles-server-events` v0.1.25.14+ to sign envelopes |
 | Unconfigured CyclesEvidence disabled mode (no queueing or dead-lettering when identity is blank) | `cycles-server` v0.1.25.38, `cycles-server-events` v0.1.25.15 |
-| Tenant-close cascade + `TENANT_CLOSED` (409) error code + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |
+| Tenant-close cascade + `TENANT_CLOSED` (409) on the admin plane + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |
+| `TENANT_CLOSED` (409) runtime guard on reservation create/commit/release/extend + `reason_code=TENANT_CLOSED` on fresh dry-run / `/v1/decide` DENYs | `cycles-server` v0.1.25.47 (runtime spec v0.1.25.13) |
 | W3C Trace Context (`trace_id` on responses + audit/events filter) | `cycles-server` v0.1.25.14, `cycles-server-admin` v0.1.25.31, `cycles-server-events` v0.1.25.7, `cycles-dashboard` v0.1.25.39 |
 | Runtime audit-log retention TTL (`AUDIT_RETENTION_DAYS`) | `cycles-server` v0.1.25.15 |
 | Events service management port split (9980) | `cycles-server-events` v0.1.25.9 |

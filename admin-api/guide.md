@@ -336,7 +336,7 @@ The admin server provides 21 webhook/event endpoints for real-time observability
 - **Delivery tracking**: list delivery attempts per subscription with status/date filters
 - **Event replay**: re-deliver historical events to a subscription
 - **Security config**: manage webhook URL SSRF protection (blocked CIDRs, HTTPS enforcement)
-- **Tenant self-service**: tenants manage their own webhooks at `/v1/webhooks` for budget, reservation, and tenant events (27 of 47 registered event types, plus the additive `_via_tenant_cascade` fan-out events the reference admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics))
+- **Tenant self-service**: tenants manage their own webhooks at `/v1/webhooks` for budget, reservation, and tenant events (29 of 51 registered event types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics))
 
 Events are emitted by admin controllers (tenant, budget, api-key, policy operations) and delivered asynchronously by the events service (`cycles-server-events`). See [Webhooks and Events](/concepts/webhooks-and-events) for architecture details.
 
@@ -420,7 +420,7 @@ curl -X POST http://localhost:7979/v1/webhooks \
   }'
 ```
 
-See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for the full 47-event-type reference and delivery specification. See [Webhook Integrations](/how-to/webhook-integrations) for PagerDuty, Slack, and ServiceNow examples.
+See [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) for the full 51-event-type reference and delivery specification. See [Webhook Integrations](/how-to/webhook-integrations) for PagerDuty, Slack, and ServiceNow examples.
 
 ## List-endpoint features (v0.1.25.22+)
 

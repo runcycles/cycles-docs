@@ -20,7 +20,7 @@ This is a reference page. If you haven't set up Cycles yet, start with the [End-
 Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** is an outbound worker that delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes; its app port 7980 and management port 9980 should stay internal. All three services share the same Redis instance.
 
 ::: info Independent release cadences
-Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-07-09: `cycles-server` 0.1.25.46, `cycles-server-admin` 0.1.25.48, `cycles-server-events` 0.1.25.22, `cycles-dashboard` 0.1.25.67. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
+Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-07-11: `cycles-server` 0.1.25.47, `cycles-server-admin` 0.1.25.50, `cycles-server-events` 0.1.25.22, `cycles-dashboard` 0.1.25.67. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
 :::
 
 ## Components

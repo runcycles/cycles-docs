@@ -298,7 +298,7 @@ Pre-v0.1.25.35, closing a tenant was a pure status flip — operators then had t
 | Open `Reservation` | → `RELEASED` (reason `tenant_closed`, no overage debt) | `reservation.released_via_tenant_cascade` |
 | `WebhookSubscription` | → `DISABLED` (re-enable blocked by Rule 2) | `webhook.disabled_via_tenant_cascade` |
 
-The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s by the reference server (registered enum constants there, but absent from the published spec's `EventType` enum — so do not rely on cross-server `event_type=` filtering). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. Instead, all four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
+The `*_via_tenant_cascade` identifiers are emitted as Event `event_type`s (declared in the governance spec's `EventType` enum since document revision v0.1.25.35, so `event_type=` filtering on them is spec-valid — though Event emission is SHOULD-level, so non-reference servers may not emit them). The matching **audit rows** are written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. All four cascade **event rows** share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`; audit rows carry `request_id`/`trace_id`, not `correlation_id`) — you can find every side effect of a close with one events query:
 
 ```bash
 # All cascade events for one close
@@ -306,7 +306,7 @@ curl -s "http://localhost:7979/v1/admin/events?correlation_id=<id>" \
   -H "X-Admin-API-Key: $ADMIN_API_KEY" | jq '.events[] | {event_type, data}'
 ```
 
-After the cascade, mutating any owned object returns `409 TENANT_CLOSED` (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
+After the cascade, mutating any owned object returns `409 TENANT_CLOSED` (Rule 2 — Terminal-Owner Mutation Guard). GET endpoints remain available for post-mortem audit reads. On the runtime plane, `cycles-server` 0.1.25.47+ enforces the same guard on persisting reservation create/commit/release/extend (runtime spec v0.1.25.13) — fresh dry-run and `/v1/decide` evaluations return `200 decision=DENY reason_code=TENANT_CLOSED` instead of a 409; runtime 0.1.25.46 and earlier surface closure there only as `401`s from revoked keys or `BUDGET_CLOSED`. Even on 0.1.25.47+, tenant-key runtime calls usually still fail `401` at the auth filter before the guard is reached — in practice the runtime 409 surfaces on admin-on-behalf-of release and in the post-flip/pre-revocation race window (see the [observability note](/protocol/tenant-close-cascade-semantics#what-the-runtime-plane-sees)). See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
 
 ::: warning Don't pre-freeze before closing
 On admin v0.1.25.35+, the cascade runs automatically and atomically from the operator's perspective (via Rule 2). **Do not** freeze budgets, revoke keys, or disable webhooks before closing — it's unnecessary, generates audit clutter, and (on future Mode A implementations) can cause cascades to roll back if a pre-freeze step fails. Just close the tenant; the cascade handles everything.
@@ -322,7 +322,7 @@ Once you click close, the amber "Tenant closed — all owned objects are read-on
 
 | Your admin version | What happens |
 |---|---|
-| **v0.1.25.36+** (recommended) | Rule 1 cascade runs; Rule 2 guard active on every mutation endpoint. Budgets, API keys, reservations, and webhooks all reach terminal state automatically. Any mutation attempt returns `409 TENANT_CLOSED`. |
+| **v0.1.25.36+** (recommended) | Rule 1 cascade runs; Rule 2 guard active on every mutation endpoint. Budgets, API keys, reservations, and webhooks all reach terminal state automatically. Any admin-plane mutation attempt returns `409 TENANT_CLOSED`; runtime tenant-key mutations usually fail `401` at the auth filter first (see the runtime-plane caveat above). |
 | **v0.1.25.35** | Rule 1 cascade runs; Rule 2 guard covers budget operations plus webhook create/update only. Policy, API key, remaining webhook, and bulk-action-row mutations against the now-closed tenant slip through silently until you upgrade (all completed in .36). Cascade itself still completes correctly. |
 | **Pre-v0.1.25.35** | No cascade. Dashboard banner still renders (it's purely UI state), but owned objects stay in their pre-close state until you manually freeze / revoke / disable them. |
 
@@ -821,6 +821,8 @@ curl -s -X PATCH http://localhost:7979/v1/admin/tenants/acme-corp \
 ### TENANT_CLOSED
 
 The tenant has been permanently closed. This cannot be reversed. If you need a new tenant, create one with a different `tenant_id`.
+
+Returned by every mutating admin-plane operation on the closed tenant's owned objects (admin v0.1.25.35+, full coverage v0.1.25.36+) and, since `cycles-server` 0.1.25.47, by persisting reservation create/commit/release/extend on the runtime plane (runtime spec v0.1.25.13).
 
 ### 403 FORBIDDEN (tenant mismatch)
 

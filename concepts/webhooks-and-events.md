@@ -45,21 +45,23 @@ A subscription defines which events to deliver and where:
 
 The events service is **optional**. If not deployed, events accumulate in Redis with TTL and are delivered when the service starts.
 
-## 47 Registered Event Types
+## 51 Registered Event Types
 
 | Category | Count | Examples |
 |---|---|---|
-| budget | 16 | `budget.exhausted`, `budget.threshold_crossed`, `budget.over_limit_entered`, `budget.funded`, `budget.reset_spent` |
-| reservation | 5 | `reservation.denied`, `reservation.commit_overage`, `reservation.expired` |
+| budget | 17 | `budget.exhausted`, `budget.threshold_crossed`, `budget.over_limit_entered`, `budget.funded`, `budget.closed_via_tenant_cascade` |
+| reservation | 6 | `reservation.denied`, `reservation.commit_overage`, `reservation.released_via_tenant_cascade` |
 | tenant | 6 | `tenant.created`, `tenant.suspended`, `tenant.closed` |
-| api_key | 6 | `api_key.created`, `api_key.revoked`, `api_key.auth_failed` |
+| api_key | 7 | `api_key.created`, `api_key.revoked`, `api_key.revoked_via_tenant_cascade` |
 | policy | 3 | `policy.created`, `policy.updated`, `policy.deleted` |
-| webhook | 6 | `webhook.created`, `webhook.paused`, `webhook.disabled` |
+| webhook | 7 | `webhook.created`, `webhook.paused`, `webhook.disabled_via_tenant_cascade` |
 | system | 5 | `system.store_connection_lost`, `system.webhook_delivery_failed` |
+
+The four `*_via_tenant_cascade` types were added to the enum in governance spec revision v0.1.25.35.
 
 ## Tenant Self-Service
 
-Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires `webhooks:write` permission). Tenant webhooks are restricted to budget, reservation, and tenant events: 27 of the 47 registered event types — plus the additive `_via_tenant_cascade` fan-out events that the reference admin server emits in those same categories during a tenant close (see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). API key, policy, webhook lifecycle, and system events are admin-only.
+Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires `webhooks:write` permission). Tenant webhooks are restricted to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` `_via_tenant_cascade` fan-out events emitted during a tenant close (see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). API key, policy, webhook lifecycle, and system events are admin-only.
 
 ## Security
 
