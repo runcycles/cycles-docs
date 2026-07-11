@@ -417,7 +417,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (16 types including `budget.created`, `budget.debited`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
+> **Note:** `event_categories` is additive with `event_types`. If you specify `"event_categories": ["budget"]`, you receive **all** `budget.*` events (17 types including `budget.created`, `budget.debited`, `budget.closed_via_tenant_cascade`, etc.), not just the ones in `event_types`. Use `event_types` alone when you want precise control over which events trigger notifications.
 
 ### Middleware (Node.js)
 

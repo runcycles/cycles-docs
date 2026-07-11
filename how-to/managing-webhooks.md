@@ -15,7 +15,7 @@ Every action in this guide — create, test, replay, pause/enable, reset failure
 
 ### Admin subscription
 
-Required fields: `url` and `event_types` (at least one event type). Add `?tenant_id=acme-corp` to scope the subscription to a specific tenant; omit for system-wide subscriptions (all tenants). All other fields are optional — the server provides sensible defaults (`signing_secret` is auto-generated if omitted).
+Required fields: `url` and `event_types` (at least one event type on create). Add `?tenant_id=acme-corp` to scope the subscription to a specific tenant; omit for system-wide subscriptions (all tenants). All other fields are optional — the server provides sensible defaults (`signing_secret` is auto-generated if omitted). On update (`PATCH`), `event_types` may be cleared to empty as long as `event_categories` is non-empty (a category-only subscription); the server rejects only the empty-both state.
 
 ```bash
 # Tenant-scoped subscription (receives events for acme-corp only)
@@ -67,7 +67,7 @@ The generated secret (e.g., `whsec_dGVzdC1zZWNy...`) is in the response. Copy it
 
 ### Category-based subscriptions
 
-Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: `event_types` is always required (at least one), so include a representative type alongside the category wildcard.
+Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: on **create**, `event_types` must be non-empty, so include a representative type alongside the category wildcard. (A later `PATCH` may clear `event_types` to leave a category-only subscription; the server rejects only the state where both arrays are empty.)
 
 ```bash
 # All budget events (17 types) + all reservation events (6 types)
@@ -274,6 +274,13 @@ curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"event_types": ["budget.exhausted", "budget.threshold_crossed", "reservation.denied"]}'
+
+# Switch to a category-only subscription: clear event_types, keep categories.
+# Valid on update (unlike create); the server rejects only the empty-both state.
+curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"event_types": [], "event_categories": ["budget", "reservation"]}'
 
 # Adjust retry policy
 curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \

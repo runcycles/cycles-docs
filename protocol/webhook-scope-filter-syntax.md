@@ -92,7 +92,7 @@ The examples below use the spec `/*` form — correct for runtime-emitted events
 
 ### Subscribe to all events for one tenant
 
-`event_types` is required with at least one entry (`minItems: 1` in the spec; the server rejects an empty list with `400`). To cover whole categories, use `event_categories` — it is additive (union) with `event_types`, so include a representative type alongside the category wildcard. See [Category-based subscriptions](/how-to/managing-webhooks#category-based-subscriptions).
+A subscription must match on at least one selector, so at least one of `event_types` / `event_categories` must be non-empty — the server rejects the empty-both state with `400 INVALID_REQUEST` (governance revision v0.1.25.39, pending; enforced since cycles-server-admin 0.1.25.50). The two arrays are additive (union) in delivery matching. Note the create/update asymmetry: `POST /v1/admin/webhooks` (and `/v1/webhooks`) requires a non-empty `event_types` specifically, while `PATCH` may clear `event_types` to empty as long as `event_categories` is non-empty — a **category-only** subscription is valid on update. To cover whole categories on create, pair a representative type with the category list. See [Category-based subscriptions](/how-to/managing-webhooks#category-based-subscriptions).
 
 ```bash
 curl -X POST http://localhost:7979/v1/admin/webhooks \
@@ -134,7 +134,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-`scope_filter` omitted — this subscription receives matching events from all scopes (including unscoped events). All-categories `event_categories` plus a representative `event_types` entry is the "everything" form: `event_types` cannot be empty or omitted (required, `minItems: 1`), and the category filter is a union with the type list.
+`scope_filter` omitted — this subscription receives matching events from all scopes (including unscoped events). All-categories `event_categories` plus a representative `event_types` entry is the "everything" form on **create**, where `event_types` must be non-empty; on a later `PATCH` the type could be cleared, leaving the all-categories subscription category-only. The two arrays are a union in delivery matching.
 
 ### Combining event type filter with scope filter
 
