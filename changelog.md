@@ -16,9 +16,9 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | Component | Version | Release date |
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.13) | 2026-07-10 |
-| Governance spec (admin) | v0.1.25.37 | 2026-07-10 |
+| Governance spec (admin) | v0.1.25.39 | 2026-07-11 |
 | `cycles-server` (runtime) | v0.1.25.47 | 2026-07-10 |
-| `cycles-server-admin` | v0.1.25.49 | 2026-07-10 |
+| `cycles-server-admin` | v0.1.25.50 | 2026-07-10 |
 | `cycles-server-events` | v0.1.25.22 | 2026-07-04 |
 | `cycles-dashboard` | v0.1.25.67 | 2026-07-04 |
 
@@ -75,6 +75,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Admin server (`cycles-server-admin`)
 
+- **v0.1.25.50** (2026-07-10) — **SECURITY: tenant-plane webhook `event_categories` validated against the tenant-accessible boundary.** `POST /v1/webhooks` and `PATCH /v1/webhooks/{id}` validated `event_types` (budget/reservation/tenant only) but never `event_categories` — and delivery matching treats categories as an additive union with types, so a tenant key could subscribe to an admin-only category (`api_key`, `policy`, `webhook`, `system`) and receive admin event classes for its tenant. Both paths now reject an admin-only category with `400 INVALID_REQUEST` (governance spec revision v0.1.25.38). The update path also closes a legacy door where clearing both `event_types` and `event_categories` produced a delivery-side match-ALL subscription. **Upgrade past 0.1.25.49** and audit existing tenant subscriptions for admin-only categories and empty-both state — see the [release notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.50) for the audit one-liner. (Category-only subscriptions — empty `event_types` with non-empty `event_categories` — remain valid on update per governance v0.1.25.39.) Residual event-provenance hardening tracked as cycles-server-admin#209.
 - **v0.1.25.49** (2026-07-10) — **Spec-conformant webhook `scope_filter` matching + replay filtering.** BEHAVIOR CHANGE: the admin matcher (`WebhookRepository.matchesScope`) moves from literal prefix matching to the spec's exact-match-with-trailing-`*` semantics — bare-prefix filters must be rewritten as `…/*` to keep matching child scopes, "base + descendants" coverage now needs two subscriptions, and null/blank-scope events are excluded from every scope-filtered subscription. Webhook replay now applies the same matcher (previously it bypassed scope matching entirely). Converges with the runtime matcher shipped in `cycles-server` v0.1.25.47 — both planes now match identically and are pinned to the same test table. See the [migration notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.49) and [Webhook Scope Filter Syntax](/protocol/webhook-scope-filter-syntax).
 - **v0.1.25.48** (2026-07-04) — Cascade event payloads now map to a typed `EventDataTenantCascade` class (the four `*_via_tenant_cascade` event types). Internal validation/registry only — no wire change.
 - **v0.1.25.47** (2026-06-26) — Admin image readiness healthcheck + `exec java $JAVA_OPTS` entrypoint; full-stack compose pins refreshed; README/OPERATIONS deployment doc refresh.
@@ -302,7 +303,7 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Server (runtime) | v0.1.25.47 | Protocol v0.1.25 plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.49 | Governance spec v0.1.25.37 |
+| Cycles Admin Server | v0.1.25.50 | Governance spec v0.1.25.39 |
 | Cycles Events Service | v0.1.25.22 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
