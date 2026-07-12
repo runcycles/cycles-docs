@@ -101,10 +101,12 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://ops.example.com/cycles-events",
     "event_types": ["budget.exhausted"],
-    "event_categories": ["budget", "reservation", "tenant", "api_key", "policy", "webhook", "system"],
+    "event_categories": ["budget", "reservation", "tenant"],
     "scope_filter": "tenant:acme-corp/*"
   }'
 ```
+
+This covers the **tenant-accessible** classes (`budget` / `reservation` / `tenant`) for one tenant. It omits the admin-only categories: `api_key.*`, `webhook.*`, and `system.*` events are **null-scoped**, so a `scope_filter` excludes them — you can't narrow those to one tenant with `scope_filter` (filter client-side on the envelope `tenant_id` instead; see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)). The one admin category that *is* scope-filterable is `policy.*` (it carries a real tenant-bounded scope) — add `policy` to `event_categories` if you also want this tenant's policy events. Note this is a `__system__`-owned subscription (admin key, no `tenant_id`); a **tenant-owned** subscription can't carry admin-only categories at all.
 
 ### Subscribe to one specific workspace
 
@@ -134,7 +136,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-`scope_filter` omitted — this subscription receives matching events from all scopes (including unscoped events). All-categories `event_categories` plus a representative `event_types` entry is the "everything" form on **create**, where `event_types` must be non-empty; on a later `PATCH` the type could be cleared, leaving the all-categories subscription category-only. The two arrays are a union in delivery matching.
+`scope_filter` omitted — this subscription receives matching events from all scopes (including unscoped events). All-categories `event_categories` plus a representative `event_types` entry is the "everything" form on **create**, where `event_types` must be non-empty; on a later `PATCH` the type could be cleared, leaving the all-categories subscription category-only. The two arrays are a union in delivery matching. This is a `__system__`-owned subscription (admin key, no `tenant_id`), so the admin-only categories are permitted; a **tenant-owned** subscription (`/v1/webhooks`, or `/v1/admin/webhooks?tenant_id=X`) may carry only `budget` / `reservation` / `tenant` (governance INVARIANT 2 — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)).
 
 ### Combining event type filter with scope filter
 

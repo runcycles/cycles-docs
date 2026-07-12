@@ -336,7 +336,7 @@ The admin server provides 21 webhook/event endpoints for real-time observability
 - **Delivery tracking**: list delivery attempts per subscription with status/date filters
 - **Event replay**: re-deliver historical events to a subscription
 - **Security config**: manage webhook URL SSRF protection (blocked CIDRs, HTTPS enforcement)
-- **Tenant self-service**: tenants manage their own webhooks at `/v1/webhooks` for budget, reservation, and tenant events (29 of 51 registered event types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics))
+- **Tenant self-service**: tenants manage their own webhooks at `/v1/webhooks` for budget, reservation, and tenant events (29 of 51 registered event types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). A tenant-owned subscription can carry only tenant-accessible classes — admin-only classes (`api_key`/`policy`/`webhook`/`system`) are rejected even when set via the admin plane or admin-on-behalf-of, and are withheld at dispatch/delivery (governance INVARIANT 2, #209; see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events))
 
 Events are emitted by admin controllers (tenant, budget, api-key, policy operations) and delivered asynchronously by the events service (`cycles-server-events`). See [Webhooks and Events](/concepts/webhooks-and-events) for architecture details.
 
