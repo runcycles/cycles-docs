@@ -56,6 +56,8 @@ Each row models one class of action your agent can take. The calculator quantifi
 
 **With Cycles** = `monthly_blast × (1 - containment_pct / 100)` — where containment is the share of incidents that runtime [action authority](/concepts/action-authority-controlling-what-agents-do) would prevent before they fire.
 
+The table shows **both** numbers per action: **Blast / incident** (a single wrong fire — the discrete, worst-case exposure) and **Blast / mo** (the expected loss at your error rate). This is deliberate: catastrophic classes fire rarely, so the monthly figure alone under-rates them — the per-incident radius is what a risk-prediction framing misses.
+
 ## The catastrophic class: irreversible + public
 
 Rows where reversibility is **Irreversible** AND visibility is **Public** are flagged with a warning marker and red outline. This combination — an agent action that cannot be undone *and* reaches a public audience — is the single most under-modeled risk class in agent governance. Examples:
@@ -84,7 +86,7 @@ The two calculators answer two halves of the same question:
 |---|---|---|
 | Question | "How much will this workload spend?" | "If this workload's actions go wrong, how much damage is in scope?" |
 | Inputs | tokens, calls, model rates | actions, reversibility, visibility, error rate |
-| Output | $ per call / day / month / year | $ blast radius per month |
+| Output | $ per call / day / month / year | $ blast radius per incident + per month |
 | Output type | expected spend | risk exposure (not a prediction) |
 | Persuasion column | "Cheapest model — save 43×" | "Δ — monthly risk reduction from containment" |
 | Maps to Cycles dimension | Cost runtime control | Action runtime authority |
