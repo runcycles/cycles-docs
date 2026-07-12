@@ -3,11 +3,11 @@ title: "Claude vs GPT Cost Calculator: Compare LLM API Pricing"
 description: "Free interactive calculator comparing Claude and OpenAI API costs per call, per day, per month, and per year for editable token volumes and model rates."
 og:
   preview:
-    value: "$10K"
+    value: "$18K"
     label: "monthly — highest vs lowest model, same workload"
-    pill: "24×"
+    pill: "43×"
     pillCaption: "model spread"
-  hook: "Plug in your token volume. Compare every Claude and GPT model. Share the URL."
+  hook: "Plug in your token volume. Compare leading Claude and GPT models. Share the URL."
 ---
 
 # Claude vs GPT Cost Calculator

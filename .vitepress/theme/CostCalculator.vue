@@ -14,10 +14,11 @@ import { toMarkdownTable, toCsv, downloadText, captureElementToPng, copyText } f
   Notes:
    - Claude Sonnet 5 shows introductory pricing ($2 / $10 per M) in effect
      through 2026-08-31; standard pricing ($3 / $15 per M) applies from 2026-09-01.
-   - Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) use a tokenizer
-     that produces ~30% more tokens for the same text than earlier Claude and
-     GPT models, so identical token counts here understate their real-world
-     cost relative to GPT. Size your token inputs accordingly.
+   - Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) use a newer
+     tokenizer that produces ~30% more tokens for the same text than earlier
+     Claude models. Token counts are not directly comparable across different
+     tokenizers, so equal token counts here are not an equal-text comparison —
+     size each model's inputs to its own tokenizer.
 */
 
 const props = defineProps({
@@ -241,8 +242,9 @@ async function downloadPng() {
       Calculation: <code>(input_tokens × input_$/M + output_tokens × output_$/M) ÷ 1,000,000 × calls/day</code>.
       Excludes prompt caching, batch discounts, fine-tuning, fast-mode, and data-residency premiums.
       Claude Sonnet 5 is at introductory pricing ($2 / $10 per M) through 2026-08-31 ($3 / $15 from 2026-09-01).
-      Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) tokenize ~30% more tokens for the same text than
-      earlier Claude and GPT models, so equal token counts here understate their real-world cost versus GPT.
+      Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) use a newer tokenizer that produces ~30% more tokens
+      for the same text than earlier Claude models, so equal token counts across different tokenizers here are not
+      an equal-text comparison.
     </p>
   </section>
 </template>
