@@ -38,7 +38,7 @@ The pricing rates default to widely-published reference values, but they are use
 
 ## What the calculator does not include
 
-- **Prompt caching discounts.** Anthropic's `cache_control` blocks bill cache hits at a fraction of base input pricing (for example, Opus 4.7 cache hits at $0.50 / MTok vs $5 / MTok base input). OpenAI also offers cached-input and Batch API pricing on supported models, but the discount varies by model. If a meaningful share of your prompts are reused, your real cost may be 30–60% lower than the calculator suggests.
+- **Prompt caching discounts.** Anthropic's `cache_control` blocks bill cache hits at a fraction of base input pricing (for example, Opus 4.8 cache hits at $0.50 / MTok vs $5 / MTok base input). OpenAI also offers cached-input and Batch API pricing on supported models, but the discount varies by model. If a meaningful share of your prompts are reused, your real cost may be 30–60% lower than the calculator suggests.
 - **Batch API discounts.** Both providers offer batch-processing discounts (Anthropic at 50%; OpenAI varies).
 - **Fine-tuning costs.** Per-token rates differ for fine-tuned model variants.
 - **Reserved or committed-use pricing.** Enterprise contracts often beat list pricing materially.
