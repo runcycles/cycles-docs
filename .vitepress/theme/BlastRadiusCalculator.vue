@@ -39,6 +39,7 @@ const state = reactive({
   agentName: 'Customer Support Bot',
   agentDescription: 'Tier-2 support agent that issues refunds, replies to customer emails, and reads order history.',
   containmentPct: 0,
+  runawayCeiling: 100,
   rows: [
     { name: 'Issue customer refund',          reversibility: 'irreversible', visibility: 'customer-facing', costPerAction: 50, affectedUsers: 1,     costPerUser: 200, callsPerDay: 200,  errorRate: 0.5 },
     { name: 'Send customer email',            reversibility: 'irreversible', visibility: 'customer-facing', costPerAction: 0,  affectedUsers: 1,     costPerUser: 50,  callsPerDay: 1000, errorRate: 0.3 },
@@ -57,6 +58,10 @@ function normalizeContainment() {
   state.containmentPct = clampNumber(state.containmentPct, 0, 100)
 }
 
+function normalizeRunaway() {
+  state.runawayCeiling = clampNumber(state.runawayCeiling, 1)
+}
+
 function normalizeRowNumber(i, key, min = 0, max = Number.POSITIVE_INFINITY) {
   if (!state.rows[i]) return
   state.rows[i][key] = clampNumber(state.rows[i][key], min, max)
@@ -69,6 +74,9 @@ const calcState = useCalcState(state, {
     if (typeof incoming.agentDescription === 'string') state.agentDescription = incoming.agentDescription
     if (typeof incoming.containmentPct === 'number') {
       state.containmentPct = clampNumber(incoming.containmentPct, 0, 100)
+    }
+    if (typeof incoming.runawayCeiling === 'number') {
+      state.runawayCeiling = clampNumber(incoming.runawayCeiling, 1)
     }
     if (Array.isArray(incoming.rows)) {
       state.rows = incoming.rows
@@ -110,12 +118,13 @@ const computedRows = computed(() => state.rows.map(r => {
   const severity      = rev.factor + vis.surcharge
   const directRadius  = costPerAction + affectedUsers * costPerUser
   const perIncident   = directRadius * severity
+  const runawayBlast  = perIncident * clampNumber(state.runawayCeiling, 1)
   const incidentsDay  = callsPerDay * (errorRate / 100)
   const monthlyRadius = perIncident * incidentsDay * 30
   const contained     = monthlyRadius * (1 - containmentPct / 100)
   const delta         = monthlyRadius - contained
   const isCatastrophic = r.reversibility === 'irreversible' && r.visibility === 'public'
-  return { ...r, costPerAction, affectedUsers, costPerUser, callsPerDay, errorRate, severity, perIncident, monthlyRadius, contained, delta, isCatastrophic }
+  return { ...r, costPerAction, affectedUsers, costPerUser, callsPerDay, errorRate, severity, perIncident, runawayBlast, monthlyRadius, contained, delta, isCatastrophic }
 }))
 
 const totals = computed(() => ({
@@ -130,6 +139,12 @@ const biggestMonthly = computed(() =>
 // exposure of one wrong fire, independent of how often it fires.
 const worstIncident = computed(() =>
   computedRows.value.length ? Math.max(...computedRows.value.map(r => r.perIncident)) : 0
+)
+// Worst single-runaway blast: one action looping up to the runaway ceiling
+// before containment. This is the discrete catastrophe a per-run budget or
+// per-action RISK_POINTS quota bounds — lower the ceiling to your cap to see it.
+const worstRunaway = computed(() =>
+  computedRows.value.length ? Math.max(...computedRows.value.map(r => r.runawayBlast)) : 0
 )
 
 function fmtMoney(v) {
@@ -146,7 +161,7 @@ function fmtFactor(v) { return '×' + v }
 const tableRef = ref(null)
 
 function exportRowsHeaders() {
-  return ['Action', 'Reversibility', 'Visibility', '$/action', 'Users', '$/user', 'Calls/day', 'Error %', 'Severity', 'Blast/incident', 'Blast/mo', 'With Cycles', 'Δ/mo']
+  return ['Action', 'Reversibility', 'Visibility', '$/action', 'Users', '$/user', 'Calls/day', 'Error %', 'Severity', 'Blast/incident', 'Runaway blast', 'Blast/mo', 'With Cycles', 'Δ/mo']
 }
 function exportRowsCells() {
   return computedRows.value.map(r => [
@@ -160,6 +175,7 @@ function exportRowsCells() {
     String(r.errorRate),
     fmtFactor(r.severity),
     fmtMoney(r.perIncident),
+    fmtMoney(r.runawayBlast),
     fmtMoney(r.monthlyRadius),
     fmtMoney(r.contained),
     fmtMoney(r.delta),
@@ -167,7 +183,7 @@ function exportRowsCells() {
 }
 
 function exportSummary() {
-  return `Worst single incident: ${fmtMoney(worstIncident.value)} · Total monthly blast radius: ${fmtMoney(totals.value.monthly)} · With Cycles (${clampNumber(state.containmentPct, 0, 100)}% containment): ${fmtMoney(totals.value.contained)} · Δ/mo: ${fmtMoney(totals.value.delta)}`
+  return `Worst single incident: ${fmtMoney(worstIncident.value)} · Worst runaway (≤${clampNumber(state.runawayCeiling, 1)} fires): ${fmtMoney(worstRunaway.value)} · Total monthly blast radius: ${fmtMoney(totals.value.monthly)} · With Cycles (${clampNumber(state.containmentPct, 0, 100)}% containment): ${fmtMoney(totals.value.contained)} · Δ/mo: ${fmtMoney(totals.value.delta)}`
 }
 
 function brandMeta() {
@@ -201,6 +217,7 @@ function downloadCsv() {
   cells.push([
     'TOTAL', '', '', '', '', '', '', '', '',
     fmtMoney(worstIncident.value),
+    fmtMoney(worstRunaway.value),
     fmtMoney(totals.value.monthly),
     fmtMoney(totals.value.contained),
     fmtMoney(totals.value.delta),
@@ -252,6 +269,14 @@ async function downloadPng() {
           </div>
           <span class="containment-hint">Default 0% shows the unbounded blast radius. Dial up to see the value of runtime action authority.</span>
         </label>
+        <label class="runaway">
+          <span class="containment-label">Runaway ceiling (max wrong fires in one incident)</span>
+          <div class="containment-row">
+            <input type="number" min="1" step="10" v-model.number="state.runawayCeiling" class="containment-num runaway-num" @change="normalizeRunaway" @blur="normalizeRunaway" />
+            <span class="containment-pct">fires</span>
+          </div>
+          <span class="containment-hint">A single runaway is this many wrong fires before something stops it. A Cycles per-run budget or per-action <a href="/how-to/assigning-risk-points-to-agent-tools">RISK_POINTS</a> quota sets this ceiling — lower it to your cap to see the bounded blast.</span>
+        </label>
       </div>
 
       <div class="table-wrap">
@@ -268,6 +293,7 @@ async function downloadPng() {
               <th class="col-num">Err %</th>
               <th class="col-sev">Sev.</th>
               <th class="col-money">Blast / incident</th>
+              <th class="col-money">Runaway blast</th>
               <th class="col-money">Blast / mo</th>
               <th class="col-money">w/ Cycles</th>
               <th class="col-money">Δ / mo</th>
@@ -304,6 +330,7 @@ async function downloadPng() {
               <td class="col-num"><input v-model.number="state.rows[i].errorRate"     type="number" min="0" max="100" step="0.1" class="num-input" @change="normalizeRowNumber(i, 'errorRate', 0, 100)" @blur="normalizeRowNumber(i, 'errorRate', 0, 100)" /></td>
               <td class="col-sev"><span class="sev-chip">{{ fmtFactor(row.severity) }}</span></td>
               <td class="col-money incident">{{ fmtMoney(row.perIncident) }}</td>
+              <td class="col-money runaway">{{ fmtMoney(row.runawayBlast) }}</td>
               <td class="col-money radius">{{ fmtMoney(row.monthlyRadius) }}</td>
               <td class="col-money">{{ fmtMoney(row.contained) }}</td>
               <td class="col-money delta">{{ fmtMoney(row.delta) }}</td>
@@ -312,8 +339,9 @@ async function downloadPng() {
           </tbody>
           <tfoot>
             <tr class="totals">
-              <td colspan="9" class="totals-label">Totals — worst single incident · monthly</td>
+              <td colspan="9" class="totals-label">Totals — worst incident · worst runaway · monthly</td>
               <td class="col-money incident" title="Largest single-incident blast radius across all actions">{{ fmtMoney(worstIncident) }}</td>
+              <td class="col-money runaway" title="Largest single-runaway blast across all actions">{{ fmtMoney(worstRunaway) }}</td>
               <td class="col-money radius">{{ fmtMoney(totals.monthly) }}</td>
               <td class="col-money">{{ fmtMoney(totals.contained) }}</td>
               <td class="col-money delta">{{ fmtMoney(totals.delta) }}</td>
@@ -327,7 +355,7 @@ async function downloadPng() {
 
     <p class="disclaimer">
       <strong>Blast radius</strong> is the magnitude of damage that could occur if the action fires when it should not — a measure of risk exposure, not a prediction.
-      <strong>Blast / incident</strong> is that exposure: the damage of a single wrong fire (discrete, worst-case). <strong>Blast / mo</strong> is the <em>expected</em> monthly loss at the given error rate — and because the catastrophic classes usually fire rarely, the monthly figure under-states them, which is exactly why the per-incident radius sits next to it.
+      <strong>Blast / incident</strong> is that exposure: the damage of a single wrong fire (discrete, worst-case). <strong>Runaway blast</strong> is that incident times the <strong>runaway ceiling</strong> — one action looping N times before it is stopped (the runaway / tool-loop failure mode). <strong>Blast / mo</strong> is the <em>expected</em> monthly loss at the given error rate — and because the catastrophic classes usually fire rarely, the monthly figure under-states them, which is exactly why the per-incident and runaway radii sit next to it.
       Severity is an additive weight — reversibility (1 / 3 / 10) plus visibility (0 / 1 / 4) — that multiplies the direct impact (<code>$/action + users × $/user</code>).
       Examples: irreversible + customer-facing = ×11; irreversible + public = ×14 (the catastrophic class — flagged with !).
       Weights are illustrative defaults, not measured industry data — replace with figures from your own incident history.
@@ -387,7 +415,9 @@ async function downloadPng() {
 .agent-name-input:focus,
 .agent-desc-input:focus { outline: 2px solid var(--vp-c-brand-1); outline-offset: 1px; border-color: var(--vp-c-brand-1); }
 
-.global-controls { margin-bottom: 18px; }
+.global-controls { display: grid; gap: 18px 28px; margin-bottom: 18px; }
+@container (min-width: 720px) { .global-controls { grid-template-columns: 1fr 1fr; align-items: start; } }
+.runaway-num { width: 90px; text-align: right; }
 .containment-label {
   display: block;
   font-size: 12px; font-weight: 600;
@@ -486,6 +516,7 @@ async function downloadPng() {
   font-weight: 700; font-size: 12px;
 }
 .col-money.incident { font-weight: 600; }
+.col-money.runaway { font-weight: 700; color: #d97706; }
 .col-money.radius { font-weight: 600; }
 .col-money.delta  { font-weight: 700; color: var(--vp-c-brand-1); }
 

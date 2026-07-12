@@ -54,9 +54,11 @@ Each row models one class of action your agent can take. The calculator quantifi
 
 **Monthly blast radius** = `per_incident × calls_per_day × (error_rate / 100) × 30`
 
+**Runaway blast** = `per_incident × runaway_ceiling` — one action looping N times (the [runaway / tool-loop](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) failure mode) before it is stopped. The **runaway ceiling** is exactly what a per-run budget or a per-action [`RISK_POINTS`](/how-to/assigning-risk-points-to-agent-tools) quota bounds: uncapped, it is detection-limited (often hundreds of fires); with a Cycles cap it drops to the cap value. Lower the ceiling to your cap to see the bounded blast.
+
 **With Cycles** = `monthly_blast × (1 - containment_pct / 100)` — where containment is the share of incidents that runtime [action authority](/concepts/action-authority-controlling-what-agents-do) would prevent before they fire.
 
-The table shows **both** numbers per action: **Blast / incident** (a single wrong fire — the discrete, worst-case exposure) and **Blast / mo** (the expected loss at your error rate). This is deliberate: catastrophic classes fire rarely, so the monthly figure alone under-rates them — the per-incident radius is what a risk-prediction framing misses.
+The table shows **three** numbers per action: **Blast / incident** (a single wrong fire — the discrete, worst-case exposure), **Runaway blast** (that incident × the runaway ceiling — a looping agent before it is stopped), and **Blast / mo** (the expected loss at your error rate). This is deliberate: catastrophic classes fire rarely, so the monthly figure alone under-rates them — the per-incident and runaway radii are what a risk-prediction framing misses.
 
 ## The catastrophic class: irreversible + public
 
