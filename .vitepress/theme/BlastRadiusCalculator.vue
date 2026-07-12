@@ -275,7 +275,7 @@ async function downloadPng() {
             <input type="number" min="1" step="10" v-model.number="state.runawayCeiling" class="containment-num runaway-num" @change="normalizeRunaway" @blur="normalizeRunaway" />
             <span class="containment-pct">fires</span>
           </div>
-          <span class="containment-hint">A single runaway is this many wrong fires before something stops it. A Cycles per-run budget or per-action <a href="/how-to/assigning-risk-points-to-agent-tools">RISK_POINTS</a> quota sets this ceiling — lower it to your cap to see the bounded blast.</span>
+          <span class="containment-hint">A single runaway is this many wrong fires before something stops it. A Cycles per-run <em>action-count</em> cap sets this ceiling directly; a per-run budget or a per-action <a href="/how-to/assigning-risk-points-to-agent-tools">RISK_POINTS</a> quota bounds it indirectly — the number of fires allowed before the budget runs out. Lower it to your effective cap to see the bounded blast.</span>
         </label>
       </div>
 
