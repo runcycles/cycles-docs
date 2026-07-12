@@ -179,7 +179,7 @@ X-Cycles-Event-Type: reservation.denied
 X-Cycles-Trace-Id: 4bf92f3577b34da6a3ce929d0e0e4736
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 X-Cycles-Signature: sha256=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
-User-Agent: cycles-server-events/0.1.25.22
+User-Agent: cycles-server-events/0.1.25.23
 ```
 
 `X-Cycles-Trace-Id` and W3C `traceparent` are always present — use them to join the delivery back to the originating request across the audit log, events, and delivery records. Two headers are conditional: `X-Request-Id` is sent when the originating event carries a `request_id`, and `X-Cycles-Signature` is sent when the subscription has a signing secret. Any custom headers configured on the subscription are also included, except names that collide with the reserved set above (reserved names are ignored with a warning). The `User-Agent` version tracks the deployed events-service version.
@@ -916,7 +916,7 @@ def handle():
 
 ## Tenant Self-Service Webhooks
 
-Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 29 of 51 registered types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants — a tenant-owned subscription can neither carry nor receive them (governance WEBHOOK SUBSCRIPTION INVARIANT 2, enforced at write, dispatch, and last-mile delivery as of cycles-server-admin 0.1.25.51 + cycles-server-events 0.1.25.23; issue #209). This holds regardless of who created the subscription — a tenant-owned row created via the admin plane or admin-on-behalf-of is bound by the same rule. To monitor a specific tenant's admin-only events, use a `__system__`-owned subscription with client-side `tenant_id` filtering — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events).
+Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 29 of 51 registered types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants — a tenant-owned subscription can neither carry them nor receive them from the event stream (governance WEBHOOK SUBSCRIPTION INVARIANT 2, enforced at write, dispatch, and last-mile delivery as of cycles-server-admin 0.1.25.51 + cycles-server-events 0.1.25.23; issue #209). The one exception is the owner-triggered `/test` probe (a synthetic `system.webhook_test` ping). This holds regardless of who created the subscription — a tenant-owned row created via the admin plane or admin-on-behalf-of is bound by the same rule. To monitor a specific tenant's admin-only events, use a `__system__`-owned subscription with client-side `tenant_id` filtering — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events).
 
 **Required API key permissions:**
 - `webhooks:write` — create, update, delete, and test subscriptions

@@ -106,7 +106,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-This covers the scope-filterable classes for one tenant. It intentionally omits the admin-only categories (`api_key`, `policy`, `webhook`, `system`): most admin events are **null-scoped**, so a `scope_filter` excludes them — you can't narrow admin events to one tenant with `scope_filter`. For per-tenant admin monitoring, filter client-side on the envelope `tenant_id` instead (see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)). Note this is a `__system__`-owned subscription (admin key, no `tenant_id`); a **tenant-owned** subscription can't carry admin-only categories at all.
+This covers the **tenant-accessible** classes (`budget` / `reservation` / `tenant`) for one tenant. It omits the admin-only categories: `api_key.*`, `webhook.*`, and `system.*` events are **null-scoped**, so a `scope_filter` excludes them — you can't narrow those to one tenant with `scope_filter` (filter client-side on the envelope `tenant_id` instead; see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)). The one admin category that *is* scope-filterable is `policy.*` (it carries a real tenant-bounded scope) — add `policy` to `event_categories` if you also want this tenant's policy events. Note this is a `__system__`-owned subscription (admin key, no `tenant_id`); a **tenant-owned** subscription can't carry admin-only categories at all.
 
 ### Subscribe to one specific workspace
 

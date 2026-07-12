@@ -61,7 +61,7 @@ The four `*_via_tenant_cascade` types were added to the enum in governance spec 
 
 ## Tenant Self-Service
 
-Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires `webhooks:write` permission). Tenant webhooks are restricted to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` `_via_tenant_cascade` fan-out events emitted during a tenant close (see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). API key, policy, webhook lifecycle, and system events are admin-only: a tenant-owned subscription can neither carry nor receive them, enforced at write, dispatch, and last-mile delivery (governance WEBHOOK SUBSCRIPTION INVARIANT 2 — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)).
+Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires `webhooks:write` permission). Tenant webhooks are restricted to budget, reservation, and tenant events: 29 of the 51 registered event types — including the `budget.*` and `reservation.*` `_via_tenant_cascade` fan-out events emitted during a tenant close (see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). API key, policy, webhook lifecycle, and system events are admin-only: a tenant-owned subscription can neither carry them nor receive them from the event stream, enforced at write, dispatch, and last-mile delivery (governance WEBHOOK SUBSCRIPTION INVARIANT 2; the one exception is the owner-triggered `/test` probe — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events)).
 
 ## Security
 
