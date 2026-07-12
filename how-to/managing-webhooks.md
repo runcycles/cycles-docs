@@ -376,6 +376,8 @@ curl http://localhost:7979/v1/admin/events/evt_abc123 \
 
 Tenants manage their own webhooks via `/v1/webhooks` using `X-Cycles-API-Key`. The tenant is derived from the key; do not pass a tenant query parameter with tenant-scoped auth.
 
+A tenant-owned subscription is restricted to **tenant-accessible** event classes — `budget.*`, `reservation.*`, `tenant.*` — for both `event_types` and `event_categories`; admin-only classes (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are rejected with `400 INVALID_REQUEST` (governance WEBHOOK SUBSCRIPTION INVARIANT 2). The same rule binds a tenant-owned row created via the admin plane (`POST /v1/admin/webhooks?tenant_id=X`) or admin-on-behalf-of — it is a property of the owning tenant, not the caller. To monitor a specific tenant's admin-only events, create a `__system__`-owned subscription (no `tenant_id`) and filter client-side on the envelope `tenant_id` — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events).
+
 ```bash
 # Create (restricted to budget.*, reservation.*, tenant.* events)
 curl -X POST http://localhost:7979/v1/webhooks \

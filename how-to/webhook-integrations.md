@@ -916,7 +916,7 @@ def handle():
 
 ## Tenant Self-Service Webhooks
 
-Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 29 of 51 registered types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants.
+Tenants can manage their own webhooks (restricted to `budget.*`, `reservation.*`, `tenant.*` events — 29 of 51 registered types, including the `_via_tenant_cascade` fan-out events the admin server emits in those categories on tenant close — see [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics)). Admin-only events (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are not available to tenants — a tenant-owned subscription can neither carry nor receive them (governance WEBHOOK SUBSCRIPTION INVARIANT 2, enforced at write, dispatch, and last-mile delivery as of cycles-server-admin 0.1.25.51 + cycles-server-events 0.1.25.23; issue #209). This holds regardless of who created the subscription — a tenant-owned row created via the admin plane or admin-on-behalf-of is bound by the same rule. To monitor a specific tenant's admin-only events, use a `__system__`-owned subscription with client-side `tenant_id` filtering — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events).
 
 **Required API key permissions:**
 - `webhooks:write` — create, update, delete, and test subscriptions
