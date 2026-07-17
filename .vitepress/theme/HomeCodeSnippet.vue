@@ -32,10 +32,10 @@ const snippets = {
     lang: 'python',
     code: `from runcycles import cycles
 
-@cycles(estimate=5000, action_kind="llm.completion", action_name="openai:gpt-4o")
+@cycles(estimate=5000, action_kind="llm.completion", action_name="openai:gpt-5")
 def ask(prompt: str) -> str:
     return openai.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5",
         messages=[{"role": "user", "content": prompt}]
     ).choices[0].message.content`,
   },
@@ -45,10 +45,10 @@ def ask(prompt: str) -> str:
     code: `import { withCycles } from "runcycles";
 
 const ask = withCycles(
-  { estimate: 5000, actionKind: "llm.completion", actionName: "openai:gpt-4o" },
+  { estimate: 5000, actionKind: "llm.completion", actionName: "openai:gpt-5" },
   async (prompt: string) => {
     const res = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5",
       messages: [{ role: "user", content: prompt }],
     });
     return res.choices[0].message.content;
@@ -60,13 +60,15 @@ const ask = withCycles(
     lang: 'java',
     code: `import io.runcycles.client.java.spring.annotation.Cycles;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
-// GPT-4o: ~$2.50/1M tokens ≈ 25 microcents/token
-@Cycles(value = "#maxTokens * 25",
+// GPT-5: 125 microcents/token in, 1000 out ($1.25 / $10 per 1M)
+@Cycles(value = "#prompt.length() / 4 * 125 + #maxTokens * 1000",
         actionKind = "llm.completion",
-        actionName = "gpt-4o")
+        actionName = "gpt-5")
 public String chat(String prompt, int maxTokens) {
     return chatClient.prompt(prompt)
+        .options(OpenAiChatOptions.builder().maxCompletionTokens(maxTokens).build())
         .call()
         .content();
 }`,
@@ -85,7 +87,7 @@ handler = CyclesBudgetHandler(
     subject=Subject(tenant="acme", agent="my-agent"),
 )
 
-llm = ChatOpenAI(model="gpt-4o", callbacks=[handler])
+llm = ChatOpenAI(model="gpt-5", callbacks=[handler])
 result = llm.invoke([HumanMessage(content="Hello!")])`,
   },
 
@@ -115,10 +117,10 @@ from runcycles import cycles
 
 client = Anthropic()
 
-@cycles(estimate=50000, action_kind="llm.completion", action_name="anthropic:claude-sonnet-4-20250514")
+@cycles(estimate=50000, action_kind="llm.completion", action_name="anthropic:claude-sonnet-5")
 def ask_claude(prompt: str) -> str:
     return client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-5",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     ).content[0].text`,
@@ -132,13 +134,13 @@ import { reserveForStream } from "runcycles";
 
 const handle = await reserveForStream({
   client, estimate: 2_000_000, unit: "USD_MICROCENTS",
-  actionKind: "llm.completion", actionName: "gpt-4o",
+  actionKind: "llm.completion", actionName: "gpt-5",
 });
 
 const result = streamText({
-  model: openai("gpt-4o"), messages,
+  model: openai("gpt-5"), messages,
   onFinish: async ({ usage }) =>
-    handle.commit((usage.promptTokens ?? 0) * 250 + (usage.completionTokens ?? 0) * 1000),
+    handle.commit((usage.promptTokens ?? 0) * 125 + (usage.completionTokens ?? 0) * 1000),
 });`,
   },
 
@@ -170,8 +172,8 @@ const result = streamText({
         "config": {
           "tenant": "acme",
           "modelBaseCosts": {
-            "openai/gpt-4o": 1000000,
-            "anthropic/claude-sonnet-4-20250514": 300000
+            "openai/gpt-5": 1000000,
+            "anthropic/claude-sonnet-5": 300000
           }
         }
       }
