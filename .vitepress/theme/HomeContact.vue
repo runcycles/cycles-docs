@@ -10,7 +10,7 @@ const reasons = [
   },
   {
     label: 'Feedback on the protocol or roadmap',
-    detail: 'You\'ve read the spec and have opinions on the error contract, permission model, or something you need in v0.1.26.',
+    detail: 'You\'ve read the spec and have opinions on the error contract, permission model, or something you need in the next protocol version.',
   },
   {
     label: 'Evaluating Cycles for production',

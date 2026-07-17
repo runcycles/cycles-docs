@@ -11,7 +11,7 @@ Most teams reach out for one of four reasons — they all land in the same inbox
 
 - **Piloting Cycles on a real stack.** You're putting Cycles in front of a real workload — Python, TypeScript, Spring Boot, Rust, MCP — and want implementation help or a second pair of eyes on the integration.
 - **Hit a failure mode we haven't documented.** Runaway agent, retry storm, unit mismatch, scope-derivation edge case. Tell us what broke; we'll add it to the runbook.
-- **Feedback on the protocol or roadmap.** You've read the spec and have opinions on the error contract, permission model, or something you need in v0.1.26.
+- **Feedback on the protocol or roadmap.** You've read the spec and have opinions on the error contract, permission model, or something you need in the next protocol version.
 - **Evaluating Cycles for production.** You're comparing it to rate limiters, LLM gateways, or observability tools. We'll walk through the spec, demo the runtime, and answer integration questions.
 
 ## Get in touch
