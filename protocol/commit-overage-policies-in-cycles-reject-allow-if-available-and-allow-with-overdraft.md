@@ -54,6 +54,16 @@ When a reservation or event is created, the server resolves the overage policy i
 
 This means tenant administrators can set an org-wide default (e.g. `REJECT`) and individual requests can still override it.
 
+### Step 0: the commit must be valid
+
+Overage policies only come into play after the commit passes basic validation. Before any policy branch is evaluated, the server checks that:
+
+1. The reservation exists and is owned by the effective tenant — otherwise `404 NOT_FOUND` or `403 FORBIDDEN`
+2. The reservation is still committable — not already `COMMITTED` or `RELEASED` (`409 RESERVATION_FINALIZED`) and not past `expires_at_ms + grace_period_ms` (`410 RESERVATION_EXPIRED`)
+3. The `actual.unit` matches the reservation's `estimate.unit` — otherwise `400 UNIT_MISMATCH`
+
+A commit that fails any of these checks is rejected regardless of overage policy. Even ALLOW_IF_AVAILABLE, which never rejects a commit on budget grounds, does not accept an invalid commit.
+
 ## REJECT
 
 REJECT is the strictest overage policy. Tenant administrators can set it as the default for all reservations and events in their tenant by setting `default_commit_overage_policy` via the Admin API.
@@ -221,4 +231,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

@@ -36,7 +36,7 @@ A case-insensitive substring match over the endpoint's searchable identifier fie
 | `/v1/admin/events` | `correlation_id`, `scope` |
 | `/v1/admin/audit/logs` | `resource_id`, `log_id`, `error_code`, `operation` |
 
-`search` is applied after other filters (`status`, `plan`, etc.) and is combined with them using AND semantics.
+`search` is applied after other filters (`status`, `parent_tenant_id`, etc.) and is combined with them using AND semantics.
 
 ### `sort_by` and `sort_dir`
 
@@ -62,14 +62,14 @@ Current admin-list defaults are endpoint-specific: tenants and API keys use `cre
 
 Pagination is cursor-based:
 
-- `limit` — maximum results per page. Endpoint-specific cap (typically 50 default, 200 max). Values outside the range return `400 INVALID_REQUEST`.
+- `limit` — maximum results per page. The default is 50 on every endpoint. Where the spec declares a cap it is 100 (`/v1/admin/tenants`, `/v1/admin/webhooks`, `/v1/admin/events`); `/v1/admin/budgets`, `/v1/admin/api-keys`, and `/v1/admin/audit/logs` declare no maximum. Out-of-range values on capped endpoints return `400 INVALID_REQUEST`.
 - `cursor` — opaque string from a previous response's `next_cursor`. Do not construct or modify it.
 - `has_more` — boolean in the response. `true` means there is at least one more page.
 - `next_cursor` — the value to pass as `cursor` on the next call. Absent when `has_more` is `false`.
 
 ### Cursor binding
 
-When `sort_by` or filters are provided, the returned cursor is bound to the `(sort_by, sort_dir, filters)` tuple. Reusing a cursor under a different sort key, direction, or filter set returns `400 INVALID_REQUEST` with `error_code = CURSOR_INVALIDATED`.
+When `sort_by` is provided, the returned cursor encodes the sort key so "Load more" continues in sort order. The spec does not define a cursor-invalidation error — a cursor reused under a different sort key, direction, or filter set is handled gracefully rather than rejected, but the resulting page order is whatever the cursor encoded, not what your new parameters asked for.
 
 **Reset the cursor whenever you change the sort key, sort direction, or any filter.** The client's job is to either preserve those parameters across all pages of a traversal or start over from page one.
 
@@ -77,7 +77,7 @@ When `sort_by` or filters are provided, the returned cursor is bound to the `(so
 
 Omitting the `tenant_id` query parameter on `/v1/admin/api-keys`, `/v1/admin/webhooks`, `/v1/admin/budgets`, `/v1/admin/events`, and `/v1/admin/audit/logs` returns rows across all tenants. Authentication must be via `X-Admin-API-Key` for cross-tenant access — tenant-scoped `X-Cycles-API-Key` calls are limited to their own tenant.
 
-API-key and budget cross-tenant walks use composite cursors such as `(tenant_id, key_id)` or `(tenant_id, ledger_id)` so traversal remains stable across tenants. Treat every `next_cursor` as opaque regardless of endpoint.
+As an implementation note, the reference server's cross-tenant API-key and budget walks use composite cursors (conceptually `(tenant_id, key_id)` / `(tenant_id, ledger_id)`) so traversal remains stable across tenants — but cursor shape is not part of the spec. Treat every `next_cursor` as opaque regardless of endpoint.
 
 ## Forward-compatible preview filters
 
@@ -206,12 +206,13 @@ For faster, more predictable queries, narrow the filter: add `status`, `idempote
 
 ## Error reference
 
-| `error_code` | Meaning |
-|--------------|---------|
+| `error` | Meaning |
+|---------|---------|
 | `INVALID_REQUEST` | Unknown `sort_by`, unknown `sort_dir`, out-of-range `limit`, or `search` over 128 chars |
-| `CURSOR_INVALIDATED` | Cursor reused under different sort key, direction, or filters |
 | `FORBIDDEN` | Tenant-scoped key attempted a cross-tenant listing |
 | `UNAUTHORIZED` | Invalid API key |
+
+The error code is carried in the `error` field of the standard `ErrorResponse` body. Note there is no cursor-specific error code — see [Cursor binding](#cursor-binding) for how stale cursors behave.
 
 ## Next steps
 

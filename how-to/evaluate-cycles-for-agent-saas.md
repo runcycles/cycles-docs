@@ -36,12 +36,12 @@ Skip Cycles if:
 
 The fastest way to know whether Cycles fits is to run the full stack and watch a denial happen.
 
-1. **Start the stack** with the published Docker images. See [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack). You'll have the runtime server, admin server, and dashboard running locally on three ports.
+1. **Start the stack** with the published Docker images. See [Deploying the Full Cycles Stack](/quickstart/deploying-the-full-cycles-stack). You'll have the runtime server and admin server running locally on two ports, backed by Redis (the events service is included but optional). The dashboard is **not** part of this compose stack — if you want a web UI for step 6, deploy the [Cycles Admin Dashboard](/quickstart/deploying-the-cycles-dashboard) separately from its own repo.
 2. **Create a tenant** via the admin server. See [Tenant Creation and Management](/how-to/tenant-creation-and-management-in-cycles).
 3. **Create a budget** scoped to that tenant — a small one, e.g., a few cents.
 4. **Run one allowed check.** A `decide` call returns `ALLOW` without creating a reservation, or a `reserve` call returns `ALLOW` and records an active reservation.
 5. **Run one denied check.** Exhaust the tenant budget with a request larger than the remaining balance. A `decide` call returns `DENY`, or a `reserve` call is rejected before the underlying action executes. (If you're evaluating the [v0.1.26 action-governance preview](/protocol/action-governance-preview-in-cycles), you can also test per-action quotas and allow/deny lists.)
-6. **Open the dashboard.** Watch the reservation, commit, and denial show up under the tenant's budget view. If you used `decide`, expect a decision result but no active reservation.
+6. **Inspect the results.** Query the balances API to see the reservation, commit, and denial reflected in the tenant's ledger — or, if you deployed the optional dashboard, watch them show up under the tenant's budget view. If you used `decide`, expect a decision result but no active reservation.
 
 You should see three things:
 

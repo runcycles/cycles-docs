@@ -45,7 +45,7 @@ export const cyclesClient = new CyclesClient(CyclesConfig.fromEnv());
 
 ## Route-level budget guard
 
-Use `client.decide()` as a preflight check in an API route before doing expensive work:
+Wrap the expensive work in `withCycles` so each request gets an automatic reserve → execute → commit lifecycle (for a lighter `client.decide()` preflight check, see the next section):
 
 ```typescript
 // app/api/chat/route.ts
@@ -221,7 +221,7 @@ export async function POST(req: Request) {
       client: cyclesClient,
       actionKind: "llm.completion",
       actionName: "gpt-4o",
-      subject: { tenant },
+      tenant,
       estimate: () => 2_000_000,
       actual: (r: any) => r.usage.prompt_tokens * 250 + r.usage.completion_tokens * 1000,
     },
@@ -231,6 +231,8 @@ export async function POST(req: Request) {
   // ...
 }
 ```
+
+`tenant` (and the other subject fields: `workspace`, `app`, `workflow`, `agent`, `toolset`) is a top-level `withCycles` option that overrides the client config default. Since 0.3.0 it also accepts a callable — `tenant: (...args) => string` — resolved per call from the wrapped function's arguments.
 
 ## Client-side error handling
 

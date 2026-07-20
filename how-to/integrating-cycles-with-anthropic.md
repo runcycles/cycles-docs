@@ -110,7 +110,8 @@ When Claude uses tools, each LLM turn in the conversation consumes tokens. Use t
 import uuid
 from runcycles import (
     CyclesClient, CyclesConfig, ReservationCreateRequest,
-    CommitRequest, Subject, Action, Amount, Unit, CyclesMetrics,
+    CommitRequest, ReleaseRequest, Subject, Action, Amount,
+    Unit, CyclesMetrics,
 )
 
 client = CyclesClient(CyclesConfig.from_env())
@@ -135,15 +136,28 @@ def chat_with_tools(prompt: str) -> str:
         if not res.is_success:
             return "Budget exhausted — stopping."
 
+        # Defensive: a conformant server returns 409 on live budget denial, but
+        # dry-run responses (and lenient servers) return 200 with decision=DENY
+        # and no reservation_id - check before using it
+        if res.get_body_attribute("decision") == "DENY":
+            return "Budget exhausted — stopping."
+
         reservation_id = res.get_body_attribute("reservation_id")
 
-        # Call Claude with tools
-        response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            tools=TOOLS,
-            messages=messages,
-        )
+        # Call Claude with tools; release the reservation if the call fails
+        try:
+            response = anthropic_client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                tools=TOOLS,
+                messages=messages,
+            )
+        except Exception:
+            client.release_reservation(reservation_id, ReleaseRequest(
+                idempotency_key=f"release-{key}",
+                reason="anthropic_call_failed",
+            ))
+            raise
 
         # Commit actual cost
         actual = (
@@ -212,4 +226,4 @@ See [`examples/anthropic_integration.py`](https://github.com/runcycles/cycles-cl
 - [Testing with Cycles](/how-to/testing-with-cycles) — testing budget-guarded code
 - [Production Operations Guide](/how-to/production-operations-guide) — running Cycles in production
 - [Anthropic example (TypeScript)](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/anthropic-sdk) — runnable Anthropic SDK integration
-- [Anthropic example (Python)](https://github.com/runcycles/cycles-client-python/tree/main/examples/anthropic_integration.py) — runnable Anthropic integration
+- [Anthropic example (Python)](https://github.com/runcycles/cycles-client-python/blob/main/examples/anthropic_integration.py) — runnable Anthropic integration

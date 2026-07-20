@@ -220,6 +220,24 @@ The official Cycles TypeScript client for Node.js and browser environments.
 - [runcycles on npm](https://www.npmjs.com/package/runcycles)
 - [TypeScript quickstart](/quickstart/getting-started-with-the-typescript-client)
 
+### Rust Client
+
+[![crates.io](https://img.shields.io/crates/v/runcycles?label=crates.io&color=555&style=flat-square)](https://crates.io/crates/runcycles)
+
+The official Cycles Rust client (currently 0.2.6). Async-first, built for budget-aware agents and services in Rust.
+
+- [runcycles on crates.io](https://crates.io/crates/runcycles)
+- [Rust quickstart](/quickstart/getting-started-with-the-rust-client)
+
+### AP2 Payment-Mandate Guard (Python)
+
+[![PyPI downloads](https://img.shields.io/pypi/dm/runcycles-ap2?label=downloads&color=555&style=flat-square)](https://pypi.org/project/runcycles-ap2/)
+
+Runtime authority guard for AP2 (Agent Payments Protocol) — reserve, commit, release around agent payment mandates to prevent mandate reuse, double-spend, and concurrent checkout attempts. Works with Google's AP2 spec and any AP2-compatible SDK.
+
+- [runcycles-ap2 on PyPI](https://pypi.org/project/runcycles-ap2/)
+- [Source on GitHub](https://github.com/runcycles/cycles-ap2-python)
+
 ### MCP Server
 
 [![npm downloads](https://img.shields.io/npm/dt/@runcycles/mcp-server?label=downloads&color=555&style=flat-square)](https://www.npmjs.com/package/@runcycles/mcp-server)

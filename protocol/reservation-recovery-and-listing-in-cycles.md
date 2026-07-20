@@ -30,7 +30,7 @@ The solution is to query by idempotency key:
 GET /v1/reservations?idempotency_key=my-unique-key-123
 ```
 
-Since idempotency keys are unique per (effective tenant, endpoint, idempotency_key), this query returns at most one matching reservation.
+Idempotency keys are expected to be unique per (effective tenant, endpoint, idempotency_key), so the server SHOULD return at most one matching reservation. The spec makes this a SHOULD rather than a MUST, so robust recovery code should tolerate the unlikely case of multiple matches.
 
 The client recovers the `reservation_id` and can then commit or release as needed.
 
@@ -72,7 +72,7 @@ Filtering on custom dimensions is out of scope for v0.
 GET /v1/reservations?idempotency_key=run-abc-step-3
 ```
 
-Returns at most one reservation matching the key. This is the primary recovery mechanism.
+The server SHOULD return at most one reservation matching the key. This is the primary recovery mechanism.
 
 ### Pagination
 
@@ -151,7 +151,7 @@ Returns the full state of a specific reservation:
 - **committed** — the amount that was committed (if status is COMMITTED)
 - **created_at_ms** — when the reservation was created
 - **expires_at_ms** — when the reservation expires (or expired)
-- **finalized_at_ms** — when the reservation was committed, released, or expired
+- **finalized_at_ms** — when the reservation reached a terminal state; present only on COMMITTED and RELEASED reservations, absent on ACTIVE and EXPIRED ones
 - **scope_path** — the canonical scope path
 - **affected_scopes** — all scopes impacted by this reservation
 - **idempotency_key** — the creation idempotency key (if the server persists it)
@@ -249,4 +249,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

@@ -336,9 +336,9 @@ The hint includes:
 
 This helps models self-regulate — choosing cheaper tools, shorter responses, or skipping optional steps when budget is tight.
 
-## Per-user and per-session scoping
+## Per-user and per-session attribution
 
-Scope budgets to individual users or sessions:
+Attach user and session identifiers to reservations for attribution and reporting:
 
 ```json
 {
@@ -358,7 +358,7 @@ Scope budgets to individual users or sessions:
 
 User and session identifiers can also be set dynamically via `ctx.metadata.userId` and `ctx.metadata.sessionId` at runtime — context values override static config.
 
-These identifiers are threaded into Cycles reservation subjects as dimensions, enabling per-user or per-session budget enforcement.
+These identifiers are threaded into Cycles reservation subjects as `dimensions` for attribution and reporting. Note that dimensions never derive budget scopes — to *enforce* a per-user or per-session budget, the identifier must be mapped to a standard Subject field (e.g. `agent` or `workflow`) with a budget at that scope.
 
 ## Reservation settings
 
@@ -715,12 +715,12 @@ With `logLevel: "debug"`, you'll see per-call activity:
 | `dryRun` | boolean | `false` | Use in-memory simulated budget |
 | `dryRunBudget` | number | `100000000` | Starting budget for dry-run mode |
 
-### Per-user/session scoping
+### Per-user/session attribution
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `userId` | string | — | User ID for budget scoping (overridable via `ctx.metadata.userId`) |
-| `sessionId` | string | — | Session ID for budget scoping (overridable via `ctx.metadata.sessionId`) |
+| `userId` | string | — | User ID recorded in `dimensions` for attribution/reporting — not budget-enforcing (overridable via `ctx.metadata.userId`) |
+| `sessionId` | string | — | Session ID recorded in `dimensions` for attribution/reporting — not budget-enforcing (overridable via `ctx.metadata.sessionId`) |
 
 ### Budget transitions
 

@@ -212,4 +212,4 @@ See [`examples/openai_integration.py`](https://github.com/runcycles/cycles-clien
 - [Testing with Cycles](/how-to/testing-with-cycles) — testing budget-guarded code
 - [Production Operations Guide](/how-to/production-operations-guide) — running Cycles in production
 - [OpenAI example (TypeScript)](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/openai-sdk) — runnable OpenAI SDK integration
-- [OpenAI example (Python)](https://github.com/runcycles/cycles-client-python/tree/main/examples/openai_integration.py) — runnable OpenAI integration
+- [OpenAI example (Python)](https://github.com/runcycles/cycles-client-python/blob/main/examples/openai_integration.py) — runnable OpenAI integration

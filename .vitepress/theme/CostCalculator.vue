@@ -6,11 +6,19 @@ import { toMarkdownTable, toCsv, downloadText, captureElementToPng, copyText } f
 
 /*
   Defaults reflect each provider's published per-million-token pricing as of
-  2026-04. Verify against the source before relying on these for budgeting:
+  2026-07. Verify against the source before relying on these for budgeting:
    - OpenAI:    https://developers.openai.com/api/docs/pricing
    - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
   Excludes prompt caching, batch API discounts, fine-tuning, fast mode,
   and data-residency premiums. Add or remove rows in the UI as releases change.
+  Notes:
+   - Claude Sonnet 5 shows introductory pricing ($2 / $10 per M) in effect
+     through 2026-08-31; standard pricing ($3 / $15 per M) applies from 2026-09-01.
+   - Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) use a newer
+     tokenizer that produces ~30% more tokens for the same text than earlier
+     Claude models. Token counts are not directly comparable across different
+     tokenizers, so equal token counts here are not an equal-text comparison —
+     size each model's inputs to its own tokenizer.
 */
 
 const props = defineProps({
@@ -32,14 +40,14 @@ const state = reactive({
   outputTokens: 800,
   callsPerDay:  10000,
   models: [
-    { name: 'GPT-5.5',           inputPerM: 5.00, outputPerM: 30.00 },
-    { name: 'GPT-5.4',           inputPerM: 2.50, outputPerM: 15.00 },
-    { name: 'GPT-5.4-mini',      inputPerM: 0.75, outputPerM:  4.50 },
-    { name: 'GPT-5.4-nano',      inputPerM: 0.20, outputPerM:  1.25 },
-    { name: 'Claude Opus 4.7',   inputPerM: 5.00, outputPerM: 25.00 },
-    { name: 'Claude Opus 4.6',   inputPerM: 5.00, outputPerM: 25.00 },
-    { name: 'Claude Sonnet 4.6', inputPerM: 3.00, outputPerM: 15.00 },
-    { name: 'Claude Haiku 4.5',  inputPerM: 1.00, outputPerM:  5.00 },
+    { name: 'GPT-5.6-sol',       inputPerM:  5.00, outputPerM: 30.00 },
+    { name: 'GPT-5.6-terra',     inputPerM:  2.50, outputPerM: 15.00 },
+    { name: 'GPT-5.6-luna',      inputPerM:  1.00, outputPerM:  6.00 },
+    { name: 'GPT-5.4-nano',      inputPerM:  0.20, outputPerM:  1.25 },
+    { name: 'Claude Fable 5',    inputPerM: 10.00, outputPerM: 50.00 },
+    { name: 'Claude Opus 4.8',   inputPerM:  5.00, outputPerM: 25.00 },
+    { name: 'Claude Sonnet 5',   inputPerM:  2.00, outputPerM: 10.00 },
+    { name: 'Claude Haiku 4.5',  inputPerM:  1.00, outputPerM:  5.00 },
   ],
 })
 
@@ -226,13 +234,17 @@ async function downloadPng() {
     </div>
 
     <p class="disclaimer">
-      Defaults reflect published list pricing as of 2026-04 from
+      Defaults reflect published list pricing as of 2026-07 from
       <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener">OpenAI</a>
       and
       <a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener">Anthropic</a>;
       verify before relying on these for budgeting and edit any cell to match your contracted rate.
       Calculation: <code>(input_tokens × input_$/M + output_tokens × output_$/M) ÷ 1,000,000 × calls/day</code>.
       Excludes prompt caching, batch discounts, fine-tuning, fast-mode, and data-residency premiums.
+      Claude Sonnet 5 is at introductory pricing ($2 / $10 per M) through 2026-08-31 ($3 / $15 from 2026-09-01).
+      Anthropic's newest models (Fable 5, Opus 4.8, Sonnet 5) use a newer tokenizer that produces ~30% more tokens
+      for the same text than earlier Claude models, so equal token counts across different tokenizers here are not
+      an equal-text comparison.
     </p>
   </section>
 </template>

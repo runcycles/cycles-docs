@@ -126,9 +126,10 @@ curl -s "http://localhost:7979/v1/admin/audit/logs?trace_id=$TID" \
 curl -s "http://localhost:7979/v1/admin/events?trace_id=$TID" \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 
-# Webhook deliveries that went out
-curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries?trace_id=$TID" \
-  -H "X-Admin-API-Key: $ADMIN_KEY"
+# Webhook deliveries that went out — the deliveries endpoint has no trace_id
+# query parameter, but each delivery row carries trace_id; filter client-side
+curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries" \
+  -H "X-Admin-API-Key: $ADMIN_KEY" | jq --arg tid "$TID" '.deliveries[] | select(.trace_id == $tid)'
 ```
 
 This is useful for confirming that a subscriber alerting channel (oncall rotation, incident tracker) received the `reservation.released` notification before you close the incident. Requires `cycles-server-admin` v0.1.25.31+. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).

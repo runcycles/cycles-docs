@@ -128,23 +128,31 @@ The `@cycles` decorator accepts parameters that control reservation behavior per
 |---|---|---|---|
 | `estimate` | `int \| Callable` | (required) | Estimated cost. Int constant or callable receiving the function's `*args, **kwargs`. |
 | `actual` | `int \| Callable \| None` | `None` | Actual cost. Int constant or callable receiving the return value. Defaults to estimate. |
-| `action_kind` | `str \| None` | `None` | Action category (e.g. `"llm.completion"`). |
-| `action_name` | `str \| None` | `None` | Action identifier (e.g. `"gpt-4"`). |
-| `action_tags` | `list[str] \| None` | `None` | Tags for filtering and reporting. |
+| `action_kind` | `str \| Callable[..., str \| None] \| None` | `None` | Action category (e.g. `"llm.completion"`). |
+| `action_name` | `str \| Callable[..., str \| None] \| None` | `None` | Action identifier (e.g. `"gpt-4"`). |
+| `action_tags` | `list[str] \| Callable[..., list[str] \| None] \| None` | `None` | Tags for filtering and reporting. |
 | `unit` | `Unit \| str` | `USD_MICROCENTS` | Budget unit: `USD_MICROCENTS`, `TOKENS`, `CREDITS`, `RISK_POINTS`. |
 | `ttl_ms` | `int` | `60000` | Reservation TTL in milliseconds (range: 1,000–86,400,000). |
 | `grace_period_ms` | `int \| None` | `None` | Grace period after TTL expiry in milliseconds. When `None`, the server applies its default (5000ms). Valid range: 0–60,000. |
 | `overage_policy` | `str` | `"ALLOW_IF_AVAILABLE"` | `"REJECT"`, `"ALLOW_IF_AVAILABLE"`, or `"ALLOW_WITH_OVERDRAFT"`. |
 | `dry_run` | `bool` | `False` | If `True`, evaluate without persisting. Function does not execute. |
-| `tenant` | `str \| None` | `None` | Subject tenant override (takes precedence over config default). |
-| `workspace` | `str \| None` | `None` | Subject workspace override. |
-| `app` | `str \| None` | `None` | Subject app override. |
-| `workflow` | `str \| None` | `None` | Subject workflow override. |
-| `agent` | `str \| None` | `None` | Subject agent override. |
-| `toolset` | `str \| None` | `None` | Subject toolset override. |
-| `dimensions` | `dict[str, str] \| None` | `None` | Custom dimensions for the subject. |
+| `tenant` | `str \| Callable[..., str \| None] \| None` | `None` | Subject tenant override (takes precedence over config default). |
+| `workspace` | `str \| Callable[..., str \| None] \| None` | `None` | Subject workspace override. |
+| `app` | `str \| Callable[..., str \| None] \| None` | `None` | Subject app override. |
+| `workflow` | `str \| Callable[..., str \| None] \| None` | `None` | Subject workflow override. |
+| `agent` | `str \| Callable[..., str \| None] \| None` | `None` | Subject agent override. |
+| `toolset` | `str \| Callable[..., str \| None] \| None` | `None` | Subject toolset override. |
+| `dimensions` | `dict[str, str] \| Callable[..., dict[str, str] \| None] \| None` | `None` | Custom dimensions for the subject. |
 | `client` | `CyclesClient \| AsyncCyclesClient \| None` | `None` | Explicit client. Falls back to module-level default. |
 | `use_estimate_if_actual_not_provided` | `bool` | `True` | If `True` and `actual` is `None`, use estimate as actual at commit. |
+
+### Callable resolution semantics
+
+Subject fields, `action_kind`, `action_name`, `action_tags`, and `dimensions` accept a callable in place of a constant (since 0.4.0). The callable is resolved on every call, invoked with the decorated function's `*args, **kwargs` at reservation time. A `None` (or otherwise falsy) result falls through:
+
+- **Subject fields** (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) — fall back to the `CyclesConfig` default; omitted if that is also unset.
+- **`action_kind` / `action_name`** — fall back to `"unknown"`.
+- **`action_tags` / `dimensions`** — omitted from the request.
 
 ## Setting a default client
 
@@ -164,7 +172,7 @@ set_default_client(CyclesClient(config))
 
 For each Subject field, the decorator resolves the value using this priority:
 
-1. **Decorator parameter** — if set on the `@cycles` decorator, it wins
+1. **Decorator parameter** — if set on the `@cycles` decorator, it wins. If the parameter is a callable, it is invoked with the function's `*args, **kwargs` on each call; a falsy result falls through to the next step.
 2. **Config default** — if set on the `CyclesConfig` instance
 
 If neither provides a value, the field is omitted from the request.

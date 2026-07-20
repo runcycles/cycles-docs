@@ -67,7 +67,7 @@ jobs:
       # contents:write from the job's permissions block) and the push succeeds.
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
 

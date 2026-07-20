@@ -88,7 +88,7 @@ def build_subject(**overrides):
 
 ### 2. Missing budget at intermediate scope levels
 
-Budgets exist at `tenant:acme` and `tenant:acme/workspace:prod/app:chatbot`, but not at `tenant:acme/workspace:prod`. Reservations with all three fields check all three scopes. The missing middle scope has no budget, causing `BUDGET_EXCEEDED`.
+Budgets exist at `tenant:acme` and `tenant:acme/workspace:prod/app:chatbot`, but not at `tenant:acme/workspace:prod`. Per the protocol's skip semantics, scopes without a budget are **skipped** — the reservation checks and debits only the levels that have budgets, so the missing middle level is silently unenforced (no error is raised). Only if *none* of the affected scopes has a budget does the reservation fail, with `404 NOT_FOUND` ("Budget not found for provided scope"). The risk here is not a spurious denial — it's a level you believe is capped that isn't.
 
 **Fix:** Create budgets at every scope level that appears in your subject hierarchy:
 
@@ -124,7 +124,7 @@ def handle_request(prompt):
     ...
 ```
 
-If a user sends `X-Workspace: prod/agent:attacker`, the scope path becomes `tenant:acme-corp/workspace:prod/agent:attacker` — a scope that likely has no budget configured, which could cause unexpected `BUDGET_EXCEEDED` errors, or worse, if a permissive fallback budget exists at a parent level, the call may bypass intended limits.
+If a user sends `X-Workspace: prod/agent:attacker`, the scope path becomes `tenant:acme-corp/workspace:prod/agent:attacker` — an injected level that has no budget configured. Under the protocol's skip semantics, budget-less scopes are simply skipped: the call is enforced only against whatever parent budgets exist, the injected level goes unenforced, and cost attribution at that level is polluted. The call would fail (`404 NOT_FOUND`) only in the unlikely case that *no* scope in the path has a budget.
 
 **Fix:** Validate and sanitize scope values against an allowlist:
 
@@ -185,28 +185,35 @@ Run in [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforc
 You can programmatically detect scope gaps by comparing budget scopes against reservation scopes:
 
 ```typescript
-import { listBalances, listReservations } from "runcycles";
+import { CyclesClient, CyclesConfig } from "runcycles";
+
+const client = new CyclesClient(new CyclesConfig({
+  baseUrl: process.env.CYCLES_BASE_URL!,
+  apiKey: process.env.CYCLES_API_KEY!,
+}));
 
 async function detectScopeGaps(tenant: string): Promise<string[]> {
-  const balances = await listBalances({ tenant });
-  const reservations = await listReservations({ tenant, status: "ACTIVE" });
+  const balancesResp = await client.getBalances({ tenant });
+  const reservationsResp = await client.listReservations({ tenant, status: "ACTIVE" });
 
-  const budgetScopes = new Set(balances.map((b) => b.scope));
-  const reservationScopes = new Set(reservations.map((r) => r.scope));
+  const balances = balancesResp.body!.balances as Array<{ scope_path: string }>;
+  const reservations = reservationsResp.body!.reservations as Array<{ scope_path: string }>;
 
-  const gaps: string[] = [];
-  for (const scope of reservationScopes) {
-    if (!budgetScopes.has(scope)) {
-      gaps.push(scope);
+  const budgetScopes = new Set(balances.map((b) => b.scope_path));
+
+  const gaps = new Set<string>();
+  for (const r of reservations) {
+    if (!budgetScopes.has(r.scope_path)) {
+      gaps.add(r.scope_path);
     }
   }
-  return gaps;
+  return [...gaps];
 }
 
-// Usage
+// Usage — deepest reservation scopes with no budget at that level (skipped, unenforced)
 const gaps = await detectScopeGaps("acme-corp");
 if (gaps.length > 0) {
-  console.warn("Reservations hitting scopes without budgets:", gaps);
+  console.warn("Reservations whose deepest scope has no budget (level unenforced):", gaps);
 }
 ```
 
@@ -215,7 +222,7 @@ if (gaps.length > 0) {
 ### Alerting for scope mismatches
 
 ::: warning Planned metrics — requires balance-polling sidecar
-`cycles_reservations_created_total{scope=...}` and `cycles_scope_spent_total{level=...}` are on the roadmap but not emitted by the current server builds (runtime 0.1.25.8). Because the `/actuator/prometheus` endpoint only exposes Spring Boot default metrics (no scope label is available on `http_server_requests_seconds*`), scope-aware alerts require a sidecar that polls `GET /v1/balances` and `GET /v1/reservations` and pushes labelled gauges (`cycles_scope_spent`, `cycles_scope_allocated`, `cycles_reservations_created`) into your metrics pipeline. See [Balance-polling alerts](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter). Once those gauges exist, the rules below apply as-is.
+`cycles_reservations_created_total{scope=...}` and `cycles_scope_spent_total{level=...}` are on the roadmap but not emitted by the current server builds (runtime 0.1.25.46). The server does register `cycles_*` operation counters (`cycles_reservations_*`, `cycles_events_total`, `cycles_overdraft_incurred_total`), but their tags are `decision` / `reason` / `overage_policy` / `tenant` — there is no scope label on them, nor on `http_server_requests_seconds*` — so scope-aware alerts require a sidecar that polls `GET /v1/balances` and `GET /v1/reservations` and pushes labelled gauges (`cycles_scope_spent`, `cycles_scope_allocated`, `cycles_reservations_created`) into your metrics pipeline. See [Balance-polling alerts](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter). Once those gauges exist, the rules below apply as-is.
 :::
 
 ```yaml
@@ -271,29 +278,45 @@ For detailed monitoring setup, see [Monitoring and Alerting](/how-to/monitoring-
 ```python
 import pytest
 from unittest.mock import patch
-from runcycles import get_last_reservation
+from runcycles import get_cycles_context
 
-REQUIRED_SCOPE_FIELDS = {"tenant", "workspace"}
+REQUIRED_SCOPE_LEVELS = {"tenant", "workspace"}
+
+def _capture_scope_path(captured):
+    """Mock the LLM call and grab the reservation context while it is live.
+
+    get_cycles_context() only returns the reservation context inside the
+    @cycles-guarded call, so capture scope_path from within the mock.
+    """
+    def _mock(prompt):
+        ctx = get_cycles_context()
+        captured["scope_path"] = ctx.scope_path
+        return "mocked"
+    return _mock
 
 def test_route_a_includes_all_scopes():
-    """Verify that route_a passes all required scope fields."""
-    with patch("myapp.call_llm", return_value="mocked"):
+    """Verify that route_a's reservation covers all required scope levels."""
+    captured = {}
+    with patch("myapp.call_llm", side_effect=_capture_scope_path(captured)):
         route_a("test prompt")
 
-    reservation = get_last_reservation()
-    subject_keys = set(reservation.subject.keys())
-    missing = REQUIRED_SCOPE_FIELDS - subject_keys
-    assert not missing, f"Route A missing scope fields: {missing}"
+    missing = {
+        level for level in REQUIRED_SCOPE_LEVELS
+        if f"{level}:" not in captured["scope_path"]
+    }
+    assert not missing, f"Route A missing scope levels: {missing}"
 
 def test_route_b_includes_all_scopes():
-    """Verify that route_b passes all required scope fields."""
-    with patch("myapp.call_llm", return_value="mocked"):
+    """Verify that route_b's reservation covers all required scope levels."""
+    captured = {}
+    with patch("myapp.call_llm", side_effect=_capture_scope_path(captured)):
         route_b("test prompt")
 
-    reservation = get_last_reservation()
-    subject_keys = set(reservation.subject.keys())
-    missing = REQUIRED_SCOPE_FIELDS - subject_keys
-    assert not missing, f"Route B missing scope fields: {missing}"
+    missing = {
+        level for level in REQUIRED_SCOPE_LEVELS
+        if f"{level}:" not in captured["scope_path"]
+    }
+    assert not missing, f"Route B missing scope levels: {missing}"
 ```
 
 ### TypeScript: centralized scope builder with tests

@@ -54,7 +54,11 @@ Each row models one class of action your agent can take. The calculator quantifi
 
 **Monthly blast radius** = `per_incident × calls_per_day × (error_rate / 100) × 30`
 
+**Runaway blast** = `per_incident × runaway_ceiling` — one action looping N times (the [runaway / tool-loop](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) failure mode) before it is stopped. The **runaway ceiling** is an action *count*, and runtime action authority bounds it two ways: a per-run **action-count** cap sets it directly, while a per-run budget or a per-action [`RISK_POINTS`](/how-to/assigning-risk-points-to-agent-tools) quota bounds it *indirectly* — the number of fires permitted before the budget is exhausted (roughly `budget ÷ risk_points_per_fire`, and fewer if other actions draw on the same budget). Uncapped, the ceiling is detection-limited (often hundreds of fires); with a cap it drops to that effective limit. Lower the ceiling to your effective cap to see the bounded blast.
+
 **With Cycles** = `monthly_blast × (1 - containment_pct / 100)` — where containment is the share of incidents that runtime [action authority](/concepts/action-authority-controlling-what-agents-do) would prevent before they fire.
+
+The table shows **three** numbers per action: **Blast / incident** (a single wrong fire — the discrete, worst-case exposure), **Runaway blast** (that incident × the runaway ceiling — a looping agent before it is stopped), and **Blast / mo** (the expected loss at your error rate). This is deliberate: catastrophic classes fire rarely, so the monthly figure alone under-rates them — the per-incident and runaway radii are what a risk-prediction framing misses.
 
 ## The catastrophic class: irreversible + public
 
@@ -84,9 +88,9 @@ The two calculators answer two halves of the same question:
 |---|---|---|
 | Question | "How much will this workload spend?" | "If this workload's actions go wrong, how much damage is in scope?" |
 | Inputs | tokens, calls, model rates | actions, reversibility, visibility, error rate |
-| Output | $ per call / day / month / year | $ blast radius per month |
+| Output | $ per call / day / month / year | $ blast radius per incident + per month |
 | Output type | expected spend | risk exposure (not a prediction) |
-| Persuasion column | "Cheapest model — save 30×" | "Δ — monthly risk reduction from containment" |
+| Persuasion column | "Cheapest model — save 43×" | "Δ — monthly risk reduction from containment" |
 | Maps to Cycles dimension | Cost runtime control | Action runtime authority |
 
 A real production AI workload has both. Cost is bounded by a [budget](/guides/llm-cost-runtime-control). Damage is bounded by [what you do not let the agent do in the first place](/guides/risk-and-blast-radius). Cycles enforces both at the same runtime gate.

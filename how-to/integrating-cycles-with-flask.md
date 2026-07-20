@@ -82,8 +82,11 @@ PRICE_PER_OUTPUT_TOKEN = 1_000
     action_kind="llm.completion",
     action_name="gpt-4o",
     unit="USD_MICROCENTS",
+    # Subject fields accept callables (runcycles 0.4.0+): resolved from the
+    # call's arguments before the reservation is created
+    tenant=lambda prompt, **kw: kw.get("tenant", "acme"),
 )
-def guarded_llm_call(prompt: str, max_tokens: int = 1024) -> dict:
+def guarded_llm_call(prompt: str, max_tokens: int = 1024, tenant: str = "acme") -> dict:
     ctx = get_cycles_context()
     if ctx and ctx.has_caps() and ctx.caps.max_tokens:
         max_tokens = min(max_tokens, ctx.caps.max_tokens)
@@ -146,7 +149,7 @@ def budget_preflight():
 
 ## Per-tenant isolation
 
-Extract the tenant from request headers and scope budgets per tenant:
+Extract the tenant from request headers and scope budgets per tenant. The `tenant=lambda ...` callable on the `guarded_llm_call` decorator above (runcycles 0.4.0+) reads the `tenant` keyword argument on each call and scopes the reservation's subject to that tenant:
 
 ```python
 from flask import request, g
@@ -161,6 +164,8 @@ def chat():
     result = guarded_llm_call(body["prompt"], tenant=g.tenant)
     return jsonify({"response": result["content"]})
 ```
+
+Each tenant's requests are charged against their own budget scope. Subject callables that return `None` fall back to the client-config default (`CYCLES_TENANT`).
 
 ## Budget dashboard endpoint
 
@@ -183,10 +188,6 @@ def get_budget(tenant_id):
 - **Preflight with `before_request`** — lightweight budget check before expensive work.
 - **Isolate tenants** — use `g.tenant` from request headers.
 - **Set a default client** — avoids passing `client=` to every `@cycles` decorator.
-
-## Full example
-
-See [`examples/flask_integration.py`](https://github.com/runcycles/cycles-client-python/blob/main/examples/flask_integration.py) for a complete, runnable server.
 
 ## Next steps
 

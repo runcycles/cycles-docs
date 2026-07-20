@@ -29,6 +29,7 @@ Cycles is an **open protocol with a minimum conformance surface**. The active v0
 | Header | Description |
 |---|---|
 | `X-Request-Id` | Unique request identifier for debugging and support |
+| `X-Cycles-Trace-Id` | 32-hex W3C Trace Context identifier. Servers MUST echo it on every response (2xx, 4xx, 5xx). The trace ID is taken from an inbound `traceparent` header (preferred) or `X-Cycles-Trace-Id` header when valid, otherwise generated fresh. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles). |
 | `X-Cycles-Tenant` | Effective tenant identifier derived from auth context (optional in v0) |
 | `X-RateLimit-Remaining` | Number of requests remaining in current window (optional in v0) |
 | `X-RateLimit-Reset` | Unix timestamp (seconds) when rate limit resets (optional in v0) |
@@ -54,7 +55,7 @@ The budgeting scope. At least one standard field is required.
 }
 ```
 
-All fields are optional except that at least one of `tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset` must be present. The `dimensions` field allows arbitrary key-value pairs for custom budgeting dimensions.
+All fields are optional except that at least one of `tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset` must be present. The `dimensions` field allows arbitrary key-value pairs for alternative taxonomies — attribution, reporting, and policy facets. Dimensions never derive budget scopes, and v0 servers MAY ignore them for budgeting decisions; anything that needs an enforceable budget belongs in one of the six standard fields.
 
 ### Amount
 
@@ -98,6 +99,7 @@ Returned when the decision is `ALLOW_WITH_CAPS`:
   "error": "BUDGET_EXCEEDED",
   "message": "Insufficient budget in scope tenant:acme",
   "request_id": "req-abc-123",
+  "trace_id": "0af7651916cd43dd8448eb211c80319c",
   "details": {}
 }
 ```
@@ -204,9 +206,10 @@ curl -X POST http://localhost:7878/v1/reservations \
 | 409 | `BUDGET_CLOSED` | Budget scope is permanently closed |
 | 409 | `OVERDRAFT_LIMIT_EXCEEDED` | Scope is over-limit |
 | 409 | `DEBT_OUTSTANDING` | Scope has unpaid debt (no overdraft limit configured) |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (persisting create only, `dry_run` absent or `false`; deployments with a governance plane — spec v0.1.25.13, cycles-server 0.1.25.47+) |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 
-**Dry run:** when `dry_run=true`, budget-state conditions (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, and the 404 "no budget at any scope" case) surface as `200 OK` with `decision: DENY` and a `reason_code` field — `DecisionReasonCode` is an open string (as of v0.1.25); clients MUST handle unknown values gracefully — not as 4xx/409 errors. Request-validity errors (`INVALID_REQUEST`, `UNIT_MISMATCH`, `UNAUTHORIZED`, `FORBIDDEN`, `IDEMPOTENCY_MISMATCH`) are still returned as 4xx on dry-run. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+**Dry run:** when `dry_run=true`, budget-state conditions (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` on a closed owning tenant, and the 404 "no budget at any scope" case) surface as `200 OK` with `decision: DENY` and a `reason_code` field — `DecisionReasonCode` is an open string (as of v0.1.25); clients MUST handle unknown values gracefully — not as 4xx/409 errors. Request-validity errors (`INVALID_REQUEST`, `UNIT_MISMATCH`, `UNAUTHORIZED`, `FORBIDDEN`, `IDEMPOTENCY_MISMATCH`) are still returned as 4xx on dry-run. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
 
 ---
 
@@ -291,6 +294,7 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/commit \
 | 409 | `BUDGET_CLOSED` | Budget scope is permanently closed |
 | 409 | `OVERDRAFT_LIMIT_EXCEEDED` | Debt would exceed limit (ALLOW_WITH_OVERDRAFT) |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 410 | `RESERVATION_EXPIRED` | TTL + grace period elapsed |
 
@@ -345,10 +349,12 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/release \
 
 | Code | Error | When |
 |---|---|---|
+| 400 | `INVALID_REQUEST` | Malformed request (e.g., missing `idempotency_key`) |
 | 401 | `UNAUTHORIZED` | Missing or invalid API key |
 | 403 | `FORBIDDEN` | Reservation owned by different tenant |
 | 404 | `NOT_FOUND` | Reservation does not exist |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 410 | `RESERVATION_EXPIRED` | TTL + grace period elapsed |
 
@@ -403,6 +409,7 @@ curl -X POST http://localhost:7878/v1/reservations/res-abc-123/extend \
 | 403 | `FORBIDDEN` | Reservation owned by different tenant |
 | 404 | `NOT_FOUND` | Reservation does not exist |
 | 409 | `RESERVATION_FINALIZED` | Already committed or released |
+| 409 | `TENANT_CLOSED` | Owning tenant's status is `CLOSED` (spec v0.1.25.13, cycles-server 0.1.25.47+); takes precedence over reservation-state errors for non-replay requests |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 | 409 | `MAX_EXTENSIONS_EXCEEDED` | Tenant `max_reservation_extensions` limit reached |
 | 410 | `RESERVATION_EXPIRED` | Past TTL (no grace period for extend) |
@@ -570,7 +577,7 @@ Evaluate a budget decision without creating a reservation. Useful for preflight 
 }
 ```
 
-The `reason_code` and `retry_after_ms` fields are present when the decision is `DENY`. `reason_code` is `DecisionReasonCode` — an open string (as of v0.1.25) with six documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`. Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+The `reason_code` and `retry_after_ms` fields are present when the decision is `DENY`. `reason_code` is `DecisionReasonCode` — an open string (as of v0.1.25) with seven documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` (added in spec v0.1.25.13 for closed owning tenants). Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
 
 ### Example
 
@@ -596,7 +603,7 @@ curl -X POST http://localhost:7878/v1/decide \
 | 403 | `FORBIDDEN` | Tenant mismatch |
 | 409 | `IDEMPOTENCY_MISMATCH` | Same key, different payload |
 
-Note: decide returns `200` with `decision: DENY` for all budget-state conditions — insufficient remaining, debt, overdraft, frozen, closed, and the "no budget exists at any scope" case — not a `409` or `404`. The specific reason is surfaced in the `reason_code` field. `DecisionReasonCode` is an open string (as of v0.1.25) with six documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`. Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics. Request-validity errors like `UNIT_MISMATCH` are still returned as `400`.
+Note: decide returns `200` with `decision: DENY` for all budget-state conditions — insufficient remaining, debt, overdraft, frozen, closed, the "no budget exists at any scope" case, and a closed owning tenant — not a `409` or `404`. The specific reason is surfaced in the `reason_code` field. `DecisionReasonCode` is an open string (as of v0.1.25) with seven documented known values: `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED` (spec v0.1.25.13; fresh evaluations on a closed owning tenant — never `409 TENANT_CLOSED` on this endpoint, though a present-but-malformed tenant record fails closed with `500 INTERNAL_ERROR`). Clients MUST handle unknown values gracefully. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes) for full semantics. Request-validity errors like `UNIT_MISMATCH` are still returned as `400`.
 
 ---
 
@@ -792,7 +799,7 @@ curl -s http://localhost:7878/v1/evidence/8403bed43e13ef7d56a8ab402a9d29ee7dd2f4
 |---|---|---|
 | 400 | `INVALID_REQUEST` | `evidence_id` is not a valid 64-character lowercase hex string |
 | 404 | `NOT_FOUND` | Envelope is not available or evidence signing/storage is not configured |
-| 429 | rate-limit error | Public endpoint throttled |
+| 429 | `LIMIT_EXCEEDED` | Public endpoint throttled (reference server default: 300 requests/minute per client IP); retry after `Retry-After` |
 
 ---
 
@@ -831,7 +838,7 @@ curl -s http://localhost:7878/v1/.well-known/cycles-jwks.json
 | Code | Error | When |
 |---|---|---|
 | 404 | `NOT_FOUND` | The server does not publish a JWK Set, usually because signer-key resolution is not configured |
-| 429 | rate-limit error | Public endpoint throttled |
+| 429 | `LIMIT_EXCEEDED` | Public endpoint throttled (reference server default: 300 requests/minute per client IP); retry after `Retry-After` |
 
 ---
 

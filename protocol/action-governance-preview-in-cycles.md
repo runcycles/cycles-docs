@@ -34,7 +34,7 @@ The YAML files remain the authority. This page is the human-readable map.
 
 ## Action Kinds
 
-An action kind is a stable string for the operation an agent is about to perform, such as `llm.completion`, `web.search`, `message.email.send`, or `code.exec.shell`.
+An action kind is a stable string for the operation an agent is about to perform, such as `llm.completion`, `web.search`, `message.email.send`, or `code.exec`.
 
 Each kind belongs to an `ActionRiskClass`:
 
@@ -168,7 +168,7 @@ The governance extension reserves several dashboard and list fields. Their seman
 | `GET /v1/admin/overview` | `tenant_counts.in_observe_mode` | Count tenants with `observe_mode != ENFORCE` |
 | `GET /v1/admin/tenants` | `observe_mode` | Filter tenants by `DISABLED`, `OBSERVE`, or `ENFORCE` |
 | `GET /v1/admin/policies` | `has_action_quotas` | Filter policies with non-empty `action_quotas` or `risk_class_quotas` |
-| `GET /v1/admin/policies` | `references_action_kind` | Filter policies whose quotas, allowlist, or denylist mention the given kind |
+| `GET /v1/admin/policies` | `references_action_kind` | Filter policies whose `action_quotas`, `allowed_action_kinds`, or `denied_action_kinds` mention the given kind; `risk_class_quotas` entries do not match, since they name risk classes rather than kinds |
 
 On v0.1.25.x reference admin servers, `observe_mode`, `has_action_quotas`, and `references_action_kind` are accepted as forward-compatible query parameters but do not narrow results until the v0.1.26 action-governance extension is implemented.
 

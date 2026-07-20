@@ -7,7 +7,7 @@ description: "Reference for the four standard unit types in Cycles and how they 
 
 Every amount in Cycles — reservations, commits, events, balances — has a unit.
 
-The unit tells the system what is being measured and how to interpret the number.
+The unit tells the system what is being measured and how to interpret the number. The `unit` field is required on every amount — there is no default unit.
 
 Cycles defines four standard units:
 
@@ -20,7 +20,7 @@ Choosing the right unit affects how budgets are expressed, how estimates are cal
 
 ## USD_MICROCENTS
 
-USD_MICROCENTS is the default unit and the most precise monetary unit in the protocol.
+USD_MICROCENTS is the most precise monetary unit in the protocol.
 
 ### Definition
 
@@ -109,6 +109,8 @@ Tenants are allocated credits per billing period. Each model call reserves and c
 
 Credits require a mapping layer to translate between credits and actual cost. This adds complexity but provides flexibility in pricing and plan design.
 
+CREDITS is a generic integer unit and is optional in v0 implementations — confirm your server supports it before budgeting in credits.
+
 ## RISK_POINTS
 
 RISK_POINTS is a generic integer unit for risk-based budgeting.
@@ -134,12 +136,18 @@ A workflow is allowed 100 risk points per run. This bounds the total side-effect
 
 Risk points are subjective. The team must define what each point represents and calibrate the scale. But for systems where side-effect control matters more than cost control, risk points can be more operationally useful than monetary units.
 
+Like CREDITS, RISK_POINTS is a generic integer unit and is optional in v0 implementations — confirm your server supports it before budgeting in risk points.
+
 ## Unit consistency
 
 All amounts within a single reservation lifecycle must use the same unit.
 
 - The reservation estimate, commit actual, and balance amounts must all be in the same unit
-- The server returns `400 UNIT_MISMATCH` if a reserve, decide, commit, or event uses a unit that doesn't match any budget at the derived scopes (when a budget exists at the scope in a different unit). The error details include `expected_units` listing the units for which a budget does exist, so clients can self-correct. When no budget exists at any scope in *any* unit, the server returns `404 NOT_FOUND` with the message `"Budget not found for provided scope: ..."` — the runtime plane uses a single `NOT_FOUND` wire code for all resource-not-found conditions, and the message field carries the specific reason. On `/v1/decide` and dry-run reserve, the same "no budget" condition instead surfaces as `200 DENY` with `reason_code=BUDGET_NOT_FOUND`.
+- The server returns `400 UNIT_MISMATCH` in three distinct cases:
+  - **Reserve and decide** — the `estimate.unit` doesn't match any budget stored for the derived scopes, but at least one of those scopes has a budget in a different unit
+  - **Commit** — the `actual.unit` differs from the reservation's `estimate.unit`
+  - **Event** — the `actual.unit` doesn't match the budget stored for the target scope
+- When the cause is a wrong unit, servers SHOULD populate the error's `details` object with `scope` (where the mismatch was detected), `requested_unit` (what the client sent), and `expected_units` (the units for which a budget does exist), so clients can self-correct without a separate lookup. When no budget exists at any scope in *any* unit, the server returns `404 NOT_FOUND` with the message `"Budget not found for provided scope: ..."` — the runtime plane uses a single `NOT_FOUND` wire code for all resource-not-found conditions, and the message field carries the specific reason. On `/v1/decide` and dry-run reserve, the same "no budget" condition instead surfaces as `200 DENY` with `reason_code=BUDGET_NOT_FOUND`.
 
 This prevents accidental unit confusion (e.g., reserving in tokens and committing in dollars).
 
@@ -189,10 +197,10 @@ However, a single reservation lifecycle uses exactly one unit. Multi-unit atomic
 
 Units define what Cycles is measuring:
 
-- **USD_MICROCENTS** — monetary cost with per-call precision (default)
+- **USD_MICROCENTS** — monetary cost with per-call precision
 - **TOKENS** — LLM token consumption
-- **CREDITS** — custom platform currency
-- **RISK_POINTS** — side-effect risk accounting
+- **CREDITS** — custom platform currency (optional in v0 implementations)
+- **RISK_POINTS** — side-effect risk accounting (optional in v0 implementations)
 
 Choosing the right unit depends on whether the primary concern is cost, capacity, pricing abstraction, or safety.
 
@@ -207,4 +215,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

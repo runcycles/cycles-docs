@@ -1,11 +1,11 @@
 ---
 title: "Add Cycles to Windsurf (MCP)"
-description: "60-second setup for adding Cycles budget enforcement to Windsurf (Codeium) via the MCP server. Config path, mock mode, common gotchas."
+description: "60-second setup for adding Cycles budget enforcement to Windsurf via the MCP server. Config path, mock mode, common gotchas."
 ---
 
 # Add Cycles to Windsurf
 
-This page is the exact setup for [Windsurf](https://codeium.com/windsurf). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
+This page is the exact setup for [Windsurf](https://windsurf.com). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
 Registering this MCP server gives Windsurf access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
@@ -13,7 +13,7 @@ Registering this MCP server gives Windsurf access to Cycles tools — `cycles_re
 
 ## Prerequisites
 
-- **Windsurf installed** ([download](https://codeium.com/windsurf))
+- **Windsurf installed** ([download](https://windsurf.com))
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.
 
@@ -85,7 +85,7 @@ Cascade should invoke `cycles_check_balance` and return the balances. The tool c
 - **Cascade mode required.** MCP tools are only available in Cascade (Windsurf's agent mode), not in inline completions or plain chat.
 - **Use env interpolation for secrets.** Windsurf expands `${env:NAME}` in MCP config fields including `env`, `url`, `serverUrl`, and `headers`. If Windsurf was launched from a GUI and cannot see your shell variables, set them in your OS environment or use a wrapper script.
 - **Tools list refreshes on Windsurf restart.** If you edit the config and the tools don't show, fully quit and reopen Windsurf (closing the window is not enough on macOS).
-- **Cascade has a total MCP tool limit** (currently 100 tools across all enabled servers). Cycles exposes only ~9 tools, but if you have many MCP servers enabled at once you may hit the cap — disable unused tools in the MCP settings panel.
+- **Cascade has a total MCP tool limit** (currently 100 tools across all enabled servers). Cycles exposes only 9 tools, but if you have many MCP servers enabled at once you may hit the cap — disable unused tools in the MCP settings panel.
 
 ## What Cycles adds
 

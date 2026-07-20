@@ -26,7 +26,7 @@ Every budget operation — reservation, commit, release, event — creates a str
 | `action` | What happened (kind, name, tags) |
 | `estimate` | Budget locked before execution (reservations) |
 | `actual` | Usage recorded after execution (commits and events) |
-| `status` | RESERVED, COMMITTED, RELEASED, EXPIRED, APPLIED |
+| `status` | ACTIVE, COMMITTED, RELEASED, EXPIRED (reservations); APPLIED (events) |
 | `metrics` | Operational metadata (tokens, latency, model version) |
 | `metadata` | Arbitrary key-value pairs for audit context |
 
@@ -48,7 +48,10 @@ curl -s "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&limit=50"
 
 ### Retention
 
-- **Hot storage (Redis)**: 90 days — queryable via API in real time
+- **Events**: 90 days in Redis (`EVENT_TTL_DAYS`) — queryable via API in real time
+- **Webhook deliveries**: 14 days (`DELIVERY_TTL_DAYS`)
+- **Terminal reservation hashes**: 30 days (auto-expired after commit, release, or expiry)
+- **Audit logs**: tiered — 400 days for authenticated entries, 30 days for unauthenticated failure captures
 - **Cold storage**: Export to S3, GCS, or any object store for long-term retention. Recommended: 1+ year for compliance
 
 ## Access control
@@ -65,6 +68,11 @@ All Cycles services run on the internal network. Only the load balancer is expos
 | Redis | 6379 | **Internal only** | Shared by all Cycles services — never exposed directly |
 
 <NetworkZones />
+
+Two hardening changes on the runtime server tighten this surface further:
+
+- **Actuator and API docs require the admin key** — as of cycles-server v0.1.25.45, the aggregate `/actuator/health`, `/actuator/info`, `/actuator/prometheus`, and the OpenAPI/Swagger endpoints require `X-Admin-API-Key`; they are no longer anonymously readable on the internal network. The Kubernetes probes (`/actuator/health/liveness`, `/actuator/health/readiness`) remain public.
+- **Public endpoints are rate-limited** — as of cycles-server v0.1.25.46, the unauthenticated evidence and JWKS endpoints are rate-limited (default 300 requests/minute per client, `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE`); excess requests receive `429 LIMIT_EXCEEDED`.
 
 ### API key security
 
@@ -96,12 +104,12 @@ See [Webhook Integrations](/how-to/webhook-integrations#signature-verification) 
 Webhook URLs are validated on creation and update to prevent Server-Side Request Forgery:
 
 - **HTTPS required** — HTTP URLs are rejected by default (`allow_http: false`)
-- **Private IP blocking** — Resolved IPs are checked against private/reserved ranges (loopback, RFC 1918, link-local, IPv6 private). This check is always enforced regardless of configuration.
+- **Private IP blocking** — Resolved IPs are checked against private/reserved ranges (loopback, RFC 1918, link-local, IPv6 private). This check is enforced by default.
 - **URL pattern allowlisting** — Optional `allowed_url_patterns` restrict accepted URLs to specific domains
 
 Default blocked CIDRs: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1/128`, `fc00::/7`
 
-Configuration is managed via `GET/PUT /v1/admin/config/webhook-security`. See the [Admin API Guide](/admin-api/guide#pillar-4-events-webhooks-v0-1-25) for examples.
+The blocked-CIDR list is admin-configurable via `GET/PUT /v1/admin/config/webhook-security`. The spec warns that removing blocked CIDR ranges may expose the server to SSRF attacks — treat the default list as a floor, not a suggestion. See the [Admin API Guide](/admin-api/guide#pillar-4-events-webhooks-v0-1-25) for examples.
 
 ### Signing secret encryption at rest
 

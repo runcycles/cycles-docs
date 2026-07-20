@@ -46,7 +46,10 @@ curl -s -X POST ".../fund" \
     estimate=2000000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    agent=current_user.id,  # Dynamically resolve from request context
+    # Callable: re-evaluated on every call, so each request resolves
+    # the current user (a bare `current_user.id` would be captured
+    # once at decoration time)
+    agent=lambda prompt: current_user.id,
 )
 def chat(prompt: str) -> str:
     ...
@@ -77,7 +80,8 @@ curl -s -X POST http://localhost:7979/v1/admin/budgets \
     estimate=2000000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    workflow=conversation_id,
+    # Callable receives the function's arguments at call time
+    workflow=lambda conversation_id, message: conversation_id,
 )
 def reply(conversation_id: str, message: str) -> str:
     ...
@@ -110,8 +114,9 @@ MODEL_TIERS = {
 @cycles(
     estimate=2000000,
     action_kind="llm.completion",
-    action_name=model_name,
-    toolset=MODEL_TIERS[model_name],
+    # Callables: resolved per call from the function's arguments
+    action_name=lambda model_name, prompt: model_name,
+    toolset=lambda model_name, prompt: MODEL_TIERS[model_name],
 )
 def call_model(model_name: str, prompt: str) -> str:
     ...
@@ -186,25 +191,28 @@ tenant:acme-corp/app:chatbot/toolset:tools      → $40  (tool use threshold)
 ```python
 from runcycles import BudgetExceededError, cycles
 
-# Try premium model first
-try:
-    @cycles(estimate=5000000, action_kind="llm.completion",
-            action_name="gpt-4o", toolset="premium")
-    def premium_response(prompt):
-        return call_gpt4o(prompt)
-    return premium_response(prompt)
-except BudgetExceededError:
-    pass  # Premium budget exhausted, fall through
+@cycles(estimate=5000000, action_kind="llm.completion",
+        action_name="gpt-4o", toolset="premium")
+def premium_response(prompt: str) -> str:
+    return call_gpt4o(prompt)
 
-# Fall back to cheap model
-try:
-    @cycles(estimate=200000, action_kind="llm.completion",
-            action_name="gpt-4o-mini")
-    def economy_response(prompt):
-        return call_gpt4o_mini(prompt)
-    return economy_response(prompt)
-except BudgetExceededError:
-    return "All budgets exhausted. Please try again later."
+@cycles(estimate=200000, action_kind="llm.completion",
+        action_name="gpt-4o-mini")
+def economy_response(prompt: str) -> str:
+    return call_gpt4o_mini(prompt)
+
+def respond(prompt: str) -> str:
+    # Try premium model first
+    try:
+        return premium_response(prompt)
+    except BudgetExceededError:
+        pass  # Premium budget exhausted, fall through
+
+    # Fall back to cheap model
+    try:
+        return economy_response(prompt)
+    except BudgetExceededError:
+        return "All budgets exhausted. Please try again later."
 ```
 
 ## Multi-tenant SaaS with per-customer budgets
@@ -232,7 +240,8 @@ The app resolves the scope from the authenticated request:
     estimate=2000000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    workspace=request.customer_id,
+    # Callable: resolves the customer per call
+    workspace=lambda request: request.customer_id,
 )
 def handle_request(request):
     ...

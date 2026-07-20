@@ -9,7 +9,7 @@ Streaming LLM responses require special handling because the actual cost is only
 
 ## The challenge
 
-With non-streaming calls, the `@cycles` decorator handles the full lifecycle automatically. With streaming, you need manual control because:
+With non-streaming calls, the `@cycles` decorator handles the full lifecycle automatically. Streaming needs different handling because:
 
 1. The reservation must stay alive for the duration of the stream
 2. Token counts accumulate incrementally
@@ -19,7 +19,62 @@ With non-streaming calls, the `@cycles` decorator handles the full lifecycle aut
 
 ### Python
 
-Use the programmatic `CyclesClient` (not the decorator) for streaming:
+Use `client.stream_reservation()`, a context manager that reserves budget on enter, auto-commits the actual cost on successful exit, and auto-releases on exception:
+
+```python
+from openai import OpenAI
+from runcycles import Action, Amount, CyclesClient, CyclesConfig, Unit
+
+client = CyclesClient(CyclesConfig.from_env())
+openai_client = OpenAI()
+
+PRICE_PER_INPUT_TOKEN = 250
+PRICE_PER_OUTPUT_TOKEN = 1_000
+
+def stream_with_budget(prompt: str, max_tokens: int = 1024) -> str:
+    estimated_cost = max_tokens * PRICE_PER_OUTPUT_TOKEN  # worst case
+
+    with client.stream_reservation(
+        action=Action(kind="llm.completion", name="gpt-4o"),
+        estimate=Amount(unit=Unit.USD_MICROCENTS, amount=estimated_cost),
+        cost_fn=lambda u: u.tokens_input * PRICE_PER_INPUT_TOKEN
+                          + u.tokens_output * PRICE_PER_OUTPUT_TOKEN,
+    ) as reservation:
+        # Respect budget caps
+        if reservation.caps and reservation.caps.max_tokens:
+            max_tokens = min(max_tokens, reservation.caps.max_tokens)
+
+        stream = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+
+        chunks = []
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                chunks.append(chunk.choices[0].delta.content)
+            if chunk.usage:  # the final chunk includes usage stats
+                reservation.usage.tokens_input = chunk.usage.prompt_tokens
+                reservation.usage.tokens_output = chunk.usage.completion_tokens
+
+    # Auto-committed on exit with the actual cost computed by cost_fn
+    return "".join(chunks)
+```
+
+The context manager handles the full lifecycle:
+
+- **On enter** — creates the reservation (default `ttl_ms=120_000`). A DENY or protocol error raises `CyclesProtocolError` (or a subclass such as `BudgetExceededError`), so the stream never starts without budget.
+- **During the stream** — a background heartbeat extends the TTL at half-TTL intervals automatically (background thread; asyncio task in the async variant). Update `reservation.usage` (`tokens_input`, `tokens_output`, or `set_actual_cost()`) as chunks arrive.
+- **On exit** — commits the actual cost: an explicit `set_actual_cost()` value wins, then `cost_fn(usage)`, then the estimate as fallback. If the body raised, the reservation is released instead.
+
+The subject defaults to the `CyclesConfig` subject fields; pass `subject=Subject(...)` to override. With `AsyncCyclesClient`, the same call returns an async context manager: `async with client.stream_reservation(...) as reservation:`.
+
+### Python: manual control
+
+Under the hood, `stream_reservation` drives the raw reserve → stream → commit/release calls. Use them directly only when you need control the context manager doesn't offer:
 
 ```python
 import uuid
@@ -48,6 +103,14 @@ def stream_with_budget(prompt: str, max_tokens: int = 1024) -> str:
 
     if not res.is_success:
         raise RuntimeError(f"Reservation failed: {res.error_message}")
+
+    # Defensive: a conformant server returns 409 on live budget denial, but
+    # dry-run responses (and lenient servers) return 200 with decision=DENY
+    # and no reservation_id - check before using it
+    if res.get_body_attribute("decision") == "DENY":
+        raise RuntimeError(
+            f"Reservation denied: {res.get_body_attribute('reason_code')}"
+        )
 
     reservation_id = res.get_body_attribute("reservation_id")
 
@@ -181,7 +244,7 @@ Streaming responses can take significantly longer than non-streaming calls. Set 
 | Medium (500–2000 tokens) | 60,000 ms |
 | Long (> 2000 tokens) | 120,000 ms |
 
-The Cycles client's automatic heartbeat (TTL extension at half-interval) is **not** available in the programmatic flow. If you need it, call `client.extend_reservation()` periodically during long streams:
+`stream_reservation` extends the TTL automatically via a half-TTL heartbeat, the same way the decorator does. Manual extension is only needed when you drive raw `create_reservation` calls yourself — call `client.extend_reservation()` periodically during long streams:
 
 ```python
 from runcycles import ReservationExtendRequest
@@ -198,7 +261,7 @@ client.extend_reservation(
 
 ## Release on failure
 
-Always release the reservation if streaming fails. This frees held budget immediately rather than waiting for TTL expiry:
+Always release the reservation if streaming fails. This frees held budget immediately rather than waiting for TTL expiry. `stream_reservation` does this automatically when the body raises; in the manual pattern:
 
 ```python
 try:
@@ -213,7 +276,7 @@ except Exception:
 
 ## Respecting caps
 
-Check for caps after creating the reservation:
+With `stream_reservation`, caps are available as `reservation.caps` immediately after entering the context (see the primary example above). In the manual pattern, check the raw response:
 
 ```python
 caps = res.get_body_attribute("caps")
@@ -229,9 +292,9 @@ For streaming, a good estimate is `max_tokens × output_price`, since output tok
 
 ## Key points
 
-- **Use the programmatic client**, not the decorator, for streaming.
+- **Use `stream_reservation`**, not the decorator, for streaming in Python — it handles reserve, heartbeat, commit, and release for you.
 - **Set a longer TTL** to cover the full stream duration.
-- **Always release on failure** to free held budget.
+- **Always release on failure** to free held budget (automatic with `stream_reservation`).
 - **Commit the actual cost** after the stream completes using usage data from the final chunk.
 - **The estimate holds budget** — the difference between estimate and actual is freed at commit time.
 
@@ -241,7 +304,7 @@ See [`examples/streaming_usage.py`](https://github.com/runcycles/cycles-client-p
 
 ## Java / Spring Boot
 
-The Spring Boot starter's `@Cycles` annotation does not support streaming responses. For streaming in Java, use the programmatic `CyclesClient` directly with the same reserve → stream → commit pattern shown above for Python. See the [Spring Boot starter overview](/quickstart/getting-started-with-the-cycles-spring-boot-starter) for the broader integration model.
+The Spring Boot starter's `@Cycles` annotation does not support streaming responses. For streaming in Java, use the programmatic `CyclesClient` directly with the reserve → stream → commit pattern shown in the Python manual-control section above. See the [Spring Boot starter overview](/quickstart/getting-started-with-the-cycles-spring-boot-starter) for the broader integration model.
 
 ## Next steps
 

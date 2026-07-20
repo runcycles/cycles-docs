@@ -28,10 +28,9 @@ LangChain.js fires callback events on every LLM call. A custom `BaseCallbackHand
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { Serialized } from "@langchain/core/load/serializable";
 import { LLMResult } from "@langchain/core/outputs";
-import { v4 as uuidv4 } from "uuid";
 import {
+  BudgetExceededError,
   CyclesClient,
-  CyclesConfig,
 } from "runcycles";
 
 interface CyclesBudgetHandlerOptions {
@@ -67,7 +66,7 @@ export class CyclesBudgetHandler extends BaseCallbackHandler {
     _prompts: string[],
     runId: string,
   ): Promise<void> {
-    const key = uuidv4();
+    const key = crypto.randomUUID();
     this.keys.set(runId, key);
 
     const res = await this.client.createReservation({
@@ -80,6 +79,15 @@ export class CyclesBudgetHandler extends BaseCallbackHandler {
 
     if (!res.isSuccess) {
       throw new Error(res.errorMessage ?? "Reservation failed");
+    }
+
+    // A DENY comes back as HTTP 2xx with decision: "DENY" and no
+    // reservation_id — isSuccess alone does not enforce the budget.
+    if (res.getBodyAttribute("decision") === "DENY") {
+      throw new BudgetExceededError("Budget denied for LLM call", {
+        status: res.status,
+        reasonCode: res.getBodyAttribute("reason_code") as string | undefined,
+      });
     }
 
     this.reservations.set(runId, res.getBodyAttribute("reservation_id") as string);
@@ -122,6 +130,8 @@ export class CyclesBudgetHandler extends BaseCallbackHandler {
   }
 }
 ```
+
+Note that the programmatic client returns responses instead of throwing typed errors, so the handler throws `BudgetExceededError` itself when the decision is `DENY` — that is what makes the `catch` blocks below work. Alternatively, wrap the whole chain in `withCycles`, which throws `BudgetExceededError` natively on a denial, as in the SDK's [langchain-js example](https://github.com/runcycles/cycles-client-typescript/blob/main/examples/langchain-js/src/chain.ts).
 
 ## Using the handler
 

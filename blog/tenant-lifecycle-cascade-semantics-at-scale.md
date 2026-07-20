@@ -51,14 +51,16 @@ Any combination of these carries real operational and security risk: silent post
 
 The Cycles governance-admin spec addresses this directly with a two-rule contract, formalized in the `CASCADE SEMANTICS` section of the v0.1.25 governance-admin yaml.
 
-**Rule 1 — Close Cascade.** When a tenant transitions to `CLOSED`, the server performs a strictly ordered sequence against every owned object:
+**Rule 1 — Close Cascade.** When a tenant transitions to `CLOSED`, the server drives every owned object to its terminal state. In the atomic presentation (Mode A, below), the spec's recommended order within the single transaction is:
 
 1. Drain open reservations (released with reason `tenant_closed`; no overage debt recorded).
 2. Close budget ledgers (final balance snapshot preserved for audit; no new reservations accepted).
 3. Disable webhook subscriptions and revoke API keys (either order).
 4. Flip `tenant.status` to `CLOSED` last.
 
-Each mutated object writes a dedicated audit entry using a reserved `event_kind` value — `budget.closed_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade` — all sharing the `correlation_id` of the originating `tenant.closed` entry, so an auditor can reconstruct the cascade in a single query over the audit trail.
+Mode B (below) inverts this by design — the tenant flip commits *first*, and the children converge afterward under the Rule 2 guard. Since the runcycles reference server implements Mode B, don't build tooling that depends on this ordering; depend on the terminal states and the guard.
+
+Each mutated object produces a dedicated record: an Event row under a reserved dotted name — `budget.closed_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `reservation.released_via_tenant_cascade` (ledger-level), `webhook.disabled_via_tenant_cascade` — plus an audit row written as `operation="tenant_close_cascade"` with `resource_type`/`resource_id`. The event rows all share a server-composed `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`) on the emitted event rows, so an auditor can reconstruct the cascade in a single events query (audit rows join via `request_id`/`trace_id`).
 
 **Rule 2 — Terminal-Owner Mutation Guard.** Every mutating endpoint on an owned object first checks the parent tenant's status. If the tenant is `CLOSED`, the endpoint returns `409 Conflict` with `error: "TENANT_CLOSED"`, regardless of the per-object terminal state. The guard applies across the budget, reservation, policy, API key, and webhook planes. `GET` endpoints remain available — closed-tenant state is readable for post-mortems and compliance evidence.
 
@@ -77,7 +79,7 @@ How these rules are implemented can vary. A protocol spec that only accepted one
 - Convergence within a documented bound.
 - Observable reads of non-terminal children remain consistent until the cascade reaches them.
 
-The important property is that both modes produce the same *client-observable* outcome: once the tenant is `CLOSED`, every mutation against any owned object returns a `409` with `error: "TENANT_CLOSED"`, regardless of which per-object row flipped first. The mode is an implementation detail the spec deliberately leaves open — a transactional SQL backend can deliver Mode A cleanly, while a Redis-backed admin can opt into Mode B as long as the guard activates at or before the flip's durability.
+The important property is that both modes produce the same *client-observable* outcome: once the tenant is `CLOSED`, every admin-plane mutation against any owned object returns a `409` with `error: "TENANT_CLOSED"`, regardless of which per-object row flipped first — and the same guard holds post-auth on the runtime plane, where a revoked tenant key is rejected with `401` before the guard is ever consulted (the close walkthrough below shows both doors). The mode is an implementation detail the spec deliberately leaves open — a transactional SQL backend can deliver Mode A cleanly, while a Redis-backed admin can opt into Mode B as long as the guard activates at or before the flip's durability.
 
 ## Where operators actually trip
 
@@ -105,20 +107,25 @@ curl -X PATCH \
   "http://localhost:7979/v1/admin/tenants/acme-corp"
 ```
 
-The response acknowledges the status flip. Under Mode B, it returns once the flip is durable — the cascade across owned objects may still be completing. A follow-up query against the audit trail confirms the aftermath, since the cascade entries are reserved audit `event_kind` values, not event-stream types:
+The response acknowledges the status flip. Mode B permits an implementation to return once the flip is durable while a reconciler completes the cascade in the background — but note the runcycles Redis-backed server flips first and then runs the cascade **inline, before responding**, so by the time you read the PATCH response the cascade is done. A follow-up query confirms the aftermath — either the audit trail (`operation=tenant_close_cascade`, inspecting `resource_type`/`resource_id`) or the events API (`correlation_id=tenant_close_cascade:<tenant_id>:<request_id>` for the dotted event types):
 
 ```bash
 # Pull cascade audit entries tied to this close
 curl -s -H "X-Admin-API-Key: $ADMIN_KEY" \
-  "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&limit=50" | jq
+  "http://localhost:7979/v1/admin/audit/logs?tenant_id=acme-corp&operation=tenant_close_cascade" \
+  | jq '.logs[] | {operation, resource_type, resource_id}'
 ```
 
-You'll see one audit entry per owned object: one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription, and one `reservation.released_via_tenant_cascade` per open reservation that was drained. All share a `correlation_id` with the top-level `tenant.closed` entry, which is how an auditor reconstructs the cascade without having to cross-join on timestamp.
+You'll see one record per owned object — one `budget.closed_via_tenant_cascade` per ledger, one `api_key.revoked_via_tenant_cascade` per key, one `webhook.disabled_via_tenant_cascade` per subscription — plus one **ledger-level** `reservation.released_via_tenant_cascade` per closed budget that had `reserved > 0`, carrying the aggregate `released_amount` (not one event per reservation). The corresponding event rows all share the server-composed cascade `correlation_id`, which is how an auditor reconstructs the cascade without having to cross-join on timestamp (audit rows join via the originating `request_id`).
 
-A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane:
+A subsequent attempt to mutate an owned object under the closed tenant returns the terminal-owner guard's `409`. Reservation lifecycle lives on the runtime plane — the spec's Rule 2 explicitly scopes reservation create/commit/release/extend, so the `409 TENANT_CLOSED` below is the normative contract — implemented in `cycles-server` 0.1.25.47, which added `TENANT_CLOSED` to the runtime error enum per spec revision v0.1.25.13 (on 0.1.25.46 and earlier, the runtime plane surfaces closed tenants only as `401`s from revoked keys or `BUDGET_CLOSED`):
 
 ```bash
 # Mutation on a released reservation under a closed tenant
+# (reachable with a not-yet-revoked tenant key in the post-flip window —
+# once the cascade revokes the key, the 401 below wins first. Of the four
+# guarded mutations only release also accepts an admin key on the runtime
+# plane, so an admin-on-behalf-of release hits this 409 with no race.)
 curl -i -X POST \
   -H "X-Cycles-API-Key: $TENANT_KEY" \
   "http://localhost:7878/v1/reservations/res-xyz/commit"
@@ -149,7 +156,7 @@ The cascade pattern isn't novel. It's the default in well-designed multi-tenant 
 | **Stripe Connect** | Account rejection via `POST /v1/accounts/:id/reject` | Charges refused, payouts held, API keys de-scoped | One-way after rejection |
 | **Okta** | Tenant deletion | SSO sessions terminated, service accounts deprovisioned | One-way after hard delete |
 | **Slack** | Channel archival (workspace-level has its own process) | Channels made read-only, integrations disabled | Channel archival is reversible (archive/unarchive) |
-| **Cycles** | Tenant CLOSED via two-rule cascade | Budgets, keys, reservations, webhook subscriptions, policies | One-way; use `SUSPENDED` for reversible block |
+| **Cycles** | Tenant CLOSED via two-rule cascade | Budgets, keys, reservation aggregates, webhook subscriptions (policy rows are not terminal-transitioned; their mutations are blocked by Rule 2) | One-way; use `SUSPENDED` for reversible block |
 
 The pattern is consistent: *terminal states must enforce themselves against the whole subtree*, and operators need a distinct *suspended* state for the much more common case of "pause this customer without terminating anything."
 
@@ -161,7 +168,7 @@ Before you close a tenant in production, the five things worth checking:
 2. **Drain known long-running workflows.** In-flight reservations will be released automatically with `reason: tenant_closed`, but if your system equates "reservation released" with "agent must retry," now is the time to signal the agent stack that a close is coming.
 3. **Snapshot what will be terminated.** List the tenant's open budgets, API keys, and webhook subscriptions via the admin `GET` endpoints before the close. These rows stay readable forever, but downstream reports sometimes aggregate only on `ACTIVE` rows — a pre-close snapshot avoids a surprise gap in month-end reconciliation.
 4. **Use a dedicated `Idempotency-Key`.** Close is idempotent — re-issuing on an already-`CLOSED` tenant is a no-op — but the idempotency key lets you safely retry across network flaps.
-5. **Verify cascade completion.** Query the audit trail for the tenant and confirm one `*_via_tenant_cascade` entry per owned object, all sharing the `correlation_id` of the originating `tenant.closed` entry. Rule 2 is already active at the moment of the flip, so any lag between the flip and the audit entries is an enforcement-safe interval — but it's still a signal worth paging the operator channel on.
+5. **Verify cascade completion.** Query the audit trail for the tenant and confirm one `*_via_tenant_cascade` record per owned object — the event rows share the cascade `correlation_id` (`tenant_close_cascade:<tenant_id>:<request_id>`). Rule 2 is already active at the moment of the flip, so on reconciler-based Mode B implementations any lag between the flip and the cascade records is an enforcement-safe interval (the runcycles server cascades inline before responding, so there should be no lag) — a persistent shortfall is a signal worth paging the operator channel on.
 
 ## The takeaway
 

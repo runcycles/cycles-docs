@@ -160,6 +160,21 @@ def code_review(code: str) -> str:
 
 This gives you a budget hierarchy: `tenant (acme)` > `workspace (content-team / engineering-team)` > `agent (researcher / code-reviewer)`. Each level can have its own budget limits set by the budget authority.
 
+::: tip Callable subject and action fields (runcycles 0.4.0+)
+The subject (`tenant`, `workspace`, `agent`, ...) and action (`action_kind`, `action_name`, ...) parameters on `@cycles` also accept callables that receive the decorated function's arguments at reservation time — so a single decorated function can route budgets per crew or per tenant:
+
+```python
+@cycles(
+    estimate=2_000_000,
+    action_kind="llm.completion",
+    action_name=lambda topic, **kw: kw.get("crew_name", "default-crew"),
+    tenant=lambda topic, **kw: kw.get("tenant", "acme"),
+)
+def run_crew_task(topic: str, tenant: str = "acme", crew_name: str = "default-crew") -> str:
+    ...
+```
+:::
+
 ## Error handling
 
 When a budget is insufficient, `BudgetExceededError` is raised **before** CrewAI executes:

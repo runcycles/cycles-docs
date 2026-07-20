@@ -31,12 +31,15 @@ Compose them in a single `middleware=[...]` list. The natural ordering is **fan-
 ### Install
 
 ```bash
-pip install langchain-runcycles
+pip install langchain-runcycles langchain-anthropic
 ```
+
+The quick starts below use Claude models, so install `langchain-anthropic` and set `ANTHROPIC_API_KEY` too.
 
 ```bash
 export CYCLES_BASE_URL="http://localhost:7878"
 export CYCLES_API_KEY="your-api-key"
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 ### Quick start
@@ -86,12 +89,16 @@ Both `CyclesToolGate` and `CyclesModelGate` (v0.1.5+) share the same three modes
 | Mode | Behavior |
 |---|---|
 | `"decide"` | Calls `client.decide()`. Denies the call on a non-allow decision. No reservation. |
-| `"reserve"` | Creates a reservation, runs the model/tool, commits on success (at the configured `estimate`), releases on exception. |
+| `"reserve"` | Creates a reservation, runs the model/tool, commits on success at the configured `estimate` (unless `cost_fn` is set — see the tips below), releases on exception. |
 | `"decide+reserve"` | Authorizes via `decide()` first, then reserves and commits. Most strict. |
+
+::: tip Tool-side actual-cost extraction (v0.3.0+)
+`CyclesToolGate` also accepts a `cost_fn: ToolCostFn` — a `Callable[[ToolCallRequest, Any], Amount]`, with the `ToolCostFn` alias exported from the package root. When supplied, the gate calls `cost_fn(request, result)` after the tool handler returns and commits at the returned `Amount` instead of the configured `estimate`. The request exposes the tool name, arguments, call id, and state, so one router-style extractor can price multiple tools from a single gate. Without `cost_fn`, commit-at-estimate is the fallback; if `cost_fn` raises or returns a non-`Amount`, the gate logs a warning and falls back to `estimate` so a costing bug never erases a successful tool result. This mirrors the `CyclesModelGate` actual-cost tip below.
+:::
 
 ### Settlement-failure policy (v0.1.2+)
 
-If `commit_reservation` fails after a successful tool run, the tool's side effect already happened. `settlement_error_policy` on `CyclesToolGate` controls what happens next:
+If `commit_reservation` fails after a successful tool run, the tool's side effect already happened. `settlement_error_policy` controls what happens next. It exists on both `CyclesToolGate` (v0.1.2+) and `CyclesModelGate` (v0.1.5+), and since v0.2.3 it applies to HTTP-failure commit responses as well as raised exceptions:
 
 | Policy | Behavior | When to choose |
 |---|---|---|

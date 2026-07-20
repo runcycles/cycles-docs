@@ -37,6 +37,8 @@ When a commit or event uses the `ALLOW_WITH_OVERDRAFT` overage policy and the ac
 2. If yes: the commit succeeds, the delta is added to debt, and remaining can go negative
 3. If no: the commit is rejected with `409 OVERDRAFT_LIMIT_EXCEEDED`
 
+For commits, the delta is the overage beyond what was reserved. Events (`POST /v1/events`) have no reservation to net against — the full actual amount is the debit, so the overdraft check becomes `(current_debt + actual) <= overdraft_limit` and, on success, the full actual is added to debt.
+
 This means the system can absorb overages up to a defined limit, then stops.
 
 ## Key concepts
@@ -59,13 +61,15 @@ If the limit is absent or zero, no overdraft is permitted (the scope behaves as 
 
 When debt exceeds the overdraft limit — typically due to concurrent commits — the scope enters an over-limit state.
 
+The same state can also be entered with **zero debt**: under `ALLOW_IF_AVAILABLE`, when the full overage delta cannot be covered, the server caps the charge and sets `is_over_limit` to `true` — without ever creating debt.
+
 In this state:
 
 - `is_over_limit` is `true` on the balance
 - all new reservations against that scope are rejected with `409 OVERDRAFT_LIMIT_EXCEEDED`
 - existing active reservations can still be committed or released normally
 
-The scope remains blocked until debt is repaid below the overdraft limit.
+The scope remains blocked until reconciled — debt repaid below the overdraft limit, or, on the zero-debt path, `is_over_limit` cleared by operator action.
 
 ### remaining (can be negative)
 
@@ -105,13 +109,13 @@ When `is_over_limit` is true:
 
 4. **The block is automatic.** No operator action is needed to enforce the block — it is protocol-level.
 
-5. **Recovery is through funding.** The scope is unblocked when debt is repaid below the overdraft limit through budget funding operations (which are outside the scope of the v0 protocol).
+5. **Recovery is through funding or operator action.** The scope is unblocked when debt is repaid below the overdraft limit through budget funding operations (which are outside the scope of the v0 protocol). When the over-limit state was entered with zero debt (the capped `ALLOW_IF_AVAILABLE` path), there is no debt to repay — an operator clears `is_over_limit` directly.
 
 ## Debt vs budget denial
 
 These are different situations:
 
-**Budget denial** (`BUDGET_EXCEEDED`): the scope has no remaining budget and the overage policy is `REJECT` or `ALLOW_IF_AVAILABLE`. The commit or reservation is refused. No debt is created.
+**Budget denial** (`BUDGET_EXCEEDED`): the request is refused and no debt is created. At commit time this happens only under the `REJECT` overage policy — `ALLOW_IF_AVAILABLE` never rejects a commit; it caps the charge to available remaining instead. At reservation time, a denial occurs when the estimate exceeds remaining budget, regardless of overage policy.
 
 **Debt creation** (`ALLOW_WITH_OVERDRAFT`): the scope has insufficient budget, but the overage policy allows debt. The commit succeeds, debt is recorded, and the ledger reflects reality.
 
@@ -167,8 +171,8 @@ The key mechanisms:
 
 - **overdraft_limit** defines how much debt a scope can tolerate
 - **debt** records actual consumption beyond available budget
-- **is_over_limit** blocks new reservations when debt exceeds the limit
-- **recovery** happens through budget funding, which is outside the v0 protocol scope
+- **is_over_limit** blocks new reservations when debt exceeds the limit — or when a capped `ALLOW_IF_AVAILABLE` overage could not be fully covered, even with zero debt
+- **recovery** happens through budget funding (or operator clearing on the zero-debt path), which is outside the v0 protocol scope
 
 This gives teams accurate ledger state, bounded risk, and a clear path to resolution.
 
@@ -181,4 +185,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

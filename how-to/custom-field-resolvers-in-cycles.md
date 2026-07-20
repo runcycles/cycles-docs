@@ -32,6 +32,10 @@ For each Subject field (tenant, workspace, app, workflow, agent, toolset), the s
 
 This means a resolver is the fallback. It is only called when the annotation and configuration do not provide a value.
 
+::: tip Value already in a method argument?
+Since 0.2.1, subject fields on `@Cycles` accept SpEL directly — `@Cycles(value = "1000", tenant = "#tenantId")` pulls the tenant from a method argument without a resolver bean. Resolvers are for values that come from outside the method signature (security context, database, thread-local state).
+:::
+
 ## Creating a resolver
 
 Register a Spring bean whose name matches the Subject field you want to resolve.
@@ -168,26 +172,17 @@ public class TenantResolver implements CyclesFieldResolver {
 The effective values depend on the annotation:
 
 ```java
-// Uses annotation value: "explicit-tenant"
+// Uses the annotation value: "explicit-tenant"
 @Cycles(value = "1000", tenant = "explicit-tenant")
 public void method1() { ... }
 
-// Uses config value: "default-tenant" (config takes priority over resolver)
+// No annotation value → uses the config value: "default-tenant".
+// The resolver is never called because config already provides a value.
 @Cycles("1000")
 public void method2() { ... }
-
-// If cycles.tenant is NOT set in config, uses resolver: "resolved-tenant"
-@Cycles("1000")
-public void method3() { ... }
 ```
 
-Wait — this needs clarification. The resolution order is:
-
-1. Annotation value (if non-empty)
-2. Config property (if non-empty)
-3. Field resolver bean (if exists and returns non-null)
-
-So in `method2()` above, the config value `default-tenant` is used, and the resolver is not called.
+The resolver is only consulted when neither the annotation nor configuration provides a value. With the configuration above, `TenantResolver` never runs. Remove `cycles.tenant` from the configuration and `method2()` resolves to `"resolved-tenant"` from the resolver bean instead.
 
 ## Returning null
 
