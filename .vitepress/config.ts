@@ -279,6 +279,7 @@ export default defineConfig({
         items: [
           { text: 'Talk to the team', link: '/contact' },
           { text: 'Become a design partner', link: '/design-partners' },
+          { text: 'Privacy Policy', link: '/privacy' },
         ],
       },
     ],
