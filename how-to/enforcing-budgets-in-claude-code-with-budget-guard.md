@@ -1,13 +1,13 @@
 ---
 title: "Enforcing Budgets in Claude Code with Budget Guard"
-description: "Install the Cycles Budget Guard plugin: PreToolUse hooks reserve budget before every tool call, a Cycles DENY blocks execution at the dispatch layer, and every executed action is settled — commit, release, or fallback event."
+description: "Install Cycles Budget Guard for Claude Code, reserve budget before gated tool calls, block DENY decisions at dispatch, and retry recorded-action settlement."
 ---
 
 # Enforcing Budgets in Claude Code with Budget Guard
 
-The [Cycles MCP server](/how-to/integrating-cycles-with-mcp) gives agents budget *tools* — but honoring a DENY inside the agent's tool loop is cooperative: nothing in MCP forces the model to reserve before acting. The **Cycles Budget Guard plugin** closes that gap on Claude Code by putting Cycles in the **dispatch path**: a `PreToolUse` hook reserves budget before each gated tool call, and a DENY blocks the call at the harness layer. The model cannot skip it.
+The [Cycles MCP Server](/how-to/integrating-cycles-with-mcp) gives agents budget *tools* — but honoring a `DENY` inside the agent's tool loop is cooperative: nothing in MCP forces the model to reserve before acting. **Cycles Budget Guard** closes that gap on Claude Code by putting Cycles in the **tool dispatch path**: a `PreToolUse` hook reserves budget before each gated tool call, and a `DENY` blocks the call at the harness layer. The model cannot skip that hook decision.
 
-Repository: [runcycles/cycles-claude-plugin](https://github.com/runcycles/cycles-claude-plugin) (Apache-2.0, zero runtime dependencies).
+Repository: [runcycles/cycles-claude-plugin](https://github.com/runcycles/cycles-claude-plugin) (Apache-2.0, zero runtime dependencies). The hooks require Node.js 22 or newer.
 
 ## Install
 
@@ -16,53 +16,58 @@ Repository: [runcycles/cycles-claude-plugin](https://github.com/runcycles/cycles
 /plugin install cycles-budget-guard@runcycles
 ```
 
-(Also submitted to the official `claude-plugins-official` directory — install from there once listed.)
-
 Then configure the environment Claude Code runs in:
 
 ```bash
 export CYCLES_BASE_URL=https://your-cycles-server
 export CYCLES_API_KEY=your-key
-export CYCLES_DEFAULT_TENANT=acme        # required — defines whose budget is charged
+export CYCLES_DEFAULT_TENANT=acme        # one subject field is required; tenant shown
 export CYCLES_DEFAULT_APP=claude-code    # optional, finer attribution
 ```
 
-Unconfigured (no base URL or no subject default), the plugin is fully dormant — it never half-enforces. An **invalid** value fails loudly by blocking calls with an error naming the variable.
+The protocol requires at least one standard subject field: `tenant`, `workspace`, `app`, `workflow`, `agent`, or `toolset`. It does not specifically require `tenant`; see [Understanding Tenants, Scopes, and Budgets](/how-to/understanding-tenants-scopes-and-budgets-in-cycles) when choosing the routing subject. Without a base URL or subject default, the plugin remains dormant. Once configured, an invalid value blocks calls and identifies the affected variable.
 
-## What happens on every gated tool call
+## How Claude Code budget enforcement works
 
-1. **PreToolUse** reserves a flat per-call cost. The call is **blocked** on: a Cycles `DENY`; any authoritative protocol rejection (budget exhausted, frozen, or closed; debt; auth failure; invalid request); or any malformed response — a garbled answer never grants execution. Fail-open applies only to genuine outages (5xx, network errors, a 4-second timeout), and `CYCLES_CC_FAIL_CLOSED=true` blocks on those too.
-2. **Caps are enforced, not advisory.** `ALLOW_WITH_CAPS` tool allow/denylists block violating calls at the gate (allowlist precedence per the protocol spec); remaining caps (max tokens, cooldown) are injected into the model's context.
-3. **PostToolUse** (success) commits the reservation. If the reservation expired mid-run — long tool, permission prompt — the executed action is still charged via an idempotent usage event. **Executed actions are never released.**
-4. **PostToolUseFailure** releases the hold: failed attempts return budget instead of charging it.
-5. **SessionEnd / SessionStart** settle anything the per-call hooks could not. Recovery is scoped by a routing hash of (server, subject, unit), so a machine running multiple projects can never charge one project's budget for another's action.
+1. **`PreToolUse`** reserves a flat per-call cost. The call is **blocked** on: a Cycles `DENY`; any authoritative protocol rejection (budget exhausted, frozen, or closed; debt; auth failure; invalid request); or any malformed response. Fail-open applies only to genuine outages (5xx, network errors, a four-second timeout). A fail-open call is unmetered because no reservation exists; `CYCLES_CC_FAIL_CLOSED=true` blocks that path.
+2. **Tool-list caps are enforced at the gate.** `ALLOW_WITH_CAPS` tool allowlists and denylists block violating calls, with [allowlist precedence defined by the protocol](/protocol/caps-and-the-three-way-decision-model-in-cycles). Max-token, remaining-step, and cooldown caps are added to model context as guidance rather than mechanically enforced by the hook.
+3. **`PostToolUse`** (success) durably changes the reservation record from `hold` to `commit`, then attempts settlement. If the reservation expired, was finalized, or is missing, the hook submits an idempotent usage event. This recovery path begins only after the successful outcome is durably recorded.
+4. **`PostToolUseFailure`** attempts to release a `hold` for a call Claude Code reports as failed and retains a failed release for retry. A failed tool can still have partial side effects, so this hook outcome is not proof that no work occurred.
+5. **`SessionEnd`** retries releases, commits, and usage events for the ending session. **`SessionStart`** replays commit and usage-event records across sessions with the same routing identity, but deliberately leaves unresolved `hold` records to their owning session or server-side TTL. State is scoped per OS user to a routing hash of (base URL, full subject, unit). Different routing identities cannot see one another's records; projects using the same tuple share a recovery scope.
 
-## Configuration reference
+## Budget Guard options
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `CYCLES_CC_UNIT` | `CREDITS` | Unit charged per tool call |
-| `CYCLES_CC_COST` | `1` | Flat cost reserved + committed per call |
-| `CYCLES_CC_SKIP_TOOLS` | `^(Read\|Glob\|Grep\|LS\|NotebookRead\|TodoWrite\|AskUserQuestion)$` | Tools never gated (default: local zero-cost reads). Set `^$` to gate everything |
+| `CYCLES_CC_UNIT` | `CREDITS` | Unit requested for each gated reservation |
+| `CYCLES_CC_COST` | `1` | Flat amount requested for each gated reservation |
+| `CYCLES_CC_SKIP_TOOLS` | `^(Read\|Glob\|Grep\|LS\|NotebookRead\|TodoWrite\|AskUserQuestion)$` | Configurable tools not gated by default. Set `^$` to gate every non-Cycles tool |
 | `CYCLES_CC_FAIL_CLOSED` | `false` | `true` blocks calls when the Cycles server is unreachable |
 | `CYCLES_CC_TTL_MS` | `1800000` (30 min) | Reservation TTL; must outlive permission prompts and long tool runs |
 
-The Cycles budget tools themselves are never gated (exact-namespace recursion guard), and the plugin bundles the pinned Cycles MCP server so the model can plan with `cycles_check_balance` and explicit reserves while the hooks enforce. `/cycles-budget-guard:budget` prints a budget status report.
+The Cycles budget tools themselves are never gated (exact-namespace recursion guard). The plugin configures the pinned companion Cycles MCP Server, `@runcycles/mcp-server@0.6.0`, which `npx` fetches as needed rather than the plugin vendoring it. The model can plan with `cycles_check_balance` and explicit reserves while the dispatch hook gates other configured tools.
 
-## Semantics worth knowing
+## Verify enforcement
 
-- **Identity and retries**: idempotency keys derive from Claude Code's per-call `tool_use_id` — transport retries replay the same reservation; distinct identical calls charge separately.
-- **Integrity vs. availability**: a response the plugin cannot interpret (unknown decision, missing reservation id, mistyped caps) is treated as an integrity failure and **denied** — only outages are eligible for fail-open. Settlement responses must confirm `COMMITTED`/`RELEASED`/`APPLIED` before local state is cleared.
-- **Privacy**: only subject identifiers, tool *names*, unit/amount, and locally computed hash digests leave the machine. Tool arguments, file contents, and prompts are never transmitted. Policy: [runcycles.io/privacy](/privacy).
+1. Use a test subject with an exhausted, frozen, or closed Cycles budget.
+2. Ask Claude Code to run a gated action such as a `Bash` command.
+3. Confirm the reservation is denied and the tool does not execute.
+4. Run `/cycles-budget-guard:budget` to inspect the active budget and routing identity.
+
+## Failure, retry, and privacy semantics
+
+- **Identity and retries**: when Claude Code supplies a non-empty per-call `tool_use_id`, transport retries reuse the same reservation and distinct IDs remain distinct. Older inputs without `tool_use_id` use a hash of session, prompt, tool, and input; identical fallback calls can collide and undercount.
+- **Integrity vs. availability**: a reserve response the plugin cannot interpret (unknown decision, missing reservation id, mistyped caps) is treated as an integrity failure and **denied** — only outages are eligible for fail-open. A malformed settlement response retains local state for retry; state is cleared only after `COMMITTED`, `RELEASED`, or `APPLIED` is confirmed.
+- **Privacy**: Cycles hook requests include the configured API credential, subject identifiers, tool name, unit/amount, reservation TTL or ID and fixed settlement reasons as needed, plus opaque idempotency digests computed locally. Raw tool arguments, file contents, and prompts are not included in Cycles request bodies; Claude Code's model-provider traffic is separate. Policy: [runcycles.io/privacy](/privacy).
 - **Platform**: Claude Code only. Cowork support is deliberately unclaimed until hook and environment behavior are verified there.
 
-## When to use which
+## Choose the Cycles MCP Server or Budget Guard
 
-| | MCP server alone | Budget Guard plugin |
+| Capability | Cycles MCP Server alone | Cycles Budget Guard plugin |
 |---|---|---|
-| Model can check balances, reserve, meter | ✅ | ✅ (bundled server) |
-| DENY blocks tool execution | ❌ cooperative | ✅ dispatch-path |
-| Works on any MCP host | ✅ | Claude Code only |
-| Setup | add server | add plugin + env |
+| Balance, reservation, and metering tools | Available | Available through the pinned companion server |
+| Pre-execution tool blocking | Cooperative only | Hook-enforced for gated tools |
+| Host support | Any compatible MCP host | Claude Code only |
+| Setup | Add server | Add plugin and environment configuration |
 
-For other hosts, see the [security model](https://github.com/runcycles/cycles-mcp-server#security-model--enforcement-boundary) and the dispatch-path integrations (OpenClaw guard, framework middleware).
+For other hosts, see the [security model](https://github.com/runcycles/cycles-mcp-server#security-model--enforcement-boundary), the [OpenClaw integration](/how-to/integrating-cycles-with-openclaw), and the guide to [choosing an integration pattern](/how-to/choosing-the-right-integration-pattern).

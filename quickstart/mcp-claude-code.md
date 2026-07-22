@@ -7,12 +7,8 @@ description: "60-second setup for adding Cycles budget enforcement to Claude Cod
 
 This page is the exact setup for [Claude Code](https://www.claude.com/claude-code). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
-::: tip Want enforcement the model can't skip?
-The MCP server gives Claude budget *tools*; the [Budget Guard plugin](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) additionally gates every tool call with PreToolUse hooks — a Cycles DENY blocks execution at the harness layer.
-:::
-
 ::: warning MCP availability is not enforcement
-Registering this MCP server gives Claude Code access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
+Registering this MCP server gives Claude Code access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For dispatch-path enforcement in Claude Code, [Cycles Budget Guard](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools with `PreToolUse` hooks. For other hosts, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
 :::
 
 ## Prerequisites

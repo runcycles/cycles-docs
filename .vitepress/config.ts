@@ -482,7 +482,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { text: 'MCP (Claude, Cursor, Windsurf)', link: '/how-to/integrating-cycles-with-mcp' },
-                { text: 'Claude Code Budget Guard plugin', link: '/how-to/enforcing-budgets-in-claude-code-with-budget-guard' },
+                { text: 'Cycles Budget Guard for Claude Code', link: '/how-to/enforcing-budgets-in-claude-code-with-budget-guard' },
                 { text: 'MCP server over HTTP / SSE', link: '/how-to/running-the-mcp-server-over-http' },
                 { text: 'OpenAI Agents', link: '/how-to/integrating-cycles-with-openai-agents' },
                 { text: 'OpenClaw', link: '/how-to/integrating-cycles-with-openclaw' },
