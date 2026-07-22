@@ -10,9 +10,7 @@ sidebar: false
 
 # Cycles Budget Guard: Hard Budget Enforcement for Claude Code
 
-A few weeks ago, someone asked us the question every enforcement product should be able to answer:
-
-> *"If a prompt injection or a hallucinated argument made the agent try to reserve an impossibly large budget, what actually enforces that the call is denied before it executes?"*
+A few weeks ago, a security-minded reader asked us the question every enforcement product should be able to answer — paraphrasing: *if a prompt injection or a hallucinated argument makes the agent request something the budget should forbid, what actually stops it before execution?*
 
 Our honest answer had two parts. Server-side, Cycles is authoritative: an oversized reserve can't grant authority beyond policy, and nothing spends until commit. But *inside an agent's tool loop*, honoring a DENY was cooperative — the [MCP server](/how-to/integrating-cycles-with-mcp) gives the model budget tools and tells it not to proceed on DENY, and nothing in MCP forces it to listen. We wrote that boundary into our [security model](https://github.com/runcycles/cycles-mcp-server#security-model--enforcement-boundary) instead of papering over it, and said the fix was to put Cycles in the actual dispatch path.
 
@@ -45,7 +43,7 @@ This plugin sits in the dispatch path of every tool call, so we held it to a dif
 
 **Retries never double-charge.** Idempotency keys derive from Claude Code's per-call `tool_use_id`, so a transport retry replays the same reservation while two genuinely identical calls charge separately. (This is also why the stateless MCP server *doesn't* auto-generate keys — only a layer with stable per-call identity can do it safely. The review that established that is in the [server's audit log](https://github.com/runcycles/cycles-mcp-server/blob/main/AUDIT.md).)
 
-**Privacy by construction.** The hooks transmit subject identifiers, tool *names*, unit and amount, and locally computed digests. Tool arguments, file contents, and prompts never leave the machine. The whole enforcement surface is a few hundred lines of zero-dependency code you can read in one sitting — and 75 tests, including an end-to-end suite that spawns the real hook processes, hold it in place. Full policy: [runcycles.io/privacy](/privacy).
+**Privacy by construction.** The hooks transmit subject identifiers, tool *names*, unit and amount, and locally computed digests. Tool arguments, file contents, and prompts never leave the machine. The whole enforcement surface is under a thousand lines of zero-dependency code — readable in one sitting — and 75 tests, including an end-to-end suite that spawns the real hook processes, hold it in place. Full policy: [runcycles.io/privacy](/privacy).
 
 ## What we don't claim
 
