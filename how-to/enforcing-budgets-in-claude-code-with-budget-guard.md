@@ -52,7 +52,7 @@ The Cycles budget tools themselves are never gated (exact-namespace recursion gu
 1. Use a test subject with an exhausted, frozen, or closed Cycles budget.
 2. Ask Claude Code to run a gated action such as a `Bash` command.
 3. Confirm the reservation is denied and the tool does not execute.
-4. Run `/cycles-budget-guard:budget` to inspect the active budget and routing identity.
+4. Run `/cycles-budget-guard:budget` to inspect the active budget scopes (which reflect your configured subject).
 
 ## Failure, retry, and privacy semantics
 
