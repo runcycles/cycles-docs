@@ -314,7 +314,7 @@ The `actual` SpEL attribute on `@Cycles` handles cost calculation. Use `CyclesMe
 
 ## Respecting budget caps in Spring AI
 
-When budget is running low, Cycles may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell you how to constrain the operation — for example, reducing max tokens to conserve budget. Read them from the reservation context:
+When the deepest matching budget has caps configured, Cycles can return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. This is configuration-driven, not an automatic low-balance transition. Read the caps from the reservation context and apply them — for example, by reducing max tokens:
 
 ```java
 @Cycles(value = "#maxTokens * 250",

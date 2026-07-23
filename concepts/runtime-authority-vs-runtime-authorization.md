@@ -12,7 +12,7 @@ Two governance terms have started circulating in the AI agent ecosystem, and the
 
 **Authorization grants access; authority meters and bounds the action.**
 
-A production agent stack needs both. They sit at different layers, fire at different moments, and bound different things. AWS AgentCore Policy, Akeyless Agentic Runtime Authority, and internal agent-IAM patterns focus on identity, intent, access, and real-time policy enforcement — they decide whether an agent identity, intent, and request context are *permitted* to use a given tool or system. Cycles focuses on the bounded-exposure question — whether the tenant has budget left, whether this tool is past its risk allocation, whether the workflow has already taken its allotted dangerous actions.
+A production agent stack needs both. They sit at different layers, fire at different moments, and bound different things. AWS AgentCore Policy, Akeyless Agentic Runtime Authority, and internal agent-IAM patterns focus on identity, intent, access, and real-time policy enforcement — they decide whether an agent identity, intent, and request context are *permitted* to use a given tool or system. Cycles focuses on bounded exposure: whether a caller-assigned amount can still be reserved against the relevant scoped budget. The caller can express exposure as money, tokens, credits, or `RISK_POINTS`; the current Cycles server does not infer risk or classify tools itself.
 
 The term "runtime authority" is used by multiple vendors with overlapping but different scopes. This page spells out the substance distinction: Cycles answers the question identity authorization can't — *should this specific next step still happen, given the budget, risk, and actions already consumed?*
 
@@ -22,9 +22,9 @@ The term "runtime authority" is used by multiple vendors with overlapping but di
 |---|---|---|
 | **What it answers** | "Is this identity allowed to call this tool?" | "Does this agent still have bounded permission to take this next step?" |
 | **When it fires** | At identity-resolution time, per tool invocation | At every reservation, before each costly action |
-| **What it bounds** | Static policy — which identities can touch which tools | Dynamic budget — total spend, risk points, action count, blast radius |
+| **What it bounds** | Static policy — which identities can touch which tools | Dynamic budget — total spend or caller-assigned exposure such as credits and risk points |
 | **What it does NOT cover** | Cumulative consumption, hierarchical scopes, atomic concurrency | Identity-to-tool mapping, credential management, secret rotation |
-| **Decision model** | ALLOW / DENY based on identity and policy | ALLOW / [ALLOW_WITH_CAPS](/blog/what-is-runtime-authority-for-ai-agents) / DENY based on budget, risk, and scope |
+| **Decision model** | ALLOW / DENY based on identity and policy | Preflight: ALLOW / [ALLOW_WITH_CAPS](/blog/what-is-runtime-authority-for-ai-agents) / DENY based on scoped budget evaluation; live reserve: ALLOW / ALLOW_WITH_CAPS or an error |
 | **State** | Stateless policy lookup (typically) | Persistent budget ledger with [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) |
 
 Both layers fire pre-execution. They're complementary — neither makes the other redundant.
@@ -37,8 +37,8 @@ A real agent action goes through both layers in sequence:
 1. Agent decides to call tool X
 2. AUTHORIZATION: "Is this agent identity allowed to invoke X?"
    ↓ Yes (or DENY → caller informed)
-3. AUTHORITY: "Does this agent still have bounded permission for this action?"
-   ↓ ALLOW or ALLOW_WITH_CAPS (or DENY → graceful degradation)
+3. AUTHORITY: "Can the caller-assigned exposure be reserved for this action?"
+   ↓ ALLOW or ALLOW_WITH_CAPS (or a budget error → graceful degradation)
 4. Execute tool with the constraints from authority's caps
 5. Authority commits actual cost, releases unused budget
 ```
@@ -65,7 +65,7 @@ A production stack wires both layers in the order shown above. Cycles supplies A
 Concrete example — a SaaS deploying customer-support agents:
 
 - **Authorization layer** (AgentCore / Akeyless / IAM): defines that *the support agent's identity* is allowed to call the `send_email` tool, and *the engineering agent's identity* is allowed to call the `deploy_service` tool. Cross-access denied at the policy layer.
-- **Authority layer** (Cycles): defines that the *support tenant* has $500/month in tokens, that *email actions cost 40 [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do)*, and that the *risk budget for email* is 200 points/day. Even though the support agent is *authorized* to send emails, Cycles will DENY the 6th email of the day if the risk budget is exhausted — and DENY any LLM call once the $500 monthly token budget is spent.
+- **Authority layer** (Cycles + host integration): defines that the *support tenant* has $500/month in tokens and a 200-point daily risk budget. The host classifies each email as 40 [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) and reserves that amount before dispatch. Even though the support agent is *authorized* to send emails, the 6th live reservation fails once that risk budget is exhausted; an LLM call likewise does not proceed when its token reservation fails.
 
 Without authorization, an attacker who exfiltrates an API key can use any tool. Without authority, an authorized agent can run a tool a thousand times.
 
@@ -92,7 +92,7 @@ If any of these apply, identity authorization alone leaves the budget and risk d
 - [Policy in Amazon Bedrock AgentCore — Control Agent-to-Tool Access](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy.html) — AWS documentation on AgentCore Policy enforcement before tool execution.
 - [Akeyless launches Runtime Authority for AI Agents](https://www.akeyless.io/press-release/akeyless-launches-runtime-authority-for-ai-agents/) — Akeyless announcement framing identity-aware enforcement as runtime authority.
 
-External vendor capabilities verified against linked sources as of April 2026. These tools evolve quickly — check the linked docs for the latest. Cycles capabilities based on v0.1.25.
+External vendor capabilities verified against linked sources as of July 2026. These tools evolve quickly — check the linked docs for the latest. Cycles capability statements describe the currently shipped server; protocol-only action-governance features are identified separately in the linked action-authority documentation.
 
 ## Related
 

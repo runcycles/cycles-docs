@@ -3,9 +3,13 @@ title: "OpenAI API Budget Limits: Per-User and Per-Tenant"
 date: 2026-03-18
 author: Cycles Team
 tags: [openai, budgets, agents, per-user, per-tenant]
-description: "OpenAI org-level spending caps are too coarse for agents. Enforce per-user, per-run, and per-tenant limits before every API call."
+description: "Enforce OpenAI API budgets per user, run, and tenant before each instrumented call, with atomic reservations, accurate settlement, and scoped ledgers."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenAI API budget limits, per-user AI budgets, per-tenant AI budgets, run budgets, atomic reservations, AI cost control
 ---
 
 # OpenAI API Budget Limits: Per-User and Per-Tenant
@@ -167,7 +171,7 @@ Cycles returns a [three-way decision](/glossary#three-way-decision), not a binar
 | Decision | What it means | What to do |
 |---|---|---|
 | `ALLOW` | Full budget available | Call OpenAI normally |
-| `ALLOW_WITH_CAPS` | Budget is getting tight | Respect the caps — e.g., reduce `max_tokens` to the value in `caps.max_tokens` |
+| `ALLOW_WITH_CAPS` | The deepest matching budget has configured caps | Apply the caps — e.g., reduce `max_tokens` to `caps.max_tokens` |
 | `DENY` | Budget exhausted | Do not call OpenAI — degrade, defer, or inform the user |
 
 The `ALLOW_WITH_CAPS` decision is particularly useful for OpenAI integrations. When the runtime authority returns `caps.max_tokens: 500`, the agent passes that directly to OpenAI's `max_tokens` parameter. The model generates a shorter response — still useful, but cheaper. The user gets an answer instead of an error.

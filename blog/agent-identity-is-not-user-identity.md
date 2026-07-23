@@ -97,7 +97,7 @@ That is why the runtime path needs two decisions:
 
 The first decision is identity policy. The second decision is [runtime authority](/blog/what-is-runtime-authority-for-ai-agents).
 
-In Cycles, the second decision is expressed through the reserve-commit lifecycle. Before the agent spends [tokens](/glossary#tokens) or invokes a risky tool, it reserves budget or [RISK_POINTS](/glossary#risk-points) against a scoped subject. The server returns ALLOW, ALLOW_WITH_CAPS, or DENY. After execution, the agent commits actual usage or releases unused budget.
+In Cycles, the budget part of the second decision is expressed through the reserve-commit lifecycle. Before the agent spends [tokens](/glossary#tokens) or invokes an instrumented risky tool, it reserves budget or caller-assigned [RISK_POINTS](/glossary#risk-points) against a scoped subject. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns an error when budget is unavailable. Application authorization remains separate. After execution starts, the agent commits best-known actual usage; it releases only an unused hold.
 
 The identity of the caller becomes part of the audit trail, but the budget ledger decides whether the action remains within bounds.
 

@@ -28,10 +28,10 @@ The best choice depends on the failure mode you are trying to prevent first.
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 
-All three rollouts on this page create structured audit records. Tenant budgets and run budgets primarily address spend; run budgets also bound risky agent loops; model-call guardrails are the lowest-friction way to start with per-call LLM spend enforcement.
+All three rollouts on this page create budget lifecycle records when they use live reservations and settlement. Dry-run and `decide` responses are non-persisting unless the application logs them. Tenant budgets and run budgets primarily address spend; run budgets also bound risky agent loops; model-call guardrails are the lowest-friction way to start with per-call LLM spend enforcement.
 :::
 
 ## The wrong way to start

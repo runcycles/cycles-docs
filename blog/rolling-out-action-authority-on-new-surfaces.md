@@ -29,6 +29,10 @@ The recent five-post arc went through what [runtime authority](/glossary#runtime
 
 This post is the operational answer. It is shorter on theory and longer on artifacts: an inventory template, per-surface instrumentation patterns, calibration metrics, a cutover criteria checklist, and a rollback decision tree. Most of it is the same shape the [shadow-to-enforcement cutover post](/blog/shadow-to-enforcement-cutover-decision-tree) already established for budget enforcement — the playbook does not change; the per-surface specifics do.
 
+::: warning Current implementation boundary
+The shipped Cycles server can evaluate scoped budgets, including caller-assigned `RISK_POINTS`, and return the protocol's five standard cap fields. It does not yet implement the v0.1.26 action registry, native action quotas, or custom caps such as `requires_human_approval` and `requires_fresh_screenshot`. In this playbook, those are application-side gate rules enforced by the host or handler; Cycles supplies budget evaluation and settlement evidence.
+:::
+
 <!-- more -->
 
 ## Why a Phased Rollout, Per Surface
@@ -41,7 +45,7 @@ The four-week structure that fits most teams:
 |---|---|---|
 | 1 | Inventory the agent fleet's action surfaces | Surface-by-surface list with current gate state |
 | 2 | Shadow-mode instrumentation, per surface | Dry-run decisions flowing for every surface |
-| 3 | Per-surface gate primitives + calibration | Surface-specific caps tuned against shadow data |
+| 3 | Per-surface gate primitives + calibration | Application gate rules and Cycles budget amounts tuned against shadow data |
 | 4 | Cutover, surface by surface, in false-positive-cost order | Hard enforcement on the surface where a wrongful denial costs least first; remaining surfaces on a planned schedule |
 
 The schedule is illustrative. Teams with mature shadow-mode tooling and a single surface in scope can move faster; teams adopting all four surfaces simultaneously will usually want two weeks per surface, not one. The structure is the load-bearing piece, not the calendar.
@@ -107,17 +111,17 @@ Calibration target (starting heuristic): when shadow mode is evaluating the prop
 | Gate primitive | What it does | Tune against |
 |---|---|---|
 | Distinct-approver rule | Block merges where author and approver share the same agent identity | Sample of agent-authored PRs and their approval chains |
-| `requires_human_approval` cap | Force a human in the loop on protected-branch merges from agents | Frequency of agent-merge requests in shadow data |
+| Human-approval rule | Force a human in the loop on protected-branch merges from agents | Frequency of agent-merge requests in shadow data |
 | Per-session promotion budget | Cap [RISK_POINTS](/glossary#risk-points) for merges in a single session | Distribution of merges-per-session from shadow data |
-| Deploy-gate cap | Allow merge but defer auto-deploy until a human releases | Auto-deploy [fan-out](/glossary#fan-out) from shadow data |
+| Deploy-gate rule | Allow merge but defer auto-deploy until a human releases | Auto-deploy [fan-out](/glossary#fan-out) from shadow data |
 
-Calibration target: shadow data should show clean separation between routine PR merges (small risk, low session totals) and the runaway-fanout patterns the gate is meant to catch. If the two populations overlap on the risk axis, the caps need tightening.
+Calibration target: shadow data should show clean separation between routine PR merges (small risk, low session totals) and the runaway-fanout patterns the gate is meant to catch. If the two populations overlap on the risk axis, the application rules or assigned reservation amounts need tightening.
 
 ### Computer-use clicks
 
 | Gate primitive | What it does | Tune against |
 |---|---|---|
-| `requires_fresh_screenshot` cap | Click must use a recent screenshot, not one cached more than N seconds ago | Distribution of screenshot-to-click latency from shadow data |
+| Fresh-screenshot rule | Click must use a recent screenshot, not one cached more than N seconds ago | Distribution of screenshot-to-click latency from shadow data |
 | Cross-tenant navigation deny | Block clicks that change the tenant context of the session | Cross-tenant URL transitions observed in shadow |
 | Target-intent risk schedule | Risk-score clicks by (URL pattern, DOM target, action verb) | Shadow data on which (target, intent) tuples actually fire in production |
 | Session budget denominated in risk, not count | Per the click sibling: a session that can do 800 read-clicks should not get to do 800 destructive clicks for the same authority | Distribution of high-risk-tier vs low-risk-tier clicks per session |
@@ -167,7 +171,7 @@ The cutover is undramatic in a different way when the calibration is bad. The fi
 | Reserve-to-commit ratio drifts outside 0.8–1.2 in a 24-hour window *(voice-specific; the ratio is well-defined for predictive reservation but not for the other surfaces' cap-fire denominators)* | Adjust reservation estimates; keep enforcement live |
 | A specific tenant produces a disproportionate share of denials (rough starting heuristic: >20%) | Partial rollback — exempt that tenant scope, keep enforcement on the rest |
 | The same agent identity produces a disproportionate share of denials (rough starting heuristic: >40%) | Scope rollback — exempt that agent, investigate separately |
-| Surface-specific cap fires above the calibrated baseline (rough starting heuristic: a 30%+ jump from shadow data, e.g. on `requires_fresh_screenshot`) | Tune the cap, do not roll the whole surface back |
+| Surface-specific application rule fires above the calibrated baseline (rough starting heuristic: a 30%+ jump from shadow data, e.g. the host's fresh-screenshot rule) | Tune that rule, do not roll the whole surface back |
 
 The decision tree is per-surface. Memory writes rolling back does not require clicks to roll back. The point of cutting over one surface at a time is that the blast radius of a bad cutover is bounded to that surface.
 
@@ -184,7 +188,7 @@ The metrics that matter day-1 are not the same as the metrics that matter month-
 
 **First month:**
 
-- Voice reserve-to-commit ratio, trending; for the other three surfaces, cap-fire rates vs the shadow-mode baseline
+- Voice reserve-to-commit ratio, trending; for the other three surfaces, application-rule fire rates vs the shadow-mode baseline
 - Drift in (target, intent) distribution for clicks — A/B tests, new admin features, agent prompt updates all show up here first
 - Memory store growth + write-quota utilization per tenant
 - Per-session promotion budget consumption vs cap
@@ -222,7 +226,7 @@ A few patterns to avoid, drawn from teams that have done this before:
 
 ## What Action Authority Adoption Is
 
-A minimum bar: the inventory from week 1, the shadow data from week 2, the per-surface caps tuned in week 3, and the per-surface cutover in week 4 (or weeks 4–N for multi-surface adoption) in false-positive-cost order with a tested kill switch, runbook entries committed before the cutover, and the discipline of treating each new surface as its own rollout on its own schedule.
+A minimum bar: the inventory from week 1, the shadow data from week 2, the per-surface application rules and budget amounts tuned in week 3, and the per-surface cutover in week 4 (or weeks 4–N for multi-surface adoption) in false-positive-cost order with a tested kill switch, runbook entries committed before the cutover, and the discipline of treating each new surface as its own rollout on its own schedule.
 
 The framework is the cheap part. The rollout is the work.
 

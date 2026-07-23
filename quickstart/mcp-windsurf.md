@@ -1,6 +1,6 @@
 ---
 title: "Add Cycles to Windsurf (MCP)"
-description: "60-second setup for adding Cycles budget enforcement to Windsurf via the MCP server. Config path, mock mode, common gotchas."
+description: "Add Cycles budget tools to Windsurf via MCP, with configuration paths, mock mode, verification steps, and enforcement-boundary guidance."
 ---
 
 # Add Cycles to Windsurf

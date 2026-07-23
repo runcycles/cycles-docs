@@ -110,17 +110,13 @@ The Cycles [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycl
 
 1. The coding agent proposes a merge — the source branch, the target branch, the head commit SHA, and the calling session's identity.
 2. The runtime reserves [RISK_POINTS](/glossary#risk-points) against the session's promotion budget — typically more for merges to protected trunks, more again if the merge auto-triggers a deploy.
-3. The runtime returns `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. Caps for merge actions can include:
-   - `requires_human_approval: true` for any merge to `main` from a session whose author was non-human
-   - `requires_distinct_approver`, blocking merges where author and approver share the same agent identity (closes the opener scenario)
-   - `max_merges_remaining` for the session, capping a runaway PR-flood
-   - `deploy_gate: deferred`, allowing the merge but blocking the auto-deploy until a human releases it
-4. The agent's harness honors the decision — calling `gh pr merge` only if `ALLOW`, calling it with the cap-derived arguments if `ALLOW_WITH_CAPS`, and aborting on `DENY`.
+3. The current server returns a budget result: a successful live reservation with `ALLOW` or configured `ALLOW_WITH_CAPS`, or an error when budget is unavailable. The protocol's caps schema is limited to token, step, tool-list, and cooldown fields.
+4. A separate application authorization policy can require human approval, a distinct approver, a per-session merge count, or a deferred deploy. The agent's harness must enforce both that policy and the Cycles budget result before calling `gh pr merge`.
 5. The [reservation](/glossary#reservation) is committed when the merge actually lands, or released if the merge was rejected by the platform.
 
 This is the same primitive that governs [tool calls](/blog/ai-agent-action-control-hard-limits-side-effects), [memory writes](/blog/agent-memory-writes-are-actions-too), and [budget spend](/blog/ai-agent-budget-control-enforce-hard-spend-limits). The unit being reserved is different — *promotion authority* rather than dollars — but the lifecycle, the audit trail, and the [three-way decision](/glossary#three-way-decision) model are unchanged.
 
-The progressive narrowing pattern is particularly natural here. A session starts with full authority. After two merges to `main`, the runtime returns `ALLOW_WITH_CAPS` with `requires_human_approval: true` for further protected-branch merges. After a deploy fires, the deploy-gate caps tighten. A runaway agent that opens forty PRs in an hour gets its promotion authority denied long before the fortieth merge.
+The progressive narrowing pattern is natural here, but it belongs in the application policy today. After two merges to `main`, the authorization layer might require a distinct human approver; after a deploy, it might defer the next promotion. Cycles can separately exhaust a caller-assigned `RISK_POINTS` budget and reject the next live reservation. The current server does not count merges or support custom caps such as `requires_human_approval`.
 
 ## A RISK_POINTS Schedule for Merge and Deploy Operations
 
@@ -142,7 +138,7 @@ Illustrative values; relative weighting matters more than absolute numbers. Ever
 | Force-push to `main` | Trunk | 80 | Execution; history rewrite |
 | Tag a release / publish artifact | Public artifact | 30 | External publication |
 
-A session capped at 100 promotion-authority points has consumed 32 after four feature-branch pushes (8), three PRs (9), and one merge to a non-protected branch (15). One prod-auto-deploy merge (60 points) would fit on paper, but only by depleting the buffer needed for any further action; a second one in the same session would not. A session that has already merged one PR to `main` with auto-deploy-to-prod (60 points) sits at the 60% threshold, and the next protected-branch merge triggers `ALLOW_WITH_CAPS` with `requires_human_approval: true` under a typical progressive-narrowing policy.
+A session capped at 100 promotion-authority points has consumed 32 after four feature-branch pushes (8), three PRs (9), and one merge to a non-protected branch (15). One prod-auto-deploy merge (60 points) would fit on paper, but only by depleting the buffer needed for any further action; a second one in the same session would not. After one 60-point production merge, the host can apply a progressive-narrowing rule that requires human approval for the next protected-branch merge. Cycles separately enforces the remaining `RISK_POINTS` budget; the current cap schema has no `requires_human_approval` field.
 
 For the broader [RISK_POINTS](/glossary#risk-points) framework, see [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk). The schedule above is the action-authority companion to the cost schedule, applied to the merge surface specifically.
 

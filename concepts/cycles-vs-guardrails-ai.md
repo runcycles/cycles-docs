@@ -76,7 +76,7 @@ Budgets can be enforced at multiple levels simultaneously: tenant, workspace, wo
 Instead of a binary allow/deny, Cycles supports three responses:
 
 - **ALLOW** — budget is sufficient, proceed normally
-- **ALLOW_WITH_CAPS** — budget is low, proceed with constraints (use a cheaper model, skip optional steps)
+- **ALLOW_WITH_CAPS** — reservation accepted with operator-configured constraints (for example, use a cheaper model or skip optional steps)
 - **DENY** — budget is exhausted, do not proceed
 
 This enables graceful degradation instead of hard failures.

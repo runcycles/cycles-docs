@@ -23,6 +23,10 @@ This post goes category by category. The [full framework mapping](/blog/ai-agent
 
 <!-- more -->
 
+::: warning Current Cycles implementation boundary
+The table describes a composed runtime-authority architecture, not features supplied by the Cycles server alone. Today Cycles can atomically budget caller-assigned exposure, including `RISK_POINTS`. Destination allowlists, tool argument policy, identity authorization, and per-action quotas belong in the host or gateway; the v0.1.26 native action-governance extension remains a protocol preview.
+:::
+
 ## The enforceability test
 
 A control *enforces* an ASI category when it can render the harmful outcome unreachable by construction — a decision point outside the model, evaluated before execution, that no amount of context manipulation can rewrite. Detection-shaped controls — classifiers, reviews, monitoring — are valuable, but they reduce probability rather than bounding outcome. And the question here is narrower than "enforceable at all": it is which categories a *runtime authority* layer can enforce. Some categories have deterministic enforcement of their own — sandboxes for code execution, authenticated channels for transport — that simply lives in a different layer. The [guardrails vs. observability vs. authority](/blog/runtime-authority-vs-guardrails-vs-observability) distinction, applied per risk.
@@ -31,8 +35,8 @@ A control *enforces* an ASI category when it can render the harmful outcome unre
 
 | ASI | Risk | Enforceable by runtime authority? | The enforcing control |
 |---|---|---|---|
-| ASI01 | Agent Goal Hijack | **Partially** | Can't stop the hijack; can bound what a hijacked agent executes — action quotas, [RISK_POINTS](/glossary#risk-points), destination allow-lists |
-| ASI02 | Tool Misuse & Exploitation | **Yes** | Per-tool budgets and quotas decided before each call |
+| ASI01 | Agent Goal Hijack | **Partially** | Can't stop the hijack; can combine caller-assigned [RISK_POINTS](/glossary#risk-points) with host-side action limits and destination allowlists |
+| ASI02 | Tool Misuse & Exploitation | **Yes** | Mandatory host policy plus scoped budget reservations before each call |
 | ASI03 | Identity & Privilege Abuse | **Yes** | Scoped credentials + per-scope authority; a stolen token is a [bounded liability](/blog/least-privilege-api-keys-for-ai-agents) |
 | ASI04 | Agentic Supply Chain Vulnerabilities | **Partially** | Provenance and signing are ecosystem work; runtime limits bound what a [poisoned skill](/blog/agent-skills-are-the-new-supply-chain) can spend and do |
 | ASI05 | Unexpected Code Execution | **No** | Sandboxing and execution isolation — a different layer's job |
@@ -40,7 +44,7 @@ A control *enforces* an ASI category when it can render the harmful outcome unre
 | ASI07 | Insecure Inter-Agent Communication | **No** | Authenticated channels, message integrity — transport-layer work |
 | ASI08 | Cascading Failures | **Yes** | Hierarchical scope isolation + [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) per delegation hop |
 | ASI09 | Human-Agent Trust Exploitation | **No** | Disclosure, UX, and consent design |
-| ASI10 | Rogue Agents | **Yes** | Every action passes a policy gate; out-of-policy behavior is denied, not detected |
+| ASI10 | Rogue Agents | **Yes** | Every consequential action passes a composed host-policy and budget gate; out-of-policy behavior is denied, not merely detected |
 
 Four clean yeses, three partials, three nos. A note on scoring: the [framework pillar](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement) counts six categories as directly addressable by runtime enforcement; this post applies a stricter test — outcome structurally unreachable, not merely bounded — under which ASI01 and ASI04 grade as partial, and ASI06 earns partial credit the pillar didn't count, because memory *writes* can be gated as actions even where memory *content* cannot be validated. Worth being precise about each class.
 

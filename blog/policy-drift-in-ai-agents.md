@@ -46,7 +46,7 @@ Agents add more change surfaces:
 |---|---|
 | Prompt instructions | "Escalate faster" becomes "send customer update automatically" |
 | Tool descriptors | A read tool gains a write operation |
-| Skills | A reusable workflow starts chaining more tools |
+| [Skills](/blog/agent-skills-are-the-new-supply-chain) | A reusable workflow starts chaining more tools |
 | Model behavior | A model upgrade changes tool-selection patterns |
 | Memory | Prior outcomes influence future actions |
 | Delegation | Parent agent starts spawning child agents |
@@ -98,8 +98,8 @@ Useful drift detection starts with plain operational signals.
 |---|---|
 | More [reservations](/glossary#reservation) per run | Looping, retries, or new tool chains |
 | More [RISK_POINTS](/glossary#risk-points) per workflow | Higher side-effect [exposure](/glossary#exposure) |
-| More ALLOW_WITH_CAPS decisions | Policy pressure before hard denial |
-| Higher estimate drift | Model or prompt behavior changed |
+| More `ALLOW_WITH_CAPS` decisions | A configured caps-bearing budget is matching more requests |
+| [Higher estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) | Model or prompt behavior changed |
 | New toolset usage | Tool descriptor, skill, or prompt changed |
 | New child-agent scopes | Delegation path added |
 | Denials clustered by tenant | Tenant-specific workflow or data issue |
@@ -131,7 +131,7 @@ For the protocol mechanics, see [Dry Run and Shadow Mode Evaluation](/protocol/d
 
 Drift will still happen. Runtime limits make it bounded.
 
-If a prompt update makes the agent call search ten more times, a run budget caps the damage. If a skill update starts sending Slack messages, a toolset [RISK_POINTS](/glossary#risk-points) budget limits side effects. If a child-agent path appears, scoped delegation prevents the child from inheriting the whole parent envelope.
+If a prompt update makes the agent call search ten more times, a mandatory run budget can bound reserved exposure. If a skill update starts sending Slack messages, the handler can assign and reserve toolset [RISK_POINTS](/glossary#risk-points) before each send. If a child-agent path appears, the orchestrator can apply the [authority-attenuation pattern](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) so the child receives a carved-out budget instead of a fresh envelope.
 
 The useful pattern is:
 

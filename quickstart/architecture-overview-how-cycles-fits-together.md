@@ -205,7 +205,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes 
 
 **When to use it:**
 
-Use the MCP server when your agent host supports MCP. No SDK integration is needed in the agent's own code — adding the server to the agent's tool configuration is the only setup required. See [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server).
+Use the MCP server when your agent host supports MCP and you want to expose Cycles tools without an SDK integration. Adding it to the tool configuration is sufficient for discovery, not for hard enforcement: the standalone server does not wrap the host's other actions. Add **Cycles Budget Guard for Claude Code** or a mandatory handler, gateway, harness, or service boundary when the action must not bypass Cycles. See [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server).
 
 ### Cycles Spring Boot Starter
 

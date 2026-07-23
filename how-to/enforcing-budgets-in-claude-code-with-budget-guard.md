@@ -1,11 +1,11 @@
 ---
-title: "Enforcing Budgets in Claude Code with Budget Guard"
+title: "Cycles Budget Guard for Claude Code"
 description: "Install Cycles Budget Guard for Claude Code, reserve budget before gated tool calls, block DENY decisions at dispatch, and retry recorded-action settlement."
 ---
 
-# Enforcing Budgets in Claude Code with Budget Guard
+# Cycles Budget Guard for Claude Code
 
-The [Cycles MCP Server](/how-to/integrating-cycles-with-mcp) gives agents budget *tools* — but honoring a `DENY` inside the agent's tool loop is cooperative: nothing in MCP forces the model to reserve before acting. **Cycles Budget Guard** closes that gap on Claude Code by putting Cycles in the **tool dispatch path**: a `PreToolUse` hook reserves budget before each gated tool call, and a `DENY` blocks the call at the harness layer. The model cannot skip that hook decision.
+The [Cycles MCP Server](/how-to/integrating-cycles-with-mcp) gives agents budget *tools* — but honoring a `DENY` inside the agent's tool loop is cooperative: nothing in MCP forces the model to reserve before acting. **Cycles Budget Guard for Claude Code** closes that gap by putting Cycles in the **tool dispatch path**: a `PreToolUse` hook reserves budget before each gated tool call, and a denial blocks the call at the harness layer. The model cannot skip that hook decision.
 
 Repository: [runcycles/cycles-claude-plugin](https://github.com/runcycles/cycles-claude-plugin) (Apache-2.0, zero runtime dependencies). The hooks require Node.js 22 or newer.
 
@@ -63,7 +63,7 @@ The Cycles budget tools themselves are never gated (exact-namespace recursion gu
 
 ## Choose the Cycles MCP Server or Budget Guard
 
-| Capability | Cycles MCP Server alone | Cycles Budget Guard plugin |
+| Capability | Cycles MCP Server alone | Cycles Budget Guard for Claude Code |
 |---|---|---|
 | Balance, reservation, and metering tools | Available | Available through the pinned companion server |
 | Pre-execution tool blocking | Cooperative only | Hook-enforced for gated tools |

@@ -39,7 +39,7 @@ That asymmetry is the opening. Instead of removing the action leg, put it behind
 
 - **Every externally visible action is priced** — in [RISK_POINTS](/glossary#risk-points) by blast radius, and in count per action class. A `reply_to_ticket` costs little; an `email_external` costs much; a `merge_pr` may cost the whole budget.
 - **Every run carries a bounded allowance**, scoped to this agent, this workflow, this [tenant](/glossary#tenant). The agent that has been successfully injected does not thereby acquire a bigger budget.
-- **The gate decides before execution** — `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` — against cumulative state: what this run has already sent, to whom, at what cost. Destination allow-lists and [action-class quotas](/concepts/action-authority-controlling-what-agents-do) turn "can communicate externally" into "can send this class of message, to these destinations, this many times."
+- **The gate checks before execution.** Application authorization enforces destinations and arguments; a mandatory Cycles reservation bounds caller-assigned cumulative exposure. The current server does not inspect recipients or implement action-class quotas, so those controls must live in the host or gateway.
 
 The property this preserves is the one that makes the subtraction frames trustworthy: **determinism**. This is not a classifier guessing whether the model was manipulated — a probabilistic guardrail of exactly the kind Willison discounts. It is a counter and a policy, evaluated outside the model, on infrastructure the model's context cannot rewrite. An injected agent can want anything; it can *do* at most its allowance.
 

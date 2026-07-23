@@ -41,11 +41,11 @@ The distinction is between **standing permission and per-action judgment**:
 |---|---|---|
 | Question | Who is this agent, and what *class* of things may it access? | Should *this specific action* proceed, right now? |
 | Granted | At registration / token issuance | Decided at execution time, per action |
-| Unit | Roles, scopes, group memberships | Budgets: spend, [RISK_POINTS](/glossary#risk-points), action quotas |
+| Unit | Roles, scopes, group memberships | Budgets: spend and caller-assigned exposure such as [RISK_POINTS](/glossary#risk-points) |
 | Failure it prevents | The wrong principal getting in | The right principal doing too much |
 | Revocation | Kill the agent's access | Deny the next action; let the agent keep working within limits |
 
-"Can send email" is a scope. "May send this 201st email, given that this run has already sent 200 and its action budget is exhausted" is a decision — one that requires counting, cumulative state, and a policy evaluated before execution. Identity systems do keep state — session controls, sign-in risk, near-real-time revocation — but not that per-action, per-run counter. It was never their job. The [runtime authority vs. runtime authorization](/concepts/runtime-authority-vs-runtime-authorization) distinction in our docs is exactly this line: authorization grants access; authority meters and bounds each use of it.
+"Can send email" is a scope. "Can this host reserve one more caller-assigned unit for the 201st email, given that this run's budget is exhausted?" is a separate decision — one that requires cumulative state evaluated before execution. Identity systems do keep state — session controls, sign-in risk, near-real-time revocation — but not that application-specific budget ledger. It was never their job. The [runtime authority vs. runtime authorization](/concepts/runtime-authority-vs-runtime-authorization) distinction in our docs is exactly this line: authorization grants access; authority meters and bounds each instrumented use of it. The current Cycles server does not count email actions by kind automatically; the host assigns and reserves the amount.
 
 The [Moltbook exposure](/blog/moltbook-exposure-agent-tokens-no-gates) made the same point from the failure side: even *perfect* verification of who an agent is says nothing about what it may do next, at whose expense. And the delegation version compounds it — an identity system can tell you agent B was spawned by agent A, but [attenuating B's authority below A's](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) is a budget operation, not an identity one.
 
@@ -60,7 +60,7 @@ The tell is what each layer counts. Identity systems count principals, sessions,
 This is not a rivalry; it is a stack, and each layer makes the other more valuable:
 
 1. **Identity feeds authority its subject.** A budget decision needs to know whose budget — the agent identity (and its sponsor, tenant, and delegation chain) is the key the authority layer scopes budgets to. Ungoverned identity makes authority decisions unattributable; ungoverned authority makes identities well-labeled blank checks.
-2. **Authority gives identity's audit trail a verdict.** Identity logs say who authenticated and what was accessed. Authority records say what was *allowed, capped, or denied*, against which limit, and why — the difference between "the agent connected to the email service 200 times" and "sends 1–200 were within budget; send 201 was denied." One is telemetry; the other is [evidence](/blog/what-goes-in-an-ai-agent-audit-packet).
+2. **Authority adds budget lifecycle evidence.** Identity logs say who authenticated and what was accessed. Live reservations and settlement show what was held and charged against which scoped budget. The application must log non-persisting preflight outcomes and correlate them with the attempted email — the difference between "the agent connected to the email service 200 times" and "sends 1–200 settled within budget; send 201 was blocked after its reservation failed." Together, those records can form [evidence](/blog/what-goes-in-an-ai-agent-audit-packet).
 3. **Revocation becomes the last resort instead of the only resort.** With per-action budgets underneath, a misbehaving agent degrades — capped, downgraded, denied — long before anyone needs the identity-level kill switch.
 
 ## The Takeaway

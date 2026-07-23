@@ -51,9 +51,9 @@ Cycles offers several integration approaches depending on your stack:
 
 ### MCP Server
 
-The zero-code approach. Add the Cycles MCP Server to your AI agent's tool configuration and the agent gets direct access to budget tools via the Model Context Protocol. No SDK integration in the agent's code required — the agent discovers and calls `cycles_reserve`, `cycles_commit`, and other tools through standard MCP tool discovery.
+The zero-code tool-exposure approach. Add the Cycles MCP Server to your AI agent's configuration and it discovers `cycles_reserve`, `cycles_commit`, and other budget tools through MCP. This is cooperative, not automatic enforcement of the host's other actions. Hard limits require **Cycles Budget Guard for Claude Code** or a mandatory handler, gateway, harness, or service boundary.
 
-Best for: Claude Desktop, Claude Code, Cursor, Windsurf, and any MCP-compatible AI host.
+Best for: budget-aware workflows and discovery in Claude Desktop, Claude Code, Cursor, Windsurf, and other MCP-compatible hosts.
 
 ### Decorator / Higher-order function
 

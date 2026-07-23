@@ -9,8 +9,8 @@ Cycles is a **runtime authority for autonomous agents**. It enforces hard limits
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 :::
 
 ## Choose your path

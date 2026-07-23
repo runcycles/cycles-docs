@@ -1,9 +1,9 @@
 ---
-title: "Python AI Agent Control: Cost, Risk, and Audit by Layer"
+title: "Python AI Agent Control: Cost, Risk, and Audit"
 date: 2026-05-06
 author: Albert Mavashev
 tags: [agents, governance, runtime-authority, action-control, audit, costs, risk-assessment, python, production]
-description: "Python AI agent tools cover cost OK, risk partially, and audit barely. Six layers of agent control, what each actually does, and where each stops short."
+description: "Compare six Python AI agent control layers across cost, caller-assigned risk, and audit, including what each layer enforces and where it stops in production."
 blog: true
 sidebar: false
 featured: false
@@ -13,7 +13,7 @@ head:
       content: "Python AI agent control, AI agent cost control, AI agent risk control, AI agent audit trail, LLM cost enforcement, Python AI agent governance, runtime authority, action authority, agent budget Python"
 ---
 
-# Python AI Agent Control: Cost, Risk, and Audit by Layer
+# Python AI Agent Control: Cost, Risk, and Audit
 
 A platform engineer at a 50-person SaaS shop deploys a Python AI agent into a CrewAI multi-agent workflow on a Tuesday. By Wednesday morning, three things have gone wrong:
 
@@ -99,7 +99,7 @@ The lifecycle distinction is treated more thoroughly in [Runtime Authority vs Gu
 
 ### 6. Runtime authority
 
-An external authority service that decides each agent action *before* execution. The agent reserves budget (in dollars, tokens, or risk-points), the authority returns ALLOW / ALLOW_WITH_CAPS / DENY, the agent proceeds (with caps) or doesn't. After execution, the agent commits the actual cost and the authority records the decision in a structured ledger.
+An external budget authority that the application calls *before* protected execution. The agent reserves dollars, tokens, or caller-assigned risk points. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns an error when budget is unavailable. After execution starts, the agent commits best-known actual usage. The ledger records the budget lifecycle; application authorization and tool-call audit data remain separate.
 
 - **Cost coverage:** pre-execution. The next action is allowed or denied based on remaining budget, not after the bill arrives.
 - **Risk coverage:** pre-execution. Action-tier classification is a first-class input to the decision. A high-tier action (like `delete_*`) hits a smaller cap than a low-tier action (like `read_file`), regardless of dollar cost. See [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) for the full action-authority framing.
@@ -141,7 +141,7 @@ The gap is layer 6 — pre-execution decision on all three axes. It's the one mi
 
 If the goal is to cover all three axes pre-execution, the stack needs two things:
 
-**Runtime authority for pre-execution decisions.** A service the agent reserves against before each action, that decides ALLOW / ALLOW_WITH_CAPS / DENY using cost budgets *and* risk-tier policies *and* tenant scope, and records the decision in a structured ledger. This is layer 6. It does not replace the other layers — it supplies what they don't.
+**Runtime budget authority for pre-execution decisions.** A service the agent reserves against before each protected action, using scoped cost or caller-assigned exposure budgets. It records reserve and settlement lifecycle data. The application supplies risk classification, permission policy, tool arguments, and any complete authorization audit record. This is layer 6; it does not replace the other layers.
 
 **Observability for retrospective analysis.** A trace of what actually happened, with cost attribution and span correlation. Layer 5. It does not replace runtime authority — they have different jobs. Authority *decides*, observability *describes*.
 
@@ -153,7 +153,7 @@ The teams that solve all three axes well typically end up running both layers �
 
 AI agent cost control is the visible problem — the bill arrives every month and someone notices. AI agent risk control is the bigger problem most teams underestimate, because side-effect blast radius doesn't show up on an invoice. Audit is the problem that doesn't surface at all until a compliance review forces it.
 
-A complete production stack covers all three pre-execution and post-hoc. The pre-execution work needs a service that decides each action against cost budgets, risk-tier policies, and tenant scope — and ledgers the decision as a byproduct. The post-hoc work needs an observability layer that traces what actually ran and rolls cost up across providers and frameworks.
+A production stack covers all three through composed controls. Pre-execution work combines application authorization with scoped cost or caller-assigned exposure budgets. The budget ledger records lifecycle evidence, while an observability layer traces what actually ran, including arguments and provider/framework context.
 
 Most Python AI agent stacks stop short on risk and audit because the layers most teams adopt first don't see those axes. That gap closes when the runtime-authority layer gets added, not when the existing layers get one more feature.
 

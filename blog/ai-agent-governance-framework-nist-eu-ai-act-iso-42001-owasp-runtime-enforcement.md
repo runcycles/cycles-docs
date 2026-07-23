@@ -7,6 +7,10 @@ description: "Map EU AI Act, NIST AI RMF, ISO 42001, and OWASP regulatory requir
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: AI agent governance framework, EU AI Act, NIST AI RMF, ISO 42001, OWASP agent security, runtime enforcement
 ---
 
 # AI Agent Governance: Mapping NIST, EU AI Act, ISO 42001, and OWASP to Runtime Enforcement
@@ -205,7 +209,7 @@ Every regulatory framework cited above converges on the same set of runtime cont
 
 **What happens without it:** Hard failures without context. The agent crashes mid-task, the user sees an error, and nobody knows whether the work was 10% complete or 90% complete. Worse, the agent may have already taken irreversible actions (sent emails, made API calls) before failing on the next step.
 
-**How Cycles implements it:** Three response types: [ALLOW, ALLOW_WITH_CAPS, DENY](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer). ALLOW_WITH_CAPS constrains the agent — limiting `maxTokens`, applying a `toolDenylist`, or setting `maxStepsRemaining` — so it can finish useful work within the remaining budget rather than failing abruptly.
+**How Cycles supports it:** Three response types: [ALLOW, ALLOW_WITH_CAPS, DENY](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer). `ALLOW_WITH_CAPS` returns operator-configured caps such as `maxTokens`, `toolDenylist`, or `maxStepsRemaining`; the host must apply them. The current server does not infer or tighten caps from remaining balance.
 
 ### Control 6: Least-Privilege Access Control
 

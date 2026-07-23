@@ -1,6 +1,6 @@
 ---
 title: "Add Cycles to Cursor (MCP)"
-description: "60-second setup for adding Cycles budget enforcement to Cursor via the MCP server. Project vs global config paths, common gotchas, and verification."
+description: "Add Cycles budget tools to Cursor via MCP, with project and global configuration paths, mock mode, verification, and enforcement guidance."
 ---
 
 # Add Cycles to Cursor

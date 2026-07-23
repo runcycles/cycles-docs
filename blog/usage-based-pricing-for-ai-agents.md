@@ -105,7 +105,7 @@ Agent products usually need a more nuanced response:
 | Budget state | Runtime decision | Product behavior |
 |---|---|---|
 | Enough budget remains | `ALLOW` | Run normally |
-| Budget is low but not exhausted | `ALLOW_WITH_CAPS` | Use a smaller model, fewer results, lower max [tokens](/glossary#tokens), or skip optional tools |
+| Configured caps apply and budget is sufficient | `ALLOW_WITH_CAPS` | Apply the returned constraints: smaller model, fewer results, lower max [tokens](/glossary#tokens), or fewer tools |
 | Budget is exhausted | `DENY` | Stop, ask for upgrade, queue for approval, or offer a cheaper path |
 
 This lets the product degrade before the commercial boundary is hit. A research agent can reduce result count. A support agent can summarize instead of launching a deep investigation. A coding agent can stop before an expensive verification loop.

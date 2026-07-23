@@ -95,7 +95,7 @@ Request flow:
 | Delegation attenuation for sub-agents | Cycles (pattern via hierarchical scopes) |
 | Provider failover and retry | LiteLLM |
 
-**Concrete integration scenario:** Your agent gets ALLOW_WITH_CAPS from Cycles (budget is low). The caps include a model downgrade hint. Your application passes that hint to LiteLLM, which routes to a cheaper model (GPT-4o-mini instead of GPT-4o). The agent completes the task at lower cost, and both systems record the outcome. Neither tool alone enables this graceful degradation pattern — Cycles decides the constraint, LiteLLM executes the downgrade.
+**Concrete integration scenario:** The deepest matching Cycles budget is configured with a model cap, so the agent receives `ALLOW_WITH_CAPS`. Your application maps that cap to a cheaper LiteLLM route (for example, GPT-4o-mini instead of GPT-4o). Cycles returns the configured constraint; LiteLLM executes the downgrade. The current Cycles server does not select a model or add caps automatically when balance is low.
 
 LiteLLM is the **routing and model-access layer**. Cycles is the **authority and enforcement layer**. They're complementary by design.
 
