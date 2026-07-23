@@ -159,7 +159,7 @@ cycles:
 
 The jtokkit dep is `optional=true` on the starter — only opt-in users pay the size cost. Setting the property without the dep on the classpath logs a WARN at app startup and falls back to chars/4. For provider-specific tokenizers, register your own `PromptTokenEstimator` bean.
 
-See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-030) for the full 0.3.0 feature surface, the Extension Points section with longer examples, and the full configuration reference.
+See the [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) for every property, auto-configuration condition, extension point, and failure-mode boundary.
 
 ---
 
@@ -604,7 +604,8 @@ public class AgentOrchestrator {
 
 For **Path 1 (`cycles-spring-ai-starter`):**
 
-- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#cycles-spring-ai-starter--runtime-authority-for-spring-ai-agents) — full Quick Start, Extension Points, Configuration reference, and the "Don't double-charge" gotcha section
+- [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) — every property, extension point, auto-configuration condition, and the double-charge boundary
+- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter) — source-repository quickstart and examples
 - [`cycles-spring-ai-starter` on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
 - [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance on where to put the gates
 

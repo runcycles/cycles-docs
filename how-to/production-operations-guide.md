@@ -71,6 +71,8 @@ Cycles uses Lua scripts for atomic operations. All keys for a single reservation
 - **AOF backups** for point-in-time recovery
 - **Test restores regularly** — untested backups are not backups
 
+Use the [Redis Backup, Restore, and Disaster Recovery Runbook](/how-to/redis-backup-restore-disaster-recovery) for a Cycles-aware procedure. Restoring Redis rolls back budget balances, reservations, idempotency records, webhook queues, audit records, and evidence state together; do not restore selected key families independently.
+
 ## Cycles Server configuration
 
 ### Running multiple instances
@@ -251,6 +253,8 @@ Scale **Redis** when:
 
 ## Upgrade procedures
 
+For the full preflight, service order, migration matrix, rollback boundaries, and verification checklist, use [Upgrading Cycles Safely](/how-to/upgrading-cycles).
+
 ### Rolling upgrade
 
 All three services (Cycles Server, Admin Server, Events Service) are stateless — all state lives in Redis. You can do rolling upgrades with zero downtime:
@@ -398,3 +402,5 @@ If all retries are exhausted or the client process crashes entirely, the reserva
 - [Security Hardening](/how-to/security-hardening) — Redis AUTH, TLS, key rotation, webhook security
 - [Monitoring and Alerting](/how-to/monitoring-and-alerting) — metrics and alerting setup
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — all configuration properties
+- [Redis Backup, Restore, and Disaster Recovery](/how-to/redis-backup-restore-disaster-recovery) — backup validation and full-dataset recovery
+- [Upgrading Cycles Safely](/how-to/upgrading-cycles) — rolling order, migrations, rollback, and verification

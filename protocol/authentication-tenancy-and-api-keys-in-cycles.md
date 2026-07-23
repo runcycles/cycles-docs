@@ -240,4 +240,4 @@ This ensures that budget governance is always tenant-isolated, even in shared de
 - [Budget Allocation and Management](/how-to/budget-allocation-and-management-in-cycles) — set up budgets at tenant and sub-scopes
 - [Scope Derivation](/protocol/how-scope-derivation-works-in-cycles) — how tenant scopes fit into the budget hierarchy
 - [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) — set up the Cycles infrastructure from scratch
-- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](/how-to/integrating-cycles-with-spring-ai)
