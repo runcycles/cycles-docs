@@ -1,6 +1,6 @@
 ---
 title: "OpenAI Agents SDK Budget Control (Python)"
-description: "Budget control for OpenAI Agents SDK workflows in Python — automatic reserve, commit, and release for every LLM call, tool invocation, and agent handoff. No per-function decoration."
+description: "Budget control for OpenAI Agents SDK workflows in Python — automatic reservation lifecycles for LLM and tool calls, plus best-effort handoff audit events."
 ---
 
 # OpenAI Agents SDK Budget Control (Python)
@@ -8,7 +8,7 @@ description: "Budget control for OpenAI Agents SDK workflows in Python — autom
 [![PyPI](https://img.shields.io/pypi/v/runcycles-openai-agents)](https://pypi.org/project/runcycles-openai-agents/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/runcycles-openai-agents?label=downloads&color=555&style=flat-square)](https://pypi.org/project/runcycles-openai-agents/)
 
-This guide shows how to add budget governance to [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) workflows using the [`runcycles-openai-agents`](https://pypi.org/project/runcycles-openai-agents/) plugin. The plugin hooks into the SDK's native `RunHooks` interface to automatically reserve, commit, and release budget for every LLM call, tool invocation, and agent handoff — with no per-function decoration required.
+This guide shows how to add budget governance to [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) workflows using the [`runcycles-openai-agents`](https://pypi.org/project/runcycles-openai-agents/) plugin. The plugin hooks into the SDK's native `RunHooks` interface to automatically reserve, commit, and release budget for LLM calls and tool invocations, and attempts to record agent handoffs as zero-amount direct-debit events — with no per-function decoration required.
 
 ## Prerequisites
 
@@ -43,12 +43,12 @@ export CYCLES_API_KEY="cyc_live_..."    # create via Admin Server — see note b
 
 ::: tip 60-Second Quick Start
 ```python
-from agents import Agent, Runner
+from agents import Agent
 from runcycles_openai_agents import CyclesRunHooks
 
 hooks = CyclesRunHooks(tenant="acme")
 agent = Agent(name="helper", instructions="You are a helpful assistant.")
-result = await Runner.run(agent, input="What is budget authority?", hooks=hooks)
+result = await hooks.run(agent, input="What is budget authority?")
 print(result.final_output)
 ```
 That's it — every LLM call and tool invocation in the agent run is now budget-guarded. If the budget is exhausted, `BudgetExceededError` is raised _before_ the call is made. Read on for production patterns with tool estimate mapping and pre-run guardrails.
@@ -64,9 +64,9 @@ The plugin implements the SDK's `RunHooks` interface. Every hook in the agent li
 | `on_tool_end` | `commit_reservation` | No | Commits at the tool's reserved estimate |
 | `on_llm_start` | `create_reservation` (LLM estimate) | Raises on DENY | Budget reserved before each LLM call |
 | `on_llm_end` | `commit_reservation` | No | Commits at the reserved estimate — or at the actual token count when `llm_unit=Unit.TOKENS`. Token counts from `response.usage` are always recorded in `CyclesMetrics` |
-| `on_handoff` | `create_event` (audit trail) | No | Handoff recorded in Cycles ledger |
+| `on_handoff` | `create_event` (audit trail) | No | Attempts a zero-amount `RISK_POINTS` event; failures are logged and do not stop the handoff |
 
-Reservations include automatic heartbeat — long-running tools won't silently expire. (Heartbeat is skipped when `ttl_ms` is below 2000, since the minimum 1-second extend interval would exceed the TTL window.)
+Reservations include automatic heartbeat. Extensions stop after `heartbeat_max_age_ms` (10 minutes by default) or the optional `heartbeat_max_extensions` cap, so raise those limits for longer operations. Heartbeat is skipped when `ttl_ms` is below 2000, since the minimum 1-second extend interval would exceed the TTL window.
 
 ## Tool estimate mapping
 
@@ -125,38 +125,40 @@ agent = Agent(
 
 ## Error handling
 
-When budget is denied, the hooks raise `BudgetExceededError` — the agent stops and no further tokens are consumed:
+When budget is denied, the hooks raise `BudgetExceededError` — the agent stops and no further tokens are consumed. Use `hooks.run()` so failures and cancellations also release reservations that are still pending:
 
 ```python
 from runcycles import BudgetExceededError
 
 try:
-    result = await Runner.run(agent, input="...", hooks=hooks)
+    result = await hooks.run(agent, input="...")
 except BudgetExceededError as e:
     print(f"Budget denied: {e}")
 ```
 
-If `Runner.run()` raises for any other reason, pending reservations stay locked until TTL expires. Call `release_pending()` to free them immediately:
+`hooks.run()` wraps `Runner.run()` and performs run-scoped cleanup when the run raises or is cancelled. Streaming runs get the same boundary through `hooks.run_streamed()`:
 
 ```python
-try:
-    result = await Runner.run(agent, input="...", hooks=hooks)
-except Exception:
-    await hooks.release_pending("agent_run_failed")
-    raise
+streamed = hooks.run_streamed(agent, input="...")
+async for event in streamed.stream_events():
+    handle(event)
 ```
+
+The OpenAI Agents SDK does not expose a general `RunHooks.on_error` callback. If you call bare `Runner.run(..., hooks=hooks)` or `Runner.run_streamed(..., hooks=hooks)`, automatic exception/cancellation cleanup cannot run. Prefer the wrappers, especially for concurrent runs. In a single-run bare-Runner error path, call `release_pending()`; it raises rather than guessing when multiple runs have pending reservations.
 
 See [Error Handling Patterns in Python](/how-to/error-handling-patterns-in-python) for more patterns.
 
 ## Fail-open / fail-closed
 
-By default, if the Cycles server is unreachable the agent continues (`fail_open=True`). This prevents infrastructure issues from blocking all agents. Set `fail_open=False` to enforce strict budget governance:
+`CyclesRunHooks` is fail-closed by default (`fail_open=False`): a transport failure while creating a reservation raises and prevents the governed call. Opt into availability-first behavior explicitly:
 
 ```python
-hooks = CyclesRunHooks(tenant="acme", fail_open=False)
+hooks = CyclesRunHooks(tenant="acme", fail_open=True)
 ```
 
-This matches the Cycles philosophy: budget enforcement should be a guardrail, not a single point of failure.
+The separate `cycles_budget_guardrail()` helper defaults to `fail_open=True`; pass `fail_open=False` there if the pre-run decision must also fail closed.
+
+A successful non-DENY response that omits `reservation_id` is currently logged and allowed to proceed without a hold. Alert on the `cycles: no reservation_id` warning if malformed upstream responses must not pass unnoticed.
 
 ## Configuration reference
 
@@ -174,8 +176,11 @@ This matches the Cycles philosophy: budget enforcement should be a guardrail, no
 | `default_tool_estimate` | `int` | `1` | Estimate for unmapped tools |
 | `llm_estimate` | `int` | `500_000` | Per-LLM-call estimate (~$0.005 in USD_MICROCENTS) |
 | `llm_unit` | `Unit` | `USD_MICROCENTS` | Unit for LLM reservations |
-| `fail_open` | `bool` | `True` | Allow execution if Cycles is down |
+| `fail_open` | `bool` | `False` | Allow LLM/tool execution if reservation creation fails |
 | `ttl_ms` | `int` | `60_000` | Reservation TTL (heartbeat extends at half-interval) |
+| `heartbeat_max_age_ms` | `int` | `600_000` | Maximum age of a pending operation for heartbeat extension |
+| `heartbeat_max_extensions` | `int` or `None` | `None` | Optional cap on heartbeat extensions per reservation |
+| `commit_max_attempts` | `int` | `2` | Attempts for transport, 429, and 5xx commit failures |
 | `overage_policy` | `CommitOveragePolicy` | `ALLOW_IF_AVAILABLE` | Overage policy for commits |
 | `dry_run` | `bool` | `False` | Shadow mode — no budget consumed |
 
@@ -188,13 +193,13 @@ If you're already using the `@cycles` decorator from the [Python client](/quicks
 | Reserve before LLM call | Your code (per function) | Automatic via `on_llm_start` |
 | Reserve before tool call | Your code (per function) | Automatic via `on_tool_start` |
 | Commit after completion | Your code (per function) | Automatic via `on_llm_end` / `on_tool_end` |
-| Release on error | Your code | `release_pending()` |
+| Release on run error or cancellation | Your code | Automatic with `hooks.run()` / `hooks.run_streamed()`; `release_pending()` for a single bare-Runner error path |
 | Tool estimate policies | Not applicable | `ToolEstimateMap` with per-tool estimates |
 | Pre-run guardrail | Not applicable | `cycles_budget_guardrail` |
-| Agent handoff tracking | Not applicable | Automatic audit events via `on_handoff` |
+| Agent handoff tracking | Not applicable | Best-effort audit events via `on_handoff` |
 | Heartbeat for long tools | Not applicable | Automatic TTL extension |
 
-The plugin is the recommended approach for OpenAI Agents SDK users — it requires no per-function decoration and covers the full agent lifecycle automatically.
+The plugin is the recommended approach for OpenAI Agents SDK users. It requires no per-function decoration; use its run wrappers so hook governance and run-scoped cleanup stay paired. Handoff audit events are best effort and log failures without blocking the handoff.
 
 ## Examples
 

@@ -1,11 +1,11 @@
 ---
-title: "Add Cycles to Windsurf (MCP)"
-description: "Add Cycles budget tools to Windsurf via MCP, with configuration paths, mock mode, verification steps, and enforcement-boundary guidance."
+title: "Add Cycles to Windsurf / Devin Desktop (MCP)"
+description: "Add Cycles budget tools to legacy Windsurf builds via MCP, with configuration paths, mock mode, verification steps, and enforcement guidance."
 ---
 
-# Add Cycles to Windsurf
+# Add Cycles to Windsurf / Devin Desktop
 
-This page is the exact setup for [Windsurf](https://windsurf.com). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
+[Windsurf has transitioned to Devin Desktop](https://devin.ai/desktop). The configuration paths below apply to legacy Windsurf builds; for current Devin Desktop releases, verify the active MCP configuration location in the app before applying them. For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
 Registering this MCP server gives Windsurf access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
@@ -13,7 +13,7 @@ Registering this MCP server gives Windsurf access to Cycles tools — `cycles_re
 
 ## Prerequisites
 
-- **Windsurf installed** ([download](https://windsurf.com))
+- **Windsurf installed**, or a current [Devin Desktop](https://devin.ai/desktop) build with MCP support
 - **Node.js 20+ with `npx` available** — Windsurf launches the MCP server through `npx`.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.

@@ -2,7 +2,7 @@
 title: "AI Agents: EU AI Act, NIST, ISO 42001, OWASP Map"
 date: 2026-04-02
 author: Cycles Team
-tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime authority, agents]
+tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime-authority, agents]
 description: "Map EU AI Act, NIST AI RMF, ISO 42001, and OWASP regulatory requirements to runtime enforcement controls — a practical governance framework for AI agents."
 blog: true
 sidebar: false
@@ -49,7 +49,7 @@ For AI agents that qualify as high-risk AI systems, five articles create direct 
 
 ### NIST AI Risk Management Framework (AI RMF 1.0)
 
-Published January 26, 2023, the [NIST AI RMF](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework-ai-rmf-10) defines four core functions: **Govern, Map, Measure, Manage.** It is voluntary and sector-agnostic, but it has become the de facto reference for U.S. organizations building AI governance programs.
+Published January 26, 2023, the [NIST AI RMF](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10) defines four core functions: **Govern, Map, Measure, Manage.** It is voluntary and sector-agnostic, but it has become the de facto reference for U.S. organizations building AI governance programs.
 
 The framework treats autonomy as a risk amplifier. Systems with greater autonomy require stronger governance controls — more frequent measurement, tighter management boundaries, and more explicit accountability structures.
 
@@ -275,7 +275,7 @@ Governance is not a feature you add after shipping. It is the infrastructure tha
 ## Sources
 
 1. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj) — Entered into force August 1, 2024. High-risk obligations rescheduled by the June 2026 Digital Omnibus to December 2, 2027 (Annex III) and August 2, 2028 (Annex I embedded).
-2. [NIST AI Risk Management Framework 1.0](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework-ai-rmf-10) — Published January 26, 2023
+2. [NIST AI Risk Management Framework 1.0](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10) — Published January 26, 2023
 3. [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — Announced February 17, 2026
 4. [ISO/IEC 42001:2023](https://www.iso.org/standard/81230.html) — AI Management System standard, published December 2023
 5. [OWASP Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) — 2025/2026 edition

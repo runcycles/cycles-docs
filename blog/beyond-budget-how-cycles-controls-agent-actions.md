@@ -1,11 +1,15 @@
 ---
-title: "Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend"
+title: "How Cycles Controls Agent Actions"
 date: 2026-04-02
 author: Albert Mavashev
-tags: [action-authority, risk-points, runtime-authority, tool-governance, agents]
-description: "Cycles isn't just a budget tool. It governs what agents do — tool calls, API requests, emails, deployments — using the same reserve-commit protocol that controls spend. Here's how action authority works."
+tags: [action-authority, RISK_POINTS, runtime-authority, tool-governance, agents]
+description: "Learn how Cycles applies reserve-commit accounting to caller-assigned risk budgets, helping applications limit agent actions as well as model spend at runtime."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent action control, action authority, RISK_POINTS, reserve commit, tool governance, runtime authority
 ---
 
 # Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend

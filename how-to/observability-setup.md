@@ -23,7 +23,7 @@ In Docker Compose:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.39
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis
     REDIS_PORT: 6379

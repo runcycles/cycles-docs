@@ -20,7 +20,7 @@ This is a reference page. If you haven't set up Cycles yet, start with the [End-
 Your application talks to the **Cycles Server** (port 7878) at runtime. The **Cycles Admin Server** (port 7979) is the management plane where you create tenants, generate API keys, and configure budget ledgers. The **Cycles Events Service** is an outbound worker that delivers webhook notifications asynchronously and, when CyclesEvidence is enabled, signs evidence envelopes; its app port 7980 and management port 9980 should stay internal. All three services share the same Redis instance.
 
 ::: info Independent release cadences
-Runtime, admin, events, and dashboard images ship patch releases independently. Latest tagged versions as of 2026-07-12: `cycles-server` 0.1.25.48, `cycles-server-admin` 0.1.25.51, `cycles-server-events` 0.1.25.23, `cycles-dashboard` 0.1.25.67. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee. See the [changelog](/changelog) for the full matrix of minimum versions per feature.
+Runtime, admin, events, and dashboard images ship patch releases independently. Current tagged versions are maintained in the [release matrix](/changelog#current-versions); use that matrix instead of assuming the four repositories share one patch number. Older admin servers that predate newer query parameters (e.g., `sort_by`, `search`) ignore them rather than erroring — the APIs follow an additive-parameter guarantee.
 :::
 
 ## Components
@@ -170,7 +170,7 @@ The async webhook delivery and evidence signing service. It runs as a separate S
 
 **What it does:**
 
-- Consumes delivery jobs from a Redis queue (`dispatch:pending`) via BLMOVE — a reliable-queue pattern that parks each claimed job on `dispatch:processing` until acknowledged, recovering orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 120000 ms)
+- Consumes delivery jobs from a Redis queue (`dispatch:pending`) via BLMOVE — a reliable-queue pattern that parks each claimed job on `dispatch:processing` until acknowledged, recovering orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 180000 ms)
 - Delivers events to webhook endpoints via HTTP POST with HMAC-SHA256 signatures
 - Retries failed deliveries with exponential backoff (configurable: default 5 retries, 1s–60s delay)
 - Auto-disables subscriptions after consecutive failures (default threshold: 10)

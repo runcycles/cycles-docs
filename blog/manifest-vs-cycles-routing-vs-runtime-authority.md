@@ -6,6 +6,10 @@ tags: [comparisons, architecture, agents]
 description: "Manifest optimizes which model handles a request. Cycles decides whether the request is allowed to execute at all. Different layers, different problems."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: Manifest vs Cycles, model routing, runtime authority, AI request routing, agent budget control, pre-execution decisions
 ---
 
 # Manifest vs Cycles: Routing vs Runtime Authority

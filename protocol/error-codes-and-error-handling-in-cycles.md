@@ -129,7 +129,7 @@ This error is issued by the **Rule 2 — Terminal-Owner Mutation Guard** half of
 
 **What to do:** the tenant and its owned objects are read-only. Create a new tenant or escalate. **Not retryable against any object owned by this tenant** — unlike `BUDGET_FROZEN` (which an operator may unfreeze), `TENANT_CLOSED` is terminal. Implement no retry logic for this error.
 
-**For client-app developers.** If your users encounter `TENANT_CLOSED`, escalate to your platform operator — they control tenant lifecycle; a client cannot un-close a tenant. New workloads require a fresh active tenant. To proactively detect closed tenants and surface a friendlier message before mutation attempts, call `GET /v1/admin/tenants/{tenant_id}` (admin-scoped) or check the response of any `GET /v1/balances` / `GET /v1/reservations` call — reads against a closed tenant still succeed and return status metadata.
+**For client-app developers.** If your users encounter `TENANT_CLOSED`, escalate to your platform operator — they control tenant lifecycle; a client cannot un-close a tenant. New workloads require a fresh active tenant. To proactively detect a closed tenant and surface a friendlier message before mutation attempts, call `GET /v1/admin/tenants/{tenant_id}` with admin credentials. Runtime balance and reservation reads still work for closed tenants, but their resource status fields do not report the tenant lifecycle status.
 
 **In bulk-action responses:** rows targeting a closed tenant go into the `failed[]` bucket with `error_code=TENANT_CLOSED`; the rest of the batch continues.
 
@@ -226,7 +226,7 @@ An unexpected server error occurred.
 
 Since `cycles-server` 0.1.25.47 this is also the deliberate fail-closed response when a tenant record exists but its status cannot be determined (undecodable JSON, non-object, missing or unrecognized `status`) — the closed-tenant guard refuses to treat a corrupt governance record as an open tenant, on the dry-run/decide surface too. That variant will not resolve on retry; the operator must repair the tenant record.
 
-**What to do:** retry with exponential backoff. If the error persists, contact the Cycles server operator.
+**What to do:** retry unexpected or transient internal errors with exponential backoff. If the error persists, contact the Cycles server operator. Do not keep retrying the malformed-tenant-record variant described above; it requires operator repair.
 
 ## Error handling by operation
 
@@ -309,6 +309,7 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | BUDGET_EXCEEDED | 409 | Insufficient budget (REJECT only) |
 | BUDGET_FROZEN | 409 | Budget scope is frozen |
 | BUDGET_CLOSED | 409 | Budget scope is permanently closed |
+| TENANT_CLOSED | 409 | Owning tenant is closed (cycles-server 0.1.25.47+, spec v0.1.25.13); applies to fresh event requests because event creation is a persisting budget debit |
 | OVERDRAFT_LIMIT_EXCEEDED | 409 | Debt would exceed limit (ALLOW_WITH_OVERDRAFT) |
 | NOT_FOUND | 404 | No budget exists at any derived scope in any unit (message: `"Budget not found for provided scope: ..."`) |
 | UNIT_MISMATCH | 400 | `actual.unit` does not match any budget at the target scope (budget exists in a different unit) |
@@ -317,7 +318,7 @@ Note: decide returns `200` with `decision: DENY` for budget-state conditions (in
 | FORBIDDEN | 403 | Tenant mismatch |
 | IDEMPOTENCY_MISMATCH | 409 | Same key, different payload |
 
-Note: `/v1/events` is not part of the closed-tenant mutation guard's surface — the runtime spec's `TENANT_CLOSED` binding covers the persisting reservation mutations (create/commit/release/extend) only. A closed owning tenant surfaces on `/v1/events` as `401` (the auth filter rejects revoked/CLOSED-tenant keys) or `BUDGET_CLOSED` (the cascade closes the tenant's budgets).
+For a fresh `/v1/events` request observed after the tenant's `CLOSED` flip, the runtime returns `409 TENANT_CLOSED`. Event creation has no dry-run mode, so this condition never becomes a `200 decision=DENY` response. A same-key replay of an event that succeeded before the close returns its original stored `201` response, and a malformed or undeterminable tenant record fails closed with `500 INTERNAL_ERROR`. In normal operation the auth filter may return `401` first because the close cascade also revokes tenant API keys.
 
 ## Decision reason codes
 

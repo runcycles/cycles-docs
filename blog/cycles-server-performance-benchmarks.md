@@ -1,9 +1,9 @@
 ---
-title: "AI Agent Budget Enforcement Latency: Cycles Server Performance Benchmarks"
+title: "Cycles Budget Enforcement Benchmarks"
 date: 2026-04-04
 author: Cycles Team
 tags: [engineering, performance, benchmarks, scaling, latency, throughput, redis]
-description: "How much latency does AI agent budget enforcement add? Published p50/p95/p99 benchmarks for every Cycles operation — 2,870+ ops/sec at 32 threads, zero errors across five versions."
+description: "Review published Cycles budget-enforcement benchmarks across operations, including latency, throughput, concurrency, and the methodology behind each result."
 blog: true
 sidebar: false
 head:
@@ -30,7 +30,7 @@ HTTP request → Spring Boot routing → Auth filter (API key validation)
 → Response serialization → HTTP response
 ```
 
-**Environment:** Spring Boot 3.5 / Java 21 / Redis 7 (Testcontainers), AMD Ryzen Threadripper 3990X 64-Core, localhost networking. Production with dedicated Redis will be faster. 200 measured iterations per operation after 50 warmup iterations (JIT, connection pool, script cache primed). Numbers below reflect **v0.1.25.3** (latest). See [version history](#performance-across-versions) for trends.
+**Benchmark environment:** Cycles Server **v0.1.25.3**, Spring Boot 3.5, Java 21, Redis 7 in Testcontainers, AMD Ryzen Threadripper 3990X 64-Core, and localhost networking. The run used 200 measured iterations per operation after 50 warmup iterations for JIT, connection-pool, and script-cache priming. These are historical measurements on this setup, not current-release or production-latency guarantees. Network topology, Redis placement, contention, and hardware can move results in either direction.
 
 ## Write-Path Latency
 
@@ -52,7 +52,7 @@ HTTP request → Spring Boot routing → Auth filter (API key validation)
 | Reserve + Commit    |  14.9ms |  17.5ms |  18.4ms |
 | Reserve + Release   |  11.4ms |  15.5ms |  16.7ms |
 
-For context, a typical LLM API call takes 500ms-30s depending on the model and token count. **Budget enforcement adds ~15ms to a multi-second operation** — less than the variance in your LLM provider's response time.
+For context, an external LLM call can take much longer than the 14.9ms p50 lifecycle measured here, depending on model, output size, network, and provider load. Measure the relative overhead in your own deployment rather than assuming this benchmark's ratio.
 
 If you just need a quick budget check without reserving (e.g., pre-flight check in a UI), **Decide** gives you a yes/no answer in ~5.5ms.
 
@@ -79,7 +79,7 @@ Extend (7.4ms) is the slowest single operation because it does the most work ato
 
 ## Concurrent Throughput
 
-Single-threaded latency doesn't tell you how the system behaves when 32 agents hit it simultaneously. We ran Reserve→Commit lifecycles at increasing concurrency:
+Single-threaded latency doesn't tell you how the system behaves when 32 agents hit it simultaneously. We ran reserve-commit lifecycles at increasing concurrency:
 
 | Threads | Throughput    |  p50    |  p95    |  p99    |  max    | Errors |
 |---------|---------------|---------|---------|---------|---------|--------|
@@ -89,13 +89,13 @@ Single-threaded latency doesn't tell you how the system behaves when 32 agents h
 
 ### Key observations
 
-**Near-linear scaling.** Throughput scales 3.5x when going from 8 to 32 threads (4x threads). The sub-linear factor is expected — Redis Lua scripts are serialized (single-threaded execution) and connection pool contention increases.
+**Measured concurrency scaling.** Throughput increased 3.5x when the test moved from 8 to 32 threads. Three concurrency points are not enough to establish a general scaling curve or saturation limit.
 
 **Zero errors under load.** No budget violations, no connection pool exhaustion, no timeouts at any concurrency level. Zero errors across all 5 benchmarked versions, at every concurrency level.
 
-**Tail latency stays tight.** p99 at 32 threads is 19.3ms — well within acceptable bounds for a pre-execution check that gates a multi-second LLM call.
+**Measured tail latency.** The 32-thread run measured 19.3ms p99. Whether that is acceptable depends on the protected operation and the caller's latency objective.
 
-**2,873 complete lifecycles per second** at 32 threads means each thread completes a full Reserve→Commit cycle (two HTTP calls, two Lua script executions, two auth checks) in ~11ms average.
+**2,873 complete lifecycles per second** at 32 threads means each thread completes a full reserve-commit cycle (two HTTP calls, two Lua script executions, two auth checks) in ~11ms average.
 
 ## Runaway Agent Demo: v0.1.23 vs v0.1.24
 
@@ -111,11 +111,11 @@ Synthetic benchmarks show per-operation overhead. But what does budget enforceme
 | **Guarded duration**  | 67.8s     | 7.5s      | **9x faster**       |
 | **Budget stop**       | 409 BUDGET_EXCEEDED | 409 BUDGET_EXCEEDED | Identical behavior |
 
-The unguarded baseline is identical — same agent, same workload, same ~600 calls burning ~$6 in 30 seconds. That confirms the comparison is fair.
+The two unguarded baselines were close: 595 versus 597 calls and 30.1 seconds in both runs. That is a useful check on this demo, not proof that all environmental variables were controlled.
 
-With budget enforcement enabled, both versions stop the agent at exactly 100 calls and $1.00 of spend. The budget boundary is airtight in both versions. The difference is how fast the guarded agent completes: v0.1.24.1 finishes in **7.5 seconds** versus 67.8 seconds on v0.1.23.3 — a **9x improvement** in end-to-end guarded runtime.
+With budget enforcement enabled, both observed runs stopped at 100 calls and $1.00 of modeled spend. The measured guarded duration was 7.5 seconds on v0.1.24.1 versus 67.8 seconds on v0.1.23.3, about a **9x improvement** in this demo.
 
-The speedup comes from the optimizations described below: BCrypt caching, EVALSHA pipelining, and in-Lua balance snapshots. In v0.1.23, each budget check added enough overhead that 100 guarded calls took longer than 600 unguarded calls. In v0.1.24, budget enforcement overhead is invisible — the guarded run is faster simply because it makes fewer calls.
+The v0.1.24 release included BCrypt caching, EVALSHA pipelining, and in-Lua balance snapshots. The before/after demo is consistent with those changes reducing overhead, but it does not isolate each optimization's contribution. The guarded v0.1.24 run finishes sooner than the unguarded run because it stops after 100 rather than roughly 600 calls; the enforcement overhead itself is still measurable.
 
 ## Performance Across Versions
 
@@ -131,9 +131,9 @@ We track benchmarks across every release. Here's how the key metrics have trende
 
 **What this shows:**
 
-- **Latency is stable.** Reserve+Commit p50 has stayed in the 12.9-16.0ms range across all versions. The variation is environmental (container warmth, Docker engine version), not code regressions.
-- **Throughput is stable or improving.** 32-thread throughput has ranged from 2,534-2,873 ops/sec. The v0.1.25.3 number (2,873) is the highest recorded, despite adding webhook event emission infrastructure in v0.1.25.
-- **New features haven't added overhead.** Between v0.1.24.0 and v0.1.25.3, we added: async webhook event emission, 11 event model classes, AES-256-GCM encryption for webhook secrets, TTL retention cleanup, and 4 new runtime events (budget.exhausted, budget.over_limit_entered, budget.debt_incurred, reservation.expired). None of these moved the performance needle — because event emission runs on a separate async thread pool and never touches the request hot path.
+- **Observed p50 range.** Reserve-plus-commit p50 stayed between 12.9ms and 16.0ms across these runs. The table alone cannot distinguish environmental noise from code-level effects.
+- **Observed throughput range.** The 32-thread measurements ranged from 2,534 to 2,873 operations per second; v0.1.25.3 was the highest of the five recorded runs.
+- **No large regression is visible in this sample.** The releases added asynchronous event-emission and retention features while remaining within the measured ranges. A controlled A/B test would be needed to attribute overhead, or its absence, to an individual feature.
 - **Zero errors across every version, at every concurrency level.** No budget violations, no connection pool exhaustion, no timeouts.
 
 For full per-version benchmark data and analysis, see [`BENCHMARKS.md`](https://github.com/runcycles/cycles-server/blob/main/BENCHMARKS.md) in the server repository.
@@ -180,19 +180,19 @@ Source: [`CyclesProtocolBenchmarkTest`](https://github.com/runcycles/cycles-serv
 
 ## The bottom line
 
-Budget enforcement with Cycles adds **4-7ms per write operation** and **2.8-3.5ms per read** in the typical case. A full reserve-commit lifecycle adds **~15ms** to an LLM call that takes seconds. At 32 concurrent threads, the server sustains **2,870+ complete lifecycles per second** with zero errors — stable across five versions and two weeks of feature development.
+In this v0.1.25.3 benchmark, write-operation p50 values were **4.1-7.4ms**, read-operation p50 values were **2.8-3.5ms**, and a full reserve-commit lifecycle measured **14.9ms p50**. The 32-thread test measured **2,873 complete lifecycles per second** with zero errors during the run. These figures describe the benchmark, not an SLO for later releases or other environments.
 
-The overhead is small enough that you shouldn't notice it. In our runaway agent demo, v0.1.24 stops a $6 agent at exactly $1.00 — and the guarded run finishes **9x faster** than the previous version. If you don't enforce budgets, the cost of a single runaway agent will be orders of magnitude larger than any latency you saved.
+Whether the overhead is material depends on workload latency and deployment topology. The separate runaway-agent demo shows the behavioral value of a hard budget boundary; it should not be treated as a general performance comparison.
 
 ## FAQ
 
 ### How much latency does Cycles add to LLM calls?
 
-A full reserve-commit lifecycle adds ~15ms (p50) to your agent's LLM call. Since most LLM API calls take 500ms-30s, budget enforcement adds less than 3% overhead in the worst case and is effectively invisible in practice. This latency has been stable across five versions of the server. Read-only queries (balance checks, reservation lookups) add just 2.8-3.5ms.
+The v0.1.25.3 benchmark measured a full reserve-commit lifecycle at 14.9ms p50. Relative overhead depends on the protected operation: 15ms is about 3% of a 500ms call, and a larger share of shorter tool calls. The same benchmark measured read-query p50 values between 2.8ms and 3.5ms. Re-run the suite against your release and infrastructure before setting latency objectives.
 
 ### Does Cycles scale horizontally?
 
-The [Cycles server](/glossary#cycles-server) is stateless — all state lives in Redis. You can run multiple server instances behind a load balancer. Redis itself can be scaled with Redis Cluster for sharding across multiple nodes. Our benchmarks show a single instance handling 2,870+ complete lifecycles per second.
+The [Cycles server](/glossary#cycles-server) keeps ledger state in Redis, so multiple application instances can share a supported Redis deployment behind a load balancer. This benchmark covered one server instance and standalone Redis; it does not establish Redis Cluster compatibility or multi-instance scaling behavior.
 
 ### What happens if the Cycles server is slow or unavailable?
 

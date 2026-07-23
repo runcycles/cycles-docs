@@ -185,7 +185,7 @@ Cycles provides an MCP server that exposes runtime authority as tools for any MC
 
 [![PyPI downloads](https://img.shields.io/pypi/dm/runcycles-openai-agents?label=downloads&color=555&style=flat-square)](https://pypi.org/project/runcycles-openai-agents/)
 
-Add budget governance to OpenAI Agents SDK workflows. The plugin hooks into the SDK's `RunHooks` interface to automatically enforce budgets on every LLM call, tool invocation, and agent handoff — with tool risk mapping and pre-run guardrails.
+Add budget governance to OpenAI Agents SDK workflows. The plugin hooks into the SDK's `RunHooks` interface to enforce budgets on LLM calls and tool invocations, and emits best-effort zero-amount audit events for agent handoffs — with tool risk mapping and pre-run guardrails.
 
 - [runcycles-openai-agents on PyPI](https://pypi.org/project/runcycles-openai-agents/)
 - [OpenAI Agents integration guide](/how-to/integrating-cycles-with-openai-agents)
@@ -224,7 +224,7 @@ The official Cycles TypeScript client for Node.js and browser environments.
 
 [![crates.io](https://img.shields.io/crates/v/runcycles?label=crates.io&color=555&style=flat-square)](https://crates.io/crates/runcycles)
 
-The official Cycles Rust client (currently 0.2.6). Async-first, built for budget-aware agents and services in Rust.
+The official Cycles Rust client (currently 0.2.7). Async-first, built for budget-aware agents and services in Rust.
 
 - [runcycles on crates.io](https://crates.io/crates/runcycles)
 - [Rust quickstart](/quickstart/getting-started-with-the-rust-client)
@@ -233,7 +233,7 @@ The official Cycles Rust client (currently 0.2.6). Async-first, built for budget
 
 [![PyPI downloads](https://img.shields.io/pypi/dm/runcycles-ap2?label=downloads&color=555&style=flat-square)](https://pypi.org/project/runcycles-ap2/)
 
-Runtime authority guard for AP2 (Agent Payments Protocol) — reserve, commit, release around agent payment mandates to prevent mandate reuse, double-spend, and concurrent checkout attempts. Works with Google's AP2 spec and any AP2-compatible SDK.
+Runtime authority guard for AP2 (Agent Payments Protocol) — reserve, commit, and release around agent payment mandates. It deduplicates Cycles accounting and rejects divergent reuse of an `open_mandate_hash`; identical retries still require PSP idempotency or a separate consume-once claim to prevent duplicate charges. Works with Google's AP2 spec and any AP2-compatible SDK.
 
 - [runcycles-ap2 on PyPI](https://pypi.org/project/runcycles-ap2/)
 - [Source on GitHub](https://github.com/runcycles/cycles-ap2-python)

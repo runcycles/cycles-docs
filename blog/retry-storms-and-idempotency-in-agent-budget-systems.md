@@ -3,7 +3,7 @@ title: "Retry Storms & Idempotency in Agent Budget Systems"
 date: 2026-04-08
 author: Albert Mavashev
 tags: [engineering, production, operations, best-practices, runtime-authority, architecture]
-description: "AI agent retries amplify both cost and risk — same email sent twice, same budget charged twice. Idempotency keys are the primitive that prevents it."
+description: "AI agent retries amplify cost and side effects. Learn how stable idempotency keys prevent duplicate actions and duplicate budget charges under failure."
 blog: true
 sidebar: false
 featured: false

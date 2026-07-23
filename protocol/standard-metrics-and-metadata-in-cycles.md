@@ -281,9 +281,9 @@ The runtime server (`cycles-server` v0.1.25.10+) publishes seven domain counters
 
 The admin server (`cycles-server-admin` v0.1.25.20+) adds `cycles_admin_audit_writes_total{path_class, outcome}` — **alert on `outcome=error` nonzero** to catch silent audit-coverage loss.
 
-The events service (`cycles-server-events` v0.1.25.6+) publishes eight webhook delivery metrics under `cycles_webhook_*` — see [Server Configuration Reference → Events service metrics](/configuration/server-configuration-reference-for-cycles#events-service-metrics) for the full inventory.
+The events service (`cycles-server-events` v0.1.25.6+) publishes webhook delivery, evidence-worker, and dispatcher metrics under `cycles_webhook_*` and `cycles_evidence_*` — see [Server Configuration Reference → Events service metrics](/configuration/server-configuration-reference-for-cycles#events-service-metrics) for the current inventory.
 
-The `tenant` label on all three services is gated by `cycles.metrics.tenant-tag.enabled` (default `true`) — set to `false` in deployments with many thousands of tenants to bound Prometheus cardinality.
+The runtime and events services gate their optional `tenant` label with `cycles.metrics.tenant-tag.enabled`. The runtime defaults it to `true`; the events service defaults it to `false`. Admin `cycles_admin_*` counters do not carry a tenant label, so this toggle does not apply there.
 
 ## Next steps
 

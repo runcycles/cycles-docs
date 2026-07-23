@@ -3,9 +3,13 @@ title: "The True Cost of Uncontrolled AI Agents"
 date: 2026-03-14
 author: Cycles Team
 tags: [costs, agents, incidents, best-practices]
-description: "What happens when AI agents run without budget limits? Real-world costs, failure modes, and why pre-execution runtime authority is the missing layer."
+description: "Uncontrolled AI agents create unpredictable spend and failure exposure. Review real scenarios and the role of pre-execution runtime budget authority today."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: uncontrolled AI agent costs, runaway agent spend, AI failure costs, pre-execution budgets, runtime authority, cost control
 ---
 
 # The True Cost of Uncontrolled AI Agents

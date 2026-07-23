@@ -66,7 +66,7 @@ Tenants can create their own webhook subscriptions via `/v1/webhooks` (requires 
 ## Security
 
 - **HMAC-SHA256** — every delivery includes `X-Cycles-Signature: sha256=<hex>` for payload verification
-- **Encryption at rest** — signing secrets encrypted in Redis with AES-256-GCM when `WEBHOOK_SECRET_ENCRYPTION_KEY` is configured (stored in plaintext otherwise)
+- **Encryption at rest** — signing secrets are encrypted in Redis with AES-256-GCM using `WEBHOOK_SECRET_ENCRYPTION_KEY`; admin and events fail startup without the key unless plaintext is explicitly enabled for local development
 - **SSRF prevention** — private IP ranges blocked by default, HTTPS required in production
 
 ## Learn More

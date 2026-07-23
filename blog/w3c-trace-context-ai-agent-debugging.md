@@ -9,7 +9,7 @@ tags:
   - runtime-authority
   - production
   - operations
-description: "How Cycles wires W3C Trace Context across admin, runtime, events, and audit planes so you can correlate an AI agent's budget decisions across every plane at once."
+description: "Trace AI agent budget decisions across Cycles admin, runtime, events, and audit planes using W3C Trace Context and shared correlation identifiers end to end."
 blog: true
 sidebar: false
 featured: false

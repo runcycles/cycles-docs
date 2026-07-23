@@ -213,7 +213,7 @@ For service-to-service communication within a trusted network (e.g., Kubernetes 
 The Cycles Server Docker images run as a non-root user by default. Verify (the image's entrypoint launches the Java server, so `whoami` must be passed with `--entrypoint` — appending it as a command argument is ignored):
 
 ```bash
-docker run --rm --entrypoint whoami ghcr.io/runcycles/cycles-server:0.1.25.46
+docker run --rm --entrypoint whoami ghcr.io/runcycles/cycles-server:0.1.25.58
 ```
 
 ### Pin image versions
@@ -221,7 +221,7 @@ docker run --rm --entrypoint whoami ghcr.io/runcycles/cycles-server:0.1.25.46
 Use specific version tags, not `latest`:
 
 ```yaml
-image: ghcr.io/runcycles/cycles-server:0.1.25.46  # Pinned
+image: ghcr.io/runcycles/cycles-server:0.1.25.58  # Pinned
 # NOT: ghcr.io/runcycles/cycles-server:latest   # Unpinned
 ```
 
@@ -231,7 +231,7 @@ Mount the container filesystem as read-only:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.46
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   read_only: true
   tmpfs:
     - /tmp

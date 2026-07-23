@@ -77,19 +77,19 @@ agent = create_agent(
 
 ```python
 # OpenAI Agents SDK
-from agents import Agent, Runner
+from agents import Agent
 from runcycles_openai_agents import CyclesRunHooks
 
 hooks = CyclesRunHooks(
     tenant="acme",
     tool_estimates={"send_email": 50, "search": 0},  # default unit: RISK_POINTS
 )
-result = await Runner.run(agent, input="...", hooks=hooks)
+result = await hooks.run(agent, input="...")
 ```
 
 **Use when:**
 - You're using an agent framework with lifecycle hooks (OpenAI Agents SDK, OpenClaw, LangChain 1.x `create_agent`)
-- You want budget governance on every LLM call, tool invocation, and handoff automatically
+- You want automatic budget governance on LLM and tool calls, plus best-effort handoff audit events
 - You need tool-level risk mapping (different costs per tool)
 - You want agent handoff tracking in the Cycles ledger
 

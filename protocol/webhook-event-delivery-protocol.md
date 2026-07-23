@@ -263,8 +263,13 @@ The events service uses these Redis data structures (shared with the admin serve
 
 | Key | Type | Written By | Read By | Description |
 |-----|------|-----------|---------|-------------|
-| `dispatch:pending` | LIST | Admin (LPUSH) | Events (BRPOP) | Delivery IDs awaiting processing |
+| `dispatch:pending` | LIST | Admin (LPUSH) | Events (BLMOVE) | Delivery IDs awaiting processing |
+| `dispatch:processing` | LIST | Events (BLMOVE) | Events (LREM / recovery) | Claimed delivery IDs retained until acknowledged |
+| `dispatch:processing:claimed_at` | ZSET | Events | Events | Claim timestamps used for idle-gated crash recovery |
+| `dispatch:processing:claim_owner` | HASH | Events | Events | Per-delivery claim-generation token that prevents a stale worker from acknowledging a successor's claim |
+| `dispatch:ordering:lock` | STRING | Events | Events | Renewable owner token for the cross-replica claim/send critical section |
 | `dispatch:retry` | ZSET | Events (ZADD) | Events (ZRANGEBYSCORE) | Retry queue (score = timestamp) |
+| `dispatch:failed` | LIST | Events (LPUSH/LTRIM) | Operators | Bounded quarantine for corrupt delivery records |
 | `delivery:{id}` | STRING | Admin (SET) | Events (GET/SET) | Delivery record JSON (14-day TTL) |
 | `event:{id}` | STRING | Admin (SET) | Events (GET) | Event record JSON (90-day TTL) |
 | `webhook:{id}` | STRING | Admin (SET) | Events (GET/SET) | Subscription JSON |

@@ -77,25 +77,22 @@ The enforcement point also becomes the [tenancy boundary](/protocol/authenticati
 
 Tenant-level budgets solve the isolation problem. But within a tenant, you still need to control which workflows, agents, and individual runs can spend how much. This is where hierarchical scoping comes in.
 
-The [Cycles protocol](/glossary#cycles-protocol) defines a canonical [scope hierarchy](/protocol/how-scope-derivation-works-in-cycles): **tenant → workspace → app → workflow → agent → toolset**. Each level is a budget scope. You use the levels that match your product model — most multi-tenant platforms start with tenant and workflow, then add finer-grained scopes as needed. Run-level budgets can be modeled through the `dimensions` field (e.g., `dimensions: { "run": "run-7a3f" }`), which provides additional metadata for execution-specific tracking. Note that v0 servers may not enforce budgets on dimensions — check your server's implementation for dimension-based enforcement support.
+The [Cycles protocol](/glossary#cycles-protocol) defines a canonical [scope hierarchy](/protocol/how-scope-derivation-works-in-cycles): **tenant → workspace → app → workflow → agent → toolset**. Each populated standard field derives a budget scope. You use the levels that match your product model—most multi-tenant platforms start with tenant and workflow, then add finer-grained scopes as needed. Because `run` is not a standard Subject field, model an enforceable run budget by carrying a unique run identifier in a standard field, such as `workflow: "run-7a3f"`. Custom `dimensions` can carry attribution metadata, but the reference server does not derive budget scopes from them.
 
 ```
 Tenant: Acme Corp ($2,000/month)
 ├── Workspace: production
-│   ├── Workflow: document-analysis ($800/month)
-│   │   ├── Agent: analyzer ($400/month)
-│   │   │   └── dimensions: { run: "run-7a3f" } ($25/run)
-│   │   └── Agent: summarizer ($400/month)
-│   │       └── dimensions: { run: "run-9c1e" } ($25/run)
+│   ├── App: document-analysis ($800/month)
+│   │   ├── Workflow: run-7a3f ($25/run)
+│   │   └── Workflow: run-9c1e ($25/run)
 │   ├── Workflow: chat-assistant ($500/month)
 │   │   └── Agent: assistant ($500/month)
-│   │       └── dimensions: { run: "session-4d2b" } ($5/session)
 │   └── Workflow: code-review ($400/month)
-│       └── dimensions: { run: "run-2e8f" } ($10/run)
+│       └── Agent: reviewer ($400/month)
 └── Workspace: staging ($300/month)
 ```
 
-When an agent makes a reservation, the system checks budget availability **at every derived scope in the path** — the run dimension, the agent, the workflow, the workspace, and the tenant. All must have sufficient budget for the reservation to succeed. If any scope is exhausted, the request is denied.
+When an agent makes a reservation, the system checks every applicable ledger among the scopes derived from the six standard fields. Every configured ledger must have sufficient budget for the reservation to succeed; derived scopes with no ledger are skipped. In the run example, the unique `workflow:run-7a3f` scope supplies the per-run boundary.
 
 This means:
 
@@ -104,7 +101,7 @@ This means:
 - A workflow cannot exceed its share of the tenant budget
 - The tenant cannot exceed their overall limit, regardless of how budget is distributed internally
 
-Scopes compose naturally. You do not need to implement enforcement at every level on day one. Start with tenant budgets for isolation, then add run-level dimensions for execution safety, then layer in workflow and agent budgets as your product matures. The [modeling guide](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles) covers this progression in detail.
+Scopes compose naturally. You do not need to implement enforcement at every level on day one. Start with tenant budgets for isolation, then add run-specific standard-field scopes for execution safety, and layer in product-workflow or agent budgets as your model matures. The [modeling guide](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles) covers the trade-offs involved in choosing which standard field carries a run identifier.
 
 ## Budgets vs Quotas
 
@@ -166,7 +163,7 @@ You do not need the full hierarchy on day one. The proven path for multi-tenant 
 
 5. **Differentiate by plan tier.** Map your pricing model directly to budget and quota configurations. Free, Pro, and Enterprise plans get different limits enforced at the same infrastructure layer.
 
-For teams introducing enforcement to an existing system, [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) lets you log what would be denied without actually blocking anything — giving you real data to size budgets before flipping to hard enforcement.
+For teams introducing enforcement to an existing system, [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) returns what would be denied without blocking. Log those non-persisting responses in the application, alongside actual outcomes, to size budgets before enabling hard enforcement.
 
 ## Next steps
 

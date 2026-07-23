@@ -6,6 +6,10 @@ tags: [governance, enterprise, salesforce, servicenow, agentforce, cross-platfor
 description: "Salesforce and ServiceNow have invested in AI agent governance. Neither acts as a neutral, shared pre-execution control plane across both — and custom runtimes."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: cross-platform AI governance, Salesforce Agentforce, ServiceNow AI agents, Action Fabric, runtime authority, agent control
 ---
 
 # Salesforce and ServiceNow Govern Their Own Agents. Who Governs the Whole System?
@@ -32,7 +36,7 @@ Each platform is shipping AI agents aggressively:
 - **ServiceNow Now Assist** — AI agents that triage incidents, auto-resolve tickets, generate knowledge articles, and manage change requests within ServiceNow.
 - **Custom agents** — LangChain, CrewAI, AutoGen, or bespoke agents that operate outside both platforms, calling APIs, querying databases, and interacting with third-party services.
 
-Both platforms have invested substantially in AI governance. Salesforce offers the Einstein Trust Layer for content safety, Agentforce guardrails for topic classification, and the [Agentforce Command Center](https://www.salesforce.com/news/press-releases/2025/06/23/agentforce-3-announcement/) for visibility and control across its ecosystem. ServiceNow provides [AI Control Tower](https://www.servicenow.com/products/ai-control-tower.html) for centralized AI monitoring, AI Agent Fabric for connecting third-party agents, and flow-level governance controls within the Now Platform.
+Both platforms have invested substantially in AI governance. Salesforce offers the Einstein Trust Layer for content safety, Agentforce guardrails for topic classification, and the [Agentforce Command Center](https://www.salesforce.com/news/press-releases/2025/06/23/agentforce-3-announcement/) for visibility and control across its ecosystem. ServiceNow provides [AI Control Tower](https://www.servicenow.com/products/ai-control-tower.html) for centralized AI monitoring, Action Fabric for connecting third-party agents, and flow-level governance controls within the Now Platform.
 
 This is not a claim that Salesforce and ServiceNow lack governance. Both offer substantial observability, analytics, and governance features within their own ecosystems — and both are expanding those capabilities aggressively. The gap is different: neither platform acts as a vendor-neutral, shared pre-execution control plane across Salesforce, ServiceNow, _and_ custom runtimes simultaneously. Each governs its own agents. Nobody governs the aggregate.
 
@@ -42,15 +46,15 @@ Three questions that illustrate this gap:
 
 2. **"Show me a complete log of all AI-initiated actions that modified customer data in the last 90 days, across all systems."** — The SOC2 auditor asks this. The security team can pull Salesforce audit logs and ServiceNow `sys_audit` records separately. But neither captures AI-initiated actions specifically (vs. human-initiated), and there is no way to correlate activity across platforms into a single timeline.
 
-3. **"Can we prove that our AI agents cannot send more than N customer communications per hour, across all systems?"** — The CISO asks this. Salesforce can limit Agentforce actions within Salesforce. ServiceNow can limit Now Assist actions within ServiceNow — and [AI Agent Fabric](https://www.servicenow.com/platform/ai-agent-fabric.html) can connect third-party agents into ServiceNow's governance model. But no vendor-neutral shared pre-execution ledger enforces a combined limit across Salesforce, ServiceNow, and custom runtimes simultaneously. The Tuesday email storm was technically within each platform's individual limits.
+3. **"Can we prove that our AI agents cannot send more than N customer communications per hour, across all systems?"** — The CISO asks this. Salesforce can limit Agentforce actions within Salesforce. ServiceNow can limit Now Assist actions within ServiceNow — and [Action Fabric](https://www.servicenow.com/platform/action-fabric.html) can connect third-party agents into ServiceNow's governance model. But no vendor-neutral shared pre-execution ledger enforces a combined limit across Salesforce, ServiceNow, and custom runtimes simultaneously. The Tuesday email storm was technically within each platform's individual limits.
 
 ## Why a Neutral Governance Plane Is Needed
 
-Both Salesforce and ServiceNow are expanding their AI governance capabilities — and those capabilities are real and valuable within each platform's ecosystem. Salesforce's Command Center gives Agentforce operators visibility and control. ServiceNow's AI Control Tower provides centralized monitoring. AI Agent Fabric connects third-party agents into ServiceNow's governance model.
+Both Salesforce and ServiceNow are expanding their AI governance capabilities — and those capabilities are real and valuable within each platform's ecosystem. Salesforce's Command Center gives Agentforce operators visibility and control. ServiceNow's AI Control Tower provides centralized monitoring. Action Fabric connects third-party agents into ServiceNow's governance model.
 
 But each platform's governance is anchored to its own ecosystem. The structural challenge is not that these platforms lack governance — it is that cross-platform governance requires a neutral party.
 
-**Platform governance is platform-scoped.** Salesforce's Agentforce Command Center monitors and controls Agentforce agents. It does not monitor Now Assist agents, LangChain agents, or custom agents running outside Salesforce. ServiceNow's AI Control Tower governs agents within the Now Platform. [AI Agent Fabric](https://www.servicenow.com/platform/ai-agent-fabric.html) connects and controls third-party agents — but it brings them into ServiceNow's governance model, not into a vendor-neutral shared ledger. Even when a platform can connect to third-party agents, that is not the same as a neutral pre-execution authority enforced across Salesforce, ServiceNow, and custom runtimes simultaneously.
+**Platform governance is platform-scoped.** Salesforce's Agentforce Command Center monitors and controls Agentforce agents. It does not monitor Now Assist agents, LangChain agents, or custom agents running outside Salesforce. ServiceNow's AI Control Tower governs agents within the Now Platform. [Action Fabric](https://www.servicenow.com/platform/action-fabric.html) connects and controls third-party agents — but it brings them into ServiceNow's governance model, not into a vendor-neutral shared ledger. Even when a platform can connect to third-party agents, that is not the same as a neutral pre-execution authority enforced across Salesforce, ServiceNow, and custom runtimes simultaneously.
 
 **Shared limits require a shared ledger.** If a Salesforce agent and a ServiceNow agent both handle the same customer interaction, enforcing a combined risk limit across both requires a single ledger that both platforms write to before acting. Neither platform provides this — and building it requires the kind of vendor-neutral protocol that neither platform is positioned to offer for the other's agents.
 
@@ -82,9 +86,9 @@ The `tenant:acme-corp` scope acts as a hard cap across all platforms. Even if in
 
 ### Two governance dimensions
 
-**[Budget authority](/glossary#budget-authority) ([USD_MICROCENTS](/glossary#usd-microcents))** controls how much AI agents can spend across all platforms. Every model call, API invocation, and external service request is governed by a single, unified budget. When the Salesforce Agentforce agent spends $35,000 by the 20th of the month, the ServiceNow Now Assist agents see their remaining budget drop accordingly. Concurrent [reservations](/glossary#reservation) from both platforms against the same budget are handled atomically by the [Cycles server](/glossary#cycles-server).
+**[Budget authority](/glossary#budget-authority) ([USD_MICROCENTS](/glossary#usd-microcents))** controls how much submitted activity can spend across platforms. Calls are governed only when each connector routes them through the shared tenant ledger. Concurrent [reservations](/glossary#reservation) from Salesforce and ServiceNow against that ledger are handled atomically by the [Cycles server](/glossary#cycles-server).
 
-**[Action authority](/glossary#action-authority) ([RISK_POINTS](/glossary#risk-points))** controls what agents _do_ across all platforms. A single customer interaction spanning both platforms might look like this:
+**Caller-assigned action exposure ([RISK_POINTS](/glossary#risk-points))** lets both connectors account for the risk scores their applications assign. It does not replace platform permissions, tool allowlists, or argument validation. A single customer interaction spanning both platforms might be scored like this:
 
 | Platform | Action | Risk Points |
 |----------|--------|:-----------:|
@@ -95,9 +99,9 @@ The `tenant:acme-corp` scope acts as a hard cap across all platforms. Even if in
 | Salesforce | Send customer email | 50 |
 | ServiceNow | Post to Slack channel | 20 |
 
-The risk budget is scoped to the interaction — via `dimensions.correlation_id` — not to the platform. When the risk budget is exhausted, all platforms stop consequential actions while reads and internal operations continue.
+The connectors can share an enforceable interaction budget by putting the same interaction identifier in a standard Subject field—for example, `workflow: "case-4782"`. Keep `dimensions.correlation_id` as attribution metadata. The reference server does not derive budget scopes from dimensions, so a dimension alone cannot create the shared interaction budget. Reads and internal operations continue only if the application classifies and routes them through a different funded scope or deliberately leaves them outside this risk budget.
 
-This is action authority applied across platforms. Dollar budgets control cost. RISK_POINTS control behavior. A support agent that sends 200 customer emails costs $1.40 in [tokens](/glossary#tokens). The risk is not monetary — it is reputational and operational. RISK_POINTS capture what [money cannot measure](/concepts/action-authority-controlling-what-agents-do).
+Dollar budgets bound submitted cost. `RISK_POINTS` bound a caller-defined measure of cumulative action exposure. A support agent that sends 200 customer emails can have low token cost and high reputational or operational consequence; the application assigns a score that reflects that distinction.
 
 ### How agents connect: thin connectors, not platform lock-in
 
@@ -141,7 +145,7 @@ With a shared RISK_POINTS budget of 500 per hour at the tenant level — where `
 }
 ```
 
-The reservation is denied before the email function executes. The next Slack notification attempt from ServiceNow returns the same `409 BUDGET_EXCEEDED`. Both platforms halt customer-facing actions simultaneously, while internal reads, note-taking, and status updates continue unaffected.
+The reservation is rejected before the email function executes. The next submitted Slack-notification reservation against the same exhausted ledger returns `409 BUDGET_EXCEEDED`. Internal reads, note-taking, and status updates continue only if platform authorization permits them and their configured Subjects do not require the exhausted ledger.
 
 The Cycles reservation ledger records every governed action — every attempt, every allow, every deny — with timestamps, platform origin, agent identity, and risk points consumed.
 
@@ -164,13 +168,13 @@ The quarterly AI spend review. Instead of reconciling billing systems across mul
 GET /v1/balances?tenant=acme-corp
 ```
 
-Returns total AI spend across all platforms — for every action routed through Cycles. Drill down by `app` to see per-platform spend. Drill down by `workflow` to see per-process spend. Because every Cycles reservation includes `dimensions.correlation_id` — the case number, ticket ID, or customer ID that triggered the interaction — the finance team can attribute AI costs to business outcomes: cost per resolved case, cost per auto-resolved incident, cost per qualified lead. Across all platforms. In real time.
+Returns budget state across the standard scopes populated by the connectors. Drill down by `app` to see per-platform spend or by the standard field chosen for an enforceable process/run boundary. For business-outcome attribution, export reservation or event records and group their `dimensions.correlation_id` metadata in downstream analytics. Dimensions are useful attribution fields, but they are not balance-query scopes in the reference server.
 
 ### Scenario 3: The auditor asks for logs
 
 SOC2 Type II audit. The auditor requests a complete log of all AI-initiated actions that modified customer data in the last 90 days, across all systems.
 
-The Cycles reservation ledger contains every governed action. A single query returns them:
+The Cycles reservation ledger contains the budget lifecycle for actions routed through the reserve-commit boundary. A reservation query returns those lifecycle records:
 
 ```
 GET /v1/reservations?tenant=acme-corp&status=COMMITTED
@@ -187,6 +191,7 @@ Each entry in the response includes the full context:
       "subject": {
         "tenant": "acme-corp",
         "app": "salesforce",
+        "workflow": "case-4782",
         "agent": "agentforce-case-bot",
         "toolset": "customer-email",
         "dimensions": {
@@ -200,8 +205,9 @@ Each entry in the response includes the full context:
       "affected_scopes": [
         "tenant:acme-corp",
         "tenant:acme-corp/app:salesforce",
-        "tenant:acme-corp/app:salesforce/agent:agentforce-case-bot",
-        "tenant:acme-corp/app:salesforce/agent:agentforce-case-bot/toolset:customer-email"
+        "tenant:acme-corp/app:salesforce/workflow:case-4782",
+        "tenant:acme-corp/app:salesforce/workflow:case-4782/agent:agentforce-case-bot",
+        "tenant:acme-corp/app:salesforce/workflow:case-4782/agent:agentforce-case-bot/toolset:customer-email"
       ]
     }
   ],
@@ -210,13 +216,13 @@ Each entry in the response includes the full context:
 }
 ```
 
-Action kind, agent identity, timestamp, platform origin, correlation ID, risk points — all in one response, across all platforms. Filter by `app`, `agent`, or `toolset` to narrow to a specific platform or action type. Paginate with `cursor` for the full history. The audit trail is generated as a side effect of enforcement — not as a separate logging concern. Enforcement guarantees a trail for governed actions; logging alone does not guarantee control. For the compliance model behind this, see [AI Agent Governance: Runtime Enforcement for Security, Cost, and Compliance](/blog/ai-agent-governance-runtime-enforcement-security-cost-compliance).
+Action kind, agent identity, timestamp, platform origin, correlation ID, and risk points can be correlated across those records. Paginate with `cursor` for the retained reservation history. A complete SOC 2 evidence set must also retain application authorization, tool arguments, external side-effect outcomes, identity decisions, and non-persisting preflight responses. The lifecycle ledger is an enforcement record, not a replacement for those application logs. For the compliance model behind this, see [AI Agent Governance: Runtime Enforcement for Security, Cost, and Compliance](/blog/ai-agent-governance-runtime-enforcement-security-cost-compliance).
 
 ## Protocol, Not Platform
 
 The governance plane is the Cycles server — the same [open protocol](/protocol/how-reserve-commit-works-in-cycles) that already integrates with [LangChain](/how-to/integrating-cycles-with-langchain), [Vercel AI SDK](/how-to/integrating-cycles-with-vercel-ai-sdk), [Spring Boot](/quickstart/getting-started-with-the-cycles-spring-boot-starter), and [MCP-based agents](/quickstart/getting-started-with-the-mcp-server). Adding Salesforce and ServiceNow connectors would extend the same reserve-commit lifecycle to two more platforms. The protocol does not change. The server does not change. The governance model does not change.
 
-Cross-platform correlation works through the existing `dimensions` field on the Cycles Subject. Both connectors include `dimensions.platform` and `dimensions.correlation_id`. When a Salesforce case triggers a ServiceNow incident — a common integration pattern — both connectors pass the same correlation ID. The Cycles server tracks all reservations under this correlation, producing a unified timeline of what happened, on which platform, in what order.
+Cross-platform attribution can carry `dimensions.platform` and `dimensions.correlation_id` on the Cycles Subject, but the application or downstream event store must use that metadata to build a correlated timeline. For enforcement, both connectors put the shared case identifier in a standard field such as `workflow`. When a Salesforce case triggers a ServiceNow incident, both connectors therefore submit the same enforceable workflow scope and the same correlation metadata.
 
 A Salesforce reserve and a ServiceNow reserve against the same tenant look identical at the protocol level:
 
@@ -226,7 +232,7 @@ A Salesforce reserve and a ServiceNow reserve against the same tenant look ident
   "subject": {
     "tenant": "acme-corp",
     "app": "salesforce",
-    "workflow": "case-triage",
+    "workflow": "case-4782",
     "agent": "agentforce-case-bot",
     "toolset": "customer-email",
     "dimensions": {
@@ -245,7 +251,7 @@ A Salesforce reserve and a ServiceNow reserve against the same tenant look ident
   "subject": {
     "tenant": "acme-corp",
     "app": "servicenow",
-    "workflow": "incident-auto-resolve",
+    "workflow": "case-4782",
     "agent": "now-assist-incident",
     "toolset": "customer-notifications",
     "dimensions": {
@@ -264,7 +270,7 @@ Both hit the same tenant budget. Both consume from the same risk-point pool. Bot
 
 Three forces are converging:
 
-**Agentforce and Now Assist are scaling to production.** Salesforce shipped [Agentforce GA in October 2024](https://www.salesforce.com/news/press-releases/2024/10/29/agentforce-general-availability-announcement/). ServiceNow introduced Now Assist AI Agents as part of the [Yokohama release in early 2025](https://www.servicenow.com/company/media/press-room/yokohama-release.html). Enterprises that piloted these capabilities throughout 2025 are now deploying them to production at scale. The cross-platform governance gap becomes real the moment a customer interaction triggers agents on both platforms simultaneously — a pattern that becomes increasingly likely as workflows span both systems.
+**Agentforce and Now Assist are scaling to production.** Salesforce shipped [Agentforce GA in October 2024](https://www.salesforce.com/news/press-releases/2024/10/29/agentforce-general-availability-announcement/). ServiceNow introduced Now Assist AI Agents as part of the [Yokohama release in early 2025](https://www.servicenow.com/uk/company/media/press-room/yokohama-release-ai-agents.html). Enterprises that piloted these capabilities throughout 2025 are now deploying them to production at scale. The cross-platform governance gap becomes real the moment a customer interaction triggers agents on both platforms simultaneously — a pattern that becomes increasingly likely as workflows span both systems.
 
 **AI governance expectations are rising across compliance frameworks.** Organizations are mapping AI agent activity into existing SOC 2 and ISO 27001 control programs, while newer AI-focused frameworks like [NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework) and ISO/IEC 42001 increase expectations around governance, traceability, and risk management. The question "show me your AI audit trail" is appearing more frequently in audits — and a cross-platform audit trail that covers Salesforce, ServiceNow, and custom agents in a single ledger is significantly harder to produce than a platform-specific one.
 

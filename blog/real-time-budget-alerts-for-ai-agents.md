@@ -1,9 +1,9 @@
 ---
-title: "Real-Time Budget Alerts for AI Agents: Designing Cycles' Webhook Event System"
+title: "Real-Time Budget Alerts for AI Agents"
 date: 2026-04-01
 author: Albert Mavashev
 tags: [engineering, webhooks, architecture, observability]
-description: "How we designed a webhook event system that delivers AI agent budget alerts to PagerDuty, Slack, and custom systems — architecture, delivery guarantees, and failure handling."
+description: "Design real-time AI agent budget alerts with webhooks, delivery guarantees, retry handling, and integrations for PagerDuty, Slack, and internal systems."
 blog: true
 sidebar: false
 head:
@@ -77,30 +77,32 @@ Admin server (port 7979) ────┘
                                     │
                               Redis ─┤
                                     │
-Events service (port 7980) ──── BRPOP → HTTP POST with HMAC signature
+Events service (port 7980) ── BLMOVE pending → processing
+                                  │
+                                  └── HTTP POST with HMAC → durable state → ack
 ```
 
 Three services, three workloads, three scaling profiles:
 
 | Service | Workload | Latency Target | Scaling Driver |
 |---|---|---|---|
-| Runtime (reserve/commit) | Synchronous, hot path | [<10ms p99](/blog/cycles-server-performance-benchmarks) | Agent request volume |
+| Runtime (reserve/commit) | Synchronous, hot path | [Reserve 7.9ms and commit 5.7ms p99 in the published v0.1.25.3 benchmark](/blog/cycles-server-performance-benchmarks) | Agent request volume |
 | Admin (CRUD) | Synchronous, operator-facing | <200ms | Human operator actions |
 | Events (webhook delivery) | Asynchronous, variable latency | Best-effort | Subscription count × event rate |
 
-Why not embed delivery in the runtime server? Webhook endpoints are external HTTP services with unpredictable latency. A slow endpoint or DNS timeout would add hundreds of milliseconds to the reserve/commit path. For a system designed to enforce budgets at sub-10ms latency, that's unacceptable. Even running delivery on a background thread doesn't help — thread pool exhaustion from slow endpoints would eventually affect the main request threads.
+Why not embed delivery in the runtime server? Webhook endpoints are external HTTP services with unpredictable latency. A slow endpoint or DNS timeout can add hundreds of milliseconds to the reserve-commit path. The published v0.1.25.3 benchmark measured a reserve-plus-commit lifecycle at 18.4ms p99 on its stated hardware, so external delivery latency belongs off that hot path. Even a background executor needs strict isolation and backpressure to avoid resource contention with request processing.
 
 Why not embed in the [admin server](/glossary#admin-server)? Same problem, different magnitude. Admin API latency matters less (operators tolerate 200ms), but a webhook endpoint that hangs for 30 seconds ties up a thread pool slot. Multiply by 50 subscriptions and a burst of events, and the admin API becomes unresponsive for tenant management.
 
-The shared Redis queue solves both problems. Admin and runtime servers fire-and-forget — LPUSH a delivery ID to `dispatch:pending` and return immediately. The [events service](/glossary#events-service) does the slow work: load the event, look up the subscription, compute the HMAC signature, make the HTTP call, handle retries. If the events service falls behind, the queue buffers. If the events service is down entirely, events accumulate in Redis with a 90-day TTL and drain when it restarts.
+The shared Redis queue isolates both workloads. Admin and runtime producers enqueue delivery IDs on `dispatch:pending`; the [events service](/glossary#events-service) does the slow work: load the event and subscription, compute the HMAC signature, make the HTTP call, and handle retries. If the worker falls behind, pending IDs buffer in Redis. Event records default to a 90-day TTL and delivery records to 14 days; on restart, deliveries older than the configured 24-hour maximum age are failed rather than sent late.
 
-Multiple events service instances can run concurrently. BRPOP is atomic — each delivery is processed by exactly one consumer. No distributed locking, no coordination, no split-brain risk. Scale horizontally by adding instances.
+Multiple events service instances can safely share the queue. `BLMOVE` atomically claims a delivery from `dispatch:pending` into `dispatch:processing`; durable state and retry writes precede an owner-token-checked acknowledgement, and stale in-flight claims can be recovered. Delivery remains at-least-once, so a crash or ambiguous HTTP outcome can produce a redelivery. A fleet-wide ordering lease currently serializes the claim/send section: extra replicas provide failover, not additional webhook throughput.
 
 ## Delivery guarantees: at-least-once with HMAC signing
 
 We chose at-least-once delivery over exactly-once. In a distributed system where the webhook receiver is an external HTTP service, exactly-once is impossible without two-phase commit — and two-phase commit across the internet is a fiction. The practical choice is: deliver at least once and give receivers the tools to deduplicate.
 
-Every delivery includes an `X-Cycles-Event-Id` header containing the event's unique ID. Receivers store processed event IDs and skip duplicates. This is the same pattern used by Stripe, GitHub, and every other webhook system at scale.
+Every delivery includes an `X-Cycles-Event-Id` header containing the event's unique ID. Receivers store processed event IDs and skip duplicates, a standard webhook idempotency pattern.
 
 ### Why HMAC-SHA256?
 
@@ -113,7 +115,7 @@ We evaluated four approaches for webhook payload verification:
 | mTLS | Yes | Yes | High | Heavy for webhook receivers |
 | **[HMAC-SHA256](/glossary#hmac-sha256)** | **Yes** | **Yes** | **Low** | **GitHub, Stripe, Slack** |
 
-HMAC-SHA256 proves both identity (the sender knows the shared secret) and integrity (the body hasn't been modified in transit). It requires no certificate infrastructure, no IP management, and no special HTTP client configuration. Receivers verify with 3 lines of code in any language.
+HMAC-SHA256 proves possession of the shared secret and protects body integrity in transit. It requires no certificate infrastructure or IP allowlist, and common cryptography libraries can verify it.
 
 The signature is sent in the `X-Cycles-Signature` header as `sha256=<hex>`, matching GitHub's webhook signature format. [Signing secrets](/glossary#signing-secret) can be encrypted at rest in Redis using AES-256-GCM (enabled via the `WEBHOOK_SECRET_ENCRYPTION_KEY` environment variable). When configured, a compromise of the Redis data store doesn't expose the signing secrets.
 
@@ -145,9 +147,10 @@ Event data doesn't grow without bounds:
 | Event records (`event:{id}`) | 90 days | Redis EXPIRE on creation |
 | Delivery records (`delivery:{id}`) | 14 days | Redis EXPIRE on creation |
 | ZSET index entries | N/A | Hourly trimming via `RetentionCleanupService` |
-| Dispatch queue (`dispatch:pending`) | Self-draining | Consumed by BRPOP |
+| Dispatch queue (`dispatch:pending`) | Self-draining | Claimed by `BLMOVE` into `dispatch:processing` |
+| In-flight queue (`dispatch:processing`) | Self-draining | Acked after durable state/retry writes; stale claims recovered to pending |
 
-All TTLs are configurable via environment variables (`EVENT_TTL_DAYS`, `DELIVERY_TTL_DAYS`) — no code changes, no redeployment. The events service is optional: if you don't deploy it, admin and runtime servers are completely unaffected. Events accumulate in Redis until either the TTL expires or you start the events service.
+Record TTLs are configurable through `EVENT_TTL_DAYS` and `DELIVERY_TTL_DAYS`; changing them requires updating the service configuration and restarting the affected deployment, but no code change. The events service is optional for runtime budget enforcement. Without it, webhook deliveries are not processed, and queued records remain only for their configured retention windows.
 
 ## Integration: PagerDuty in 5 minutes
 

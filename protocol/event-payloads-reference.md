@@ -14,10 +14,14 @@ The v0.1.25 Admin API `EventType` enum registers **51 event types** total across
 
 - **Reservation:** `reservation.denied`, `reservation.expired`, `reservation.commit_overage` (runtime).
 - **Budget:** `budget.exhausted`, `budget.over_limit_entered`, `budget.debt_incurred`, `budget.reset_spent` (runtime + admin v0.1.25.18+); `budget.funded`, `budget.debited`, `budget.reset`, `budget.debt_repaid` (admin v0.1.25.38+).
-- **Tenant:** `tenant.suspended`, `tenant.reactivated`, `tenant.closed` (admin v0.1.25.38+, single-op + bulk-action paths).
+- **Tenant:** `tenant.created`, `tenant.updated` (current admin implementation); `tenant.suspended`, `tenant.reactivated`, `tenant.closed` (admin v0.1.25.38+, single-op + bulk-action paths).
+- **API key:** `api_key.created`, `api_key.revoked`, and `api_key.auth_failed` (admin v0.1.25+); `api_key.permissions_changed` (admin v0.1.25.7+).
+- **Policy:** `policy.created` and `policy.updated` (admin v0.1.25+).
 - **Webhook:** `webhook.created`, `webhook.updated`, `webhook.paused`, `webhook.resumed`, `webhook.deleted` (admin v0.1.25.39+); `webhook.disabled` (events service auto-disable v0.1.25.11+). All six webhook lifecycle types were added in spec v0.1.25.33 — see the [Webhook Lifecycle Events](#webhook-lifecycle-events) section below.
+- **System:** `system.webhook_test` is sent directly by the admin webhook-test endpoint; `system.webhook_delivery_failed` is persisted by the events service after retry exhaustion (events v0.1.25.21+).
 - **Tenant-close cascade fan-out:** `budget.closed_via_tenant_cascade`, `reservation.released_via_tenant_cascade`, `api_key.revoked_via_tenant_cascade`, `webhook.disabled_via_tenant_cascade` (admin v0.1.25.35+; declared in the governance spec's enum since revision v0.1.25.35) — see [Tenant-Close Cascade Events](#tenant-close-cascade-events-governance-spec-v0-1-25-35) below.
-- **API key, policy, system:** 0 registered enum values currently emitted; all planned.
+
+Registered values not named above remain planned unless a later section says otherwise.
 
 **Additive reference-server payloads** (observable in the reference implementation but not part of the published admin-openapi enum — consumers must ignore unrecognized event types gracefully):
 
@@ -610,47 +614,49 @@ For the managing-webhooks operator flow (subscription creation, signing-secret r
 
 ## Tenant, API Key, Policy, and System Events
 
-The tenant category is partially emitted as of admin v0.1.25.38. Policy, system, and api_key enum values are fully defined in the protocol but are not yet emitted directly by any service; cascade fan-out examples above are additive reference-server payloads. Additional emissions will be implemented as the admin service gains event-emission support.
+Current services emit part of every category below. The tables distinguish direct lifecycle emission, synthetic test delivery, and values that remain registered-but-planned.
 
-### Tenant Events (6 types — 3 currently emitted)
+### Tenant Events (6 types — 5 currently emitted)
 
 | Event Type | Status | Trigger |
 |---|---|---|
-| `tenant.created` | Planned | New tenant provisioned |
-| `tenant.updated` | Planned | Tenant configuration changed |
+| `tenant.created` | **Emitted** (current admin implementation) | New tenant provisioned |
+| `tenant.updated` | **Emitted** (current admin implementation) | Tenant configuration changed |
 | `tenant.suspended` | **Emitted** (admin v0.1.25.38+) | `PATCH /v1/admin/tenants/{id}` or `bulk-action` sets status to `SUSPENDED` |
 | `tenant.reactivated` | **Emitted** (admin v0.1.25.38+) | `PATCH /v1/admin/tenants/{id}` or `bulk-action` restores status to `ACTIVE` |
 | `tenant.closed` | **Emitted** (admin v0.1.25.38+) | `PATCH /v1/admin/tenants/{id}` or `bulk-action` sets status to `CLOSED` — also triggers the four `_via_tenant_cascade` events documented above |
 | `tenant.settings_changed` | Planned | Tenant default settings modified |
 
-### API Key Events (6 types — all planned)
+### API Key Events (6 base types, plus the tenant-cascade event)
 
 | Event Type | Status | Trigger |
 |---|---|---|
-| `api_key.created` | Planned | New API key generated |
-| `api_key.revoked` | Planned | API key permanently revoked |
+| `api_key.created` | **Emitted** (admin v0.1.25+) | New API key generated |
+| `api_key.revoked` | **Emitted** (admin v0.1.25+) | API key permanently revoked |
 | `api_key.expired` | Planned | API key reached expiration date |
-| `api_key.permissions_changed` | Planned | API key permissions modified |
-| `api_key.auth_failed` | Planned | Authentication attempt failed |
+| `api_key.permissions_changed` | **Emitted** (admin v0.1.25.7+) | API key permissions modified |
+| `api_key.auth_failed` | **Emitted** (admin v0.1.25+) | Authentication attempt failed |
 | `api_key.auth_failure_rate_spike` | Planned | Auth failure rate exceeded threshold |
 
-### Policy Events (3 types — all planned)
+`api_key.revoked_via_tenant_cascade` is emitted separately by admin v0.1.25.35+ when tenant close revokes owned keys.
 
-| Event Type | Trigger |
-|---|---|
-| `policy.created` | New policy rule created |
-| `policy.updated` | Policy configuration changed |
-| `policy.deleted` | Policy removed |
+### Policy Events (3 types — 2 currently emitted)
 
-### System Events (5 types — all planned)
+| Event Type | Status | Trigger |
+|---|---|---|
+| `policy.created` | **Emitted** (admin v0.1.25+) | New policy rule created |
+| `policy.updated` | **Emitted** (admin v0.1.25+) | Policy configuration changed |
+| `policy.deleted` | Planned | Policy removed |
 
-| Event Type | Trigger |
-|---|---|
-| `system.store_connection_lost` | Redis connection failed |
-| `system.store_connection_restored` | Redis connection recovered |
-| `system.high_latency` | Server-side p99 latency exceeded threshold |
-| `system.webhook_delivery_failed` | Webhook delivery permanently failed after all retries |
-| `system.webhook_test` | Admin-initiated test webhook |
+### System Events (5 types — 2 currently produced)
+
+| Event Type | Status | Trigger |
+|---|---|---|
+| `system.store_connection_lost` | Planned | Redis connection failed |
+| `system.store_connection_restored` | Planned | Redis connection recovered |
+| `system.high_latency` | Planned | Server-side p99 latency exceeded threshold |
+| `system.webhook_delivery_failed` | **Emitted** (events v0.1.25.21+) | Webhook delivery permanently failed after all retries; persisted as a loop-safe meta-event rather than recursively delivered |
+| `system.webhook_test` | **Sent directly** (current admin implementation) | Admin-initiated synthetic connectivity test; not queued as an ordinary stored event |
 
 ---
 
@@ -660,11 +666,11 @@ The tenant category is partially emitted as of admin v0.1.25.38. Policy, system,
 |---|---|---|---|
 | Reservation | 6 | `reservation.denied`, `reservation.expired`, and `reservation.commit_overage` emitted by runtime paths; the cascade aggregate (`reservation.released_via_tenant_cascade`, spec-declared since governance v0.1.25.35) emitted by the admin server on tenant close | Spike events still planned |
 | Budget | 17 | `budget.exhausted`, `over_limit_entered`, `debt_incurred`, `reset_spent`, and admin funding events emitted by current services; `budget.closed_via_tenant_cascade` (spec-declared since v0.1.25.35) emitted on tenant close; legacy threshold aliases are additive reference-server payloads | Remaining lifecycle/threshold types still planned |
-| Tenant | 6 | `tenant.suspended`, `tenant.reactivated`, `tenant.closed` emitted by admin (single-op + bulk-action paths, bulk parity added in v0.1.25.38) | `tenant.created`, `.updated`, `.settings_changed` still planned |
-| API Key | 7 | `api_key.revoked_via_tenant_cascade` (spec-declared since v0.1.25.35) emitted on tenant close; no other registered enum values emitted directly | Lifecycle events still planned |
-| Policy | 3 | 0 | All planned |
+| Tenant | 6 | `tenant.created`, `tenant.updated`, `tenant.suspended`, `tenant.reactivated`, and `tenant.closed` emitted by the current admin service | `tenant.settings_changed` still planned |
+| API Key | 7 | `api_key.created`, `.revoked`, `.permissions_changed`, `.auth_failed`, plus `.revoked_via_tenant_cascade` | Expiry and rate-spike events still planned |
+| Policy | 3 | `policy.created`, `policy.updated` | `policy.deleted` still planned |
 | Webhook | 7 | 6 lifecycle events (`webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted`) from admin v0.1.25.39 + events v0.1.25.11, plus `webhook.disabled_via_tenant_cascade` (spec-declared since v0.1.25.35) on tenant close | All registered enum values emitted |
-| System | 5 | 0 | All planned |
+| System | 5 | `system.webhook_delivery_failed` persisted by the events service; `system.webhook_test` delivered directly by the admin test endpoint | Store-connection and high-latency events still planned |
 | **Total** | **51** | See category rows above | — |
 
 For webhook delivery mechanics, retry schedule, and signature verification, see the [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol).

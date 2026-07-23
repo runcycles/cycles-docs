@@ -84,7 +84,7 @@ Multi-tenant systems have failure modes single-tenant systems do not — scope m
 
 ## Audit trail by tenant
 
-Per-tenant ledgers create per-tenant audit trails as a side effect. Every allow/deny, every reservation, every commit, every degraded action — attributable to the tenant that drove it. That audit is the substrate for compliance, billing reconciliation, and post-incident review.
+Per-tenant ledgers create scoped reservation and settlement records as a side effect. Persisting reserve, commit, release, and direct-usage operations can be attributed to the tenant supplied at the mandatory boundary. Non-persisting `decide` and dry-run outcomes, degraded actions, tool arguments, and external side-effect results require application logging. Together, those records support compliance, billing reconciliation, and post-incident review.
 
 - [The AI Agent Audit Trail You're Already Building](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default)
 - [Operational Runbook: Using Cycles Runtime Events](/blog/operational-runbook-using-cycles-runtime-events)

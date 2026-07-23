@@ -6,6 +6,10 @@ tags: [openclaw, budgets, agents, graceful-degradation, model-downgrade, product
 description: "A $12 OpenClaw research session constrained to a $5 Cycles budget. The agent downgrades models, disables expensive tools, self-regulates, finishes at $4.85."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenClaw budget, five dollar agent, model downgrade, graceful degradation, AI agent cost control, Cycles Budget Guard
 ---
 
 # We Gave Our OpenClaw Agent a $5 Budget and Watched It Adapt

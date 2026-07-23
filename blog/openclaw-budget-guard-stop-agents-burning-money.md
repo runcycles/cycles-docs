@@ -3,9 +3,13 @@ title: "Your OpenClaw Agent Has No Spending Limit"
 date: 2026-03-27
 author: Albert Mavashev
 tags: [openclaw, budgets, agents, runtime-authority, cost-control, plugin, tool-limits]
-description: "OpenClaw agents can call any model and retry indefinitely with no budget cap. cycles-openclaw-budget-guard adds hard limits without code changes."
+description: "OpenClaw agents can retry model and tool calls without a budget cap. Learn how its Cycles budget guard adds pre-execution limits without app code changes."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenClaw spending limit, OpenClaw Budget Guard, agent cost control, model call budgets, tool limits, runtime authority
 ---
 
 # Your OpenClaw Agent Has No Spending Limit — Here's How to Fix That
@@ -40,7 +44,7 @@ Cost isn't the only risk. An agent can send 100 emails, trigger 50 deployments, 
 
 In a multi-[tenant](/glossary#tenant) platform or a team with shared API keys, one user's runaway agent consumes the entire budget. Other agents — serving other users — start failing because there's nothing left.
 
-**What the plugin does:** Budgets are scoped per [user, session, or team](/how-to/integrating-cycles-with-openclaw#per-user-and-per-session-scoping). Each agent draws from its own allocation. One user's spike doesn't affect anyone else.
+**What the plugin does:** Budgets are scoped per [user, session, or team](/how-to/integrating-cycles-with-openclaw#per-user-and-per-session-attribution). Each agent draws from its own allocation. One user's spike doesn't affect anyone else.
 
 ### 4. No visibility into what agents spend
 

@@ -2,7 +2,7 @@
 title: "Closing the Estimate-Actual Gap with cost_fn"
 date: 2026-05-15
 author: Albert Mavashev
-tags: [langchain, engineering, runtime-authority, budgets, integration, agents]
+tags: [langchain, engineering, runtime-authority, budgets, integrations, agents]
 description: "langchain-runcycles 0.2.0 adds cost_fn to CyclesModelGate: reserve at estimate, commit at the LangChain ModelResponse's actual reported token usage per call."
 blog: true
 sidebar: false
@@ -130,17 +130,17 @@ The same shape is what [`cycles-spring-ai-starter` 0.2.0](/blog/cycles-spring-ai
 
 The contrast worth being honest about is with `langchain-runcycles`' sibling post on [LangGraph](/blog/langgraph-budget-control-durable-execution-retries-fan-out). That post is about graph-level controls — per-run, per-node, durable-execution retries, [fan-out](/glossary#fan-out) across sub-graphs. This post is about the middleware-level cost-actuals problem that sits one layer below the graph. Both layers compose; neither replaces the other. The LangGraph piece is about *where* the gate runs; this post is about *what number it commits*.
 
-## What's still open
+## Tool-side actual cost in v0.3.0
 
-The v0.2.x line is now feature-complete on the original v0.2.0 scope: cost_fn shipped in v0.2.0, streaming-path verification + regression tests shipped in v0.2.1, the multi-tenant fan-out + HITL demo shipped in v0.2.2, and the settlement-honesty fix shipped in v0.2.3. The remaining gap is on the tool side:
+The v0.2.x line completed its original scope: model-side `cost_fn` shipped in v0.2.0, streaming-path verification and regression tests shipped in v0.2.1, the multi-tenant fan-out and HITL demo shipped in v0.2.2, and the settlement-honesty fix shipped in v0.2.3.
 
-- **`cost_fn` on `CyclesToolGate`** is tracked as a v0.3.0 candidate ([issue #20](https://github.com/runcycles/langchain-runcycles/issues/20)). Tool calls today still commit at estimate because most tool callbacks don't expose token usage. Some tools that wrap an LLM call internally could provide a `cost_fn` for the same actual-cost-at-commit shape; the v0.3.0 design needs to decide whether the tool-side hook receives a `ToolMessage` or something richer, and how to surface tool-side errors without breaking the tool result path.
+Version 0.3.0, released on 2026-05-15, adds `cost_fn` to `CyclesToolGate`. The optional callback receives `(ToolCallRequest, result)` and returns the `Amount` to commit after the wrapped tool completes. When no callback is supplied—or when it raises or returns an invalid value—the gate preserves the tool result and falls back to committing the configured estimate. Tool result shapes and provider pricing are not normalized, so applications still supply the extractor.
 
 ## Closing
 
 The estimate-as-actual gap is one of the easiest silent failure modes to ship in reserve-commit middleware, and it is fixable with the same shape across frameworks: a callback that reads the provider's reported usage and produces an `Amount` for commit. `cost_fn` is the LangChain implementation. The same pattern lives behind `cycles-spring-ai-starter`'s `Usage` extraction and behind any [runtime authority](/glossary#runtime-authority) implementation that aims to bill agents at what they actually cost rather than what the worst-case estimate covered.
 
-The release-by-release sequence is worth recording for the trail it leaves. 0.1.5 shipped with the limitation explicit in the release notes. 0.2.0 added `cost_fn` to close it. 0.2.3 caught a separate silent-success bug in settlement reporting that would have made the 0.2.0 fix less useful than it should be. Each release moved one gap from known-limitation status to closed, with the contract documented in tests on the way out.
+The release-by-release sequence is worth recording for the trail it leaves. 0.1.5 shipped with the limitation explicit in the release notes. 0.2.0 added model-side `cost_fn`; 0.2.3 fixed a separate silent-success bug in settlement reporting; and 0.3.0 added the corresponding tool-side callback. Each release moved one gap from known-limitation status to closed, with the contract documented in tests on the way out.
 
 ## Further reading
 
@@ -153,6 +153,6 @@ The release-by-release sequence is worth recording for the trail it leaves. 0.1.
 ## External references
 
 - [`langchain-runcycles` on GitHub](https://github.com/runcycles/langchain-runcycles) — source, releases, integration tests
-- [`langchain-runcycles` on PyPI](https://pypi.org/project/langchain-runcycles/) — `0.2.3` current at publication
+- [`langchain-runcycles` on PyPI](https://pypi.org/project/langchain-runcycles/) — package releases, including the v0.3.0 tool-side `cost_fn`
 - [LangChain `AgentMiddleware` reference](https://docs.langchain.com/oss/python/langchain/middleware/) — the framework hook this package implements
 - [Cycles Protocol](https://github.com/runcycles/cycles-protocol) — the open spec for runtime budget and [action authority](/glossary#action-authority)

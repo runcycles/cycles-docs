@@ -21,7 +21,7 @@ A platform-engineering lead got three questions in one week:
 - The auditor: *"Show me evidence that the agent's spending was authorized, with rationale and timestamp."*
 - The data team: *"Why is our AI bill 6× engineering's? Can you break it down by team?"*
 
-Three different stakeholders. Three different vocabularies. One underlying need: a record of every agent action — *who*, *what*, *when*, *how much*, and *with what authority*.
+Three different stakeholders. Three different vocabularies. One underlying need: correlated records that explain *who* proposed an action, *what* happened, *when*, *how much budget settled*, and *which application and budget controls applied*.
 
 The lead's existing tools couldn't answer any of them cleanly. The provider invoice was one line. The APM trace had spans but no costs. The SIEM logged tool calls but not money. Each question would have meant a separate instrumentation project.
 
@@ -33,7 +33,7 @@ This post is about that byproduct. What runtime authority *also* gives you when 
 
 ## What runtime authority actually persists
 
-The core Cycles lifecycle is [reserve → execute → commit or release](/protocol/how-reserve-commit-works-in-cycles), with `decide()` available as an optional preflight check before reservation. The framing in the docs is a control story — *no action proceeds until the budget is locked, and we know exactly how much was used after.* That control story is the headline.
+The core Cycles lifecycle is [reserve → execute → commit or release](/protocol/how-reserve-commit-works-in-cycles), with `decide()` available as an optional preflight check before reservation. At an instrumented mandatory boundary, execution proceeds only after the applicable budget is locked, and settlement records the best-known actual usage supplied by the integration.
 
 The bookkeeping story is the byproduct. Persisting lifecycle operations produce structured records; non-persisting preflight evaluations must be logged by the caller:
 
@@ -41,12 +41,12 @@ The bookkeeping story is the byproduct. Persisting lifecycle operations produce 
 |---|---|---|
 | `decide()` *(optional preflight)* | Returns subject evaluation, decision (`ALLOW` / `ALLOW_WITH_CAPS` / `DENY`), `reason_code`, and affected scopes but does not persist them | Caller can write an application audit record with machine-readable rationale |
 | `reserve` | actual lock against the budget, hold token, expiry | Authoritative "we said yes and here's what we held" |
-| `commit` | actual cost (separate from estimate), final balance impact, lifecycle close | Authoritative "this is what was used" |
+| `commit` | caller-reported best-known actual cost (separate from estimate when available), final balance impact, lifecycle close | Authoritative "this is what the integration settled" |
 | `release` / `expired-reservation` | unused portion returned to the budget | Authoritative "this is what was given back" |
 
 The [subject hierarchy](/protocol/how-scope-derivation-works-in-cycles) supports up to six levels — `tenant`, `workspace`, `app`, `workflow`, `agent`, and `toolset`. The more consistently you populate it, the better the attribution: aggregating by `tenant` gives cost-per-customer, by `workflow` gives cost-per-conversation, by `agent` gives cost-per-component. The point is that attribution is *structural* — a field on the record, not a SQL join across log streams stitched together after the fact.
 
-What you have, after running with Cycles in production for a quarter, is a multi-million-row ledger with fields that look like rows in a financial system: *who*, *what*, *when*, *how much committed against estimate*, *which authority granted it*. That's the data exhaust. We argue it's also the deliverable.
+What you can have after sustained production use is a lifecycle ledger with fields suited to financial reconciliation: *which Subject and action context were submitted*, *when*, *how much was reserved and committed*, and *which budget scopes were affected*. Join it to application authorization and outcome records before treating it as a complete action history.
 
 ## Risk and compliance: audit evidence by default
 
@@ -125,15 +125,15 @@ A side benefit worth flagging: this kills shadow AI spend. Engineers can't quiet
 
 A reasonable objection: every observability tool produces records. Why call this a ledger?
 
-The distinction matters. A *log* is an append-only stream optimized for debugging — high-cardinality, tolerant of duplicates and gaps, generally not signed. A *ledger* is a record system you can settle accounts against — idempotent, signed, with provenance per record.
+The distinction here is operational. A *log* is usually optimized for debugging, while a settlement ledger emphasizes idempotent mutations, balances, and lifecycle state that accounts can be reconciled against. Cryptographic proof is optional and depends on enabling CyclesEvidence or preserving signed webhook deliveries.
 
-Cycles' record stream satisfies the ledger criteria, by protocol design:
+Cycles supplies several of those ledger properties:
 
 - **Idempotency is protocol-defined**, especially around commit/release and retry safety. When an idempotency key is supplied, the server enforces replay semantics per tenant, endpoint, and key: successful replays return the original response, while mismatched payloads return `IDEMPOTENCY_MISMATCH`. That is what prevents retries from double-charging. The [glossary](/glossary#idempotency-key) covers the broader semantics.
-- **Webhook deliveries are HMAC-SHA256 signed** with a unique `X-Cycles-Event-Id` per event, delivered with at-least-once semantics. Subscribers dedupe by event ID and verify the signature; the protocol guarantees they can detect tampering and replay.
+- **Webhook deliveries are HMAC-SHA256 signed** with a unique `X-Cycles-Event-Id` per event and delivered with at-least-once semantics. Subscribers can verify the delivered body and deduplicate by event ID; this transport signature does not make every stored lifecycle row independently signed.
 - **Events carry W3C trace context** (`traceparent` / `X-Cycles-Trace-Id`), which means cross-system correlation — the ledger entry, the application trace, and the LLM provider span can be tied together by ID, not by timestamp guesswork.
 
-That's the difference between a Datadog APM trace (a log of what happened) and a row in a financial system (a record you can audit, settle, and certify). For deeper coverage of the webhook-delivery side, see [Webhook Idempotency Patterns for AI Agent Budget Events](/blog/webhook-idempotency-patterns-for-ai-agent-budget-events).
+That makes the lifecycle records useful alongside an APM trace: the trace explains execution, while the Cycles records explain budget holds and settlement. For deeper coverage of the webhook-delivery side, see [Webhook Idempotency Patterns for AI Agent Budget Events](/blog/webhook-idempotency-patterns-for-ai-agent-budget-events).
 
 Honest scoping: Cycles is not a billing engine, not a SIEM, and not a FinOps platform. It is a source of scoped budget lifecycle data that those systems can consume. Datadog, Honeycomb, CloudZero, Splunk, and the various LLMOps platforms each cover slices of the larger story. Your integration supplies the tool identity and business context, logs non-persisting decisions, and correlates external outcomes with what Cycles reserved and committed.
 

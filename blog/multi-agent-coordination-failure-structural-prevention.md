@@ -1,5 +1,5 @@
 ---
-title: "Why Multi-Agent Coordination Fails — and What Actually Prevents It"
+title: "Why Multi-Agent Coordination Fails"
 date: 2026-04-26
 author: Albert Mavashev
 tags:

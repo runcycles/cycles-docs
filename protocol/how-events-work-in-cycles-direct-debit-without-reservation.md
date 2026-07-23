@@ -75,7 +75,7 @@ Both are useful. They solve different problems.
 
 An event request includes:
 
-- **subject** — the budget scopes to charge (tenant, workspace, app, workflow, agent, toolset, dimensions)
+- **subject** — the six standard fields that derive budget scopes (tenant, workspace, app, workflow, agent, toolset), plus optional `dimensions` metadata that does not derive scopes in the reference server
 - **action** — what happened (kind, name, optional tags)
 - **actual** — the amount consumed (unit and amount)
 - **idempotency_key** — ensures the same event is not recorded twice

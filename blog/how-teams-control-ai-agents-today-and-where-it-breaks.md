@@ -1,12 +1,16 @@
 ---
-title: "How Teams Control AI Agents Today — And Where It Breaks"
+title: "Where AI Agent Controls Break"
 date: 2026-04-05
 author: Albert Mavashev
 tags: [engineering, risk, governance, agents, best-practices, production, costs, security, multi-agent, action-control]
-description: "Most teams control AI agents with system prompts, rate limits, or dashboards. Here's why each breaks — and why risk, not just cost, is the real gap."
+description: "System prompts, rate limits, and dashboards each help control agents but fail at different boundaries. See where runtime budget authority fits in production."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent controls, agent guardrails, rate limits, runtime authority, risk controls, production AI governance
 ---
 
 # How Teams Control AI Agents Today — And Where It Breaks
@@ -131,10 +135,10 @@ The shift isn't conceptual — it's architectural. Instead of hoping guardrails 
 |---|---|
 | System prompt: "don't exceed $10" | [Reserve-commit lifecycle](/blog/what-is-runtime-authority-for-ai-agents): budget atomically locked before each call |
 | Proxy rate limit per provider | Cross-provider budget scope: one enforcement point across all models and tools |
-| Framework max-iteration count | [Action authority with RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk): per-tool limits scored by blast radius, not just iteration count |
-| Spend dashboard + alert | Pre-execution DENY: the call doesn't happen, not "we'll tell you it happened" |
-| Custom rate limiter across providers | [Reserve-commit](/blog/what-is-runtime-authority-for-ai-agents) with built-in [action authority](/glossary#action-authority): one system for both cost and risk, no custom integration per provider |
-| Inherited permissions in delegation | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation): each sub-agent gets a carved-out sub-budget and restricted action mask |
+| Framework max-iteration count | [Caller-assigned RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk): the application scores and meters tool exposure, not just iterations |
+| Spend dashboard + alert | Live reservation rejection before the instrumented call |
+| Custom rate limiter across providers | [Reserve-commit](/blog/what-is-runtime-authority-for-ai-agents) for both monetary and caller-assigned exposure budgets; each provider path still needs integration |
+| Inherited permissions in delegation | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation): explicitly provision a child sub-budget and restrict its tool set in the orchestrator |
 
 The pattern is the same in every row: move the decision upstream, from after execution to before it. From semantic to structural. From observation to enforcement.
 
@@ -145,8 +149,8 @@ The pattern is the same in every row: move the decision upstream, from after exe
 Five questions that reveal whether your current controls are sufficient:
 
 1. **Can you enforce a budget that spans multiple LLM providers and tool APIs in a single agent run?** If not, your cost controls have blind spots.
-2. **Can you limit how many times a specific tool is called per run — not just total iterations?** If not, your risk controls are coarse-grained.
-3. **When agent A delegates to agent B, does B's budget and permission scope automatically narrow?** If not, your delegation chains amplify risk.
+2. **Can you meter each protected tool call against a per-run exposure budget—not just a framework iteration count?** If not, your cumulative risk controls are coarse-grained.
+3. **When agent A delegates to agent B, does your orchestrator explicitly narrow B's budget and tool permissions?** If not, your delegation chains amplify risk.
 4. **If an agent exceeds a limit, does the call get blocked before execution — or reported after?** If after, you have observability, not enforcement.
 5. **Can you answer all of the above with a single system?** If not, you're stitching together controls that don't compose.
 

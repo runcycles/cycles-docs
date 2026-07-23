@@ -79,14 +79,14 @@ The Cycles Server is stateless. You can run multiple instances behind a load bal
 
 ```yaml
 cycles-server-1:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.46
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
 
 cycles-server-2:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.46
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -148,7 +148,7 @@ The **Cycles Events Service** (`cycles-server-events`) delivers webhook notifica
 
 | Variable | Default | Description |
 |---|---|---|
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Same across all services. Generate: `openssl rand -base64 32` |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | required by default | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Same across all services. Generate: `openssl rand -base64 32`. Missing key fails admin/events startup unless `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` is explicitly set for local development. |
 | `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
 | `DELIVERY_TTL_DAYS` | 14 | Redis TTL for delivery records |
 | `MAX_DELIVERY_AGE_MS` | 86400000 | Stale deliveries auto-fail after this age (24h default) |
@@ -164,11 +164,11 @@ The per-subscription retry policy (exponential backoff) defaults to `max_retries
 
 ### Running multiple instances
 
-The Events Service is safe to run as multiple instances. Each instance atomically claims delivery jobs from the `dispatch:pending` Redis queue with `BLMOVE` (moving them into a `dispatch:processing` in-flight list, acknowledged only after the delivery is handled), so a job is claimed by only one instance at a time and remains recoverable if that instance crashes. Delivery semantics are at-least-once, not exactly-once — webhook receivers should deduplicate on the delivery ID.
+The Events Service is safe to run as multiple instances. `BLMOVE` moves a claimed job from `dispatch:pending` to the recoverable `dispatch:processing` list, and owner-token-checked acknowledgement prevents a stale worker from removing a successor's claim. A fleet-wide ordering lease currently serializes the claim/send critical section, so replicas provide failover rather than linear webhook throughput. Delivery semantics are at least once, not exactly once — webhook receivers should deduplicate on the event ID.
 
 ```yaml
 cycles-events-1:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -176,7 +176,7 @@ cycles-events-1:
     WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY}
 
 cycles-events-2:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379

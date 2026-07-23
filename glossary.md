@@ -129,7 +129,7 @@ Evaluating budget policies and computing the decision result **without** persist
 
 ### Idempotency Key
 
-A unique client-supplied key that ensures a protocol operation is processed exactly once, even if the request is retried due to network failures or timeouts. Each endpoint type has its own idempotency scope. See [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes).
+A unique client-supplied key that lets retries of the same operation reuse the stored result instead of applying the operation's effect twice after a network failure or timeout. It does not guarantee that a request which never reached the server succeeds. Each endpoint type has its own idempotency scope. See [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes).
 
 ### Debt / Overdraft
 
@@ -227,7 +227,7 @@ An immutable record of a state change (e.g., `budget.exhausted`, `reservation.de
 
 ### Signing Secret
 
-A shared secret used to compute HMAC-SHA256 signatures for webhook payload verification. Generated at subscription creation, returned once, and encrypted at rest with AES-256-GCM when `WEBHOOK_SECRET_ENCRYPTION_KEY` is configured (stored in plaintext otherwise — development only).
+A shared secret used to compute HMAC-SHA256 signatures for webhook payload verification. Generated at subscription creation, returned once, and encrypted at rest with AES-256-GCM using `WEBHOOK_SECRET_ENCRYPTION_KEY`. Current admin and events services require that key by default; plaintext local development requires the explicit `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch.
 
 ### HMAC-SHA256
 
@@ -293,7 +293,7 @@ Two reserved `tenant_id` values on audit-log entries (v0.1.25.28+): `__admin__` 
 
 ### TENANT_CLOSED
 
-A `409` error code returned when mutating an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract: on the admin plane since `cycles-server-admin` v0.1.25.35 (full coverage across every mutating admin-plane operation as of v0.1.25.36), and on the runtime plane since `cycles-server` 0.1.25.47 (runtime spec v0.1.25.13) for persisting reservation create/commit/release/extend — where fresh dry-run and `/v1/decide` evaluations instead return `200 decision=DENY` with `reason_code=TENANT_CLOSED`. GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
+A `409` error code returned when mutating an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract: on the admin plane since `cycles-server-admin` v0.1.25.35 (full coverage across every mutating admin-plane operation as of v0.1.25.36), and on the runtime plane for persisting reservation create/commit/release/extend since `cycles-server` 0.1.25.47 (runtime spec v0.1.25.13) and direct events since server 0.1.25.48 (spec revision v0.1.25.14). Fresh dry-run and `/v1/decide` evaluations instead return `200 decision=DENY` with `reason_code=TENANT_CLOSED`; `POST /v1/events` has no dry-run mode and returns the 409 on a fresh request. GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
 
 ### Tenant-Close Cascade
 

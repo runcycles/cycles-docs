@@ -138,16 +138,16 @@ tenant:acme
    └─ app:support-bot
       └─ workflow:billing-dispute
          └─ agent:resolver
-            ├─ toolset:internal-notes   → 200 RISK_POINTS ✓
-            ├─ toolset:crm-updates      → 100 RISK_POINTS ✓
-            └─ toolset:send-email       → 0 RISK_POINTS   ✗
+            ├─ toolset:internal-notes   → 200 RISK_POINTS (funded)
+            ├─ toolset:crm-updates      → 100 RISK_POINTS (funded)
+            └─ toolset:send-email       → 0 RISK_POINTS (explicit zero)
 ```
 
-The scoping model enables three patterns that flat permission systems cannot:
+The scoping model enables three cumulative-exposure patterns that a single flat budget cannot:
 
 **Per-workflow policies.** A billing-dispute workflow blocks autonomous email; a shipping-update workflow allows it. Same agent, same tools, different runtime permissions depending on the workflow context.
 
-**Per-[tenant isolation](/glossary#tenant-isolation).** Customer A's agents can call external APIs; Customer B's cannot. Same codebase, same deployment, different action surfaces configured through budget provisioning — not code changes.
+**Per-[tenant isolation](/glossary#tenant-isolation).** Customer A and Customer B can receive different caller-assigned external-API exposure budgets while sharing one codebase. The application permission layer still decides whether either tenant may call the API.
 
 **Scope isolation.** One agent's actions do not erode another agent's permissions. If Agent A exhausts its email budget, Agent B's email budget is unaffected. Each scope path has its own independent ledger.
 
@@ -227,19 +227,19 @@ The agent cannot deploy autonomously, but it can prepare the deployment and requ
 
 ### Pattern 4: Per-tenant action policies
 
-Different tenants get different action surfaces through budget provisioning — not code branching.
+Different tenants get different cumulative exposure allocations through budget provisioning, without branching the metering code.
 
 ```
-# Enterprise tenant — full action surface
+# Enterprise tenant — larger exposure allocations
 tenant:enterprise-corp/toolset:send-email    → 500 RISK_POINTS
 tenant:enterprise-corp/toolset:deploy        → 200 RISK_POINTS
 
-# Starter tenant — restricted action surface
+# Starter tenant — smaller or zero exposure allocations
 tenant:starter-co/toolset:send-email         → 50 RISK_POINTS
-tenant:starter-co/toolset:deploy             → 0 RISK_POINTS (no budget = always DENY)
+tenant:starter-co/toolset:deploy             → 0 RISK_POINTS (explicit zero-allocation ledger)
 ```
 
-Same agent code, same deployment. The runtime determines what each tenant's agents can do based on provisioned budgets.
+Same agent code, same deployment. A submitted deploy reservation for the starter tenant is rejected because the applicable ledger explicitly allocates zero. An absent ledger would be skipped, so applications must provision zero-allocation ledgers deliberately when using budget state as a stop control.
 
 ## What this looks like with Cycles
 

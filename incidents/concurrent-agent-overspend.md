@@ -43,11 +43,11 @@ Time 0: Budget = $10.00
 Agent A reserves $3.00 → ALLOW ($7.00 remaining, $3.00 reserved)
 Agent B reserves $3.00 → ALLOW ($4.00 remaining, $6.00 reserved)
 Agent C reserves $3.00 → ALLOW ($1.00 remaining, $9.00 reserved)
-Agent D reserves $3.00 → DENIED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
-Agent E reserves $3.00 → DENIED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
+Agent D reserves $3.00 → REJECTED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
+Agent E reserves $3.00 → REJECTED — HTTP 409 BUDGET_EXCEEDED (only $1.00 remaining)
 ```
 
-Agents D and E are denied *before any LLM call is made*. The budget is never exceeded. On the wire, a live denial is an HTTP `409` error response with `error: BUDGET_EXCEEDED` — the `DENY` decision value appears only on dry-run and `decide` responses, which return `200` with the decision in the body.
+Agents D and E are rejected *before any LLM call is made*. The budget is not exceeded. On the wire, a live reserve failure is an HTTP `409` response with `error: BUDGET_EXCEEDED`; the `DENY` decision value appears only on dry-run and `decide` responses, which return `200` with the decision in the body.
 
 ### Python example
 
@@ -198,7 +198,7 @@ curl -s "http://localhost:7878/v1/balances?tenant=acme-corp" \
 ### Alerting rules
 
 ::: warning Planned metrics — not yet registered
-`cycles_scope_spent_total`, `cycles_scope_allocated_total`, `cycles_scope_remaining_total`, and `cycles_active_reservations_count` are on the roadmap but are not emitted by the current server builds (runtime 0.1.25.46 registers request-driven `cycles.*` counters — reservations, events, overdraft — but no balance or active-reservation gauges). Build these alerts from a balance-polling sidecar that pushes `GET /v1/balances` fields as gauges — see [Query balances for monitoring](/how-to/monitoring-and-alerting#query-balances-for-monitoring). Once the sidecar pushes `cycles_budget_spent` / `cycles_budget_allocated` / `cycles_budget_remaining` / `cycles_active_reservations`, the rules below apply as-is against your own gauge names.
+`cycles_scope_spent_total`, `cycles_scope_allocated_total`, `cycles_scope_remaining_total`, and `cycles_active_reservations_count` are on the roadmap but are not emitted by the current server builds (runtime 0.1.25.58 registers request-driven `cycles.*` counters — reservations, events, overdraft — but no balance or active-reservation gauges). Build these alerts from a balance-polling sidecar that pushes `GET /v1/balances` fields as gauges — see [Query balances for monitoring](/how-to/monitoring-and-alerting#query-balances-for-monitoring). Once the sidecar pushes `cycles_budget_spent` / `cycles_budget_allocated` / `cycles_budget_remaining` / `cycles_active_reservations`, the rules below apply as-is against your own gauge names.
 :::
 
 ```yaml

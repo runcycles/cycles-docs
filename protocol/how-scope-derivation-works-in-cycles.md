@@ -119,7 +119,7 @@ If any scope has insufficient budget, the reservation fails entirely. There is n
 
 This prevents situations where a reservation succeeds at the local level but violates a parent boundary.
 
-For example, if a workflow has budget remaining but the tenant is exhausted, the reservation is denied at the tenant scope.
+For example, if a workflow has budget remaining but the tenant is exhausted, the live reservation is rejected at the tenant scope.
 
 ## affected_scopes in responses
 
@@ -200,7 +200,7 @@ Scope derivation transforms Subject fields into a hierarchical set of budget bou
 - Missing fields are skipped (not filled with "default")
 - Reservations are atomic across all derived scopes
 - Balances, affected_scopes, and scope_path all follow the same hierarchy
-- Custom dimensions extend the model for additional taxonomies
+- Custom dimensions carry additional taxonomy and attribution metadata but do not derive budget scopes in the reference server
 
 Understanding scope derivation is essential for designing effective budget policy in Cycles.
 

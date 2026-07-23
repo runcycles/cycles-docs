@@ -1,12 +1,16 @@
 ---
-title: "The 429 Classification Gap: Why Your Retry Logic Is Lying to You"
+title: "HTTP 429: Why Retry Logic Lies"
 date: 2026-04-10
 author: Brenton Williams
 tags: [ai-agents, retry-logic, retry-storms, rate-limits, http-429, 429, agent-infrastructure, runtime-authority]
-description: "HTTP 429 is not one failure — it is three: WAIT, CAP, STOP. Why classifying 429s before retry is the missing primitive in AI agent runtimes."
+description: "HTTP 429 can mean wait, cap, or stop. Learn how classifying each response before retrying prevents retry storms and unsafe AI agent behavior in production."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: HTTP 429 retry logic, AI agent retries, retry storms, rate limits, runtime authority, failure classification
 ---
 
 # The 429 Classification Gap: Why Your Retry Logic Is Lying to You
@@ -144,7 +148,7 @@ Because it is retrying when it should have changed state.
 
 Cycles is an enforcement layer.
 
-It is built around a clean [reserve/commit/release execution model](/protocol/how-reserve-commit-works-in-cycles):
+It is built around the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles):
 
 - reserve
 - commit

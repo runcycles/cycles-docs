@@ -59,7 +59,7 @@ Start with spend. That's the stable v0.1.25 baseline and the path most teams sho
 
 | Category | Example caps | What it stops |
 |---|---|---|
-| **Spend** | `$1.00 per run` where `dimensions.run` is enforced, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
+| **Spend** | `$1.00 per run` by mapping the run ID to a standard field such as `workflow`, `$50 per tenant per day` | Runaway LLM completions, fan-out across paid APIs |
 
 Two more categories will be available once the v0.1.26 action-governance extensions ship in `cycles-server`. The spec is published and SHOULD-level for protocol conformance today, but the runtime enforcement is **not yet implemented in runcycles' servers** — these are illustrative for what's coming, not testable yet:
 
@@ -70,7 +70,7 @@ Two more categories will be available once the v0.1.26 action-governance extensi
 
 The action-kind slugs above (`message.email.send`, `web.search`, `code.exec.shell`, `deploy.service`) are illustrative — the formal v0.1.26 action-kind registry is upcoming, and only `llm.completion` is currently used as a documented action kind across shipped guides. Treat your own slugs as a convention until the registry lands.
 
-Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. If you want run-level spend budgets, model the run as `subject.dimensions.run` and verify your Cycles deployment derives budget scope from that custom dimension; the base protocol requires custom dimensions to be accepted and round-tripped, but v0 implementations may ignore them for budget decisions. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
+Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. For an enforceable run-level budget, map the stable run ID to one of the six standard subject fields—for example `workflow: "run-{id}"`—and fund that derived scope. Keep `dimensions.run_id` only for attribution or preview policy context; the reference runtime does not derive budget scopes from custom dimensions. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
 
 The reserve and settlement wrapper can keep the same shape if the future governance categories ship, while policy resolution remains server-side. Today, use it with shipped budget units and caller-supplied context. The [MCP integration guide](/how-to/integrating-cycles-with-mcp) covers the cooperative standalone-server pattern and the separate hard-enforcement boundary.
 
@@ -168,9 +168,10 @@ export async function gatedToolCall<T>(
     app: ctx.app,
     ...(ctx.workflow ? { workflow: ctx.workflow } : {}),
     toolset: ctx.toolsetName,
-    // Run is not a standard subject field. Use dimensions.run only after
-    // verifying your Cycles deployment derives budget scope from it.
-    dimensions: { run: ctx.runId },
+    // Dimensions carry attribution/policy context; they do not derive
+    // budget scopes. Map runId to a standard field such as workflow when
+    // this wrapper needs an enforceable per-run budget.
+    dimensions: { run_id: ctx.runId },
   }
   const action = { kind: ctx.actionKind, name: ctx.toolName }
 
@@ -482,7 +483,7 @@ A few things this wrapper does deliberately:
 - **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or return `skipped` so the wrapper releases the reservation.
 - **Execution failures are committed**, using provider-reported usage or the best conservative measurement available. Only `skipped` outcomes are released.
 - **Ambiguous outcomes fail closed for settlement.** An unexpected handler throw or unconfirmed commit leaves the reservation unreleased until the same commit is retried or an operator reconciles it.
-- **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in `subject`, action kind and tool name in `action`, run ID in `subject.dimensions.run`, and free-form fields (run_id, tool_call_id, tool_name) in `metadata`. That's the context available for dashboard views and audit queries — subject to your server's and dashboard's support for custom dimensions (filtering on `dimensions.run` is out of scope for v0 unless your implementation explicitly supports it).
+- **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in the standard `subject` fields that derive budget scopes, action kind and tool name live in `action`, run ID is carried as the attribution-only `subject.dimensions.run_id`, and free-form fields (`run_id`, `tool_call_id`, `tool_name`) live in `metadata`. Filtering on custom dimensions is outside the v0 reservation-listing surface.
 
 ## Why this matters
 

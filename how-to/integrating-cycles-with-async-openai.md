@@ -454,13 +454,13 @@ If the budget unit is `USD_MICROCENTS` rather than `TOKENS`, convert from the re
 
 ```rust
 fn tokens_to_microcents(prompt_tokens: u32, completion_tokens: u32, model: &str) -> u64 {
-    // Rates expressed as microcents per million tokens (1 cent = 10_000 microcents).
+    // Rates expressed as microcents per million tokens (1 cent = 1_000_000 microcents).
     // The numbers below illustrate; pin yours to the provider's current pricing
     // page and bump them as a release task — model rates change.
     let (input_per_million_microcents, output_per_million_microcents) = match model {
-        "gpt-4o-mini" => (1_500_000, 6_000_000),   // illustrative
-        "gpt-4o"      => (2_500_000, 10_000_000),  // illustrative
-        _             => (1_500_000, 6_000_000),
+        "gpt-4o-mini" => (15_000_000, 60_000_000),     // illustrative: $0.15 / $0.60
+        "gpt-4o"      => (250_000_000, 1_000_000_000), // illustrative: $2.50 / $10.00
+        _             => (15_000_000, 60_000_000),
     };
     let input  = (prompt_tokens as u64)     * input_per_million_microcents  / 1_000_000;
     let output = (completion_tokens as u64) * output_per_million_microcents / 1_000_000;

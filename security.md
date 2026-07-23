@@ -113,7 +113,7 @@ The blocked-CIDR list is admin-configurable via `GET/PUT /v1/admin/config/webhoo
 
 ### Signing secret encryption at rest
 
-Webhook signing secrets are encrypted in Redis using AES-256-GCM with a 12-byte random IV per encryption. The encryption key (`WEBHOOK_SECRET_ENCRYPTION_KEY`) must be shared across the admin, runtime, and events services. If not set, secrets are stored in plaintext (backward compatible for development).
+Webhook signing secrets are encrypted in Redis using AES-256-GCM with a 12-byte random IV per encryption. The encryption key (`WEBHOOK_SECRET_ENCRYPTION_KEY`) must be shared across the admin, runtime, and events services. Current admin and events services fail startup without it. Plaintext storage requires the explicit local/development-only `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch; never enable that option in production.
 
 ### At-least-once delivery
 

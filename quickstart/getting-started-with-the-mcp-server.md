@@ -25,7 +25,7 @@ For deterministic production enforcement, make the Cycles check part of the tool
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — `cycles_reserve` / `cycles_commit` / `cycles_release` enforce budget before instrumented agent actions
 - **Risky actions** — `cycles_decide` performs a non-locking preflight using caller-assigned `RISK_POINTS` estimates and can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. The application must apply the decision and any returned caps.
-- **Audit** — `cycles_create_event` and reserve/commit/release calls create structured records for export, compliance, attribution, and incident review
+- **Audit** — `cycles_create_event` and reserve-commit lifecycle calls create structured records for export, compliance, attribution, and incident review
 :::
 
 ## Prerequisites
@@ -113,7 +113,7 @@ Once connected, ask your agent to check a budget balance:
 
 The agent will call `cycles_check_balance` with `tenant: "acme-corp"` and return matching balance records — remaining budget, reserved amounts, and total spent. If you need descendant scopes, ask for child scopes explicitly; the tool maps that to `includeChildren: true` where the server supports it.
 
-## The reserve/commit lifecycle
+## The reserve-commit lifecycle
 
 The core pattern is **reserve → execute → commit**. Commit the actual usage whenever execution incurred cost, including an operation that started but later failed. Use **release** only when the reservation was unused — for example, the operation was cancelled, skipped, or failed before execution. Here's how it works through MCP tools:
 
@@ -121,7 +121,7 @@ The core pattern is **reserve → execute → commit**. Commit the actual usage 
 
 > "Reserve 500,000 USD_MICROCENTS for an OpenAI GPT-4o call"
 
-The agent calls `cycles_reserve` and gets back a `reservationId` and a decision of `ALLOW` or `ALLOW_WITH_CAPS`. The budget is locked and the agent can proceed, applying any returned caps. If a live reservation is denied, the tool returns an error such as `BUDGET_EXCEEDED`; `decision: "DENY"` is returned only by `cycles_decide` or a reserve call with `dryRun: true`.
+The agent calls `cycles_reserve` and gets back a `reservationId` and a decision of `ALLOW` or `ALLOW_WITH_CAPS`. The budget is locked and the agent can proceed, applying any returned caps. If a live reservation is rejected, the tool returns an error such as `BUDGET_EXCEEDED`; `decision: "DENY"` is returned only by `cycles_decide` or a reserve call with `dryRun: true`.
 
 **Step 2 — Execute** the operation (the LLM call, API request, etc.)
 
@@ -165,7 +165,7 @@ The server includes 3 prompts that agents can invoke for guided workflows:
 
 | Prompt | Description |
 |--------|-------------|
-| `integrate_cycles` | Generate reserve/commit/release patterns for a specific language and use case |
+| `integrate_cycles` | Generate reserve-commit lifecycle patterns for a specific language and use case |
 | `diagnose_overrun` | Analyze budget exhaustion — guides through checking balances and listing reservations |
 | `design_budget_strategy` | Recommend scope hierarchy, limits, units, and degradation strategy for a workflow |
 

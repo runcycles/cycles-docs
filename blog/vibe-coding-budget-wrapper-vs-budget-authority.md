@@ -3,9 +3,13 @@ title: "Budget Wrapper vs Runtime Authority for AI Agents"
 date: 2026-03-16
 author: Cycles Team
 tags: [architecture, agents, budgets, engineering]
-description: "A budget wrapper is easy to vibe code. Owning a runtime authority with concurrency safety, idempotency, and multi-tenant isolation is not."
+description: "A budget wrapper is easy to prototype but hard to operate safely. Compare it with runtime authority built for concurrency, retries, and tenant isolation."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI budget wrapper, runtime authority, concurrency safety, idempotency, multi-tenant budgets, agent cost control
 ---
 
 # Budget Wrapper vs Runtime Authority for AI Agents
