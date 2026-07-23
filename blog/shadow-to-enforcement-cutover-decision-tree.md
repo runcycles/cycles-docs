@@ -1,5 +1,5 @@
 ---
-title: "Shadow Mode to Hard Enforcement: The Cutover Decision Tree"
+title: "Shadow Mode to Hard Enforcement"
 date: 2026-04-23
 author: Albert Mavashev
 tags:

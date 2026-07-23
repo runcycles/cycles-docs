@@ -1,18 +1,22 @@
 ---
-title: "26 Integrations: Every AI Framework, One Budget Protocol"
+title: "26 Integrations for One AI Budget Protocol"
 date: 2026-04-02
 author: Albert Mavashev
 tags: [announcement, integrations, langchain, langgraph, autogen, openai, anthropic, groq, django, nextjs, flask, anyagent, runtime-authority]
-description: "Cycles now ships 26 integrations across Python, TypeScript, Java, and Rust. One protocol enforces spend limits, action boundaries, and risk controls across every agent stack — before execution."
+description: "Cycles ships 26 integrations across Python, TypeScript, Java, and Rust. See how one protocol coordinates runtime budget controls across diverse agent stacks."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI framework integrations, agent budget protocol, runtime authority, Python AI agents, TypeScript AI agents, Java AI agents
 ---
 
-# 26 Integrations: Every AI Framework, One Budget Protocol
+# 26 Cycles Integration Guides at Publication
 
 When we launched Cycles, the question we heard most was: *"Does this work with my stack?"*
 
-Today the answer is yes — for almost every stack. As of this post (2026-04-02), Cycles ships **26 integrations** across Python, TypeScript, Java, and Rust; see the [integrations overview](/how-to/integrations-overview) for the current list. Every LLM call, tool invocation, and agent action in your stack can be governed with the same reserve → commit → release protocol — enforcing spend limits, action boundaries, and risk controls before execution.
+At publication on 2026-04-02, the documentation covered **26 integration patterns** across Python, TypeScript, Java, and Rust; see the [integrations overview](/how-to/integrations-overview) for the current list. Each guide shows where an application can insert the same reserve-commit lifecycle. Coverage is not automatic: the integration must route every protected call through the boundary, classify caller-assigned exposure such as `RISK_POINTS`, and retain application authorization for tool permissions.
 
 <!-- more -->
 
@@ -65,17 +69,17 @@ We added 9 new integration guides, bringing the total from 17 to 26:
 
 ## The patterns that matter
 
-### Action authority across frameworks
+### Budget gates across frameworks
 
-Every integration enforces the same principle: **no agent action executes without authorization**. Whether it's an LLM call in LangGraph, a tool invocation in AutoGen, or an API request in a Django endpoint — the [reservation](/glossary#reservation) happens before the action, not after.
+The integration pattern is consistent: put a successful [reservation](/glossary#reservation) before each instrumented LLM call, tool invocation, or API request. That proves budget availability for the submitted Subject and estimate; application authorization still decides whether the specific tool and arguments are permitted.
 
-This matters beyond cost. The same protocol that prevents a $50 runaway spend also prevents an agent from sending 200 emails, hitting a rate-limited API in a retry loop, or executing a high-risk tool without approval. The [OpenAI Agents guide](/how-to/integrating-cycles-with-openai-agents) maps tool estimates to budget — `send_email` reserves 50 [RISK_POINTS](/glossary#risk-points) per call while `search_knowledge` uses zero. The [budget authority](/glossary#budget-authority) decides which actions are cheap and which are expensive.
+This can also bound cumulative caller-assigned action exposure. If the host authorizes and instruments `send_email`, for example, the [OpenAI Agents guide](/how-to/integrating-cycles-with-openai-agents) can reserve 50 [RISK_POINTS](/glossary#risk-points) per call while `search_knowledge` uses zero. The application chooses those classifications and prevents unauthorized tools or arguments; the budget authority accounts for what it submits.
 
 For a layer-by-layer view of how the Python integrations above sit relative to wrapper-style libraries, provider-client patches, LLM gateways, and observability tooling — and where each layer covers cost, risk, or audit — see [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers).
 
 ### Graceful degradation with model downgrade
 
-Most authorization systems have two modes: allow or deny. Cycles gives you a third: **downgrade**.
+The Cycles decision model has `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY` for preflight/dry-run evaluation. A caller can implement model downgrade when its configured policy returns caps or when a live reservation is rejected.
 
 The [Groq guide](/how-to/integrating-cycles-with-groq) introduces a pattern where agents switch models based on remaining authority:
 
@@ -87,7 +91,7 @@ def chat_with_downgrade(prompt: str) -> dict:
         return fallback_chat(prompt)   # Groq Llama 4: $0.11/$0.34 per 1M tokens
 ```
 
-The agent keeps working. The user still gets an answer. The authority boundary holds — just with a different cost profile. This works because Cycles tracks authority per `action_name`, so the budget authority can set different limits for different models and let the application route between them.
+In this example the application catches the primary-path budget error and attempts a separately configured fallback. Cycles records `action_name` as context but does not derive budget scopes from it; use standard Subject fields and estimates to give primary and fallback calls the intended budgets.
 
 ## Multi-tenant SaaS guide
 
@@ -100,11 +104,11 @@ It covers the full lifecycle of per-customer [runtime authority](/glossary#runti
 - **[Graceful degradation](/glossary#graceful-degradation)** — upgrade prompts, model downgrade, feature disabling
 - **Tenant suspension** — ACTIVE → SUSPENDED → CLOSED lifecycle
 
-Each customer gets independent spend limits, action boundaries, and risk controls — all enforced at the protocol level with cryptographic tenant isolation.
+Each customer can receive independent scope ledgers, while tenant-bound API-key checks reject cross-tenant access. Application authorization and mandatory-boundary coverage remain necessary; this is not cryptographic isolation of arbitrary application actions.
 
 ## Try it
 
-Pick your framework from the [integration overview](/how-to/integrations-overview), follow the guide, and have budget governance running in under 10 minutes.
+Pick your framework from the [integration overview](/how-to/integrations-overview) and follow the guide. Setup time depends on how many execution paths, Subjects, estimates, and failure modes your application must instrument.
 
 If your stack isn't covered, [open an issue](https://github.com/runcycles/cycles-docs/issues). We're prioritizing based on real user requests.
 

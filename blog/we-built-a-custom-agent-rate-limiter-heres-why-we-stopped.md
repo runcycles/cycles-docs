@@ -1,5 +1,5 @@
 ---
-title: "We Built a Custom Agent Rate Limiter. Here's Why We Stopped."
+title: "Why We Stopped Using an Agent Rate Limiter"
 date: 2026-04-05
 author: Albert Mavashev
 tags: [engineering, production, costs, agents, best-practices, budgets, runtime-authority, architecture]
@@ -7,6 +7,10 @@ description: "A post-mortem of the multi-provider AI agent rate limiter we built
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent rate limiter, runtime authority, multi-provider cost control, agent budgets, distributed rate limiting, production AI agents
 ---
 
 # We Built a Custom Agent Rate Limiter. Here's Why We Stopped.

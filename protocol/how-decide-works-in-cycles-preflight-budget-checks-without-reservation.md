@@ -59,7 +59,7 @@ Operators can use decide to evaluate hypothetical scenarios against live budget 
 
 A decide request includes four required fields:
 
-- **subject** — the budget scopes to evaluate (tenant, workspace, app, workflow, agent, toolset, dimensions)
+- **subject** — the six standard fields that derive budget scopes (tenant, workspace, app, workflow, agent, toolset), plus optional `dimensions` metadata that does not derive scopes in the reference server
 - **action** — the proposed action (kind, name, optional tags)
 - **estimate** — the amount the action would need
 - **idempotency_key** — for request deduplication

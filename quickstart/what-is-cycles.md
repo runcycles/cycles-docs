@@ -5,7 +5,7 @@ description: "Cycles is a runtime authority for autonomous agents: it enforces s
 
 # What is Cycles?
 
-Cycles is a **runtime authority for autonomous agents**. It enforces hard limits on agent spend and risky actions — **before they happen, not after** — and records the evidence operators need to audit decisions later.
+Cycles provides **runtime budget authority for autonomous agents**. At application-defined mandatory boundaries, it enforces spend and caller-assigned action-exposure limits **before instrumented execution**. The application remains responsible for tool authorization, argument validation, complete path coverage, and retaining non-persisting decisions and external outcomes.
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
@@ -27,7 +27,7 @@ def ask(prompt: str) -> str:
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
     ).choices[0].message.content
-# Cycles are reserved before the action runs. If unavailable, execution is denied.
+# Budget is reserved before the decorated action runs. On rejection, the decorator does not call it.
 ```
 
 ## The problem
@@ -49,7 +49,7 @@ The [Demos](/demos/) page has self-contained scenarios you can run in 60 seconds
 
 ## How Cycles solves it
 
-Cycles enforces a budget decision before agent actions execute — LLM calls, tool invocations, API requests. Every action follows a **[Reserve-Commit lifecycle](/glossary#reservation)**:
+Cycles enforces a budget decision before the instrumented LLM calls, tool invocations, and API requests that your application routes through it. Each protected path follows the **[reserve-commit lifecycle](/glossary#reservation)**:
 > Cycles enforces where you instrument it. Uninstrumented code paths are unaffected.
 
 ```
@@ -58,7 +58,7 @@ Cycles enforces a budget decision before agent actions execute — LLM calls, to
 3. Commit     →  Record actual usage; unused budget is released automatically
 ```
 
-If the budget is exhausted, the reservation is **denied before the action executes**.
+If an applicable budget is exhausted, a live reservation is **rejected before the protected action executes**.
 
 ::: code-group
 ```python [Python]
@@ -105,7 +105,7 @@ const result = await ask("Summarize this document");
 | **Atomic reservation** | Budget is locked across all affected scopes in one operation — no partial locks |
 | **Concurrency-safe** | Multiple agents sharing a budget cannot oversubscribe |
 | **Idempotent** | Retries are safe; the same action cannot settle twice |
-| **Pre-enforcement** | Budget is denied *before* the expensive action, not after |
+| **Pre-enforcement** | An insufficient live reservation is rejected *before* the instrumented expensive action, not after |
 
 ## Multi-level scoping
 
@@ -120,7 +120,7 @@ For example, a reservation with `tenant=acme, workspace=prod, app=chatbot` check
 - `tenant:acme/workspace:prod`
 - `tenant:acme/workspace:prod/app:chatbot`
 
-All three must have sufficient budget for the reservation to succeed.
+Any configured ledger among those three scopes must have sufficient budget for the reservation to succeed. A derived scope with no ledger is skipped; at least one applicable ledger in the requested unit must exist.
 
 ## Architecture
 
@@ -132,7 +132,7 @@ Your application talks to the **Cycles Server** for runtime budget checks. The *
 
 - **Platform teams** building multi-tenant agent runtimes
 - **Framework authors** integrating budget enforcement into SDKs
-- **Enterprise operators** needing audit-grade cost accountability
+- **Enterprise operators** needing structured cost-accountability records
 - **Teams building agents** that call paid APIs autonomously
 
 ## Get started

@@ -1,5 +1,5 @@
 ---
-title: "Estimate Drift: The Silent Killer of Budget Enforcement"
+title: "Estimate Drift in Budget Enforcement"
 date: 2026-04-07
 author: Albert Mavashev
 tags: [operations, production, observability, runtime-authority, incident-response, calibration]

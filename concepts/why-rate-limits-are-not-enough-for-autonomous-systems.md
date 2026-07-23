@@ -151,7 +151,7 @@ A quota says:
 you may use up to this much over time
 :::
 
-A reserve/commit model says:
+A reserve-commit model says:
 
 ::: info
 this execution is allowed to consume up to this bounded amount now

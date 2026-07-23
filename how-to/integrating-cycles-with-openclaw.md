@@ -123,11 +123,11 @@ Add the plugin to your OpenClaw config file (typically `openclaw.config.json`). 
 }
 ```
 
-> **Important:** Budget exhaustion is enforced fail-closed by default, but Cycles server connectivity failures are handled fail-open — the plugin assumes healthy budget and allows execution to continue. See [Fail-open vs fail-closed](#fail-open-vs-fail-closed) for details.
+> **Important:** Budget exhaustion and reservation failures are enforced fail-closed by default. A failed budget-snapshot fetch is treated as healthy by default, but you can make that path fail closed with `failClosedOnSnapshotError: true`. See [Fail-open vs fail-closed](#fail-open-vs-fail-closed) for details.
 
 ## Understanding the cost model
 
-Every model call and tool call reserves a fixed cost from the budget. The default currency is `USD_MICROCENTS` — 1 unit = $0.00001.
+Every model call and tool call reserves a fixed cost from the budget. The default currency is `USD_MICROCENTS` — 1 unit = $0.00000001 (10⁻⁸ dollars).
 
 | Amount | USD |
 |--------|-----|
@@ -561,25 +561,27 @@ In dry-run mode, budget is tracked in-memory using a simulated client. All plugi
 The plugin distinguishes between two failure modes:
 
 **Budget confirmed exhausted** — controlled by `failClosed` (default: `true`):
-- `failClosed: true` → throws `BudgetExhaustedError`, blocking the agent
+- `failClosed: true` → returns OpenClaw's blocking result for tools; for model calls, overrides the model with the plugin's non-existent exhaustion sentinel so the provider rejects before generation
 - `failClosed: false` → logs a warning but allows execution to continue
 
-**Cycles server unreachable** — always fail-open:
-- If the balance check or reservation fails due to a network error, the plugin assumes healthy budget
-- This prevents transient infrastructure issues from blocking all agents
+**Budget snapshot unavailable** — controlled by `failClosedOnSnapshotError` (default: `false`):
+- `failClosedOnSnapshotError: false` → assumes a healthy snapshot and continues to the reservation step
+- `failClosedOnSnapshotError: true` → treats the snapshot as exhausted; `failClosed` then decides whether to block
 
-This matches the Cycles philosophy: budget enforcement should be a guardrail, not a single point of failure.
+**Reservation unavailable or denied** — the reservation helper returns a denial after its configured transient retries. `failClosed: true` blocks the call; `failClosed: false` logs the denial and allows execution while tracking the estimate locally.
 
 ## Error handling
 
-The plugin exports two structured error types:
+The package exports two structured error classes for custom integrations:
 
 ```typescript
 import { BudgetExhaustedError, ToolBudgetDeniedError } from "@runcycles/openclaw-budget-guard";
 ```
 
-- **`BudgetExhaustedError`** (`code: "BUDGET_EXHAUSTED"`) — thrown when budget is exhausted and `failClosed: true`. Includes `remaining`, `tenant`, and `budgetId` properties. The error message includes an actionable hint to increase budget via the Cycles API.
-- **`ToolBudgetDeniedError`** (`code: "TOOL_BUDGET_DENIED"`) — structured error type for tool denials. Includes `toolName` property.
+- **`BudgetExhaustedError`** (`code: "BUDGET_EXHAUSTED"`) — includes `remaining`, `tenant`, and `budgetId` properties.
+- **`ToolBudgetDeniedError`** (`code: "TOOL_BUDGET_DENIED"`) — includes `toolName`.
+
+The built-in hooks do not currently throw these classes. `before_tool_call` returns `{ block: true, blockReason }` for a fail-closed denial, while `before_model_resolve` returns `modelOverride: "__cycles_budget_exhausted__"` because OpenClaw does not expose a model-call block result.
 
 ## Verifying the integration
 
@@ -603,7 +605,7 @@ Set `logLevel: "debug"` to see the plugin's activity:
 On startup, the plugin logs a config summary so you can verify settings at a glance:
 
 ```
-  Cycles Budget Guard for OpenClaw v0.8.0
+  Cycles Budget Guard for OpenClaw v0.8.4
   https://runcycles.io
   tenant: acme
   cyclesBaseUrl: http://localhost:7878
@@ -642,7 +644,8 @@ With `logLevel: "debug"`, you'll see per-call activity:
 | `budgetScope` | object | — | Scope segments for targeting a specific budget (e.g. `{ "workspace": "road", "app": "lane" }`) |
 | `budgetId` | string | — | **Deprecated** — use `budgetScope`. Equivalent to `budgetScope: { "app": "<value>" }` |
 | `currency` | string | `USD_MICROCENTS` | Default budget unit |
-| `failClosed` | boolean | `true` | Block on exhausted budget |
+| `failClosed` | boolean | `true` | Block on exhausted snapshots and reservation denials |
+| `failClosedOnSnapshotError` | boolean | `false` | Treat a failed or timed-out budget snapshot fetch as exhausted instead of healthy |
 | `logLevel` | string | `info` | `debug` / `info` / `warn` / `error` |
 
 ### Budget thresholds
@@ -1069,9 +1072,9 @@ This is intentional. When OpenClaw adds `block` support to `before_model_resolve
 1. **Fund the budget** via the Cycles Admin API:
    ```bash
    curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:my-org&unit=USD_MICROCENTS" \
-     -H "X-Cycles-API-Key: your-admin-key" \
+     -H "X-Cycles-API-Key: your-tenant-key" \
      -H "Content-Type: application/json" \
-     -d '{"operation": "CREDIT", "amount": 50000000, "idempotency_key": "topup-001"}'
+     -d '{"operation": "CREDIT", "amount": {"amount": 50000000, "unit": "USD_MICROCENTS"}, "idempotency_key": "topup-001"}'
    ```
    This adds 50,000,000 units ($0.50) to the budget. Adjust the `scope` to match your `tenant` and `budgetScope`.
 

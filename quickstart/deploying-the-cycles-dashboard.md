@@ -103,7 +103,7 @@ services:
       - cycles
 
   dashboard:
-    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.67
+    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.85
     restart: unless-stopped
     # No exposed ports — only reachable through Caddy.
     environment:
@@ -123,13 +123,14 @@ services:
   # Its ADMIN_API_KEY must match cycles-admin's so admin-on-behalf-of calls
   # authenticate on both sides.
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.46
+    image: ghcr.io/runcycles/cycles-server:0.1.25.58
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_ORIGIN:-https://admin.example.com}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:7878/actuator/health/readiness"]
@@ -145,7 +146,7 @@ services:
 
   # Governance plane — tenants, budgets, policies, webhooks, events, audit.
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.55
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
@@ -153,7 +154,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
-      WEBHOOK_SECRET_ENCRYPTION_REQUIRED: "true"
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_ORIGIN:-https://admin.example.com}
       EVENT_TTL_DAYS: ${EVENT_TTL_DAYS:-90}
       DELIVERY_TTL_DAYS: ${DELIVERY_TTL_DAYS:-14}
@@ -171,7 +172,7 @@ services:
 
   # Async webhook delivery and optional CyclesEvidence signing.
   cycles-events:
-    image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
@@ -294,7 +295,7 @@ Each page manages its own polling lifecycle via a `usePolling` composable. Inter
 |---|---|---|---|
 | `ADMIN_API_KEY` | Yes | — | Admin API key for `X-Admin-API-Key`. **Must be the same value on `cycles-admin` and `cycles-server`** — admin-on-behalf-of calls (force-release reservation) authenticate on both. |
 | `REDIS_PASSWORD` | Recommended | (empty) | Redis authentication password |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Recommended | (empty) | AES-256-GCM key for webhook signing secrets at rest |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Yes | — | AES-256-GCM key for webhook signing secrets at rest; required by the admin and events services unless their explicit local-development plaintext escape hatch is enabled |
 | `DASHBOARD_CORS_ORIGIN` | Dev only | `http://localhost:5173` | CORS origin — only needed when the browser calls the admin server directly (dev mode); unused in standard production |
 | `ADMIN_UPSTREAM` | No | `http://cycles-admin:7979` | Governance-plane upstream for the dashboard container's nginx proxy |
 | `RUNTIME_UPSTREAM` | No | `http://cycles-server:7878` | Runtime-plane upstream for reservations, evidence lookup, and signer JWKS |

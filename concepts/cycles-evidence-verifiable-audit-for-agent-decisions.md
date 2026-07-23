@@ -54,7 +54,7 @@ A consumer records the `evidence_id`, then fetches the signed envelope at `cycle
 
 ## What it is not
 
-CyclesEvidence is the **receipt, not the gate.** Enforcement is the reserve/commit ledger itself; evidence does not change a real-time decision or make budgets "safer" in the moment. Its entire value is *after* the decision: audit, dispute resolution, cross-system trust, and compliance.
+CyclesEvidence is the **receipt, not the gate.** Enforcement is the reserve-commit ledger itself; evidence does not change a real-time decision or make budgets "safer" in the moment. Its value comes after the decision: audit, dispute resolution, cross-system trust, and compliance.
 
 It is also **off until configured.** A deployment must set a shared signing identity before any verifiable evidence is produced — see the operator [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md). Until then, Cycles enforces budgets exactly as before; it just doesn't emit signed receipts.
 

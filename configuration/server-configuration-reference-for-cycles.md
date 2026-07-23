@@ -1,11 +1,11 @@
 ---
 title: "Server Configuration Reference for Cycles"
-description: "Complete reference for all Cycles server and admin server configuration properties, including Redis, expiry, logging, and Spring Boot actuator settings."
+description: "Reference for Cycles runtime, admin, and events service configuration, including Redis, maintenance, security, evidence, and operations."
 ---
 
 # Server Configuration Reference for Cycles
 
-This is the complete reference for all configuration properties available in the Cycles server.
+This reference covers the Cycles-defined properties and deployment-facing Spring settings in the current runtime, admin, and events service implementations. Standard Spring Boot properties that the services do not set explicitly are outside its scope.
 
 The server uses Spring Boot's configuration system. Properties can be set in `application.properties`, `application.yml`, or via environment variables.
 
@@ -15,6 +15,11 @@ The server uses Spring Boot's configuration system. Properties can be set in `ap
 |---|---|---|---|
 | `server.port` | `7878` | `SERVER_PORT` | HTTP port the server listens on |
 | `spring.application.name` | `cycles-protocol-service` | — | Application name |
+| `spring.task.scheduling.pool.size` | `4` | `CYCLES_SCHEDULER_POOL_SIZE` | Bounded scheduler used by expiry, audit, event, and reservation-index maintenance jobs |
+| `server.compression.enabled` | `true` | — | Enable HTTP response compression |
+| `server.compression.min-response-size` | `1024` | — | Minimum response size in bytes before compression |
+| `server.shutdown` | `graceful` | — | Enable graceful shutdown |
+| `spring.lifecycle.timeout-per-shutdown-phase` | `30s` | — | Maximum graceful-shutdown phase duration |
 
 ## Redis connection
 
@@ -44,6 +49,32 @@ The expiry sweep scans for reservations past their TTL and marks them as `EXPIRE
 - **Higher values** (e.g., 30000ms): less Redis overhead, but expired reservations hold budget longer before cleanup.
 
 For most deployments, the default 5000ms is a good balance.
+
+## Distributed maintenance and reservation index
+
+Runtime maintenance jobs coordinate across replicas with renewable, owner-safe Redis leases. The optional per-tenant created-at index is dual-written by all writers but remains disabled for reads and repair by default so it can be rolled out safely.
+
+| Property | Default | Env Variable | Description |
+|---|---|---|---|
+| `cycles.maintenance.lease-ttl-ms` | `30000` | `CYCLES_MAINTENANCE_LEASE_TTL_MS` | Lease TTL for each distributed maintenance job |
+| `cycles.maintenance.renew-interval-ms` | `10000` | `CYCLES_MAINTENANCE_RENEW_INTERVAL_MS` | Lease-renewal interval; must remain below the lease TTL |
+| `cycles.reservation-index.created-at.enabled` | `false` | `RESERVATION_CREATED_AT_INDEX_ENABLED` | Enable reads and repair for the per-tenant created-at reservation index |
+| `cycles.reservation-index.created-at.repair-interval-ms` | `300000` | `RESERVATION_CREATED_AT_INDEX_REPAIR_INTERVAL_MS` | Delay between repair batches |
+| `cycles.reservation-index.created-at.initial-delay-ms` | `5000` | `RESERVATION_CREATED_AT_INDEX_INITIAL_DELAY_MS` | Initial delay before repair begins |
+| `cycles.reservation-index.created-at.failure-backoff-ms` | `3600000` | `RESERVATION_CREATED_AT_INDEX_FAILURE_BACKOFF_MS` | Backoff after a repair failure |
+| `cycles.reservation-index.created-at.sweep-cron` | `0 45 3 * * *` | `RESERVATION_CREATED_AT_INDEX_SWEEP_CRON` | Cron for stale index-pointer cleanup |
+
+## Runtime cross-plane settings
+
+| Property | Default | Env Variable | Description |
+|---|---|---|---|
+| `admin.api-key` | (empty) | `ADMIN_API_KEY` | Admin key accepted on the allowlisted admin-on-behalf-of and protected operational endpoints |
+| `webhook.secret.encryption-key` | (empty) | `WEBHOOK_SECRET_ENCRYPTION_KEY` | Shared base64 AES-256 key. Production Compose requires it; use the same value on admin and events. |
+| `events.retention.event-ttl-days` | `90` | `EVENT_TTL_DAYS` | Runtime-emitted event record TTL |
+| `events.retention.delivery-ttl-days` | `14` | `DELIVERY_TTL_DAYS` | Delivery record TTL stamped for the shared event plane |
+| `events.retention.sweep-cron` | `0 30 3 * * *` | `EVENT_RETENTION_SWEEP_CRON` | Cron for stale event/delivery index cleanup |
+| `cycles.evidence.queue.pending-key` | `evidence:pending` | `EVIDENCE_PENDING_KEY` | Source queue consumed by the events-service evidence worker |
+| `cycles.evidence.store.key-prefix` | `evidence:envelope:` | `EVIDENCE_STORE_KEY_PREFIX` | Redis key prefix used by public evidence retrieval; must match the events service |
 
 ## Public endpoint rate limiting (v0.1.25.46)
 
@@ -189,7 +220,9 @@ Admin-key-protected paths (require `X-Admin-API-Key`):
 
 All other paths require a valid `X-Cycles-API-Key` header.
 
-## Full configuration example
+## Representative runtime configuration
+
+This example shows the common deployment settings. Use the tables above for maintenance, evidence, retention, and rate-limit tuning.
 
 ```properties
 # Server
@@ -218,7 +251,7 @@ springdoc.swagger-ui.path=/swagger-ui.html
 springdoc.swagger-ui.enabled=true
 
 # Actuator
-management.endpoints.web.exposure.include=health,info
+management.endpoints.web.exposure.include=health,info,prometheus
 management.endpoint.health.show-details=when-authorized
 ```
 
@@ -233,10 +266,27 @@ Quick reference for setting all properties via environment variables:
 | `REDIS_PASSWORD` | `redis.password` |
 | `SERVER_PORT` | `server.port` |
 | `CYCLES_EXPIRY_INTERVAL_MS` | `cycles.expiry.interval-ms` |
+| `CYCLES_SCHEDULER_POOL_SIZE` | `spring.task.scheduling.pool.size` |
+| `CYCLES_MAINTENANCE_LEASE_TTL_MS` | `cycles.maintenance.lease-ttl-ms` |
+| `CYCLES_MAINTENANCE_RENEW_INTERVAL_MS` | `cycles.maintenance.renew-interval-ms` |
+| `RESERVATION_CREATED_AT_INDEX_ENABLED` | `cycles.reservation-index.created-at.enabled` |
+| `RESERVATION_CREATED_AT_INDEX_REPAIR_INTERVAL_MS` | `cycles.reservation-index.created-at.repair-interval-ms` |
+| `RESERVATION_CREATED_AT_INDEX_INITIAL_DELAY_MS` | `cycles.reservation-index.created-at.initial-delay-ms` |
+| `RESERVATION_CREATED_AT_INDEX_FAILURE_BACKOFF_MS` | `cycles.reservation-index.created-at.failure-backoff-ms` |
+| `RESERVATION_CREATED_AT_INDEX_SWEEP_CRON` | `cycles.reservation-index.created-at.sweep-cron` |
+| `ADMIN_API_KEY` | `admin.api-key` |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | `webhook.secret.encryption-key` |
+| `EVENT_TTL_DAYS` | `events.retention.event-ttl-days` |
+| `DELIVERY_TTL_DAYS` | `events.retention.delivery-ttl-days` |
+| `EVENT_RETENTION_SWEEP_CRON` | `events.retention.sweep-cron` |
 | `CYCLES_PUBLIC_RATE_LIMIT_ENABLED` | `cycles.public-rate-limit.enabled` |
 | `CYCLES_PUBLIC_RATE_LIMIT_REQUESTS_PER_MINUTE` | `cycles.public-rate-limit.requests-per-minute` |
 | `CYCLES_EVENTS_EMIT_THREADS` | `cycles.events.emit.threads` |
 | `CYCLES_EVENTS_EMIT_QUEUE_CAPACITY` | `cycles.events.emit.queue-capacity` |
+| `AUDIT_RETENTION_DAYS` | `audit.retention.days` |
+| `AUDIT_SWEEP_CRON` | `audit.sweep.cron` |
+| `EVIDENCE_PENDING_KEY` | `cycles.evidence.queue.pending-key` |
+| `EVIDENCE_STORE_KEY_PREFIX` | `cycles.evidence.store.key-prefix` |
 | `EVIDENCE_SERVER_ID` | `cycles.evidence.server-id` |
 | `EVIDENCE_SIGNING_SIGNER_DID` | `cycles.evidence.signing.signer-did` |
 | `EVIDENCE_SIGNING_KID` | `cycles.evidence.signing.kid` |
@@ -265,7 +315,15 @@ The Cycles Admin Server (`cycles-admin-service`) is a separate service that mana
 | `springdoc.api-docs.enabled` | `false` | `API_DOCS_ENABLED` | OpenAPI JSON spec endpoint (`/api-docs`) is disabled by default on the admin server; set to `true` to enable. |
 | `auth.failure-rate-limit.enabled` | `false` | `AUTH_FAILURE_RATE_LIMIT_ENABLED` | Optional in-process guard for repeated 401/403 failures from the same source. Disabled by default for local/test parity; enable in production. |
 | `auth.failure-rate-limit.max-per-minute` | `300` | `AUTH_FAILURE_RATE_LIMIT_MAX_PER_MINUTE` | Max auth failures per source per minute before throttling, when the guard is enabled. |
-| `webhook.secret.encryption-required` | `false` | `WEBHOOK_SECRET_ENCRYPTION_REQUIRED` | When `true`, refuse to store webhook signing secrets unless `WEBHOOK_SECRET_ENCRYPTION_KEY` is configured (no plaintext fallback). |
+| `auth.failure-rate-limit.max-tracked-sources` | `10000` | `AUTH_FAILURE_RATE_LIMIT_MAX_TRACKED_SOURCES` | Bound the limiter's in-memory source/path buckets; the oldest live bucket is evicted at the cap. |
+| `spring.task.scheduling.pool.size` | `2` | `TASK_SCHEDULER_POOL_SIZE` | Scheduler threads. Values below 2 are raised to the enforced safety floor. |
+| `tenant-close.reconciler.enabled` | `true` | `TENANT_CLOSE_RECONCILER_ENABLED` | Retry incomplete Mode-B cascades for tenants already marked `CLOSED`. |
+| `tenant-close.reconciler.interval-ms` | `300000` | `TENANT_CLOSE_RECONCILER_INTERVAL_MS` | Delay between reconciliation runs. |
+| `tenant-close.reconciler.max-tenants-per-run` | `100` | `TENANT_CLOSE_RECONCILER_MAX_TENANTS_PER_RUN` | Maximum due tenant-close work items processed per run. |
+| `webhook.secret.encryption-key` | (empty; startup fails) | `WEBHOOK_SECRET_ENCRYPTION_KEY` | Base64 AES-256 key used to encrypt webhook signing secrets. Must match runtime and events. |
+| `webhook.secret.allow-plaintext` | `false` | `WEBHOOK_SECRET_ALLOW_PLAINTEXT` | Explicit local/development compatibility escape hatch. With an empty key, `true` permits plaintext and emits a prominent warning. Never enable in production. |
+| `events.retention.event-ttl-days` | `90` | `EVENT_TTL_DAYS` | Shared event record TTL. |
+| `events.retention.delivery-ttl-days` | `14` | `DELIVERY_TTL_DAYS` | Shared webhook-delivery record TTL. |
 | `logging.level.io.runcycles.admin` | `INFO` | `LOG_LEVEL` | Admin-specific log level. |
 
 ### Audit log retention
@@ -275,7 +333,7 @@ Introduced in `cycles-server-admin` v0.1.25.20 for SOC2-compliant defaults. Fail
 | Property | Default | Env Variable | Description |
 |---|---|---|---|
 | `audit.retention.authenticated.days` | `400` | `AUDIT_RETENTION_AUTHENTICATED_DAYS` | TTL on authenticated audit entries (success + authenticated failures). `400` covers the SOC2 Type II 12-month lookback + 1-month auditor-engagement buffer. Set to `0` for indefinite retention (legal hold, HIPAA-adjacent). |
-| `audit.retention.unauthenticated.days` | `30` | `AUDIT_RETENTION_UNAUTHENTICATED_DAYS` | TTL on pre-auth failures (sentinel tenant `<unauthenticated>`). Enough for brute-force / credential-stuffing post-mortem. Aggregate volume stays visible via Prometheus regardless of TTL. Set to `0` for indefinite. |
+| `audit.retention.unauthenticated.days` | `30` | `AUDIT_RETENTION_UNAUTHENTICATED_DAYS` | TTL on pre-auth failures (sentinel tenant `__unauth__`). Enough for brute-force / credential-stuffing post-mortem. Aggregate volume stays visible via Prometheus regardless of TTL. Set to `0` for indefinite. |
 | `audit.sample.unauthenticated` | `1` | `AUDIT_SAMPLE_UNAUTHENTICATED` | Sampling rate on unauthenticated entries (`1` = every entry, `100` = 1 in 100). Opt-in hardening against failed-auth floods on internet-exposed admin endpoints. Authenticated entries are **never** sampled. |
 | `audit.sweep.cron` | `0 0 3 * * *` | `AUDIT_SWEEP_CRON` | Cron for the daily audit-index sweep. Purges TTL-expired pointers from the `audit:logs:_all` + per-tenant sorted-set indexes. Skipped entirely when `audit.retention.authenticated.days=0`. |
 
@@ -313,7 +371,7 @@ The admin server uses two authentication schemes:
 
 For the full endpoint-to-header mapping with required permissions, see the [Architecture Overview — Authentication](/quickstart/architecture-overview-how-cycles-fits-together#authentication).
 
-### Admin server full configuration example
+### Representative admin server configuration
 
 ```properties
 # Server
@@ -328,6 +386,10 @@ redis.password=${REDIS_PASSWORD}
 # Admin key
 admin.api-key=${ADMIN_API_KEY:}
 
+# Webhook signing-secret encryption (required by default)
+webhook.secret.encryption-key=${WEBHOOK_SECRET_ENCRYPTION_KEY:}
+webhook.secret.allow-plaintext=${WEBHOOK_SECRET_ALLOW_PLAINTEXT:false}
+
 # JSON
 spring.jackson.serialization.write-dates-as-timestamps=false
 spring.jackson.deserialization.fail-on-unknown-properties=false
@@ -339,8 +401,9 @@ logging.level.io.runcycles.admin=DEBUG
 
 # Swagger
 springdoc.api-docs.path=/api-docs
+springdoc.api-docs.enabled=false
 springdoc.swagger-ui.path=/swagger-ui.html
-springdoc.swagger-ui.enabled=true
+springdoc.swagger-ui.enabled=false
 
 # Actuator
 management.endpoints.web.exposure.include=health,info
@@ -353,7 +416,7 @@ The admin server exposes powerful management operations. In production:
 
 - Run the admin server on an internal network not accessible to application traffic
 - Use a strong, randomly generated `ADMIN_API_KEY`
-- Consider disabling Swagger UI (`springdoc.swagger-ui.enabled=false`)
+- Keep Swagger UI and API docs disabled unless operators explicitly need them (`springdoc.swagger-ui.enabled=false`, `springdoc.api-docs.enabled=false`)
 
 ## Events Service Configuration
 
@@ -379,22 +442,61 @@ Do not publish either port to the internet. Keep `9980` on an internal-only Clus
 | `REDIS_HOST` | localhost | Redis hostname (shared with admin/runtime) |
 | `REDIS_PORT` | 6379 | Redis port |
 | `REDIS_PASSWORD` | (empty) | Redis password |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32` |
+| `REDIS_USERNAME` | (empty) | Redis ACL username |
+| `REDIS_TLS_ENABLED` | `false` | Enable TLS for the Redis connection |
+| `REDIS_CONNECT_TIMEOUT_MS` | `2000` | Redis connection timeout |
+| `REDIS_SOCKET_TIMEOUT_MS` | `5000` | Redis non-blocking socket timeout |
+| `REDIS_BLOCKING_SOCKET_TIMEOUT_MS` | `10000` | Redis timeout used by blocking queue operations |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty; startup fails) | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32`. |
+| `WEBHOOK_SECRET_ALLOW_PLAINTEXT` | `false` | Explicit local/development compatibility escape hatch. Never enable in production. |
 | `EVIDENCE_SERVER_ID` | (empty) | Issuer base URL including `/v1`. Blank disables evidence signing and leaves pending evidence-source records untouched. Must match the runtime server when evidence is enabled. |
 | `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Raw-hex Ed25519 public key. Must match the runtime server's public signer identity when evidence is enabled. |
 | `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex Ed25519 private key used to sign evidence envelopes. Secret; deploy only to `cycles-server-events`. |
 | `EVIDENCE_ALLOW_EPHEMERAL_SIGNING_KEY` | `false` | Allow the worker to generate an ephemeral signing key when no keypair is configured. Development-only; leave `false` in production. |
-| `EVIDENCE_STORE_BACKEND` | `redis` | Durable envelope store backend (content-addressed by `evidence_id`). `redis` is the default, shared with `cycles-server` which serves `GET /v1/evidence/{id}`; `s3` / `gcs` backends can replace it. |
+| `EVIDENCE_STORE_BACKEND` | `redis` | Select the evidence-store bean. The reference service ships only `redis`; another value requires a custom `EvidenceStore` implementation in the application context. |
 | `dispatch.pending.timeout-seconds` | 5 | BLMOVE blocking timeout (reliable-queue pattern) |
+| `DISPATCH_LOOP_DELAY_MS` | `25` | Delay before the next dispatch-loop iteration |
+| `DISPATCH_ORDERING_LEASE_MS` | `120000` | Global claim/send lease. Must cover queue claim, HTTP delivery, and Redis state-write time. |
+| `DISPATCH_ORDERING_CONTENTION_BACKOFF_MS` | `500` | Backoff when another replica owns the ordering lease |
+| `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` | `180000` | Minimum idle age before an in-flight delivery is eligible for recovery |
+| `DISPATCH_PROCESSING_RECOVERY_INTERVAL_MS` | `30000` | Interval between recovery passes |
+| `DISPATCH_FAILED_MAX_LEN` | `10000` | Maximum malformed/untransitionable delivery IDs retained in the quarantine list |
+| `DISPATCH_EVENT_OUTBOX_POLL_INTERVAL_MS` | `1000` | Lifecycle-event outbox polling interval |
+| `DISPATCH_EVENT_OUTBOX_BATCH_SIZE` | `25` | Maximum outbox rows claimed per poll |
+| `DISPATCH_EVENT_OUTBOX_CLAIM_LEASE_MS` | `30000` | Outbox claim lease |
+| `DISPATCH_EVENT_OUTBOX_RETRY_DELAY_MS` | `5000` | Retry delay after an outbox publish failure |
+| `DISPATCH_EVENT_OUTBOX_MAX_ATTEMPTS` | `100` | Maximum publish attempts before quarantine |
+| `DISPATCH_EVENT_OUTBOX_FAILED_MAX_LEN` | `10000` | Maximum quarantined outbox rows retained |
 | `dispatch.retry.poll-interval-ms` | 5000 | Retry queue poll interval (ms) |
 | `dispatch.retry.batch-size` / `RETRY_BATCH_SIZE` | 100 | Max ready-for-retry deliveries processed per poll tick |
 | `dispatch.http.timeout-seconds` | 30 | HTTP request timeout for webhook delivery |
 | `dispatch.http.connect-timeout-seconds` | 5 | HTTP connect timeout |
+| `WEBHOOK_URL_GUARD_ALLOW_PRIVATE_NETWORKS` | `false` | Development-only opt-out for the delivery-side private-network SSRF baseline; admin-configured blocked CIDRs remain enforced |
 | `dispatch.max-delivery-age-ms` / `MAX_DELIVERY_AGE_MS` | 86400000 | Deliveries older than this auto-fail without further retries (24h). Also feeds `cycles_webhook_delivery_stale_total`. |
 | `events.retention.event-ttl-days` / `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
 | `events.retention.delivery-ttl-days` / `DELIVERY_TTL_DAYS` | 14 | Redis TTL for delivery records |
 | `events.retention.cleanup-interval-ms` / `RETENTION_CLEANUP_INTERVAL_MS` | 3600000 | ZSET index cleanup interval (1h) |
+| `RETENTION_LOCK_LEASE_MS` | `300000` | Distributed lease duration for retention cleanup |
+| `SCHEDULING_POOL_SIZE` | `5` | Scheduler pool sized for dispatch, evidence, retry, recovery, and cleanup jobs |
 | `cycles.metrics.tenant-tag.enabled` | `false` | Same toggle as the runtime, but the events service defaults to `false` (the runtime defaults to `true`). When `false`, `cycles_webhook_*` counters drop the `tenant` label to bound cardinality. |
+
+### Evidence queue and store tuning
+
+| Variable | Default | Description |
+|---|---|---|
+| `EVIDENCE_PENDING_KEY` | `evidence:pending` | Pending source-record list; must match the runtime server |
+| `EVIDENCE_PROCESSING_KEY` | `evidence:processing` | In-flight reliable-queue list |
+| `EVIDENCE_POP_TIMEOUT_SECONDS` | `5` | BLMOVE timeout |
+| `EVIDENCE_LOOP_DELAY_MS` | `25` | Delay between worker iterations |
+| `EVIDENCE_QUEUE_FAILURE_BACKOFF_MS` | `1000` | Backoff for record-level failures |
+| `EVIDENCE_INFRASTRUCTURE_BACKOFF_MS` | `30000` | Backoff for signing/store infrastructure failures |
+| `EVIDENCE_RECOVERY_IDLE_MS` | `120000` | Minimum idle age before in-flight recovery |
+| `EVIDENCE_RECOVERY_INTERVAL_MS` | `30000` | Interval between evidence recovery passes |
+| `EVIDENCE_RECOVERY_BATCH_SIZE` | `100` | Maximum in-flight records recovered per pass |
+| `EVIDENCE_FAILED_KEY` | `evidence:failed` | Dead-letter list for deterministically malformed source records |
+| `EVIDENCE_FAILED_MAX_LEN` | `10000` | Maximum retained dead-letter records |
+| `EVIDENCE_STORE_KEY_PREFIX` | `evidence:envelope:` | Content-addressed Redis key prefix; must match the runtime server |
+| `EVIDENCE_STORE_TTL_SECONDS` | `0` | Envelope TTL; `0` means no expiry |
 
 ### Per-subscription retry policy
 
@@ -415,7 +517,7 @@ Introduced in `cycles-server-events` v0.1.25.6. Seven counters plus one latency 
 
 ### Encryption key (shared across all services)
 
-`WEBHOOK_SECRET_ENCRYPTION_KEY` must be the same on admin, runtime, and events services. Admin encrypts signing secrets on write; events decrypts on read. If not set, secrets are stored in plaintext (backward compatible for development).
+`WEBHOOK_SECRET_ENCRYPTION_KEY` must be the same on admin, runtime, and events services. Admin encrypts signing secrets on write; events decrypts on read. Current admin and events services fail startup when the key is missing. Local development may opt into plaintext explicitly with `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true`; that escape hatch logs a warning and must never be enabled in production. Existing plaintext values remain readable during migration after a key is configured.
 
 ```bash
 export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
@@ -430,7 +532,7 @@ To enable evidence, configure the same public identity on the runtime and events
 
 Then configure only the events service with `EVIDENCE_SIGNING_PRIVATE_KEY_HEX`. Configure only the runtime server with `EVIDENCE_SIGNING_KID`, `EVIDENCE_SIGNING_NBF_MS`, and `EVIDENCE_SIGNING_RETIRED_KEYS` so it can publish `GET /v1/.well-known/cycles-jwks.json`.
 
-### Full events service configuration example
+### Representative events service configuration
 
 ```bash
 # Required — must match admin and runtime servers

@@ -35,7 +35,7 @@ docker run -d --name cycles-events \
   -e REDIS_PORT=6379 \
   -e REDIS_PASSWORD=your-redis-password \
   -e WEBHOOK_SECRET_ENCRYPTION_KEY=your-base64-key \
-  ghcr.io/runcycles/cycles-server-events:0.1.25.22
+  ghcr.io/runcycles/cycles-server-events:0.1.25.25
 ```
 
 The service does not need inbound traffic from applications or webhook targets; it sends webhook HTTP requests outbound. For local inspection, temporarily add `-p 9980:9980` and query the management endpoint from the host. In production, scrape `9980` from Prometheus on an internal network path and leave `7980` unpublished unless you have a specific internal use for the app port.
@@ -64,7 +64,7 @@ java -jar cycles-server-events-*.jar
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret decryption. Base64-encoded 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32`. If empty, secrets are read as plaintext. |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (required by default) | AES-256-GCM key for signing secret decryption. Base64-encoded 32 bytes. Must match admin and runtime. Generate: `openssl rand -base64 32`. A missing key fails startup unless the local/development-only `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch is set. |
 
 ### Optional: CyclesEvidence signing
 
@@ -87,7 +87,7 @@ The runtime server also publishes public JWKS metadata with `EVIDENCE_SIGNING_KI
 | `dispatch.http.timeout-seconds` | 30 | HTTP request timeout for webhook delivery (property, not env var) |
 | `dispatch.http.connect-timeout-seconds` | 5 | HTTP connect timeout (property, not env var) |
 | `RETRY_BATCH_SIZE` | 100 | Max due retries claimed per retry poll |
-| `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` | 120000 | Idle window before in-flight deliveries on the processing list are recovered back to pending |
+| `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` | 180000 | Idle window before in-flight deliveries on the processing list are recovered back to pending |
 | `MANAGEMENT_PORT` | 9980 | Separate management port for the actuator endpoints |
 | `MAX_DELIVERY_AGE_MS` | 86400000 | Deliveries older than this auto-fail (24h) |
 | `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
@@ -110,7 +110,7 @@ EVIDENCE_SIGNING_SIGNER_DID=b10554...c522
 EVIDENCE_SIGNING_PRIVATE_KEY_HEX=4f9c...d20a
 MANAGEMENT_PORT=9980
 RETRY_BATCH_SIZE=100
-DISPATCH_PROCESSING_RECOVERY_IDLE_MS=120000
+DISPATCH_PROCESSING_RECOVERY_IDLE_MS=180000
 MAX_DELIVERY_AGE_MS=86400000
 EVENT_TTL_DAYS=90
 DELIVERY_TTL_DAYS=14
@@ -144,7 +144,7 @@ Pre-v0.1.25.9 deployments exposed `/actuator/health` on the application port 798
 3. **Redis memory is bounded** — TTLs ensure keys auto-expire even if never consumed
 4. **When the events service restarts:**
    - Stale deliveries (older than `MAX_DELIVERY_AGE_MS`, default 24h) are immediately marked FAILED
-   - Fresh deliveries are processed normally via the BLMOVE reliable queue — claimed jobs sit on `dispatch:processing` until acknowledged, and orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 120000 ms) are recovered back to pending
+   - Fresh deliveries are processed normally via the BLMOVE reliable queue — claimed jobs sit on `dispatch:processing` until acknowledged, and orphans idle longer than `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default 180000 ms) are recovered back to pending
    - `RetentionCleanupService` trims orphaned ZSET index entries hourly
 5. **No data loss for events** — event records persist in Redis for 90 days regardless of delivery status
 6. **Evidence may be temporarily unavailable** — responses can still include `cycles_evidence`, but `GET /v1/evidence/{id}` may return transient `404` until the events service signs and stores the envelope
@@ -178,7 +178,7 @@ Alert on `cycles_webhook_subscription_auto_disabled_total` (any increase is a re
 
 ## Scaling
 
-Multiple events service instances can safely consume the same `dispatch:pending` list — the BLMOVE reliable-queue claim is atomic, so each delivery is processed by exactly one consumer, and claimed jobs are parked on `dispatch:processing` until acknowledged (orphans idle past `DISPATCH_PROCESSING_RECOVERY_IDLE_MS`, default 120000 ms, are recovered to pending). No distributed locking is needed.
+Multiple events service instances can safely share the same `dispatch:pending` list. `BLMOVE` atomically moves a claimed delivery to `dispatch:processing`, and owner-token-checked acknowledgement prevents a stale worker from removing a successor's claim. Claims idle past `DISPATCH_PROCESSING_RECOVERY_IDLE_MS` (default `180000` ms) are recovered to pending. A fleet-wide ordering lease serializes the claim/send critical section, so additional replicas provide failover rather than higher initial-delivery throughput. Delivery remains at least once; receivers must deduplicate by event ID.
 
 ## Next steps
 

@@ -9,7 +9,7 @@ tags:
   - operations
   - runtime-authority
   - best-practices
-description: "What happens when you close an AI-agent tenant matters more than how you close it. A walk through cascade semantics, terminal-owner guards, and the zombie-budget problem."
+description: "Closing an AI-agent tenant requires explicit cascade semantics. Learn terminal-owner guards, dependent resource cleanup, and zombie-budget prevention."
 blog: true
 sidebar: false
 featured: false

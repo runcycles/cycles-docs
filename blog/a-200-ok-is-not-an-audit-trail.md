@@ -10,7 +10,7 @@ tags:
   - agents
   - production
   - evidence
-description: "Enforcing an agent's budget is only half of runtime authority. The other half is proving what you decided — to an auditor, a counterparty, or a regulator who wasn't on the call. When configured, CyclesEvidence turns eligible budget decisions into signed, portable receipts."
+description: "A 200 response proves a request succeeded, not why an agent action was allowed. Learn how signed CyclesEvidence receipts provide portable audit evidence."
 blog: true
 sidebar: false
 featured: false
@@ -72,8 +72,8 @@ Because a receipt is portable and self-verifying, it composes. A receipt or agen
 
 Two things this is *not*, because over-claiming an audit feature is its own kind of risk:
 
-- **It's the receipt, not the gate.** Evidence doesn't change a real-time decision or make a budget "safer" in the moment — enforcement is still the reserve/commit ledger. Its entire value is *after* the decision: audit, dispute resolution, cross-system trust, retention.
-- **It's opt-in, and still maturing.** Evidence is off until you configure a signing identity; until then Cycles enforces budgets exactly as before and simply emits no receipts. Today the envelope's *signature validity* is fully specified; *signer authority* — proving the signing key genuinely belongs to that server, with key rotation and long-horizon resolution — is the v0.2 work currently in design ([cycles-protocol#103](https://github.com/runcycles/cycles-protocol/issues/103)). Until it lands, pin the expected signer for issuer trust.
+- **It's the receipt, not the gate.** Evidence doesn't change a real-time decision or make a budget "safer" in the moment—enforcement is still the reserve-commit ledger. Its value comes after the decision: audit, dispute resolution, cross-system trust, and retention.
+- **It's opt-in and operationally dependent.** Evidence is off until you configure a signing identity; until then Cycles enforces budgets exactly as before and emits no receipts. CyclesEvidence v0.2 now specifies signer-authority resolution through the server-relative JWK Set, and the current server can publish the active key plus configured retired-key validity windows. A verifier that does not resolve that set remains in the `binding_only` posture and should pin the expected signer when issuer trust is required.
 
 ## Close the loop
 

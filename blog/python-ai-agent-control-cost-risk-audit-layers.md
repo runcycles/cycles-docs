@@ -102,8 +102,8 @@ The lifecycle distinction is treated more thoroughly in [Runtime Authority vs Gu
 An external budget authority that the application calls *before* protected execution. The agent reserves dollars, tokens, or caller-assigned risk points. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns an error when budget is unavailable. After execution starts, the agent commits best-known actual usage. The ledger records the budget lifecycle; application authorization and tool-call audit data remain separate.
 
 - **Cost coverage:** pre-execution. The next action is allowed or denied based on remaining budget, not after the bill arrives.
-- **Risk coverage:** pre-execution. Action-tier classification is a first-class input to the decision. A high-tier action (like `delete_*`) hits a smaller cap than a low-tier action (like `read_file`), regardless of dollar cost. See [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) for the full action-authority framing.
-- **Audit coverage:** structured by-default. Every [reservation](/glossary#reservation), commit, release, and denial produces an audit record with subject (the canonical scope chain: `tenant` → `workspace` → `app` → `workflow` → `agent` → `toolset`), action (kind / name / tier), amount, decision, reason, and timestamp. Per-user attribution is a derived field via `dimensions` or actor metadata, not a built-in subject scope. The ledger is the byproduct of enforcement, not a separate instrumentation project.
+- **Risk coverage:** pre-execution when the application classifies the action, assigns `RISK_POINTS`, and submits the reservation before the mandatory boundary. A high-consequence action such as `delete_*` can consume more of a caller-provisioned exposure budget than `read_file`; Cycles does not infer the tier from the action name. See [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) for the full action-authority framing.
+- **Audit coverage:** structured budget lifecycle records by default. Reservations, commits, and releases carry the submitted Subject, action context, amount, status, and timestamps. Live rejection responses and non-persisting `decide`/dry-run outcomes need explicit retention, while tool arguments, application authorization, and external outcomes remain application records. Per-user attribution can be carried in `dimensions` or actor metadata, not as a built-in budget scope.
 
 **Where it stops short:** requires a service to operate. Self-hosted or otherwise, it's a real piece of infrastructure with availability requirements, not a single-file Python library you `pip install` and forget. The trade-off is the operational footprint in exchange for pre-execution control on all three axes.
 
@@ -113,12 +113,12 @@ What each layer covers, in one view:
 
 | Layer | Cost | Risk | Audit | Pre-execution? |
 |---|---|---|---|---|
-| 1. Wrapper-style cost guards | Single-session $ cap | Kill switch on $ only | Local logs | ✓ (cost only) |
-| 2. Provider-client patches | Per-call cost | Model calls only | Per-call log, one provider | ✓ (cost only, one provider) |
-| 3. Framework-native hooks | Per-step cost | Per-tool, per-framework | Trace events, per-framework | ✓ (within one framework) |
-| 4. LLM gateways | Cross-provider model cost | Model calls only | Prompt/response logs | ✓ (model calls only) |
-| 5. Observability / tracing | Post-hoc rollup | Post-hoc visibility | Rich, structured | ✗ (post-hoc) |
-| 6. Runtime authority | Pre-execution decision | Action-tier caps | Decision ledger by-default | ✓ (all three axes) |
+| 1. Wrapper-style cost guards | Single-session $ cap | Kill switch on $ only | Local logs | Yes, cost only |
+| 2. Provider-client patches | Per-call cost | Model calls only | Per-call log, one provider | Yes, cost only within one provider |
+| 3. Framework-native hooks | Per-step cost | Per-tool, per-framework | Trace events, per-framework | Yes, within one framework |
+| 4. LLM gateways | Cross-provider model cost | Model calls only | Prompt/response logs | Yes, model calls only |
+| 5. Observability / tracing | Post-hoc rollup | Post-hoc visibility | Rich, structured | No, post-hoc |
+| 6. Runtime authority | Pre-execution budget decision | Caller-assigned exposure budget | Budget lifecycle records | Yes, at instrumented boundaries |
 
 Three patterns are visible in the matrix.
 

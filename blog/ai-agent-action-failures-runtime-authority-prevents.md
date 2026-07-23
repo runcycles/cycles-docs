@@ -1,11 +1,15 @@
 ---
-title: "5 AI Agent Failures Only Action Controls Would Prevent"
+title: "5 Agent Failures Action Controls Prevent"
 date: 2026-03-30
 author: Cycles Team
 tags: [action-control, risk, incidents, best-practices]
 description: "Five AI agent failures where model spend was under $5 but the business impact was severe — and how action authority with risk-point budgets prevents each one."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent failures, action controls, runtime authority, risk budgets, agent side effects, pre-execution enforcement
 ---
 
 # 5 AI Agent Failures Only Action Controls Would Prevent

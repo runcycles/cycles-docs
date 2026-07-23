@@ -5,11 +5,11 @@ description: "Get started with Cycles — runtime budget authority for AI agents
 
 # Quickstart
 
-Cycles is a runtime authority for autonomous agents — it enforces hard budget and action limits **before** an agent runs an LLM call, a tool, or any side-effecting operation. This section takes you from zero to a working integration.
+Cycles provides runtime budget authority for autonomous agents. At the boundaries you instrument, it reserves spend or caller-assigned action exposure **before** an LLM call, tool, or side effect. Your application still classifies and authorizes the action and must route every protected path through the boundary. This section takes you from zero to a working integration.
 
 ## New to Cycles?
 
-Start with **[What is Cycles?](/quickstart/what-is-cycles)** for a 5-minute orientation, then run through the **[end-to-end tutorial](/quickstart/end-to-end-tutorial)** to see reserve / commit / release in practice.
+Start with **[What is Cycles?](/quickstart/what-is-cycles)** for a short orientation, then run through the **[end-to-end tutorial](/quickstart/end-to-end-tutorial)** to see the reserve-commit lifecycle in practice.
 
 ## Add Cycles to an existing application
 

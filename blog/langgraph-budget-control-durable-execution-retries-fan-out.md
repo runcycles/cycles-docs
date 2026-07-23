@@ -1,11 +1,15 @@
 ---
-title: "LangGraph Budget Control for Durable Execution, Retries, and Fan-Out"
+title: "LangGraph Budget Control for Durable Runs"
 date: 2026-03-21
 author: Cycles Team
 tags: [langgraph, budgets, engineering, durable-execution, best-practices]
 description: "LangGraph runs pause, resume, retry, and fan out. Enforce per-run and per-node spend limits before durable execution turns cost spikes into cost cliffs."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: LangGraph budget control, durable execution costs, AI agent retries, graph run budgets, node budgets, runtime authority
 ---
 
 # LangGraph Budget Control for Durable Execution, Retries, and Fan-Out

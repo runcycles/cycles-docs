@@ -9,7 +9,7 @@ tags:
   - monitoring
   - webhooks
   - deployment
-description: "How to run the Cycles events service in production: the 7980/9980 port split, Prometheus scraping, Kubernetes probes, and alert rules that actually page the right people."
+description: "Run the Cycles events service with correct ports, Prometheus metrics, Kubernetes probes, and alert rules that give production teams actionable signals."
 blog: true
 sidebar: false
 featured: false
@@ -50,7 +50,7 @@ The docker-compose block for an events service that works on `v0.1.25.9+` looks 
 
 ```yaml
 cycles-events:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   restart: unless-stopped
   # No `ports:` stanza — the service has no public inbound surface.
   # Traffic-plane dispatch is outbound-only; only the management-plane
@@ -63,12 +63,10 @@ cycles-events:
     REDIS_HOST: redis
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
-    # In the current reference implementation, the AES-256-GCM key
-    # used to encrypt webhook signing secrets at rest in Redis. An
-    # empty value is accepted (plaintext fallback) for backward
-    # compatibility with older dev deployments; production should set
-    # a 32-byte base64-encoded key.
-    WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY}
+    # Required by default: the AES-256-GCM key used to encrypt webhook
+    # signing secrets at rest in Redis. Use the same 32-byte,
+    # base64-encoded key on the admin, runtime, and events services.
+    WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
   healthcheck:
     test: ["CMD", "wget", "--spider", "-q", "http://localhost:9980/actuator/health"]
     interval: 10s
@@ -84,7 +82,7 @@ Three things to note:
 
 - **No published ports.** The events service doesn't accept inbound HTTP, so there's no reason to publish `7980`. `9980` stays reachable only inside the Docker network, where a co-located Prometheus scrapes it. Publish `9980` to the host only when an operator needs local inspection.
 - **`start_period: 30s`.** The events service needs time to connect to Redis, warm connection pools, and load signing secrets before health should matter. Set this too short and a slow Redis round-trip during startup will trigger a premature restart loop.
-- **`WEBHOOK_SECRET_ENCRYPTION_KEY`** (implementation detail). The plaintext-fallback behavior described above is specific to the current reference implementation — if you're on a different build or a forked image, confirm against that image's release notes before relying on it in production.
+- **`WEBHOOK_SECRET_ENCRYPTION_KEY`.** Current admin and events services fail startup without the key. The explicit `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch exists only for local/development compatibility and must not be enabled in production.
 
 For stacks using the dashboard's reference compose, the `7980 → 9980` healthcheck edit was the fix that unblocked yesterday's upgrade incident; worth a branch-blame check if your stack's compose file dates from before mid-April 2026.
 
@@ -100,7 +98,7 @@ A minimal probe config:
 spec:
   containers:
     - name: cycles-events
-      image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+      image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
       ports:
         - name: traffic
           containerPort: 7980
@@ -149,17 +147,17 @@ A NetworkPolicy that restricts port 9980 to the monitoring namespace (or equival
 
 ## What Prometheus actually scrapes
 
-The `/actuator/prometheus` endpoint returns standard Micrometer output. The metric families in the current reference implementation (exact names and tag lists are subject to change between releases — confirm against your build's emitted output):
+The `/actuator/prometheus` endpoint returns standard Micrometer output. These are the core webhook-delivery families used in the examples below, not an exhaustive inventory (confirm exact names and tags against your build's emitted output):
 
 | Metric family | Meaning |
 |---|---|
-| `cycles_webhook_delivery_attempts_total` | Every HTTP attempt. Tags: `tenant`, `event_type`. |
-| `cycles_webhook_delivery_success_total` | Attempts that returned 2xx. Tags: `tenant`, `event_type`, `status_code_family`. |
-| `cycles_webhook_delivery_failed_total` | Attempts that failed. Tags: `tenant`, `event_type`, `reason`. |
-| `cycles_webhook_delivery_retried_total` | Retries scheduled. Tags: `tenant`, `event_type`. |
-| `cycles_webhook_delivery_stale_total` | Deliveries marked failed without another HTTP attempt (exceeded the delivery-age ceiling). Tags: `tenant`. |
-| `cycles_webhook_subscription_auto_disabled_total` | Subscriptions that hit the consecutive-failure threshold and were paused. Tags: `tenant`, `reason`. |
-| `cycles_webhook_delivery_latency_seconds` | HTTP round-trip timer. Tags: `tenant`, `event_type`, `outcome`. |
+| `cycles_webhook_delivery_attempts_total` | Every HTTP attempt. Tags: `event_type`, plus optional `tenant`. |
+| `cycles_webhook_delivery_success_total` | Attempts that returned 2xx. Tags: `event_type`, `status_code_family`, plus optional `tenant`. |
+| `cycles_webhook_delivery_failed_total` | Attempts that failed. Tags: `event_type`, `reason`, plus optional `tenant`. |
+| `cycles_webhook_delivery_retried_total` | Retries scheduled. Tags: `event_type`, plus optional `tenant`. |
+| `cycles_webhook_delivery_stale_total` | Deliveries marked failed without another HTTP attempt (exceeded the delivery-age ceiling). Optional tag: `tenant`. |
+| `cycles_webhook_subscription_auto_disabled_total` | Subscriptions that hit the consecutive-failure threshold and were paused. Tags: `reason`, plus optional `tenant`. |
+| `cycles_webhook_delivery_latency_seconds` | HTTP round-trip timer. Tags: `event_type`, `outcome`, plus optional `tenant`. |
 | `cycles_webhook_events_payload_invalid_total` | Schema-validation discrepancies on emitted events. Tags: `type`, `rule`. |
 
 A scrape config via `kube-prometheus-stack`'s `ServiceMonitor` CRD is the cleanest path on Kubernetes:
@@ -192,19 +190,17 @@ For non-operator Prometheus installs, a static scrape_config works equally well:
         service: "cycles-events"
 ```
 
-Thirty-second scrape interval is a reasonable default. Faster isn't free — a 5-second interval against a large tenant population produces a lot of label-cardinality pressure on the Prometheus side, and most of the signals you care about are slow enough (delivery failure rate, auto-disable count) to be visible at 30s resolution.
+Thirty-second scrape interval is a reasonable default. Faster isn't free, and most of the signals you care about are slow enough (delivery failure rate, auto-disable count) to be visible at 30s resolution. If tenant tagging is enabled, a short interval against a large tenant population also increases the number of samples Prometheus must ingest.
 
 ### A note on tenant cardinality
 
-Every metric above is tagged with `tenant`. For deployments with a few dozen tenants, that's fine. For SaaS environments with thousands of tenants, the label-cardinality explosion will hurt Prometheus before anything else notices.
-
-The current reference implementation exposes a `cycles.metrics.tenant-tag.enabled` config flag (default `true`) that strips the `tenant` label when set to `false`, keeping the metrics aggregable across all tenants. Per-tenant visibility then lives in the admin API's delivery history or a dedicated log-based observability path, not Prometheus. If you're north of a few hundred tenants this is usually worth flipping; confirm the exact flag name against your build before relying on it.
+The current reference implementation exposes `cycles.metrics.tenant-tag.enabled`, which defaults to `false`. With the default, delivery metrics remain aggregable across tenants and per-tenant visibility lives in the admin API's delivery history or a dedicated log-based observability path. Set the flag to `true` only when you need a `tenant` label on webhook metrics and have accounted for the additional series cardinality.
 
 ## Alerts that actually page the right person
 
 A healthy events service is one you don't think about. The alerts worth paging on are the ones that indicate *silent* degradation — the class of problem where deliveries are still happening but with meaningful loss, because downstream consumers will notice that kind of drift long after an alert could have prevented the incident.
 
-Three rules that cover most of the real failure modes:
+Three rules that cover most of the real failure modes are shown below. They group and annotate by `tenant`, so enable `cycles.metrics.tenant-tag.enabled=true` before using them as written. With the default tenant tag disabled, remove `by (tenant)` and use deployment-level alert summaries instead.
 
 ```yaml
 groups:

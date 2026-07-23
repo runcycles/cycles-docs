@@ -22,17 +22,17 @@ That's the finding that reframed MCP security in 2026. [Invariant Labs demonstra
 
 <!-- more -->
 
-The scale of [exposure](/glossary#exposure) is staggering. As of early 2026, there are [over 10,000 public MCP servers](https://mcpplaygroundonline.com/blog/mcp-security-tool-poisoning-owasp-top-10-mcp-scan). [Trend Micro found 492 MCP servers](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) exposed to the internet with zero authentication. Security researchers [reported 1,184 malicious skills](https://www.cryptonewsz.com/openclaws-clawhub-flags-1184-malicious-skills/) circulating on OpenClaw's ClawHub marketplace. And in controlled benchmark testing, the [MCP-ITP framework](https://arxiv.org/abs/2601.07395) measured tool poisoning attack success rates **up to 84.2%** when agents auto-approve tool calls — a configuration that is common in demos and many production integrations.
+The ecosystem is large enough that provenance and configuration matter. As of early 2026, one directory reported [over 10,000 public MCP servers](https://mcpplaygroundonline.com/blog/mcp-security-tool-poisoning-owasp-top-10-mcp-scan). [Trend Micro found 492 MCP servers](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) exposed to the internet with zero authentication, while researchers [reported 1,184 malicious skills](https://www.cryptonewsz.com/openclaws-clawhub-flags-1184-malicious-skills/) in OpenClaw's separate ClawHub ecosystem. In controlled benchmark testing, the [MCP-ITP framework](https://arxiv.org/abs/2601.07395) measured tool-poisoning success rates **up to 84.2%** under auto-approval. That benchmark condition should not be read as evidence about how common auto-approval is in production.
 
-OWASP responded by publishing the [MCP Top 10](https://owasp.org/www-project-mcp-top-10/), a dedicated security framework for MCP vulnerabilities (currently in beta) — separate from the broader Agentic AI Top 10 published the same month. Security researchers have [documented more than 30 CVEs](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f) against MCP implementations in the past 60 days — a pace that prompted a [front-page Hacker News discussion](https://news.ycombinator.com/item?id=47356600) on MCP's expanding attack surface. This isn't a theoretical risk. It's active exploitation in the wild.
+OWASP responded by publishing the [MCP Top 10](https://owasp.org/www-project-mcp-top-10/), a dedicated security framework for MCP vulnerabilities (currently in beta), separate from the broader Agentic AI Top 10. Researchers have also [catalogued more than 30 CVEs](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f) across MCP implementations. Those reports establish a broad implementation and supply-chain attack surface; they do not mean every CVE or exposed server is a metadata-poisoning exploit in the wild.
 
-Some agent frameworks do offer defenses. OpenAI's Agents SDK provides [`requireApproval`](https://openai.github.io/openai-agents-python/guardrails/) callbacks and tool input/output guardrails with tripwire mechanisms. Claude Desktop and Cursor support per-tool approval prompts. These are real controls — but they are not an independent [runtime authority](/glossary#runtime-authority) that evaluates each MCP action against policy outside the agent's own reasoning loop. Approval dialogs require human-in-the-loop, which doesn't scale to production workloads. SDK guardrails run inside the agent's trust boundary, meaning a sufficiently poisoned context can influence the guardrail evaluation itself. And none of them enforce budget, scope, or cross-agent policy as a separate enforcement plane.
+Some agent frameworks do offer defenses. OpenAI's Agents SDK provides [`requireApproval`](https://openai.github.io/openai-agents-python/guardrails/) callbacks and tool input/output guardrails with tripwire mechanisms. Claude Desktop and Cursor support per-tool approval prompts. These are real controls. A deterministic guardrail callback need not be influenced by model context unless the application feeds untrusted context into the policy decision, but it still shares the host process and whatever credentials or bypass paths that process exposes. Approval prompts suit interactive use; unattended systems need independently enforced host, gateway, sandbox, and budget controls.
 
-That gap — between the agent's decision and an _external_ policy evaluation before execution — is where tool poisoning lives. And it's the gap that runtime authority closes.
+Tool poisoning therefore requires defense in depth. A mandatory boundary outside model reasoning can reject a proposed action, while supply-chain validation, argument checks, sandboxing, credential isolation, and egress controls address risks that a budget ledger cannot see.
 
 ## What MCP Tool Poisoning Actually Looks Like
 
-The threats above span three distinct risk classes that are related but not identical: **(1) metadata poisoning** — malicious instructions embedded in tool descriptions and schemas (Invariant Labs, CyberArk, MCP-ITP); **(2) supply chain compromise** — poisoned packages distributed through marketplaces and registries (postmark-mcp, ClawHub); and **(3) implementation vulnerabilities** — missing authentication, command injection, and path traversal in [MCP server](/glossary#mcp-server) code (Trend Micro, the 30+ CVEs). Each requires different defenses, but all three converge on one architectural gap: no policy evaluation before tool execution.
+The threats above span three distinct risk classes that are related but not identical: **(1) metadata poisoning**—malicious instructions embedded in tool descriptions and schemas; **(2) supply-chain compromise**—poisoned packages distributed through marketplaces and registries; and **(3) implementation vulnerabilities**—missing authentication, command injection, and path traversal in [MCP server](/glossary#mcp-server) code. Each requires category-specific defenses. A pre-execution policy boundary helps with proposed actions, but it does not repair a vulnerable server or prove package provenance.
 
 The [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) catalogs the full attack surface. Three categories of metadata poisoning account for most targeted incidents:
 
@@ -112,21 +112,17 @@ The missing enforcement layer isn't just a security problem. It's an operational
 
 In March 2026, a multi-agent research system built on a common open-source stack [generated a $47,000 API bill](https://earezki.com/ai-news/2026-03-23-the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working/) when two agents entered a recursive loop that ran for 11 days. Traditional monitoring — Datadog, PagerDuty — didn't catch it because the API calls were succeeding. Every tool call returned 200. The agents were "working."
 
-Teja Kusireddy, whose team experienced the incident, [put it bluntly](https://techstartups.com/2025/11/14/ai-agents-horror-stories-how-a-47000-failure-exposed-the-hype-and-hidden-risks-of-multi-agent-systems/):
+The reported incident illustrates a cumulative-control gap: individually successful calls can still form an unsafe loop. OWASP's MCP guidance covers pre-execution authorization, audit, scope enforcement, and other controls, while the [Coalition for Secure AI (CoSAI)](https://www.helpnetsecurity.com/2026/03/03/enterprise-ai-agent-security-2026/) maps additional MCP threat categories. Evaluation before execution is one requirement among supply-chain, identity, sandbox, and monitoring controls.
 
-> "Agent-to-Agent communication and Anthropic's Model Context Protocol are revolutionary. But there's a $47,000 lesson nobody's talking about: the infrastructure layer doesn't exist yet."
-
-The infrastructure layer he's describing is exactly what the OWASP MCP Top 10 calls for: pre-execution authorization (MCP02), audit trails (MCP08), and scope enforcement (MCP01, MCP04). And it's what the [Coalition for Secure AI (CoSAI)](https://www.helpnetsecurity.com/2026/03/03/enterprise-ai-agent-security-2026/) mapped in their January 2026 MCP Security whitepaper — 12 core threat categories and nearly 40 distinct threats, all converging on the same architectural requirement: **evaluation before execution**.
-
-## How Runtime Authority Closes the MCP Security Gap
+## How a Mandatory Boundary Limits MCP Blast Radius
 
 Runtime authority adds the missing enforcement point to the MCP tool call pipeline:
 
 ```
-Agent reasons → Agent selects tool → Runtime authority evaluates → Allow / Deny / Cap → Tool executes
+Agent proposes tool → Host validates and authorizes → Cycles reserve succeeds or rejects → Tool executes
 ```
 
-The evaluation happens _outside_ the agent's context — deterministic policy, not probabilistic inference. The agent can't reason around the policy because it doesn't control the enforcement layer.
+Host policy and the Cycles budget check can run outside model reasoning. That boundary is effective only if every protected path crosses it and the model cannot call the handler or reach the resource through an alternate path.
 
 No single product closes the OWASP MCP Top 10. A defensible deployment combines protocol security, supply-chain controls, sandboxing, and a mandatory action boundary:
 
@@ -139,7 +135,7 @@ No single product closes the OWASP MCP Top 10. A defensible deployment combines 
 | **MCP05: Command Injection** | Validate typed arguments, avoid shell interpolation, and sandbox execution |
 | **MCP06: Intent Flow Subversion** | Treat tool output as untrusted and require a fresh gate before each consequential follow-on action |
 | **MCP07: Insufficient Auth** | Use MCP authorization where supported, TLS, and application-level authentication and authorization |
-| **MCP08: Lack of Audit** | Combine tool-call logs with reserve/commit/release [lifecycle evidence](/protocol/standard-metrics-and-metadata-in-cycles) |
+| **MCP08: Lack of Audit** | Combine tool-call logs with reserve-commit [lifecycle evidence](/protocol/standard-metrics-and-metadata-in-cycles) |
 | **MCP09: Shadow Servers** | Maintain an approved server registry and enforce it in the host or gateway |
 | **MCP10: Context Over-Sharing** | Minimize context, redact secrets, validate outbound data, and apply data-loss-prevention controls |
 
@@ -173,7 +169,7 @@ The allowlist, not the current Cycles server, blocks `file.read`. Cycles enforce
 
 ### Breaking Recursive Loops Before $47,000
 
-The same enforcement pattern prevents the recursive agent loop that generated the $47K bill. Each iteration of the loop requires a new reservation. [Per-run budgets](/blog/ai-agent-budget-control-enforce-hard-spend-limits) cap total spend. When the budget is exhausted, the next reservation is denied:
+The same enforcement pattern bounds a recursive agent loop when each iteration crosses the mandatory boundary. Each iteration requires a new reservation, and an enforceable [per-run budget](/blog/ai-agent-budget-control-enforce-hard-spend-limits) caps total submitted spend. When the budget is exhausted, the next live reservation is rejected:
 
 ```python
 # Iteration 1: Reserve $0.15 → ALLOW (budget: $50 remaining)

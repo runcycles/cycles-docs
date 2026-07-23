@@ -80,7 +80,7 @@ The mature framing for this evolution is in [From Observability to Enforcement](
 
 The audit/compliance card on the Cycles homepage frames this with the question: "Auditor asks: prove the agent was under control." Without a pre-execution layer, the answer to that question is the agent's confession — a high-fidelity description of what the agent decided to do, written *by the agent*, *after* the damage. That is an observability artifact, not an audit record.
 
-With Cycles in the path, the answer is different. The governance page puts the contract this way: ["Every action is recorded before execution. The reservation creates a pre-execution control record, and the full audit trail is completed by commit, release, and event records."](/why-cycles/governance) The post-incident question changes shape:
+With Cycles at an instrumented mandatory boundary, the answer can include a pre-execution budget record and its later settlement. The [governance page](/why-cycles/governance) also makes the boundary explicit: those lifecycle records must be correlated with application authorization, tool arguments, and the external database outcome. The post-incident question changes shape:
 
 | Question | Confession-only world | Ledger-based world |
 |---|---|---|

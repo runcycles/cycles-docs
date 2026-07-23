@@ -52,18 +52,20 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.55
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       ADMIN_API_KEY: admin-bootstrap-key
+      WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}"
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
       DASHBOARD_CORS_ORIGIN: "${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}"
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.46
+    image: ghcr.io/runcycles/cycles-server:0.1.25.58
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
@@ -74,24 +76,26 @@ services:
       # API docs) and the admin-on-behalf-of paths return 500
       # "server misconfiguration".
       ADMIN_API_KEY: admin-bootstrap-key
+      WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}"
       DASHBOARD_CORS_ORIGIN: "${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}"
     depends_on:
       redis: { condition: service_healthy }
   # Optional: webhook event delivery and evidence signing worker
   cycles-events:
-    image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
-      WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:-}"
+      WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}"
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
     depends_on:
       redis: { condition: service_healthy }
 volumes:
   redis-data:
 COMPOSE
 
-# Generate encryption key for webhook signing secrets (optional)
+# Generate the shared encryption key required by admin and events
 export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
 
 docker compose up -d
@@ -217,7 +221,7 @@ services:
       retries: 5
 
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.55
     ports:
       - "7979:7979"
     environment:
@@ -225,13 +229,15 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       ADMIN_API_KEY: ${ADMIN_API_KEY:-admin-bootstrap-key}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       redis:
         condition: service_healthy
 
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.46
+    image: ghcr.io/runcycles/cycles-server:0.1.25.58
     ports:
       - "7878:7878"
     environment:
@@ -243,26 +249,28 @@ services:
       # this key; leaving it unset makes them return 500 "server
       # misconfiguration" (liveness/readiness probes stay public).
       ADMIN_API_KEY: ${ADMIN_API_KEY:-admin-bootstrap-key}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       redis:
         condition: service_healthy
 
   # Optional: webhook delivery and CyclesEvidence signing service. Set
-  # WEBHOOK_SECRET_ENCRYPTION_KEY for production webhook secret encryption:
+  # the same WEBHOOK_SECRET_ENCRYPTION_KEY used by admin and runtime:
   # export WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
   # Evidence signing is off unless EVIDENCE_SERVER_ID, EVIDENCE_SIGNING_SIGNER_DID,
   # and the worker-only EVIDENCE_SIGNING_PRIVATE_KEY_HEX are configured.
   # Docs: https://runcycles.io/quickstart/deploying-the-events-service
   # cycles-events:
-  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.22
+  #   image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   #   # No public inbound port is required. Add "9980:9980" only for local
   #   # management inspection; keep it internal in production.
   #   environment:
   #     REDIS_HOST: redis
   #     REDIS_PORT: 6379
   #     REDIS_PASSWORD: ""
-  #     WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:-}"
+  #     WEBHOOK_SECRET_ENCRYPTION_KEY: "${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}"
+  #     WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
   #   depends_on:
   #     redis:
   #       condition: service_healthy
@@ -278,7 +286,7 @@ docker compose up -d
 ```
 
 ::: tip Version pinning
-The examples above pin known compatible images: admin `0.1.25.48`, server `0.1.25.46`, and events `0.1.25.22`. Check each repository's GitHub releases for newer versions. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
+The examples above pin the current compatible images: admin `0.1.25.55`, server `0.1.25.58`, and events `0.1.25.25`. Check the [current version matrix](/changelog#current-versions) before deploying. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
 :::
 
 Verify all services are healthy:
@@ -676,7 +684,7 @@ requests.post(f"{CYCLES_URL}/v1/reservations/{reservation_id}/commit", json={
 | `MANAGEMENT_PORT` | `9980` | Separate management port for health and Prometheus; keep internal-only |
 | `EVENT_TTL_DAYS` | `90` | Event record retention (days) |
 | `DELIVERY_TTL_DAYS` | `14` | Webhook delivery record retention (days) |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for webhook signing secrets at rest |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | required by default | AES-256-GCM key for webhook signing secrets at rest. Missing key fails admin/events startup unless the local-development-only `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch is set. |
 | `EVIDENCE_SERVER_ID` | (empty) | Same issuer base as the runtime server. Blank disables evidence signing and leaves pending evidence records untouched. |
 | `EVIDENCE_SIGNING_SIGNER_DID` | (empty) | Same raw-hex public Ed25519 key as the runtime server |
 | `EVIDENCE_SIGNING_PRIVATE_KEY_HEX` | (empty) | Raw-hex private Ed25519 key; set only on `cycles-server-events` |

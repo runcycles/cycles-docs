@@ -437,7 +437,7 @@ const EMOJI = {
 // Format amount based on unit type (protocol supports multiple units)
 function formatAmount(amount, unit) {
   switch (unit) {
-    case 'USD_MICROCENTS': return `$${(amount / 1000000).toFixed(2)}`;
+    case 'USD_MICROCENTS': return `$${(amount / 100000000).toFixed(2)}`;
     case 'TOKENS':         return `${amount.toLocaleString()} tokens`;
     case 'CREDITS':        return `${amount.toLocaleString()} credits`;
     case 'RISK_POINTS':    return `${amount.toLocaleString()} risk points`;
@@ -712,7 +712,7 @@ CARD_COLOR_MAP = {
 
 def format_amount(amount, unit):
     if unit == "USD_MICROCENTS":
-        return f"${amount / 1_000_000:.2f}"
+        return f"${amount / 100_000_000:.2f}"
     return f"{amount:,} {unit.lower()}" if unit else f"{amount:,}"
 
 @app.post("/cycles-to-teams")

@@ -35,7 +35,7 @@ cd cycles-server
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-This pulls `ghcr.io/runcycles/cycles-server:0.1.25.46` (the version pinned in `docker-compose.prod.yml`) and starts it with Redis. The prod compose file requires `REDIS_PASSWORD` and `ADMIN_API_KEY` to be set and fails fast if either is missing.
+This pulls `ghcr.io/runcycles/cycles-server:0.1.25.58` (the version pinned in `docker-compose.prod.yml`) and starts it with Redis. The prod compose file requires `REDIS_PASSWORD` and `ADMIN_API_KEY` to be set and fails fast if either is missing.
 
 ::: tip Pinning versions
 `docker-compose.prod.yml` pins a specific version tag so deployments are reproducible. To upgrade, update the existing pin to the new tag and re-run `docker compose -f docker-compose.prod.yml up -d`. Check [GitHub releases](https://github.com/runcycles/cycles-server/releases) for the current stable version.

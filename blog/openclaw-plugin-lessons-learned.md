@@ -1,11 +1,15 @@
 ---
-title: "Five Lessons from Building a Production OpenClaw Plugin"
+title: "Five Lessons from a Production OpenClaw Plugin"
 date: 2026-03-28
 author: Albert Mavashev
 tags: [openclaw, plugins, engineering, hooks, workarounds, developer-experience, production, openclaw-plugin-development]
-description: "We built a budget enforcement plugin for OpenClaw and hit five undocumented behaviors — including the discovery that you can't actually block a model call. Here are the workarounds we shipped and the feature requests we filed."
+description: "Five implementation lessons from building an OpenClaw budget plugin: model-call blocking limits, hook metadata gaps, config traps, and safe workarounds."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenClaw plugin development, OpenClaw hooks, budget plugin, agent cost control, plugin workarounds, production agents
 ---
 
 # Five Lessons from Building a Production OpenClaw Plugin
@@ -70,7 +74,7 @@ return { block: true, blockReason: "Budget exhausted" };
 
 The `before_model_resolve` hook has no equivalent. The return type only supports `{ modelOverride?, providerOverride? }`. There is no `block` field and no `shouldStop` policy in the hook runner.
 
-When our plugin throws `BudgetExhaustedError`, OpenClaw catches it (the default `catchErrors: true` behavior), logs "handler failed," and proceeds with the model call. The agent gets a response. Budget enforcement is bypassed.
+Our first implementation threw `BudgetExhaustedError`. OpenClaw caught it (the default `catchErrors: true` behavior), logged "handler failed," and proceeded with the model call. The agent got a response, so that implementation did not enforce the budget.
 
 **Workaround:** We redirect to a non-existent model. When budget is exhausted, the plugin returns:
 
@@ -81,7 +85,7 @@ return { modelOverride: "__cycles_budget_exhausted__" };
 OpenClaw passes this to the LLM provider, which rejects it (`model not found`). The provider rejects the call before generation, so the agent produces no response. The user sees:
 
 ```
-⚠ Agent failed before reply: Unknown model: openai/__cycles_budget_exhausted__
+Agent failed before reply: Unknown model: openai/__cycles_budget_exhausted__
 ```
 
 Not pretty, but the budget is enforced. The model call costs nothing because the provider never executes it.

@@ -78,17 +78,19 @@ services:
       timeout: 3s
       retries: 5
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.48
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.55
     ports: ["7979:7979"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ""
       ADMIN_API_KEY: admin-bootstrap-key
+      # Local tutorial only. Production must set WEBHOOK_SECRET_ENCRYPTION_KEY.
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "true"
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.46
+    image: ghcr.io/runcycles/cycles-server:0.1.25.58
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
