@@ -208,19 +208,19 @@ The broad version depends on the agent staying well-behaved after approval, whic
 
 Approvals do not have to be binary.
 
-The same [three-way decision](/glossary#three-way-decision) model used for runtime authority maps cleanly to approval workflows:
+An application-level three-way approval model maps cleanly to these workflows:
 
 | Decision | Approval queue behavior | Runtime behavior |
 |---|---|---|
 | ALLOW | Approver accepts as written | Reserve and execute within envelope |
-| ALLOW_WITH_CAPS | Approver narrows amount, recipient, environment, model, tools, or expiry | Execute only with the returned caps |
+| ALLOW_WITH_CAPS | Approver narrows amount, recipient, environment, model, tools, or expiry | Execute only within the approved envelope |
 | DENY | Approver rejects or policy blocks | Do not execute; return feedback to agent |
 
 This matters because many agent actions are almost acceptable.
 
 The email is fine, but the recipient is wrong. The refund is justified, but the amount is too high. The deploy can proceed to staging, not production. The database query can run with `LIMIT 100`, not as a full export.
 
-If the only choices are approve or reject, operators either block too much or approve too broadly. ALLOW_WITH_CAPS gives them the middle path.
+If the only choices are approve or reject, operators either block too much or approve too broadly. A constrained approval gives them the middle path. This is an application policy pattern: the current Cycles caps schema supports token, step, tool-list, and cooldown fields, not recipient, refund amount, environment, or approval-envelope fields.
 
 ## Audit needs one chain, not three logs
 

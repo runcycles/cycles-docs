@@ -27,17 +27,21 @@ If you are not in one of the HTTP rows above, use STDIO. STDIO is simpler and av
 ## Start the server with HTTP transport
 
 ```bash
+export HOST=127.0.0.1
+export MCP_HTTP_AUTH_TOKEN=replace-with-a-long-random-token
 npx @runcycles/mcp-server --transport http
 ```
 
-The server starts on port `3000` and exposes:
+The server starts on port `3000`, binds to loopback, and requires the bearer token on `/mcp`. Do not copy the bare `npx ... --transport http` command into a reachable environment: without `HOST`, the current server binds all interfaces, and without `MCP_HTTP_AUTH_TOKEN`, `/mcp` is unauthenticated.
+
+It exposes:
 
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/health` | GET | Liveness probe — returns `{"status": "ok", "version": "..."}` |
 | `/mcp` | POST | MCP Streamable HTTP endpoint (preferred for new clients) |
 | `/mcp` | GET | Streamable HTTP SSE stream (server-to-client notifications) |
-| `/mcp` | DELETE | Part of the Streamable HTTP surface; effectively a no-op — the server is stateless |
+| `/mcp` | DELETE | Requests Streamable HTTP transport termination. Authenticate and restrict it like the other `/mcp` methods. |
 
 ### Configuration
 
@@ -62,7 +66,7 @@ The Cycles MCP server has no first-party container image yet, so the cleanest pa
 # Dockerfile
 FROM node:22-alpine
 WORKDIR /app
-RUN npm install --omit=dev @runcycles/mcp-server@latest
+RUN npm install --omit=dev @runcycles/mcp-server@0.6.0
 EXPOSE 3000
 CMD ["npx", "@runcycles/mcp-server", "--transport", "http"]
 ```
@@ -94,7 +98,7 @@ curl http://localhost:3000/health
 # => {"status":"ok","version":"..."}
 ```
 
-You can now point any HTTP-capable MCP client at `http://localhost:3000/mcp` and configure it to send the same bearer header. For production, pin a specific version of `@runcycles/mcp-server` in the Dockerfile (replace `@latest`). Keep the built-in token or put the service behind a reverse proxy/API gateway; use the latter when you need per-user identity or stronger network controls.
+You can now point any HTTP-capable MCP client at `http://localhost:3000/mcp` and configure it to send the same bearer header. The Dockerfile pins the version for reproducibility; review and update that pin intentionally when upgrading. Keep the built-in token or put the service behind a reverse proxy/API gateway; use the latter when you need per-user identity or stronger network controls.
 
 ## Verify with MCP Inspector
 
@@ -159,7 +163,7 @@ For clients that take JSON config rather than a CLI, the shape replaces the STDI
 }
 ```
 
-Windsurf documents stdio, HTTP, and SSE transports. Claude Code supports remote HTTP via the CLI above. Other clients may vary by release channel — check the client docs before assuming a JSON shape. STDIO is universally supported and is the right fallback while remote support stabilizes.
+Windsurf documents stdio, HTTP, and SSE transports. Claude Code supports remote HTTP via the CLI above. Other clients may vary by release channel — check the client docs before assuming a JSON shape. STDIO is widely supported and is the right fallback for the local clients covered by these guides while remote support stabilizes.
 
 ## Auth, scope derivation, and security
 
@@ -167,12 +171,14 @@ Windsurf documents stdio, HTTP, and SSE transports. Claude Code supports remote 
 - **End-user attribution is not injected automatically.** The MCP schemas do not accept a reservation `actor` field. A client or identity-aware tool harness can attach audit context through `action.tags` or `metadata` on subject-bearing operations; `metrics.custom` is available only on commit and create-event calls. These fields add observability but do not determine the budget scope. If you need per-user or per-tenant enforcement, map the authenticated identity to an explicit subject policy before the Cycles call, or use separate gateway/API-key identities per boundary. See [Custom Field Resolvers](/how-to/custom-field-resolvers-in-cycles).
 - **Scope derivation behaves identically over HTTP.** `cycles_reserve`, `cycles_decide`, and `cycles_create_event` accept the subject hierarchy ([tenant → workspace → app → workflow → agent → toolset](/concepts/exposure-why-rate-limits-leave-agents-unbounded)); `cycles_check_balance` accepts the corresponding filters. Commit, release, and extend operate on an existing `reservationId` and do not accept a new subject.
 - **Protect every reachable `/mcp` endpoint.** Use `MCP_HTTP_AUTH_TOKEN` for shared-token access, or put the service behind nginx/caddy/Traefik, mTLS, an API gateway, or a private network. Prefer an identity-aware gateway when users need distinct credentials or policies.
+- **Validate browser origins at the proxy.** MCP's Streamable HTTP specification requires servers to validate the `Origin` header to prevent DNS rebinding. Cycles MCP Server v0.6.0 does not yet perform that validation itself. Until it does, reject unexpected `Origin` values at the reverse proxy or API gateway; keep loopback deployments authenticated as defense in depth.
 - **Health check is intentionally unauthenticated.** `/health` returns version information for load balancers. Built-in bearer auth, when configured, applies to every `/mcp` method.
 
 ## Known limitations
 
 - **No built-in per-user auth.** The built-in bearer token is shared. If the goal is per-developer attribution, use an identity-aware gateway or STDIO with a separate Cycles API key per developer.
-- **No first-party container image.** A pinned GHCR image will land once HTTP demand is validated. Until then, the Dockerfile above is the recommended pattern — pin the package version in production rather than `@latest`.
+- **No application-level `Origin` validation in v0.6.0.** Put HTTP deployments behind a proxy that validates browser origins, and do not expose an unauthenticated listener even when it binds to loopback.
+- **No first-party container image.** A pinned GHCR image will land once HTTP demand is validated. Until then, the version-pinned Dockerfile above is the recommended pattern.
 - **The server is stateless.** It issues no session IDs, so any replica can serve any request — no sticky sessions needed. Restarts are safe from a transport perspective; retry an interrupted mutating tool call with the same caller-supplied `idempotencyKey`. A new key represents a new operation and can create a duplicate hold, charge, extension, event, or evidence artifact.
 
 ## Next steps

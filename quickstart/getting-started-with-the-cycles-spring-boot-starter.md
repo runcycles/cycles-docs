@@ -26,8 +26,8 @@ The starter wraps any annotated method in a reserve → execute → commit lifec
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 :::
 
 All of this happens transparently through Spring AOP.
@@ -94,7 +94,7 @@ The demo app includes working examples for every major feature area:
 - `@Cycles` with SpEL estimate/actual, `CyclesContextHolder` for reading reservation context, `CyclesMetrics` for reporting token counts and latency, and `commitMetadata` for audit data
 
 **Annotation variations (`/api/demo/annotation/*`)**
-- `ALLOW_WITH_CAPS` — reading and respecting server-imposed constraints — `POST /api/demo/annotation/caps`
+- `ALLOW_WITH_CAPS` — reading and respecting operator-configured constraints returned by the server — `POST /api/demo/annotation/caps`
 - `unit=TOKENS` with `actionTags` — `POST /api/demo/annotation/tokens`
 - `unit=CREDITS` with `workflow`, `agent`, and custom `dimensions` — `POST /api/demo/annotation/credits`
 - Per-annotation budget scope targeting (`workspace`/`app` override) — `POST /api/demo/annotation/budget-targeting`

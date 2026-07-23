@@ -6,12 +6,12 @@ description: "Expose Cycles runtime tools — decide, reserve, commit, release, 
 # Integrating Cycles with MCP
 
 ::: tip Put budget checks in the execution path
-For MCP tool handlers, read [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) for a TypeScript reserve-commit wrapper. On Claude Code, [Cycles Budget Guard](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools at the harness layer instead of relying on the model to cooperate.
+For MCP tool handlers, read [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) for a TypeScript reserve-commit wrapper. On Claude Code, [Cycles Budget Guard for Claude Code](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools at the harness layer instead of relying on the model to cooperate.
 :::
 
 The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is the standard way AI hosts discover and call tools. The Cycles MCP Server exposes Cycles runtime authority as MCP tools, so MCP-compatible agents (Claude Desktop, Claude Code, Cursor, Windsurf, custom agents) can call `decide`, `reserve`, `commit`, `release`, and balance tools without an SDK integration.
 
-This gives agents a standard way to participate in Cycles workflows. **For hard production enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require `reserve` or `decide` before the costly or risky action fires.** The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
+This gives agents a standard way to participate in Cycles workflows. **For hard budget enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require a successful live `reserve` before the costly action fires.** `decide` is a non-locking preflight whose result the application must apply. The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
 
 This guide covers the integration patterns, resources, prompts, and transport options available through the MCP server.
 
@@ -112,7 +112,7 @@ If the decision is `ALLOW`, proceed with a full `cycles_reserve`. If it is `ALLO
 
 ## Pattern 3: Graceful degradation
 
-When budget is running low, `cycles_reserve` may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell the agent how to constrain the operation:
+When the deepest matching budget has caps configured, `cycles_reserve` can return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. This is configuration-driven; it is not an automatic low-balance transition. Caps tell the caller how to constrain the operation:
 
 ```json
 {
@@ -161,7 +161,7 @@ For operations that may exceed the default 60-second TTL, use `cycles_extend` as
 }
 ```
 
-**Commit when done.** If the agent crashes, the reservation expires automatically and the budget is returned to the pool.
+**Commit when done.** If the agent crashes, TTL expiry can recover an abandoned hold, but it is not accurate settlement when execution may have started. Reconcile the outcome and commit the best-known actual usage. If the outcome is ambiguous, do not release the reservation merely to restore budget.
 
 See [TTL, Grace Period, and Extend](/protocol/reservation-ttl-grace-period-and-extend-in-cycles) for the full TTL model.
 
@@ -218,7 +218,7 @@ The MCP server exposes 9 tools:
 | `cycles_decide` | Lightweight budget check without creating a reservation |
 | `cycles_create_event` | Record usage directly without a reservation (post-hoc metering) |
 | `cycles_check_balance` | Query current budget balance for a tenant/scope |
-| `cycles_list_reservations` | List active reservations with optional filters |
+| `cycles_list_reservations` | List reservations with optional status and subject filters |
 | `cycles_get_reservation` | Get details of a specific reservation by ID |
 
 ## Resources
@@ -275,21 +275,25 @@ Recommends scope hierarchy, budget limits, units, TTL settings, and degradation 
 
 The Cycles MCP server supports two transports:
 
-- **STDIO** *(default)* — the AI client launches the server as a subprocess via `npx`. One server per developer, per machine. This is what every per-client quickstart uses ([Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf)).
+- **STDIO** *(default)* — the AI client launches a local server subprocess. The recommended [Claude Desktop](/quickstart/mcp-claude-desktop) path installs the bundled `.mcpb` extension; manual Desktop configuration and the [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), and [Windsurf](/quickstart/mcp-windsurf) quickstarts launch the npm package with `npx`.
 - **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; the older standalone HTTP+SSE transport is not implemented. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
 
 Quick HTTP start:
 
 ```bash
+HOST=127.0.0.1 \
+MCP_HTTP_AUTH_TOKEN='replace-with-a-long-random-secret' \
 npx @runcycles/mcp-server --transport http
 ```
+
+This keeps the listener on the local machine and requires a bearer token for `/mcp`. The server does not currently validate the HTTP `Origin` header, so place remote deployments behind a trusted reverse proxy that validates origins, terminates TLS, and applies authorization.
 
 The server starts on port 3000 (configurable via `PORT`) with:
 
 - `GET /health` — health check (`{"status": "ok", "version": "..."}`)
 - `POST /mcp` — MCP Streamable HTTP endpoint
 - `GET /mcp` — Streamable HTTP SSE stream (server-to-client notifications)
-- `DELETE /mcp` — part of the Streamable HTTP surface; no-op (the server is stateless)
+- `DELETE /mcp` — requests Streamable HTTP transport termination; authenticate and restrict it like the other `/mcp` methods
 
 For the full decision tree, docker-compose example, and auth/scope behavior, see **[Running the MCP server over Streamable HTTP / SSE](/how-to/running-the-mcp-server-over-http)**.
 
@@ -300,8 +304,8 @@ Errors from live mutating calls are returned as MCP tool errors containing the C
 | Error Code | Meaning | Recommended Action |
 |---|---|---|
 | `BUDGET_EXCEEDED` | Not enough budget | Degrade to cheaper model or stop |
-| `RESERVATION_EXPIRED` | TTL elapsed before commit | Re-reserve if work is still needed |
-| `RESERVATION_FINALIZED` | Already committed or released | No action needed |
+| `RESERVATION_EXPIRED` | TTL elapsed before commit | Inspect the outcome and reconcile any usage already incurred; re-reserve only for new work |
+| `RESERVATION_FINALIZED` | Already committed or released | Read the reservation status and verify the expected settlement; record missing usage idempotently rather than assuming it was charged |
 | `DEBT_OUTSTANDING` | Scope has unpaid debt (no overdraft limit) | Wait for admin to fund the budget or configure an overdraft limit |
 | `OVERDRAFT_LIMIT_EXCEEDED` | Over-limit state | Wait for admin to reconcile |
 

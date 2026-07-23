@@ -65,7 +65,7 @@ A gateway can decide whether a tool is reachable. It does not automatically know
 
 The distinction is operational. It changes incident outcomes.
 
-If an agent is authorized to call `send_email`, a gateway lets the call through. Runtime authority can still DENY the 201st email because the `toolset:email` [RISK_POINTS](/glossary#risk-points) budget is exhausted. If an agent is authorized to call an expensive model, a gateway lets the call through. Runtime authority can still return ALLOW_WITH_CAPS and force a cheaper model or lower token cap because the run is close to its budget.
+If an agent is authorized to call `send_email`, a gateway lets the call through. A mandatory live reservation can still reject the 201st email because the caller-assigned `toolset:email` [RISK_POINTS](/glossary#risk-points) budget is exhausted. If an agent is authorized to call an expensive model, a successful reservation can return `ALLOW_WITH_CAPS`; the caller must apply a cheaper model or lower token cap before execution.
 
 Authorization answers whether access exists. Authority answers whether [exposure](/glossary#exposure) remains bounded.
 
@@ -89,7 +89,7 @@ That is the gap [MCP Tool Poisoning Has an 84% Success Rate](/blog/mcp-tool-pois
 
 ## The Two-Layer Pattern
 
-A safer architecture composes both layers:
+A safer architecture composes both layers. The handler-side implementation is shown in [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution):
 
 ```text
 Agent proposes tool call
@@ -104,11 +104,11 @@ That produces four useful outcomes:
 | Gateway decision | Authority decision | Outcome |
 |---|---|---|
 | DENY | Not evaluated | Unknown or forbidden tool is blocked before runtime authority |
-| ALLOW | DENY | Approved tool blocked because exposure is exhausted |
+| ALLOW | DENY from preflight, or live budget error | Approved tool blocked because exposure is exhausted |
 | ALLOW | ALLOW_WITH_CAPS | Tool executes with constraints |
 | ALLOW | ALLOW | Tool executes and actual usage is committed |
 
-The two layers should not be collapsed. A gateway without authority is a pass/fail access system. Runtime authority without tool connectivity control has to trust that the tool inventory is already sane. Together, they form a more complete control plane.
+The two layers should not be collapsed. A gateway without authority is a pass/fail access system. Runtime authority without tool connectivity control has to trust that the tool inventory is already sane. [Runtime authorization and runtime authority](/concepts/runtime-authority-vs-runtime-authorization) answer different questions; together, they form a more complete control plane.
 
 ## Where Cycles Fits
 
@@ -119,14 +119,19 @@ For MCP-backed agents, a Cycles-style runtime authority call should include:
 | Field | Example |
 |---|---|
 | Tenant | `acme` |
-| Scope | `tenant:acme/workflow:support/run:4821` |
+| Workspace | `production` |
+| App | `support-platform` |
+| Workflow | `support` |
 | Agent | `support-refund-agent` |
 | Toolset | `email`, `refund`, `search`, `deploy` |
+| Optional run context | `subject.dimensions.run: "4821"` |
 | Estimate | `$0.03`, `10 RISK_POINTS`, or token estimate |
 | Action metadata | tool name, operation kind, argument class |
 | [Idempotency key](/glossary#idempotency-key) | Stable key for retries |
 
-The server responds with ALLOW, ALLOW_WITH_CAPS, or DENY. If execution proceeds, the caller commits actual usage. If the action is skipped or fails before execution, the caller releases unused budget.
+The standard subject hierarchy is described in [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles). `run` is not a standard subject field; it can be carried in custom `dimensions`, but a v0 deployment may ignore custom dimensions for budget decisions unless it explicitly supports them.
+
+A successful live reservation returns `ALLOW` or `ALLOW_WITH_CAPS`; insufficient budget is normally an error such as `409 BUDGET_EXCEEDED`. `DENY` is used by `decide` and dry-run flows. If execution starts, the caller commits best-known actual usage, including partial failures. It releases only if the action never starts or demonstrably consumes zero usage.
 
 That lifecycle gives operations something a gateway alone cannot: a ledger-backed answer to "how much exposure has this agent consumed, and why was the next action allowed?"
 
@@ -141,12 +146,12 @@ Use this split:
 | Hide unapproved tools | MCP gateway |
 | Detect known malicious tool descriptors | Scanner / gateway integration |
 | Cap per-run model spend | Runtime authority |
-| Limit high-risk tool calls | Runtime authority with RISK_POINTS |
+| Budget caller-assigned action exposure | Mandatory runtime boundary with RISK_POINTS |
 | Isolate tenant budgets | Runtime authority with scoped ledgers |
 | Prevent double-spend under concurrency | Runtime authority with atomic reservations |
 | Produce budget and risk audit evidence | Runtime authority event and ledger records |
 
-The operational mistake is buying the first four and assuming they imply the last five.
+The operational mistake is buying the first four and assuming they imply the last five. The standalone [Cycles MCP integration](/quickstart/getting-started-with-the-mcp-server) exposes budget tools, while hard limits require the gateway, handler, host hook, or service boundary to make the reservation unavoidable.
 
 They do not. They solve different layers.
 

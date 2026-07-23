@@ -3,10 +3,14 @@ title: "When Budget Runs Out: AI Agent Degradation Patterns"
 date: 2026-04-06
 author: Albert Mavashev
 tags: [engineering, best-practices, agents, production, action-control, costs, risk, budgets]
-description: "Your guardrails block an agent action. Now what? Five graceful degradation patterns for handling DENY and ALLOW_WITH_CAPS — from model fallback to inform-and-stop."
+description: "Handle rejected reservations and configured caps with five AI agent degradation patterns, from model fallback and read-only work to a graceful stop safely."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: AI budget degradation, graceful AI agent fallback, budget exceeded handling, ALLOW_WITH_CAPS, model downgrade, AI cost limits
 ---
 
 # When Budget Runs Out: AI Agent Degradation Patterns
@@ -55,7 +59,7 @@ The binary allow/deny model forces hard stops. The three-way model gives agents 
 
 **When to use:** Budget is running low but the task can still be completed with a cheaper model.
 
-The simplest degradation path — and the one with the most existing framework support. LangChain's [fallback middleware](https://docs.langchain.com/oss/python/langchain/middleware/built-in) provides built-in model fallback components for this. When the agent receives ALLOW_WITH_CAPS or detects that remaining budget is thin, it switches from a high-capability model to a cheaper one.
+The simplest degradation path — and the one with the most existing framework support. LangChain's [fallback middleware](https://docs.langchain.com/oss/python/langchain/middleware/built-in) provides built-in model fallback components for this. When the agent receives operator-configured `ALLOW_WITH_CAPS`, or when separate balance monitoring detects that remaining budget is thin, the application can switch to a cheaper model.
 
 **The fallback chain:**
 
@@ -67,7 +71,7 @@ Claude Opus → Claude Sonnet → Claude Haiku
 **How it works in practice:**
 
 1. Agent requests a reservation for the next LLM call
-2. Enforcement returns ALLOW_WITH_CAPS with a reduced budget ceiling
+2. The matched budget returns its configured `ALLOW_WITH_CAPS` constraint
 3. Agent checks whether the preferred model fits within the cap
 4. If not, it walks down the fallback chain until it finds a model that fits
 5. If no model fits, it falls through to Pattern 4 or 5
@@ -86,18 +90,18 @@ Claude Opus → Claude Sonnet → Claude Haiku
 
 ## Pattern 2: Capability Narrowing
 
-**When to use:** The agent has multiple tools, and enforcement progressively restricts which ones it can use. **This is the primary pattern for risk-driven enforcement** — it's triggered by RISK_POINTS consumption, not just dollar spend.
+**When to use:** The agent has multiple tools and the application can route phases through progressively stricter configured policies. `RISK_POINTS` consumption can inform that application decision, but the current server does not switch cap tiers automatically.
 
-This is the [progressive capability narrowing](/blog/ai-agent-action-control-hard-limits-side-effects) pattern. As the agent consumes its [RISK_POINTS budget](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) — where high-blast-radius actions like `send_email` (20 points) or `deploy` (50 points) cost far more than read-only operations — the enforcement layer returns ALLOW_WITH_CAPS with increasingly restrictive `tool_denylist` or `tool_allowlist` constraints.
+This is the [progressive capability narrowing](/blog/ai-agent-action-control-hard-limits-side-effects) pattern. An application can assign higher `RISK_POINTS` estimates to high-blast-radius actions and route later workflow phases through budgets with stricter `tool_denylist` or `tool_allowlist` caps. The current server returns caps from the deepest matching configured budget; it does not make them increasingly restrictive as points are consumed.
 
 **Example policy progression:**
 
-| Budget consumed | Decision | Caps | Agent can still... |
+| Application-selected phase | Decision | Configured caps | Agent can still... |
 |---|---|---|---|
-| 0-50% | ALLOW | — | Full tool access |
-| 50-80% | ALLOW_WITH_CAPS | `tool_denylist: [send_email, deploy, delete_record]` | Read, search, generate, write drafts |
-| 80-100% | ALLOW_WITH_CAPS | `tool_allowlist: [search, read_file, summarize]` | Read-only operations |
-| 100% | DENY | — | Must stop or inform user |
+| Normal | ALLOW | — | Full tool access |
+| Restricted | ALLOW_WITH_CAPS | `tool_denylist: [send_email, deploy, delete_record]` | Read, search, generate, write drafts |
+| Read-only | ALLOW_WITH_CAPS | `tool_allowlist: [search, read_file, summarize]` | Read-only operations |
+| Insufficient budget | Live reservation error | — | Must stop or inform user |
 
 **What the agent does at each stage:**
 - **Full access:** Normal operation
@@ -157,7 +161,7 @@ The worst user experience isn't a DENY at the start — it's a DENY in the middl
 **How it works:**
 
 1. Agent is executing a multi-step task (e.g., reviewing 10 files, processing 50 records)
-2. Mid-task, a reservation returns DENY or ALLOW_WITH_CAPS with `max_steps_remaining: 1`
+2. Mid-task, a live reservation is rejected for insufficient budget, or a matched configured policy returns `ALLOW_WITH_CAPS` with `max_steps_remaining: 1`
 3. Agent uses its final allowed step to:
    - Save intermediate results (drafts, partial analyses, processed records)
    - Generate a summary of work completed vs. work remaining

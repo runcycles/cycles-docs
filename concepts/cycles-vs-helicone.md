@@ -100,7 +100,7 @@ Request flow:
 
 **Concrete integration scenario:** Helicone's cache deduplicates repeated requests at zero cost — this reduces the total number of actions that even reach Cycles. For uncached requests, Cycles enforces budget authority. Meanwhile, Helicone's per-session cost tracking lets you correlate Cycles' `reservation_id` with trace data for unified debugging. Helicone reduces what you spend. Cycles limits what you're allowed to spend. Together, they form both the optimization and the enforcement layer.
 
-**Another scenario:** Helicone's cost alert fires at 80% of a soft threshold — your team sees the Slack notification. Cycles' budget enforcement fires at 100% — the agent gets ALLOW_WITH_CAPS or DENY. The alert gives you time to intervene. The enforcement guarantees the budget holds even if you don't.
+**Another scenario:** Helicone's cost alert fires at 80% of a soft threshold — your team sees the Slack notification. A Cycles live reservation is rejected when sufficient budget is unavailable. `ALLOW_WITH_CAPS` is a separate, operator-configured accepted outcome, not the automatic 100% response. The alert gives you time to intervene; the mandatory reservation boundary prevents the next estimate from being accepted beyond available budget.
 
 ## What Cycles does not do
 

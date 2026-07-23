@@ -90,11 +90,11 @@ For an enforcement layer to do useful work on a click, it needs the same informa
 | Modifier inputs | What was typed before the click, what flag is set | Just typed `1000` into "refund amount" |
 | Session history | What the agent has already done in this session | 800 prior `Edit → Save` cycles |
 
-A [runtime authority](/glossary#runtime-authority) decision for a single click can use any subset of these. The simpler the agent stack, the simpler the feature vector. Browser-Use, which produces DOM-aware actions, can hand the gate a labeled target. A pixel-only CUA agent has to fall back on URL pattern, intent text, and coordinate region.
+A host-side [runtime authorization](/concepts/runtime-authority-vs-runtime-authorization) policy for a single click can use any subset of these. The simpler the agent stack, the simpler the feature vector. Browser-Use, which produces DOM-aware actions, can hand the gate a labeled target. A pixel-only CUA agent has to fall back on URL pattern, intent text, and coordinate region. Cycles can separately reserve the caller-assigned exposure, but the current server does not inspect these click features.
 
-The decision shape is unchanged from every other action class: `ALLOW`, `ALLOW_WITH_CAPS`, `DENY`, with a `reason_code` on deny. What changes is what the rule body inspects.
+The composed gate has two outputs: the host's authorization result for the click features, and Cycles' scoped budget result. A Cycles preflight can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`; a live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error. The host must enforce both layers before emitting the click.
 
-A rule that says *"never click an element whose ARIA label contains 'delete' on a URL matching `admin.*/customers/.*/edit`, in a production tenant, without an `ALLOW_WITH_CAPS` carrying `requires_human_approval: true`"* is exactly the kind of rule a screen-acting agent needs. It is also the kind of rule the existing tool-name schedule cannot express, because there is no `delete_customer` tool to scope.
+A host rule that says *"never click an element whose ARIA label contains 'delete' on a URL matching `admin.*/customers/.*/edit`, in a production tenant, without human approval"* is exactly the kind of rule a screen-acting agent needs. It is also the kind of rule the current Cycles cap schema cannot express, because it has no `requires_human_approval` field and there may be no `delete_customer` tool to scope.
 
 ## A Target-Intent Risk Schedule
 
@@ -123,16 +123,16 @@ For pixel agents that cannot reliably extract the DOM target, the schedule degra
 The [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) applies to clicks the same way it applies to tool calls and merge buttons. The shape:
 
 1. Before the agent issues the click (or `type`), it submits a proposal — the proposed target, the intent text, the URL pattern, the session identity, and any optional features the agent harness supports (DOM crop, screenshot crop).
-2. The runtime evaluates the rule body and reserves RISK_POINTS sized by tier.
-3. The runtime returns `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. Caps for click actions can include:
-   - `requires_human_approval: true` for any click that matches a destructive label pattern on a production URL
-   - `requires_fresh_screenshot: true` — the agent must take a new screenshot and re-classify before issuing the click, blocking the A/B-shift scenario in the opener
-   - `max_clicks_remaining` per session for a given site context
-   - `cross_tenant_navigation: deny` for any click that would change the tenant context of the session
+2. The host evaluates its click rules, assigns `RISK_POINTS` by tier, and makes a live Cycles reservation mandatory.
+3. The host combines the Cycles budget result with application rules such as:
+   - require human approval for a destructive label pattern on a production URL
+   - require a fresh screenshot and re-classification before issuing the click, blocking the A/B-shift scenario in the opener
+   - limit remaining clicks per session for a given site context
+   - deny a click that would change the tenant context of the session
 4. The agent harness honors the decision before the keyboard or mouse event leaves the process.
 5. The [reservation](/glossary#reservation) is committed after the click is observed to have taken effect, or released if the click did not register.
 
-The `requires_fresh_screenshot` cap is the screen-specific equivalent of the per-session-cumulative-authority caps used in the [merge post](/blog/when-coding-agents-press-merge): for some action classes, the agent's most recent observation is *itself* the load-bearing input, and a runtime check can require that observation to be fresh. This closes the opener scenario directly. The agent saw "Save" at (840, 612) nine seconds ago; if the click is gated by `requires_fresh_screenshot: true`, the agent has to take a new screenshot, re-classify the target, and re-propose. The A/B button-swap is caught at the gate, not at the click.
+A fresh-screenshot application rule is the screen-specific equivalent of the per-session cumulative-authority pattern used in the [merge post](/blog/when-coding-agents-press-merge): for some action classes, the agent's most recent observation is *itself* the load-bearing input, and a runtime check can require that observation to be fresh. This closes the opener scenario directly. The agent saw "Save" at (840, 612) nine seconds ago; if the host requires a new screenshot, the agent has to re-observe, re-classify the target, and re-propose. The A/B button-swap is caught at the gate, not at the click.
 
 ## Why Existing Controls Don't Cover Computer-Use
 
@@ -170,7 +170,7 @@ The same two-layer fix that emerged from the [PocketOS post-mortem](/blog/pocket
 **Agent-layer fixes (the click-side equivalent of runtime authority):**
 
 - A pre-action gate between the agent's intent to click and the click event leaving the harness, evaluating (target, intent, context) and returning a [three-way decision](/glossary#three-way-decision).
-- Per-session promotion-authority budgets denominated in [RISK_POINTS](/glossary#risk-points), capped well below a single high-blast click without `requires_human_approval`.
+- Per-session promotion-authority budgets denominated in [RISK_POINTS](/glossary#risk-points), with the host separately requiring human approval for high-blast clicks.
 - Fresh-screenshot requirements for any click whose target was classified more than N seconds ago, or after the agent has performed any intervening action.
 - Audit records of every click attempt — the proposed target, the runtime decision, the actual event — separate from the application's own logs.
 

@@ -1,11 +1,15 @@
 ---
-title: "OpenAI Agents SDK: Content Guardrails, No Action Control"
+title: "OpenAI Agents SDK Guardrails vs Action Control"
 date: 2026-03-30
 author: Albert Mavashev
 tags: [openai, agents, runtime-authority, governance, risk, actions, python, RunHooks]
 description: "OpenAI Agents SDK tool guardrails validate individual function tools. They aren't cross-tenant budget or risk authority — RunHooks is where that fits."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenAI Agents SDK guardrails, OpenAI RunHooks, AI agent action control, tool guardrails, runtime authority, Python agents
 ---
 
 # The OpenAI Agents SDK Has Guardrails for Content — But Nothing for Actions
@@ -64,7 +68,7 @@ This is the difference between runtime authority and observability. Observabilit
 
 The reserve-commit pattern makes this concrete:
 
-1. **Before the action:** Reserve budget or risk points. The [Cycles server](/glossary#cycles-server) checks the tenant's remaining balance and returns ALLOW or DENY.
+1. **Before the action:** Reserve budget or caller-assigned risk points. The [Cycles server](/glossary#cycles-server) checks the relevant scoped budgets; a live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error.
 2. **Execute the action:** Only if authorized. The [reservation](/glossary#reservation) holds the estimated cost so concurrent requests don't over-allocate.
 3. **After the action:** Commit usage and record token metrics from `response.usage` for observability.
 4. **On failure:** Release the reservation to return budget to the pool.

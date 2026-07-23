@@ -1,14 +1,18 @@
 ---
-title: "AI Agent Runtime Permissions: Control Actions Before Execution"
+title: "Runtime Permissions for AI Agent Actions"
 date: 2026-03-23
 author: Albert Mavashev
 tags: [runtime-authority, action-authority, action-control, agents, side-effects, permissions, engineering]
-description: "Agents don't just cost money — they take actions. Learn why runtime permissions are the missing layer for controlling what AI agents can do in production."
+description: "Compose application authorization with caller-assigned risk budgets to control AI agent side effects before protected tools execute in production today."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent runtime permissions, action control, RISK_POINTS, runtime authorization, pre-execution enforcement, tool permissions
 ---
 
-# AI Agent Runtime Permissions: Control Actions Before Execution
+# Runtime Permissions for AI Agent Actions
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
@@ -60,9 +64,9 @@ Teams already have controls. The problem is that none of them govern what an age
 | Guardrails | Output quality and safety | During or after generation | No — checks content, not authorization |
 | Rate limits | Request velocity | Per-request | No — controls throughput, not capability |
 | Observability | Visibility and audit | After execution | No — reports, does not enforce |
-| **Runtime permissions** | **Action authorization** | **Before each action** | **Yes** |
+| **Mandatory application boundary** | **Application authorization plus cumulative exposure checks** | **Before each protected action** | **Yes, when every path crosses it** |
 
-The gap is clear. No existing layer provides AI agent action control at the moment it matters — before execution. None of these controls make a pre-execution decision about whether a specific action should proceed given the current runtime context: how many actions have already been taken, which tools have already been used, and what the cumulative [exposure](/glossary#exposure) looks like right now.
+The gap appears when these controls are not composed at the execution boundary. Application authorization can decide whether a specific tool and argument set is permitted; a cumulative budget can separately decide whether the configured exposure remains available.
 
 ## Runtime permissions: the missing layer for AI agent action control
 
@@ -70,7 +74,7 @@ Runtime permissions are pre-execution decisions about whether an agent may invok
 
 This is different from static configuration. A static tool allowlist says "this agent can send emails" — a decision made at deploy time. A runtime permission says "this agent can send emails, but it has already sent 5 in this run, and its action budget for external writes is exhausted, so the next email is denied." The first is a capability declaration. The second is a live enforcement decision that adapts as the agent acts.
 
-Runtime permissions use the same [three-way decision](/glossary#three-way-decision) model as budget enforcement:
+An application can combine its permission decision with Cycles' [three-way budget decision](/glossary#three-way-decision):
 
 - **ALLOW** — the action is within limits; proceed normally
 - **ALLOW_WITH_CAPS** — the action is allowed but should be constrained (disable certain tools, limit remaining steps)
@@ -85,7 +89,7 @@ Runtime permissions can control which tools are available to an agent at any poi
 - **`tool_allowlist`** — only these tools may be used (everything else is implicitly denied)
 - **`tool_denylist`** — these specific tools are blocked (everything else is allowed)
 
-This is not static configuration. The allowlist or denylist is computed at decision time based on remaining budget, consumed risk points, and configured policy. An agent that starts with full tool access may lose access to high-risk tools mid-run — not because the code changed, but because the runtime state changed.
+In the current Cycles server, the allowlist or denylist comes from the deepest matching budget's configured caps. It is not computed from remaining balance or consumed risk points. A host can implement dynamic narrowing by selecting a stricter configured policy or scope, but the host must enforce the returned tool list.
 
 ### RISK_POINTS: a non-monetary unit for action risk
 
@@ -109,24 +113,24 @@ The specific point values are team-defined. The value is not in the absolute num
 
 ## Progressive capability narrowing
 
-As an agent consumes its action budget, its capabilities should shrink. This is not a crash — it is a controlled degradation where the most dangerous tools are removed first.
+An application may choose to shrink capabilities as a workflow progresses. This is a controlled-degradation policy layered on top of the budget ledger, not automatic current-server behavior.
 
-| Risk budget consumed | Decision | Effect |
-|:-------------------:|----------|--------|
-| 0–50% | ALLOW | Full tool access — reads, writes, external calls, mutations |
-| 50–80% | ALLOW_WITH_CAPS | High-blast-radius actions disabled — no email, no deploy |
-| 80–100% | ALLOW_WITH_CAPS | Read-only mode — search and summarize only |
-| 100% | DENY | No further actions permitted |
+| Application-selected phase | Decision | Effect |
+|---|---|---|
+| Normal | ALLOW | Full tool access — reads, writes, external calls, mutations |
+| Restricted | ALLOW_WITH_CAPS | Configured high-blast-radius tools disabled |
+| Read-only | ALLOW_WITH_CAPS | Configured allowlist permits search and summarize only |
+| Insufficient budget | Live reservation error | No further metered actions permitted |
 
-Early in a run, the agent has full access: it can read data, update records, send emails, and trigger deploys. As it consumes risk points, external writes are disabled first — the agent can still read and reason, but it cannot take actions with external consequences. Near the end of its budget, only read-only tools remain.
+The application can start in a normal policy phase, then route later work through restricted or read-only budget scopes. It decides when to change phases; Cycles returns the caps configured for the matched scope.
 
 The agent does not crash. It does not throw an unhandled exception. It continues doing useful work within progressively tighter boundaries. A support agent that runs out of its email budget can still query the knowledge base, update internal notes, and prepare a draft for human review. It just cannot send the email.
 
-This is the "disable" degradation strategy applied to actions rather than cost. The same agent, the same code, the same tools — but the runtime determines which tools are reachable at each step.
+This is the "disable" degradation strategy applied to actions rather than cost. The host or handler determines which tools are reachable and can use Cycles caps as policy input.
 
 ## Scoped action authority
 
-Action permissions are hierarchical. The Cycles scope hierarchy — [tenant](/glossary#tenant), workspace, app, workflow, agent, toolset — applies to [action authority](/glossary#action-authority) the same way it applies to [budget authority](/glossary#budget-authority).
+Caller-assigned action-exposure budgets can use the Cycles scope hierarchy — [tenant](/glossary#tenant), workspace, app, workflow, agent, and toolset. Application permissions remain a separate policy and enforcement concern.
 
 ```
 tenant:acme
@@ -147,7 +151,7 @@ The scoping model enables three patterns that flat permission systems cannot:
 
 **Scope isolation.** One agent's actions do not erode another agent's permissions. If Agent A exhausts its email budget, Agent B's email budget is unaffected. Each scope path has its own independent ledger.
 
-The operational model is straightforward: **approving an action = adding a budget; revoking an action = removing a budget**. No code changes. No redeployment. No new API keys.
+Provisioning or removing a `RISK_POINTS` budget changes whether that exposure can be reserved. It does not itself grant or revoke application permission; the mandatory handler still owns authorization and must map each action to the intended subject and estimate.
 
 ## Runtime vs. design-time vs. post-hoc
 
@@ -161,7 +165,7 @@ The three control points sit at different stages of the agent lifecycle:
 
 Design-time controls answer "can this agent ever send emails?" Runtime controls answer "should this agent send this email right now, given what it has already done?" Post-hoc controls answer "how many emails did it send?"
 
-Only runtime controls can distinguish the agent's 1st email from its 50th. Only runtime controls can adapt as the agent acts. And only runtime controls can make a decision that changes based on cumulative exposure rather than static policy.
+A cumulative runtime budget can distinguish the agent's first metered email from its fiftieth. Application authorization and host tool controls still decide whether either email is permitted in the first place.
 
 An agent that was correctly configured at design time — with the right tools, the right prompt, the right model — can still produce a catastrophic outcome at runtime when conditions diverge from expectations. This is why AI agent permissions must be enforced at runtime, not just at deploy time. The opening scenario is exactly this: a correctly configured agent operating on unexpected input, with no [runtime authority](/glossary#runtime-authority) to constrain its actions when they became inappropriate.
 
@@ -184,7 +188,7 @@ def send_customer_email(case_id, to, subject, body):
     return _send_email(case_id, to, subject, body)
 ```
 
-The 6th email attempt hits 120 RISK_POINTS against a 100-point budget. The reservation returns DENY. The email function never executes.
+The 6th email attempt would take the total to 120 RISK_POINTS against a 100-point budget. Its live reservation fails with a budget-exceeded error, and the decorator never executes the email function.
 
 ### Pattern 2: Read-only fallback
 
@@ -204,7 +208,7 @@ The agent still produces useful output — a prepared draft and an escalation �
 
 ### Pattern 3: Approval gates
 
-A DENY on a high-risk action triggers a human-in-the-loop approval flow instead of a hard stop.
+A preflight `DENY` or a live reservation error can trigger a human-in-the-loop approval flow instead of a hard stop. The application implements that escalation and any separate approval authorization.
 
 ```python
 try:
@@ -239,9 +243,9 @@ Same agent code, same deployment. The runtime determines what each tenant's agen
 
 ## What this looks like with Cycles
 
-Cycles enforces action authority through the same [reserve-commit protocol](/protocol/how-reserve-commit-works-in-cycles) used for budget authority. RISK_POINTS is a first-class unit alongside [USD_MICROCENTS](/glossary#usd-microcents) and TOKENS. The reserve-commit lifecycle works identically:
+Cycles can enforce a caller-assigned action-exposure budget through the same [reserve-commit protocol](/protocol/how-reserve-commit-works-in-cycles) used for spend. `RISK_POINTS` is a first-class unit alongside [USD_MICROCENTS](/glossary#usd-microcents) and `TOKENS`. The application classifies and authorizes the action; Cycles accounts for the submitted estimate:
 
-1. **Reserve** — before the tool call, request permission by reserving RISK_POINTS
+1. **Reserve** — after application authorization and before the tool call, reserve caller-assigned `RISK_POINTS`
 2. **Execute** — only if the reservation succeeds (ALLOW or ALLOW_WITH_CAPS)
 3. **Commit** — after execution, confirm the actual risk consumed
 4. **Release** — if the action was skipped, release the reservation
@@ -258,7 +262,7 @@ def send_customer_email(case_id, to, subject, body):
     return _send_email(case_id, to, subject, body)
 ```
 
-The same protocol, the same infrastructure, the same scope hierarchy. Action authority is not a separate system — it is a different unit applied to the same enforcement layer. Teams that already use Cycles for budget authority can add action authority by creating RISK_POINTS budgets for their toolsets. No additional SDK. No new integration.
+The same protocol and scope hierarchy can account for action exposure, but a `RISK_POINTS` budget is not a complete permission system. Teams can reuse an existing Cycles SDK integration while adding application-side classification, authorization, and mandatory tool dispatch checks.
 
 For agent frameworks (LangGraph, CrewAI, custom loops) and coding agents (Claude Code, Cursor, Windsurf), action authority works through the same integration points — Python decorators, TypeScript higher-order functions, or MCP tool configuration. See [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects) for the full taxonomy and implementation details.
 

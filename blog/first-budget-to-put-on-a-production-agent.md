@@ -82,7 +82,7 @@ Use it when:
 - One bad input can trigger a long chain.
 - The biggest fear is "this one run went sideways."
 
-The budget story is also simple: every execution gets a ceiling. Each step reserves from that run budget. If the run burns through its allowance, the next step is capped or denied.
+The budget story is also simple: every execution gets a ceiling. Each step reserves from that run budget. If the run burns through its allowance, the next live reservation fails. If the deepest matching budget has operator-configured caps, the caller may receive `ALLOW_WITH_CAPS` before exhaustion and must apply those caps.
 
 Run budgets are often the best first operational safety control. They contain the blast radius of one bad execution even when the tenant still has monthly budget remaining.
 

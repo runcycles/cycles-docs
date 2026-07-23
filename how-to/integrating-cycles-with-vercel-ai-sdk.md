@@ -145,7 +145,7 @@ export async function POST(req: Request) {
 
 ## Respecting budget caps
 
-When the budget is running low, Cycles may return `ALLOW_WITH_CAPS` with a suggested `max_tokens` limit. Respect it by capping the model's output:
+When the deepest matching budget has `max_tokens` configured, Cycles can return `ALLOW_WITH_CAPS`. This is not an automatic low-balance transition. Respect the returned value by capping the model's output:
 
 ```typescript
 let handle = await reserveForStream({ ... });

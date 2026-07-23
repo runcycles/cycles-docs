@@ -121,7 +121,7 @@ When a tenant is approaching their budget limit, the right response might not be
 
 This is graceful degradation. It keeps the system running at reduced capability instead of failing hard.
 
-Cycles supports this through its three-way decision model. When budget is low, the system returns ALLOW_WITH_CAPS instead of DENY. The caller receives structured guidance on how to proceed with reduced resources.
+Cycles supports this through its three-way decision model. When the deepest matching budget has caps configured, the system returns `ALLOW_WITH_CAPS`. The caller receives structured constraints and must apply them; the current server does not add or tighten caps automatically as the balance falls.
 
 Implementing this on top of a custom counter requires the counter to return not just "yes" or "no" but also "how much is left" and "what constraints apply." That turns a simple counter into a policy engine. Most teams do not make that investment.
 

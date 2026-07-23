@@ -42,7 +42,7 @@ Caps provide a middle ground.
 
 ## What caps are
 
-Caps are server-imposed constraints that the client should respect when the decision is ALLOW_WITH_CAPS.
+Caps are operator-configured constraints that the server returns from the deepest matching budget when the decision is ALLOW_WITH_CAPS.
 
 The protocol defines five cap fields:
 
@@ -91,14 +91,7 @@ The client is responsible for respecting caps. The server does not enforce them 
 
 ## When caps appear
 
-The server may return caps based on:
-
-- budget pressure at one or more scopes
-- policy rules that apply to the action class
-- operator-configured constraints
-- approaching budget limits that do not yet warrant denial
-
-For example, a scope may have enough budget for the reservation, but the server may still want to signal: "budget is getting tight — reduce token usage" or "avoid expensive tools for the rest of this run."
+In the current server, caps come from the deepest matching budget that has an operator-configured `caps` object. Their presence is configuration-driven, not an automatic response to utilization or remaining balance. A deployment that wants progressive narrowing must change which configured policy or scope applies; the base server does not tighten caps as spend rises.
 
 ## Using caps in practice
 
@@ -118,7 +111,7 @@ This creates a bounded wind-down instead of an abrupt stop.
 
 When `tool_allowlist` or `tool_denylist` is returned, the agent should filter its available tools accordingly.
 
-This narrows the action surface under budget pressure without eliminating all capability.
+This narrows the action surface when the configured policy calls for it without eliminating all capability.
 
 ### Pacing
 
@@ -171,9 +164,9 @@ If the client ignores `max_tokens` and generates more output, the commit will st
 But respecting caps is important for two reasons:
 
 1. It keeps budget consumption aligned with server expectations
-2. It prevents the system from escalating into harder denials on subsequent requests
+2. Lower-cost execution can preserve remaining budget and delay a later hard denial
 
-Caps are a signal to self-regulate before enforcement becomes necessary.
+Caps are configuration supplied with an accepted decision. They are only effective when the caller or a mandatory host boundary applies them.
 
 ## Tool list precedence
 
@@ -207,9 +200,7 @@ Caps provide server-driven guidance that lets clients:
 - restrict tool usage
 - pace execution
 
-This creates a smoother degradation curve between full execution and hard denial.
-
-That is how budget pressure becomes a signal for adjustment, not just a gate.
+This supports a configured degradation path between full execution and hard denial.
 
 ## Next steps
 

@@ -15,36 +15,37 @@ Each Cycles SDK offers multiple integration patterns. This guide helps you pick 
 
 | Pattern | Languages | Best for | Streaming | Auto-heartbeat | Auto-commit |
 |---|---|---|---|---|---|
-| **MCP Server** | Any (agent-native) | MCP-compatible AI agents | — | — | — |
+| **MCP Server** | Any (agent-native) | Cooperative budget-tool exposure in MCP hosts | — | — | — |
 | **Agent framework plugin** | Python, TypeScript | Agent SDKs with lifecycle hooks | — | Yes | Yes |
 | **Decorator / HOF** | Python `@cycles`, TS `withCycles`, Java `@Cycles` | Simple function calls | No | Yes | Yes |
 | **Streaming adapter** | Python `stream_reservation`, TS `reserveForStream` | Streaming responses | Yes | Yes | Manual |
 | **Middleware** | Express, FastAPI | Per-request budget in web apps | Both | Depends | Manual |
 | **Programmatic client** | All languages | Full control, complex flows | Both | Manual | Manual |
 
-## Pattern 0: MCP Server (zero-code)
+## Pattern 0: MCP Server (zero-code tool exposure)
 
-If your agent runs in an MCP-compatible host — Claude Desktop, Claude Code, Cursor, or Windsurf — you don't need any SDK integration. Add the Cycles MCP Server to your agent's tool configuration and the agent gets direct access to budget tools via MCP discovery.
+If your agent runs in an MCP-compatible host — Claude Desktop, Claude Code, Cursor, or Windsurf — you can expose Cycles tools without an SDK integration. This is cooperative: the standalone MCP server does not automatically wrap or block the host's other tools.
 
 ```bash
 # Claude Code
-claude mcp add cycles -- npx -y @runcycles/mcp-server
-
-# Set required environment variables
-export CYCLES_API_KEY=cyc_live_...
-export CYCLES_BASE_URL=http://localhost:7878
+claude mcp add \
+  --transport stdio \
+  --env CYCLES_API_KEY=cyc_live_... \
+  --env CYCLES_BASE_URL=http://localhost:7878 \
+  cycles \
+  -- npx -y @runcycles/mcp-server
 ```
 
-The agent calls `cycles_reserve`, `cycles_commit`, and other tools as part of its reasoning. No application code wraps the LLM call.
+The agent may call `cycles_reserve`, `cycles_commit`, and other tools as part of its reasoning. No application code wraps the LLM call, so this alone is not a hard limit. Use **Cycles Budget Guard for Claude Code** or a mandatory handler, gateway, harness, or service boundary when the protected action must not bypass the reservation.
 
 **Use when:**
 - The agent host supports MCP
 - You want budget awareness with zero code changes
-- The agent should self-manage its own budget lifecycle
+- Cooperative, model-managed budget lifecycle is acceptable
 
 **Don't use when:**
 - You're building a non-agent application (web API, batch pipeline)
-- You need to wrap specific functions with budget governance in your own code
+- You need a hard limit but cannot add a mandatory host or application boundary
 
 See [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server) for setup instructions.
 

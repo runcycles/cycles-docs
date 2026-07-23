@@ -176,7 +176,7 @@ The goal is not to create hundreds of secrets for their own sake. The goal is to
 
 Agent credentials should encode the authority the agent actually needs: tenant, environment, and operation. A runtime worker should be able to ask for [budget authority](/glossary#budget-authority) and commit actual usage. It should not be able to rewrite the governance plane because that was convenient during development.
 
-Least-privilege API keys make runtime authority sharper. The server can already return ALLOW, ALLOW_WITH_CAPS, or DENY before execution. Scoped credentials make sure the caller asking for that decision is itself bounded before the request ever reaches the budget ledger.
+Least-privilege API keys make runtime authority sharper. Preflight `decide` and dry-run calls can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`; a live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error. Scoped credentials make sure the caller asking for that evaluation is itself bounded before the request ever reaches the budget ledger.
 
 ## Related reading
 

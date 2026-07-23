@@ -6,6 +6,10 @@ tags: [multi-tenant, budgets, architecture, costs]
 description: "One customer's runaway agent can degrade service for every tenant. Enforce per-tenant budgets, hierarchical limits, and scope-level isolation with Cycles."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: multi-tenant AI cost control, per-tenant budgets, tenant isolation, hierarchical budgets, AI SaaS budgets, runtime authority
 ---
 
 # Multi-Tenant AI Cost Control: Budgets and Isolation
@@ -142,7 +146,7 @@ Per-tenant budget enforcement, combined with quotas, delivers concrete operation
 | Pro | $500 | $10 | Degrade to cheaper model | Usage notice + overage option |
 | Enterprise | Custom | $25 | Degrade to cached results | Admin notification |
 
-Each copilot session runs within a per-session budget nested inside the monthly account budget. The [three-way decision model](/protocol/caps-and-the-three-way-decision-model-in-cycles) (ALLOW, ALLOW_WITH_CAPS, DENY) drives the degradation: as session budget runs low, the system returns ALLOW_WITH_CAPS to reduce token limits before hard-denying.
+Each copilot session runs within a per-session budget nested inside the monthly account budget. The [three-way decision model](/protocol/caps-and-the-three-way-decision-model-in-cycles) can carry operator-configured caps such as lower token limits through `ALLOW_WITH_CAPS`. The application must select and enforce that degradation policy; the current server does not tighten caps automatically as the session balance falls.
 
 **Agent platform with per-run ceilings.** A development tools company offers AI agent pipelines that customers configure and run. Each pipeline execution gets a per-run budget based on the pipeline type: code review at $5/run, deep analysis at $30/run, simple chat at $1/run. The tenant's monthly budget caps total spend across all runs. A customer running 200 code reviews in a month spends up to $1,000 — and no more, even if their agents loop.
 

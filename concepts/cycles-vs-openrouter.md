@@ -108,7 +108,7 @@ Request flow:
 | Credit management | OpenRouter |
 | Delegation attenuation for sub-agents | Cycles (pattern via hierarchical scopes) |
 
-**Concrete integration scenario:** OpenRouter provides your agents with access to 200+ models through a single API. Cycles decides whether each action should proceed based on the agent's remaining budget and risk profile. When Cycles returns ALLOW_WITH_CAPS (budget is running low), your application asks OpenRouter for a cheaper model variant. OpenRouter handles the routing; Cycles handles the authority. OpenRouter's per-key cap is the safety net; Cycles' reserve-commit is the precision control.
+**Concrete integration scenario:** OpenRouter provides access to many models through a single API. Cycles decides whether an instrumented action can reserve against the configured budget. If the deepest matching budget supplies `ALLOW_WITH_CAPS`, your application can map a returned cap to a cheaper OpenRouter model. OpenRouter handles routing; Cycles handles the budget reservation. The current Cycles server neither infers a risk profile nor adds caps automatically as the balance falls.
 
 **Another scenario:** OpenRouter guardrails restrict a key to only GPT-4o-mini and Claude Haiku (cheaper models). Cycles' RISK_POINTS budget independently restricts the same agent to 2 emails and 0 deploys per run. Model access (OpenRouter) and action access (Cycles) are enforced independently — both constraints must pass.
 

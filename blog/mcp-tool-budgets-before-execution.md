@@ -26,7 +26,7 @@ What MCP does not do is decide whether *this specific call*, right now, should s
 
 The first call is fine. The second is fine. The twelfth is the problem — the agent is in a retry loop, fan-out has multiplied the request count, the tenant's budget is gone, and the next `send_email` or `web_search` or `refund.issue` is about to fire anyway. Tracing tells you what happened. The dashboard updates after the fact. Neither stops the call.
 
-Cycles closes that loop with a `reserve → execute → commit` wrapper around every MCP tool. The wrapper asks before each call: *given everything this agent has already done, should this one still run?* If Cycles denies or rejects the reservation, the tool never executes. If the reservation is allowed, the tool runs and actual usage is committed back. If the tool throws, the reservation is released so the budget isn't double-charged.
+Cycles closes that loop with a `reserve → execute → settle` wrapper around every MCP tool. The wrapper asks before each call: *given everything this agent has already done, should this one still run?* If Cycles rejects the reservation, the tool never executes. If the reservation is allowed, the tool runs and best-known actual usage is committed, including usage from a partial failure. A reservation is released only when execution never starts or usage is demonstrably zero.
 
 This post shows the pattern, the policy it enforces, and the TypeScript code that implements it.
 
@@ -43,15 +43,15 @@ reserve(subject, action, estimate)  →  ALLOW | ALLOW_WITH_CAPS | error
   ↓ (if allowed, with caps applied)
 tool executes
   ↓
-commit(reservation_id, actual_usage)   on success
-release(reservation_id)                on failure
+commit(reservation_id, actual_usage)   after execution starts
+release(reservation_id)                only if skipped or zero usage
 ```
 
-`reserve` is the gate. It returns a reservation ID and a decision. For a non-dry-run reservation, insufficient budget is an HTTP error such as `409 BUDGET_EXCEEDED`; a successful response can be `ALLOW` or `ALLOW_WITH_CAPS`. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — usually less than the estimate. (Action-count quotas, once the v0.1.26 action-governance extensions ship in `cycles-server`, will be enforced at reservation time from the action kind, not at commit. The extension specs are published and SHOULD-level today, but not yet implemented in runcycles' servers — track the [changelog](/changelog) for the release.) `release` returns unused budget to the tenant when the tool throws or is cancelled.
+`reserve` is the gate. It returns a reservation ID and a decision. For a non-dry-run reservation, insufficient budget is an HTTP error such as `409 BUDGET_EXCEEDED`; a successful response can be `ALLOW` or `ALLOW_WITH_CAPS`. `commit` records what the tool actually consumed in the reserved unit — for example microcents, tokens, credits, or risk points — whether the tool succeeded or failed after consuming usage. `release` returns the reservation only when execution was skipped, cancelled before it began, or demonstrably consumed zero usage. [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles) covers the lifecycle and failure boundaries in detail.
 
 If you want a lower-overhead preflight that doesn't lock budget, swap `client.createReservation` for `client.decide` — similar decision shape, no reservation written. Use it for "should the agent even propose this tool?" checks; use `reserve` for hard enforcement before execution. The wrapper below uses `reserve` because the goal is to block calls that shouldn't happen, not to predict them.
 
-The MCP protocol and transport don't change. The wrapper sits between the MCP transport (STDIO, HTTP, whatever) and the tool's handler — only the handler code is wrapped. Every approved tool gets the same treatment: same `reserve` call shape, same metadata, same release-on-error behavior.
+The MCP protocol and transport don't change. The wrapper sits between the MCP transport (STDIO or HTTP) and the tool's handler — only the handler code is wrapped. Every approved tool gets the same `reserve` call shape, metadata, and explicit settlement based on whether execution started. Stable operation keys provide the retry behavior described in [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes).
 
 ## The policy this enforces
 
@@ -72,13 +72,14 @@ The action-kind slugs above (`message.email.send`, `web.search`, `code.exec.shel
 
 Stick with spend on day one. Pick one tenant, one workflow, one risky action kind, and one small spend budget. If you want run-level spend budgets, model the run as `subject.dimensions.run` and verify your Cycles deployment derives budget scope from that custom dimension; the base protocol requires custom dimensions to be accepted and round-tripped, but v0 implementations may ignore them for budget decisions. Once `cycles-server` ships the v0.1.26 enforcement, layer on a quota or allow-deny rule. See [Evaluate Cycles for multi-tenant AI agents](/how-to/evaluate-cycles-for-agent-saas) for the fit checklist and 15-minute local test.
 
-The wrapper code below stays the same regardless of which category you enforce — Cycles handles the policy resolution server-side. You pass the subject, action kind, tool name, run dimension, and estimate.
+The reserve and settlement wrapper can keep the same shape if the future governance categories ship, while policy resolution remains server-side. Today, use it with shipped budget units and caller-supplied context. The [MCP integration guide](/how-to/integrating-cycles-with-mcp) covers the cooperative standalone-server pattern and the separate hard-enforcement boundary.
 
 ## The TypeScript wrapper
 
-This is a complete, framework-neutral wrapper using the [`runcycles`](https://www.npmjs.com/package/runcycles) TypeScript client. Drop it around any MCP tool handler and the call is gated.
+This framework-neutral control-flow template uses the [`runcycles`](https://www.npmjs.com/package/runcycles) TypeScript client. The client intentionally returns raw wire responses, so the wrapper validates the fields it relies on. Supply a durable settlement store whose startup worker replays pending records; an in-memory queue is not sufficient across process crashes.
 
 ```typescript
+import { createHash } from 'node:crypto'
 import { CyclesClient, CyclesConfig, Unit } from 'runcycles'
 
 const client = new CyclesClient(new CyclesConfig({
@@ -109,41 +110,74 @@ export class DeniedByCyclesError extends Error {
   constructor(message: string) { super(message); this.name = 'DeniedByCyclesError' }
 }
 
+export class UnsettledReservationError extends Error {
+  constructor(message: string) { super(message); this.name = 'UnsettledReservationError' }
+}
+
 type CyclesDecision = {
   decision: 'ALLOW' | 'ALLOW_WITH_CAPS'
   caps?: Record<string, unknown>
 }
 
+type PendingSettlement = {
+  key: string
+  kind: 'hold' | 'commit' | 'release'
+  reservationId: string
+  subject: Record<string, unknown>
+  action: Record<string, unknown>
+  operationKey?: string
+  actualMicrocents?: number
+  reason?: string
+}
+
+// Implement this with a durable database or queue. On startup, replay commit
+// and release records with their original idempotency keys. Never convert an
+// ambiguous commit into a release.
+declare const settlementStore: {
+  put(record: PendingSettlement): Promise<void>
+  remove(key: string): Promise<void>
+}
+
+type ToolAttempt<T> =
+  | { status: 'succeeded'; result: T; actualMicrocents: number }
+  | { status: 'failed'; error: unknown; actualMicrocents: number }
+  | { status: 'skipped'; error: unknown }
+
 export async function gatedToolCall<T>(
   ctx: ToolContext,
-  execute: (cycles: CyclesDecision) => Promise<{ result: T; actualMicrocents: number }>,
+  execute: (cycles: CyclesDecision) => Promise<ToolAttempt<T>>,
 ): Promise<T> {
   // Stable idempotency key so a network retry hits the same reservation
   // and doesn't double-charge — but a legitimately different tool call
   // gets a distinct key. The toolCallId is what distinguishes the two:
   // pass the same ID across retries of one MCP call, a different ID for
   // the next call.
-  const idempotencyKey = [
-    ctx.tenantId,
-    ctx.runId,
-    ctx.toolCallId,
-    ctx.toolName,
-    ctx.actionKind,
-  ].join(':')
+  const idempotencyKey = `mcp_${createHash('sha256')
+    .update(JSON.stringify([
+      ctx.tenantId,
+      ctx.runId,
+      ctx.toolCallId,
+      ctx.toolName,
+      ctx.actionKind,
+    ]))
+    .digest('hex')}`
+
+  const subject = {
+    tenant: ctx.tenantId,
+    workspace: ctx.workspace,
+    app: ctx.app,
+    ...(ctx.workflow ? { workflow: ctx.workflow } : {}),
+    toolset: ctx.toolsetName,
+    // Run is not a standard subject field. Use dimensions.run only after
+    // verifying your Cycles deployment derives budget scope from it.
+    dimensions: { run: ctx.runId },
+  }
+  const action = { kind: ctx.actionKind, name: ctx.toolName }
 
   const response = await client.createReservation({
     idempotency_key: idempotencyKey,
-    subject: {
-      tenant: ctx.tenantId,
-      workspace: ctx.workspace,
-      app: ctx.app,
-      ...(ctx.workflow ? { workflow: ctx.workflow } : {}),
-      toolset: ctx.toolsetName,
-      // Run is not a standard subject field. Use dimensions.run only after
-      // verifying your Cycles deployment derives budget scope from it.
-      dimensions: { run: ctx.runId },
-    },
-    action: { kind: ctx.actionKind, name: ctx.toolName },
+    subject,
+    action,
     estimate: { unit: Unit.USD_MICROCENTS, amount: ctx.estimateMicrocents },
     ttl_ms: 60_000,
     metadata: {
@@ -165,32 +199,207 @@ export async function gatedToolCall<T>(
     )
   }
 
-  const reservationId = response.getBodyAttribute('reservation_id') as string
-  // Pass decision and caps through to the handler so it can react to
-  // ALLOW_WITH_CAPS (e.g. respect a tool denylist or max_tokens cap).
-  const decision = response.getBodyAttribute('decision') as CyclesDecision['decision']
-  const caps = response.getBodyAttribute('caps') as Record<string, unknown> | undefined
-
-  try {
-    const { result, actualMicrocents } = await execute({ decision, caps })
-    await client.commitReservation(reservationId, {
-      idempotency_key: `commit:${idempotencyKey}`,
-      actual: { unit: Unit.USD_MICROCENTS, amount: actualMicrocents },
-    })
-    return result
-  } catch (err) {
-    // Tool threw or was cancelled — give the budget back so the next
-    // legitimate call isn't denied because of a failed attempt.
-    try {
-      await client.releaseReservation(reservationId, {
-        idempotency_key: `release:${idempotencyKey}`,
-        reason: err instanceof Error ? err.message : 'tool execution failed',
-      })
-    } catch {
-      // Don't mask the original tool error. Log release failures in production.
-    }
-    throw err
+  const reservationId = response.getBodyAttribute('reservation_id')
+  const decision = response.getBodyAttribute('decision')
+  const rawCaps = response.getBodyAttribute('caps')
+  const affectedScopes = response.getBodyAttribute('affected_scopes')
+  const reserveFields = new Set([
+    'decision',
+    'reservation_id',
+    'reserved',
+    'expires_at_ms',
+    'scope_path',
+    'affected_scopes',
+    'caps',
+    'balances',
+    'reason_code',
+    'retry_after_ms',
+    'cycles_evidence',
+  ])
+  if (
+    !response.body ||
+    Object.keys(response.body).some((key) => !reserveFields.has(key)) ||
+    typeof reservationId !== 'string' ||
+    reservationId.length === 0 ||
+    (decision !== 'ALLOW' && decision !== 'ALLOW_WITH_CAPS') ||
+    !Array.isArray(affectedScopes) ||
+    !affectedScopes.every((scope) => typeof scope === 'string') ||
+    (decision === 'ALLOW' && rawCaps !== undefined) ||
+    (decision === 'ALLOW_WITH_CAPS' && rawCaps === undefined)
+  ) {
+    throw new UnsettledReservationError(
+      `Malformed successful reserve response (request ${response.requestId ?? 'unknown'}). ` +
+      'Do not execute; retain the request for operator reconciliation.',
+    )
   }
+
+  const settlementKey = `settlement:${idempotencyKey}`
+  await settlementStore.put({
+    key: settlementKey,
+    kind: 'hold',
+    reservationId,
+    subject,
+    action,
+  })
+  // Validate the closed Caps schema only after durably recording the plausible
+  // hold. If validation fails, the action remains blocked and the hold is
+  // reconciled or expires; it is never treated as permission to execute.
+  const caps = validateCaps(rawCaps)
+
+  const commitKey = `commit:${idempotencyKey}`
+  const commitActual = async (actualMicrocents: number): Promise<void> => {
+    const pending: PendingSettlement = {
+      key: settlementKey,
+      kind: 'commit',
+      reservationId,
+      subject,
+      action,
+      operationKey: commitKey,
+      actualMicrocents,
+    }
+    await settlementStore.put(pending)
+
+    // A timeout can leave the outcome ambiguous. Retry the same commit key;
+    // never release. The durable record remains until COMMITTED or APPLIED is
+    // confirmed.
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const commitResponse = await client.commitReservation(reservationId, {
+        idempotency_key: commitKey,
+        actual: { unit: Unit.USD_MICROCENTS, amount: actualMicrocents },
+      })
+      if (
+        commitResponse.isSuccess &&
+        commitResponse.getBodyAttribute('status') === 'COMMITTED'
+      ) {
+        await settlementStore.remove(settlementKey)
+        return
+      }
+      lastError = new Error(commitResponse.errorMessage ?? 'commit unconfirmed')
+
+      const code = commitResponse.getErrorResponse()?.error
+      if (
+        code === 'RESERVATION_EXPIRED' ||
+        code === 'RESERVATION_FINALIZED' ||
+        code === 'NOT_FOUND'
+      ) {
+        const detail = await client.getReservation(reservationId)
+        const status = detail.getBodyAttribute('status')
+        if (detail.isSuccess && status === 'COMMITTED') {
+          await settlementStore.remove(settlementKey)
+          return
+        }
+        if (
+          (detail.isSuccess && (status === 'RELEASED' || status === 'EXPIRED')) ||
+          (!detail.isSuccess && detail.getErrorResponse()?.error === 'NOT_FOUND')
+        ) {
+          const eventResponse = await client.createEvent({
+            idempotency_key: `event:${idempotencyKey}`,
+            subject,
+            action,
+            actual: { unit: Unit.USD_MICROCENTS, amount: actualMicrocents },
+            metadata: { reservation_id: reservationId, settlement_fallback: true },
+          })
+          if (
+            eventResponse.isSuccess &&
+            eventResponse.getBodyAttribute('status') === 'APPLIED'
+          ) {
+            await settlementStore.remove(settlementKey)
+            return
+          }
+          lastError = new Error(eventResponse.errorMessage ?? 'usage event unconfirmed')
+        }
+      }
+    }
+    throw new UnsettledReservationError(
+      `Settlement remains pending for ${reservationId}; the recovery worker must retry ` +
+      `${commitKey}. Do not release it. Last error: ${String(lastError)}`,
+    )
+  }
+
+  const releaseUnused = async (reason: string): Promise<void> => {
+    const releaseKey = `release:${idempotencyKey}`
+    await settlementStore.put({
+      key: settlementKey,
+      kind: 'release',
+      reservationId,
+      subject,
+      action,
+      operationKey: releaseKey,
+      reason,
+    })
+    const releaseResponse = await client.releaseReservation(reservationId, {
+      idempotency_key: releaseKey,
+      reason,
+    })
+    if (
+      !releaseResponse.isSuccess ||
+      releaseResponse.getBodyAttribute('status') !== 'RELEASED'
+    ) {
+      throw new UnsettledReservationError(
+        `Could not confirm release for ${reservationId}: ${releaseResponse.errorMessage}`,
+      )
+    }
+    await settlementStore.remove(settlementKey)
+  }
+
+  let toolAttempt: ToolAttempt<T>
+  try {
+    toolAttempt = await execute({ decision, caps })
+  } catch (err) {
+    // The wrapper cannot tell whether an unexpectedly thrown handler consumed
+    // usage. Keep the reservation for reconciliation instead of releasing it.
+    throw new UnsettledReservationError(
+      `Tool outcome is unknown for ${reservationId}; measure usage and commit it. ` +
+      `Do not release this reservation. Handler error: ${String(err)}`,
+    )
+  }
+
+  if (toolAttempt.status === 'skipped') {
+    await releaseUnused('tool skipped before execution')
+    throw toolAttempt.error
+  }
+
+  // Commit usage after every execution attempt, including failed attempts.
+  await commitActual(toolAttempt.actualMicrocents)
+
+  if (toolAttempt.status === 'failed') {
+    throw toolAttempt.error
+  }
+
+  return toolAttempt.result
+}
+
+function validateCaps(value: unknown): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new DeniedByCyclesError('Malformed caps in successful reserve response')
+  }
+
+  const caps = value as Record<string, unknown>
+  const allowed = new Set([
+    'max_tokens',
+    'max_steps_remaining',
+    'tool_allowlist',
+    'tool_denylist',
+    'cooldown_ms',
+  ])
+  for (const [key, cap] of Object.entries(caps)) {
+    if (!allowed.has(key)) {
+      throw new DeniedByCyclesError(`Unknown Cycles cap: ${key}`)
+    }
+    if (key === 'tool_allowlist' || key === 'tool_denylist') {
+      if (
+        !Array.isArray(cap) ||
+        !cap.every((item) => typeof item === 'string' && item.length <= 256)
+      ) {
+        throw new DeniedByCyclesError(`Malformed Cycles cap: ${key}`)
+      }
+    } else if (typeof cap !== 'number' || !Number.isInteger(cap) || cap < 0) {
+      throw new DeniedByCyclesError(`Malformed Cycles cap: ${key}`)
+    }
+  }
+  return caps
 }
 ```
 
@@ -229,24 +438,36 @@ server.tool('send_email', emailSchema, async (args) => {
       // when a non-empty allowlist is returned, the denylist is ignored
       // entirely — the allowlist is the sole authority for which tools may
       // run.
-      const allowlist = caps?.toolAllowlist ?? caps?.tool_allowlist
+      const allowlist = caps?.tool_allowlist
       const hasAllowlist = Array.isArray(allowlist) && allowlist.length > 0
 
       if (hasAllowlist) {
         if (!allowlist.includes('send_email')) {
-          throw new DeniedByCyclesError('Cycles caps allowlist excludes send_email.')
+          return {
+            status: 'skipped',
+            error: new DeniedByCyclesError('Cycles caps allowlist excludes send_email.'),
+          }
         }
         // Allowlist includes this tool → permitted. Denylist is ignored
         // when an allowlist is present.
       } else {
-        const denylist = caps?.toolDenylist ?? caps?.tool_denylist
+        const denylist = caps?.tool_denylist
         if (Array.isArray(denylist) && denylist.includes('send_email')) {
-          throw new DeniedByCyclesError('Cycles caps disallow send_email.')
+          return {
+            status: 'skipped',
+            error: new DeniedByCyclesError('Cycles caps disallow send_email.'),
+          }
         }
       }
 
-      const sent = await sendEmail(args)
-      return { result: sent, actualMicrocents: 50_000 }
+      try {
+        const sent = await sendEmail(args)
+        return { status: 'succeeded', result: sent, actualMicrocents: 50_000 }
+      } catch (error) {
+        // This example uses the full estimate as the best-known actual after
+        // dispatch begins. Use provider-reported usage when it is available.
+        return { status: 'failed', error, actualMicrocents: 50_000 }
+      }
     },
   )
 })
@@ -258,8 +479,9 @@ A few things this wrapper does deliberately:
 
 - **Idempotency keys** are derived, not random. A retried network call hits the same reservation and doesn't double-charge. Commit and release each get their own derived key off the same base.
 - **Denials throw `DeniedByCyclesError`**, not silent fallthroughs. The agent has to handle them — by stopping, downgrading, or asking for more budget.
-- **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or fail closed so the wrapper releases the reservation.
-- **Release on any throw**, including cancellations. Unused budget goes back to the tenant.
+- **`ALLOW_WITH_CAPS` reaches the handler**. The handler must respect caps before side effects happen, or return `skipped` so the wrapper releases the reservation.
+- **Execution failures are committed**, using provider-reported usage or the best conservative measurement available. Only `skipped` outcomes are released.
+- **Ambiguous outcomes fail closed for settlement.** An unexpected handler throw or unconfirmed commit leaves the reservation unreleased until the same commit is retried or an operator reconciles it.
 - **Context travels with every call** in the right slot: tenant / workspace / app / workflow / toolset live in `subject`, action kind and tool name in `action`, run ID in `subject.dimensions.run`, and free-form fields (run_id, tool_call_id, tool_name) in `metadata`. That's the context available for dashboard views and audit queries — subject to your server's and dashboard's support for custom dimensions (filtering on `dimensions.run` is out of scope for v0 unless your implementation explicitly supports it).
 
 ## Why this matters

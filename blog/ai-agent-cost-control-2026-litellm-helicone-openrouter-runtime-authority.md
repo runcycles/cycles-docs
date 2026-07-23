@@ -3,7 +3,7 @@ title: "AI Agent Cost Control in 2026: A Landscape Guide"
 date: 2026-04-06
 author: Albert Mavashev
 tags: [engineering, production, costs, agents, best-practices, governance, architecture]
-description: "LiteLLM, Helicone, and OpenRouter each solve part of agent cost control. What each does, where they stop, and the layer none of them cover."
+description: "Compare LiteLLM, Helicone, OpenRouter, and Cycles for AI agent cost control: routing, observability, provider caps, and pre-execution budgets at runtime."
 blog: true
 sidebar: false
 featured: false
@@ -150,7 +150,7 @@ Agent decides to act
 
 The proxy layer **optimizes** what you spend (routing, caching, model selection). The authority layer **enforces** what you're allowed to spend and do (budgets, RISK_POINTS, delegation limits). Together, they cover both cost efficiency and structural enforcement.
 
-**Concrete example:** Budget is running low. The authority layer returns ALLOW_WITH_CAPS (proceed with constraints — use a cheaper model). Your application passes that hint to LiteLLM, which routes to GPT-4o-mini instead of GPT-4o. The agent completes the task at lower cost. Neither layer alone enables this graceful degradation — the authority layer decides the constraint, the proxy layer executes the downgrade.
+**Concrete example:** The deepest matching budget has a model cap configured, so the authority layer returns `ALLOW_WITH_CAPS`. Your application maps that cap to a cheaper LiteLLM route such as GPT-4o-mini. Cycles returns the configured constraint; the proxy executes the downgrade. The current server does not add caps automatically when balance is low.
 
 ## Decision matrix
 

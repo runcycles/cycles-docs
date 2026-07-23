@@ -7,6 +7,10 @@ description: "Cursor agent reportedly wiped a Railway production database and ba
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: Cursor agent database deletion, Railway incident, AI agent production safety, pre-execution gate, RISK_POINTS, runtime authority
 ---
 
 # Cursor AI Agent Reportedly Deleted a Production Database in 9 Seconds
@@ -64,7 +68,7 @@ A control point that would have prevented this lives between the model's tool-ca
 The Cycles primitives map onto this gap directly:
 
 - **[Decide / preflight](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation).** Before the destructive call leaves the agent harness, the proposed tool invocation is submitted to a preflight check. The decision is `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` — with a machine-readable `reason_code`. The model is not consulted on the answer.
-- **[Action authority and RISK_POINTS](/concepts/action-authority-controlling-what-agents-do).** Destructive infrastructure calls — database `DROP`, volume deletion, deploy rollback — are scored as Tier 4 actions when their tool definitions are registered with the agent. The session's action budget is denominated in [RISK_POINTS](/glossary#risk-points), not dollars. A `delete_volume` invocation costs more risk points than the entire session's authority allows. It is denied before it leaves the harness.
+- **[Action authority and RISK_POINTS](/concepts/action-authority-controlling-what-agents-do).** The host classifies destructive infrastructure calls — database `DROP`, volume deletion, deploy rollback — as Tier 4 and assigns their reservation amounts. The session's action budget is denominated in [RISK_POINTS](/glossary#risk-points), not dollars. If a `delete_volume` invocation requires more risk points than the session can reserve, the host blocks it before it leaves the harness. The current Cycles server does not register or classify tool definitions itself.
 - **[Reserve / commit](/protocol/how-reserve-commit-works-in-cycles).** When the call is allowed, it is reserved against the session's budget first; the API client only fires after the [reservation](/glossary#reservation) succeeds. The reservation, the commit, and any release are all written to the ledger as separate records.
 - **Hooks and approvals (integration pattern).** At configured risk thresholds, the agent harness can route the proposed destructive call to an out-of-band approval step — a webhook, a Slack approver, a separate service — before the API client fires. The approval payload carries the agent, the proposed tool call and arguments, the risk score, and the remaining session authority. In that architecture, the Railway API does not see the call until approval comes back.
 
@@ -80,8 +84,8 @@ With Cycles in the path, the answer is different. The governance page puts the c
 
 | Question | Confession-only world | Ledger-based world |
 |---|---|---|
-| What did the agent decide to do? | Recoverable from the model's reply | Same — and the `decide` request preserves the proposed call |
-| What did the policy decide? | No record — there was no policy | `decide` record with `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` and `reason_code` |
+| What did the agent decide to do? | Recoverable from the model's reply | Application audit log of the proposed call; `decide` itself does not persist the request |
+| What did the policy decide? | No record — there was no policy | Application log of the preflight outcome, correlated with any live reservation lifecycle |
 | Was the action authorized? | Inferred from the absence of a stop | Reservation record, with timestamp and authority scope |
 | Did the action actually fire? | Yes (the database is gone) | Reservation lifecycle records whether the governed call was allowed, released, or settled; the tool integration can attach the external API outcome |
 | Who carried the authority? | "The agent" | Subject scope: [tenant](/glossary#tenant) / workspace / app / workflow / agent / toolset |

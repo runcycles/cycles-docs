@@ -12,7 +12,7 @@ The Cycles MCP Server gives MCP-compatible agents access to Cycles runtime autho
 This is the fastest way to expose Cycles budget tools to an MCP-compatible AI agent. For hard production enforcement, route costly or risky actions through the reserve → execute → commit/release lifecycle, or enforce Cycles in the application/gateway layer.
 
 ::: warning What this does and does not enforce
-The MCP server **exposes Cycles tools** to the agent. It does not automatically proxy or block every other MCP tool, API call, or model request — the agent can still take actions that bypass Cycles unless those actions go through `cycles_reserve` / `cycles_decide` / `cycles_commit`.
+The MCP server **exposes Cycles tools** to the agent. It does not automatically proxy or block every other MCP tool, API call, or model request — the agent can still take actions that bypass Cycles unless the host requires a live `cycles_reserve` before execution and settles the reservation afterward. `cycles_decide` is a non-locking preflight check.
 
 Use this for:
 - budget-aware agents and operator workflows
@@ -24,14 +24,14 @@ For deterministic production enforcement, make the Cycles check part of the tool
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — `cycles_reserve` / `cycles_commit` / `cycles_release` enforce budget before instrumented agent actions
-- **Risky actions** — `cycles_decide` returns `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
+- **Risky actions** — `cycles_decide` performs a non-locking preflight using caller-assigned `RISK_POINTS` estimates and can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. The application must apply the decision and any returned caps.
 - **Audit** — `cycles_create_event` and reserve/commit/release calls create structured records for export, compliance, attribution, and incident review
 :::
 
 ## Prerequisites
 
 - **A running Cycles stack** with a tenant, API key, and budget. If you don't have one yet, follow [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) first.
-- **Node.js 20+ with `npx` available** — every per-client config below launches `@runcycles/mcp-server` through `npx`.
+- **Node.js 20+ with `npx` available** for Claude Code, Cursor, Windsurf, or a manual Claude Desktop configuration. The recommended Claude Desktop `.mcpb` extension uses Claude Desktop's bundled runtime and does not require a separate Node.js installation.
 
 ::: tip Where do I get my API key?
 API keys are created through the **Cycles Admin Server** (port 7979). Use a runtime API key such as `cyc_live_...`. If your stack is already running with a tenant, create one directly:
@@ -66,7 +66,7 @@ Each client has its own config file path and quirks. Start with the one you use:
 | **Windsurf** | [Add Cycles to Windsurf](/quickstart/mcp-windsurf) |
 | Other MCP-compatible client | Use the STDIO config below as a template |
 
-All of them use the same package — `@runcycles/mcp-server` from npm — launched via `npx`. The differences are config-file paths and a few client-specific gotchas.
+All hosts use the same `@runcycles/mcp-server` implementation. Claude Desktop can install the bundled `.mcpb` desktop extension; the other local setup paths launch the npm package via `npx`. Config-file paths and client-specific behavior still differ.
 
 ### Generic STDIO config (template)
 
@@ -140,7 +140,7 @@ If no execution or billable work occurred, the agent calls `cycles_release` inst
 | Decision | Meaning | Agent should… |
 |----------|---------|---------------|
 | `ALLOW` | Budget is available, proceed normally | Execute the operation |
-| `ALLOW_WITH_CAPS` | Budget is tight, proceed with constraints | Reduce scope — use a cheaper model, fewer tokens, or skip optional tools. The `caps` field contains hints such as `maxTokens`, `maxStepsRemaining`, `toolAllowlist`, `toolDenylist`, and `cooldownMs` |
+| `ALLOW_WITH_CAPS` | The deepest matching budget has configured caps | Apply the returned constraints before execution. The `caps` field can contain `maxTokens`, `maxStepsRemaining`, `toolAllowlist`, `toolDenylist`, and `cooldownMs` |
 | `DENY` | Budget exhausted or insufficient | Stop, inform the user, or switch to a free fallback |
 
 ## Available tools

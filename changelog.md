@@ -15,12 +15,12 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | Component | Version | Release date |
 |---|---|---|
-| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.14) | 2026-07-11 |
-| Governance spec (admin) | v0.1.25.41 | 2026-07-11 |
-| `cycles-server` (runtime) | v0.1.25.48 | 2026-07-11 |
-| `cycles-server-admin` | v0.1.25.51 | 2026-07-11 |
-| `cycles-server-events` | v0.1.25.23 | 2026-07-11 |
-| `cycles-dashboard` | v0.1.25.67 | 2026-07-04 |
+| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.15) | 2026-07-21 |
+| Governance spec (admin) | v0.1.25.42 | 2026-07-21 |
+| `cycles-server` (runtime) | v0.1.25.58 | 2026-07-14 |
+| `cycles-server-admin` | v0.1.25.55 | 2026-07-21 |
+| `cycles-server-events` | v0.1.25.25 | 2026-07-18 |
+| `cycles-dashboard` | v0.1.25.85 | 2026-07-21 |
 
 **Client SDKs and plugins.** The language clients and plugin integrations are versioned independently from the protocol / server / dashboard tracks — they track the client API surface rather than the wire spec. Current releases:
 
@@ -30,9 +30,10 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | `cycles-client-rust` | 0.2.6 | 2026-05-22 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
 | `cycles-client-python` | 0.4.3 | 2026-05-22 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
 | `cycles-spring-boot-starter` | 0.2.5 | 2026-06-18 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
-| `cycles-mcp-server` | 0.2.4 | 2026-05-03 | Node 20+, MCP protocol | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
+| `cycles-mcp-server` | 0.6.0 | 2026-07-22 | Node 20+, MCP protocol, Claude Desktop `.mcpb` | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
 | `cycles-openai-agents` | 0.2.1 | 2026-05-07 | OpenAI Agents SDK (Python) | [CHANGELOG](https://github.com/runcycles/cycles-openai-agents/blob/main/CHANGELOG.md) |
 | `cycles-openclaw-budget-guard` | 0.8.4 | 2026-05-07 | OpenClaw plugin (Node) | [CHANGELOG](https://github.com/runcycles/cycles-openclaw-budget-guard/blob/main/CHANGELOG.md) |
+| `cycles-claude-plugin` | 0.2.0 | 2026-07-22 | Cycles Budget Guard for Claude Code (Node 22+; companion MCP server 0.6.0) | [CHANGELOG](https://github.com/runcycles/cycles-claude-plugin/blob/main/CHANGELOG.md) |
 | `langchain-runcycles` | 0.3.0 | 2026-05-15 | LangChain `create_agent` middleware (Python) — `CyclesModelGate` (with `cost_fn` actual-cost extraction, v0.2.0+) + `CyclesToolGate` (with tool-side `cost_fn`, v0.3.0+) + `CyclesFanOutGate` + streaming-path verified (v0.2.1+); settlement HTTP failures honored per `settlement_error_policy` (v0.2.3+) | [CHANGELOG](https://github.com/runcycles/langchain-runcycles/blob/main/CHANGELOG.md) |
 | `cycles-spring-ai-starter` | 0.3.1 | 2026-05-12 | Spring Boot 3.5+, Spring AI 1.0+/1.1+, Java 21 — three extension points added in 0.3.0: **pluggable `SubjectResolver`** for per-call attribution (multi-tenant agents can route the Cycles subject from an authenticated principal, header, or thread-local); **pluggable `PromptTokenEstimator`** with a real BPE impl (`JtokkitPromptTokenEstimator` via `com.knuddels:jtokkit`, opt in with `cycles.spring-ai.token-estimator-encoding=cl100k_base` / `o200k_base`); **`cycles.reservation_id` on chat-client traces** as a high-cardinality `KeyValue` for trace ↔ reservation correlation. End-to-end integration test added. 98.3% instruction / 95.7% branch test coverage at 0.3.0; 0.3.1 is a documentation-only patch (fixed a 10x cost-per-token example) verified at 100% / 100%. No breaking changes vs 0.2.0. Companion to `cycles-spring-boot-starter`. | [CHANGELOG](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/CHANGELOG.md) |
 
@@ -303,12 +304,13 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `runcycles` (TypeScript) | 0.3.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `runcycles` (Rust) | 0.2.6 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `cycles-client-java-spring` | 0.2.5 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `@runcycles/mcp-server` | 0.2.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `@runcycles/mcp-server` | 0.6.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Server (runtime) | v0.1.25.48 | Protocol v0.1.25 (runtime revision v0.1.25.14) plus CyclesEvidence v0.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.51 | Governance spec v0.1.25.41 |
-| Cycles Events Service | v0.1.25.23 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
-| Cycles Dashboard | v0.1.25.67 | Admin v0.1.25.39+ for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
+| Cycles Budget Guard for Claude Code | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.0 |
+| Cycles Server (runtime) | v0.1.25.58 | Protocol v0.1.25 (runtime revision v0.1.25.15) plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.55 | Governance spec v0.1.25.42 |
+| Cycles Events Service | v0.1.25.25 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
+| Cycles Dashboard | v0.1.25.85 | Admin v0.1.25.42 for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
 
 All current SDK versions are backward-compatible with server v0.1.23. New v0.1.24 features (budget patch, policy patch, capped `ALLOW_IF_AVAILABLE` commits) require server v0.1.24+. New v0.1.25 features (event emission, webhook delivery, events service, `policy_id` / `deny_detail` on `reservation.denied`) require server v0.1.25.
 

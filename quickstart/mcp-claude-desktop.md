@@ -1,6 +1,6 @@
 ---
 title: "Add Cycles to Claude Desktop (MCP)"
-description: "60-second setup for adding Cycles budget enforcement to Claude Desktop via the MCP server. Config paths for macOS and Windows, mock mode, and common gotchas."
+description: "Add Cycles budget tools to Claude Desktop with the recommended desktop extension or manual MCP configuration on macOS and Windows."
 ---
 
 # Add Cycles to Claude Desktop
@@ -14,15 +14,25 @@ Registering this MCP server gives Claude Desktop access to Cycles tools — `cyc
 ## Prerequisites
 
 - **Claude Desktop installed** ([download](https://claude.ai/download))
-- **Node.js 20+** on PATH — Claude Desktop launches the MCP server via `npx`.
+- **Node.js 20+** on PATH if you use the manual `npx` configuration below.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip this if you only want to try mock mode below.
 - **Cycles server running** locally or remote. Skip this for mock mode.
 
 ## Setup
 
-Edit the Claude Desktop config file. Create it if it doesn't exist.
+### Desktop extension (recommended)
 
-The fastest way to open it is from inside the app: **Settings → Developer → Edit Config**. Or open it directly:
+1. Download `cycles-mcp-server-0.6.0.mcpb` from the [latest Cycles MCP Server release](https://github.com/runcycles/cycles-mcp-server/releases/latest).
+2. In Claude Desktop, open **Settings → Extensions → Advanced settings → Install Extension…** and select the downloaded file.
+3. Enter your Cycles server URL and API key in the extension configuration screen. To explore without a backend, enable **Mock mode** instead; mock mode is synthetic and performs no enforcement.
+
+Claude Desktop installs the bundled server and makes the Cycles tools available without a hand-edited JSON file. Restart Claude Desktop if the tools do not appear immediately.
+
+### Manual JSON configuration
+
+Use this fallback when desktop extensions are disabled by policy or when you need to manage the launch command directly.
+
+Open **Settings → Developer → Edit Config**. Or edit the file directly:
 
 **macOS:**
 ```
@@ -34,7 +44,7 @@ The fastest way to open it is from inside the app: **Settings → Developer → 
 %APPDATA%\Claude\claude_desktop_config.json
 ```
 
-Paste the following, replacing `cyc_live_...` with your real API key:
+On macOS, paste the following, replacing `cyc_live_...` with your real API key:
 
 ```json
 {
@@ -51,13 +61,30 @@ Paste the following, replacing `cyc_live_...` with your real API key:
 }
 ```
 
+On Windows, launch the `npx.cmd` wrapper through `cmd /c`:
+
+```json
+{
+  "mcpServers": {
+    "cycles": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@runcycles/mcp-server"],
+      "env": {
+        "CYCLES_API_KEY": "cyc_live_...",
+        "CYCLES_BASE_URL": "http://localhost:7878"
+      }
+    }
+  }
+}
+```
+
 **Quit Claude Desktop completely** (cmd+Q on macOS — closing the window is not enough), then reopen. The Cycles tools should appear in the MCP indicator at the bottom of the chat.
 
 > **Security note:** if you put `CYCLES_API_KEY` directly in this file, treat the config file as a secret. For shared machines, use a wrapper script or a local-only test key.
 
 ## Try mock mode (no API key required)
 
-Drop `CYCLES_API_KEY` and `CYCLES_BASE_URL`, and set `CYCLES_MOCK` instead. The server returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls, and mock mode performs no live enforcement:
+For the desktop extension, enable **Mock mode** in its configuration screen. For a manual JSON installation, drop `CYCLES_API_KEY` and `CYCLES_BASE_URL`, and set `CYCLES_MOCK` instead. The server returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls, and mock mode performs no live enforcement:
 
 ```json
 {
@@ -70,6 +97,8 @@ Drop `CYCLES_API_KEY` and `CYCLES_BASE_URL`, and set `CYCLES_MOCK` instead. The 
   }
 }
 ```
+
+On Windows, keep the `command: "cmd"` and `["/c", "npx", ...]` argument prefix from the real-mode example.
 
 Useful for trying out the tools before standing up a stack.
 
@@ -84,14 +113,14 @@ Claude should call `cycles_check_balance` and return the balances. If you don't 
 ## Common gotchas
 
 - **Indicator missing after edit.** Claude Desktop only re-reads the config on a full quit/restart. Closing the window is not enough on macOS.
-- **`npx` not found on Windows.** Make sure Node 20+ is on PATH. `where npx` should resolve. Reinstall Node if not.
+- **Manual `npx` launch fails on Windows.** Make sure Node 20+ is on PATH and `where npx` resolves, then verify the config uses `command: "cmd"` with `"/c", "npx"` at the start of `args`.
 - **`CYCLES_BASE_URL` reachability.** If your Cycles server is in Docker, `localhost:7878` from Claude Desktop on macOS reaches the host's localhost — that works. From inside another container, use `host.docker.internal`.
 - **API key starts with `cyc_test_` not `cyc_live_`.** Test keys work but only against test budgets; if you're getting `BUDGET_NOT_FOUND` errors, double-check the tenant has a budget allocated.
 - **Where are the logs?** When the indicator stays empty or tools fail silently, Claude writes MCP logs to `~/Library/Logs/Claude/` on macOS and `%APPDATA%\Claude\logs\` on Windows. Tail the `mcp*.log` files while restarting the app.
 
 ## What Cycles adds
 
-MCP gives Claude Desktop a standard way to call tools. Cycles adds runtime authority before those tools run: budget checks, risk limits, tenant scope, and reserve → commit / release accounting.
+MCP gives Claude Desktop a standard way to call tools. The Cycles server adds budget checks, caller-assigned risk budgets, tenant scope, and reserve → commit/release accounting as tools. Those tools are cooperative in Claude Desktop; hard enforcement requires a host or application boundary that Claude Desktop cannot bypass.
 
 ## Next steps
 
