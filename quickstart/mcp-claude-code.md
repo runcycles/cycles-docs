@@ -14,6 +14,7 @@ Registering this MCP server gives Claude Code access to Cycles tools — `cycles
 ## Prerequisites
 
 - **Claude Code installed** ([install guide](https://docs.claude.com/en/docs/claude-code))
+- **Node.js 20+ with `npx` available** — Claude Code launches the MCP server through `npx`.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip this for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.
 
@@ -59,7 +60,7 @@ Commit `.mcp.json`, but **do not commit real secrets**. Each developer sets `CYC
 claude mcp add --transport stdio --env CYCLES_MOCK=true cycles -- npx -y @runcycles/mcp-server
 ```
 
-Returns realistic deterministic responses with no Cycles backend running.
+Returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls; mock mode performs no live enforcement.
 
 ## Verify
 

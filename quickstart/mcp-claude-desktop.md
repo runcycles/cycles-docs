@@ -57,7 +57,7 @@ Paste the following, replacing `cyc_live_...` with your real API key:
 
 ## Try mock mode (no API key required)
 
-Drop `CYCLES_API_KEY` and `CYCLES_BASE_URL`, and set `CYCLES_MOCK` instead. The server returns realistic deterministic responses with no Cycles backend running:
+Drop `CYCLES_API_KEY` and `CYCLES_BASE_URL`, and set `CYCLES_MOCK` instead. The server returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls, and mock mode performs no live enforcement:
 
 ```json
 {

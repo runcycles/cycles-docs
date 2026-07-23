@@ -63,7 +63,7 @@ The most common pattern — reserve budget before a costly operation, commit act
 }
 ```
 
-Response includes `decision: "ALLOW"` and a `reservationId`.
+An accepted response includes `decision: "ALLOW"` or `decision: "ALLOW_WITH_CAPS"` and a `reservationId`. Apply any returned caps before executing. A live denial is returned as an MCP tool error, such as `BUDGET_EXCEEDED`, rather than as `decision: "DENY"`.
 
 **Step 2 — Execute** the LLM call or tool invocation.
 
@@ -85,13 +85,13 @@ Response includes `decision: "ALLOW"` and a `reservationId`.
 
 The unused 15,000 microcents are returned to the budget pool.
 
-**If the operation fails**, call `cycles_release` instead:
+**If the operation never starts and incurs no usage**, call `cycles_release` instead. If execution starts and incurs partial usage before failing, call `cycles_commit` with that actual usage so the cost is not lost:
 
 ```json
 {
   "reservationId": "rsv_...",
   "idempotencyKey": "release-a1b2c3d4",
-  "reason": "LLM call failed with timeout"
+  "reason": "Operation cancelled before dispatch"
 }
 ```
 
@@ -108,7 +108,7 @@ Use `cycles_decide` for a lightweight check before committing to a reservation. 
 }
 ```
 
-If the decision is `ALLOW`, proceed with a full `cycles_reserve`. If `DENY`, the agent can switch to a cheaper model or skip the operation — without having locked any budget.
+If the decision is `ALLOW`, proceed with a full `cycles_reserve`. If it is `ALLOW_WITH_CAPS`, apply the returned caps and reserve the constrained estimate. If it is `DENY`, the agent can switch to a cheaper model or skip the operation — without having locked any budget.
 
 ## Pattern 3: Graceful degradation
 
@@ -201,7 +201,7 @@ For workflows with multiple costly steps, check the balance first, then reserve 
 
 **Step 2:** `cycles_reserve` → execute → `cycles_commit`
 
-**Step 3:** `cycles_reserve` → **DENY** (budget exhausted) → degrade or stop
+**Step 3:** `cycles_reserve` → **`BUDGET_EXCEEDED` tool error** (budget exhausted) → degrade or stop
 
 Each step gets its own reservation, so the budget authority can deny mid-workflow if the agent is burning through budget too fast. **Do not reserve once for an entire long workflow unless you are comfortable locking that whole estimate up front** — per-step reservations give the authority layer a chance to stop mid-run, and unused budget returns to the pool sooner. See [Common Budget Patterns](/how-to/common-budget-patterns) for more examples.
 
@@ -295,6 +295,8 @@ For the full decision tree, docker-compose example, and auth/scope behavior, see
 
 ## Error handling
 
+Errors from live mutating calls are returned as MCP tool errors containing the Cycles error code, message, request ID, and HTTP status. In particular, a denied live reservation normally surfaces as a 409-class error; `decision: "DENY"` is reserved for `cycles_decide` and dry-run reserve responses.
+
 | Error Code | Meaning | Recommended Action |
 |---|---|---|
 | `BUDGET_EXCEEDED` | Not enough budget | Degrade to cheaper model or stop |
@@ -308,7 +310,7 @@ See [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in
 ## Key points
 
 - **No SDK changes for tool exposure.** Add the MCP server to your agent's config and it discovers Cycles tools automatically. Hard enforcement still requires those tools to sit in the execution path.
-- **Always finalize reservations.** Every `cycles_reserve` must be followed by `cycles_commit` or `cycles_release` — never leave reservations dangling.
+- **Always finalize reservations.** Commit actual usage when execution incurred cost, even if it later failed. Release only an unused reservation when execution was cancelled, skipped, or failed before starting. Never leave reservations dangling.
 - **Use stable idempotency keys.** Use a unique, stable `idempotencyKey` per logical Cycles operation so retries replay safely and do not double-settle reservations. The same retry of the same logical call must use the **same** key, not a new UUID per attempt.
 - **Respect caps.** When the decision is `ALLOW_WITH_CAPS`, constrain the operation accordingly.
 - **Heartbeat long operations.** Use `cycles_extend` for operations that may exceed the reservation TTL.
