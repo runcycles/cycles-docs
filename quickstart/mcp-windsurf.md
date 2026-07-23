@@ -14,6 +14,7 @@ Registering this MCP server gives Windsurf access to Cycles tools — `cycles_re
 ## Prerequisites
 
 - **Windsurf installed** ([download](https://windsurf.com))
+- **Node.js 20+ with `npx` available** — Windsurf launches the MCP server through `npx`.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.
 
@@ -69,7 +70,7 @@ Set `CYCLES_API_KEY` and `CYCLES_BASE_URL` in the environment where Windsurf can
 }
 ```
 
-Returns realistic deterministic responses with no Cycles backend running.
+Returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls; mock mode performs no live enforcement.
 
 ## Verify
 

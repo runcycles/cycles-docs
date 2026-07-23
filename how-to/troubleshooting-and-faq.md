@@ -357,7 +357,8 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 
 1. Is `CYCLES_API_KEY` set in the MCP server environment? Without it, the server cannot authenticate.
 2. Is `CYCLES_BASE_URL` set? **There is no default** — this variable is required. Set it to your Cycles server URL (e.g., `http://localhost:7878` for local development).
-3. Is `CYCLES_MOCK` set to `"true"`? Mock mode returns realistic responses without contacting a real server. Remove it for production use.
+3. Is `CYCLES_MOCK` set to `"true"`? Mock mode returns synthetic responses without contacting a real server and performs no live enforcement. Remove it for production use. The MCP server refuses mock mode when `NODE_ENV=production` unless `CYCLES_ALLOW_MOCK_IN_PRODUCTION=true` is also set.
+4. Does the API key have the permission for the requested tool? The MCP tool set uses the valid runtime permissions `reservations:create`, `reservations:commit`, `reservations:release`, `reservations:extend`, `reservations:list`, and `balances:read`. There are no separate `decide` or `events:create` permission values.
 
 ### MCP server not appearing in Claude Desktop or Cursor
 
@@ -376,7 +377,7 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 
 **Symptom:** Every reservation or decide call returns `ALLOW` regardless of budget state.
 
-**Cause:** The server is running in mock mode (`CYCLES_MOCK=true`), which returns deterministic mock responses.
+**Cause:** The server is running in mock mode (`CYCLES_MOCK=true`), which returns synthetic `ALLOW` responses. Generated IDs and timestamps are not deterministic.
 
 **Fix:** Remove the `CYCLES_MOCK` environment variable and ensure `CYCLES_BASE_URL` and `CYCLES_API_KEY` are set correctly.
 

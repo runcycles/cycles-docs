@@ -251,7 +251,7 @@ The server derives all affected scopes from the Subject, then executes `reserve.
 
 ### 4. Decision returned
 
-The server returns one of three decisions: `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`.
+A successful live reservation returns `ALLOW` or `ALLOW_WITH_CAPS`. If a live reservation is denied, the server returns a protocol error such as `409 BUDGET_EXCEEDED`; `decision: DENY` is reserved for `/v1/decide` and dry-run reservation evaluations.
 
 ### 5. Method execution
 
