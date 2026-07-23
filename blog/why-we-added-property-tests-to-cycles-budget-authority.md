@@ -1,9 +1,9 @@
 ---
-title: "Why We Added Property Tests to Cycles' Budget Authority"
+title: "Property Tests for Cycles Budget Authority"
 date: 2026-04-16
 author: Albert Mavashev
 tags: [engineering, testing, operations, property-based-testing, jqwik, concurrency, runtime-authority]
-description: "Ordinary unit tests won't systematically explore the interleavings that break atomicity. Here's the property test we built for Cycles' budget authority — and two jqwik-Spring traps worth knowing."
+description: "Learn how property-based tests expose concurrency and atomicity failures in Cycles budget authority, including practical jqwik and Spring testing traps."
 blog: true
 sidebar: false
 featured: false

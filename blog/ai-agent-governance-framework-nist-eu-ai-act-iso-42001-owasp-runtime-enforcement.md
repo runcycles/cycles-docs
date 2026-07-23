@@ -2,11 +2,15 @@
 title: "AI Agents: EU AI Act, NIST, ISO 42001, OWASP Map"
 date: 2026-04-02
 author: Cycles Team
-tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime authority, agents]
+tags: [governance, compliance, EU AI Act, NIST, ISO 42001, OWASP, runtime-authority, agents]
 description: "Map EU AI Act, NIST AI RMF, ISO 42001, and OWASP regulatory requirements to runtime enforcement controls — a practical governance framework for AI agents."
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: AI agent governance framework, EU AI Act, NIST AI RMF, ISO 42001, OWASP agent security, runtime enforcement
 ---
 
 # AI Agent Governance: Mapping NIST, EU AI Act, ISO 42001, and OWASP to Runtime Enforcement
@@ -45,7 +49,7 @@ For AI agents that qualify as high-risk AI systems, five articles create direct 
 
 ### NIST AI Risk Management Framework (AI RMF 1.0)
 
-Published January 26, 2023, the [NIST AI RMF](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework-ai-rmf-10) defines four core functions: **Govern, Map, Measure, Manage.** It is voluntary and sector-agnostic, but it has become the de facto reference for U.S. organizations building AI governance programs.
+Published January 26, 2023, the [NIST AI RMF](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10) defines four core functions: **Govern, Map, Measure, Manage.** It is voluntary and sector-agnostic, but it has become the de facto reference for U.S. organizations building AI governance programs.
 
 The framework treats autonomy as a risk amplifier. Systems with greater autonomy require stronger governance controls — more frequent measurement, tighter management boundaries, and more explicit accountability structures.
 
@@ -205,7 +209,7 @@ Every regulatory framework cited above converges on the same set of runtime cont
 
 **What happens without it:** Hard failures without context. The agent crashes mid-task, the user sees an error, and nobody knows whether the work was 10% complete or 90% complete. Worse, the agent may have already taken irreversible actions (sent emails, made API calls) before failing on the next step.
 
-**How Cycles implements it:** Three response types: [ALLOW, ALLOW_WITH_CAPS, DENY](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer). ALLOW_WITH_CAPS constrains the agent — limiting `maxTokens`, applying a `toolDenylist`, or setting `maxStepsRemaining` — so it can finish useful work within the remaining budget rather than failing abruptly.
+**How Cycles supports it:** Three response types: [ALLOW, ALLOW_WITH_CAPS, DENY](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer). `ALLOW_WITH_CAPS` returns operator-configured caps such as `maxTokens`, `toolDenylist`, or `maxStepsRemaining`; the host must apply them. The current server does not infer or tighten caps from remaining balance.
 
 ### Control 6: Least-Privilege Access Control
 
@@ -271,7 +275,7 @@ Governance is not a feature you add after shipping. It is the infrastructure tha
 ## Sources
 
 1. [EU AI Act — Regulation 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj) — Entered into force August 1, 2024. High-risk obligations rescheduled by the June 2026 Digital Omnibus to December 2, 2027 (Annex III) and August 2, 2028 (Annex I embedded).
-2. [NIST AI Risk Management Framework 1.0](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework-ai-rmf-10) — Published January 26, 2023
+2. [NIST AI Risk Management Framework 1.0](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10) — Published January 26, 2023
 3. [NIST AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — Announced February 17, 2026
 4. [ISO/IEC 42001:2023](https://www.iso.org/standard/81230.html) — AI Management System standard, published December 2023
 5. [OWASP Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) — 2025/2026 edition

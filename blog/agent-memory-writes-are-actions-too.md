@@ -90,13 +90,13 @@ A `memory.add` to a per-tenant scope, modeled as an action authority [reservatio
 
 1. The agent proposes a write — fact text, scope path, source provenance.
 2. The runtime reserves [RISK_POINTS](/glossary#risk-points) against the run's action budget, sized by tier (e.g., 25 points for a per-tenant `add`).
-3. The runtime returns `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. Caps for memory writes might include: `max_writes_remaining` for the run, `allowed_scopes` (e.g., per-user only, not per-tenant), or `require_provenance: true`.
+3. A live reservation succeeds with `ALLOW` or `ALLOW_WITH_CAPS`, or rejects insufficient budget. The standard cap fields are `maxTokens`, `maxStepsRemaining`, `toolAllowlist`, `toolDenylist`, and `cooldownMs`; memory-specific limits such as write counts, allowed scopes, and provenance requirements must be enforced by the memory handler or a future extension.
 4. The write executes against the memory layer.
-5. The agent commits the reservation with the actual operation result, or releases it if the write was rejected by the memory store itself.
+5. The agent commits an `Amount` representing best-known actual usage, including usage from a partial failure. It releases only when the write never starts or demonstrably consumes zero usage.
 
-The shape is identical to a `send_email` or `deploy` reservation. The substantive change is what the cap means. `tool_allowlist: ["memory.add_user_scope"]` becomes the memory equivalent of a read-only fallback: the agent can still write notes about its own user but cannot mutate shared knowledge. `tool_denylist: ["memory.update_pinned"]` is the equivalent of disabling deploys when risk budget runs low — the operations with the largest blast radius go first.
+The shape is identical to a `send_email` or `deploy` reservation. The substantive change is what the cap means. In the MCP response, `toolAllowlist: ["memory.add_user_scope"]` can express the memory equivalent of a read-only fallback: the agent can still write notes about its own user but cannot mutate shared knowledge. `toolDenylist: ["memory.update_pinned"]` can disable the operations with the largest blast radius. The current server returns caps configured on the deepest matching budget; the memory handler must enforce the returned list.
 
-The progressive narrowing pattern from the [action control post](/blog/ai-agent-action-control-hard-limits-side-effects#tool-allowlists-and-denylists-capability-control-under-pressure) applies directly: as the run consumes risk budget, the memory operations available to it shrink, with shared-scope writes lost first and per-user writes lost last.
+An application can implement the progressive narrowing pattern from the [action control post](/blog/ai-agent-action-control-hard-limits-side-effects) by selecting stricter budget policy or scopes as the workflow changes. That policy can remove shared-scope writes before per-user writes, but Cycles does not automatically tighten caps as the remaining balance falls.
 
 ## A RISK_POINTS Schedule for Memory Operations
 
@@ -152,7 +152,7 @@ The multi-tenant arguments in [Multi-Tenant AI Cost Control](/blog/multi-tenant-
 The fixes are familiar from the budget side of the protocol:
 
 - Memory scopes mirror [scope](/glossary#scope) paths — `tenant:acme/agent:support` writes only to that scope, retrievals only resolve within it.
-- Cross-tenant writes are a distinct action class with a higher risk-point cost or a hard `DENY`.
+- Cross-tenant writes are a distinct action class with a higher risk-point cost or an application-enforced denial.
 - Audit and attribution are per-scope, not per-store.
 
 A memory layer that does not enforce scopes is the memory equivalent of a budget system that does not enforce per-tenant caps. The damage looks the same: one tenant's bad behavior degrades service for every tenant.
@@ -180,7 +180,7 @@ Memory drift becomes a measurable, bounded property. Without write quotas, drift
 
 Incident response gets faster. When an agent starts behaving oddly and the cause is a poisoned memory, the audit trail of recent writes — bounded in size by the per-run quota — narrows the search to a small set of candidates. Without that quota, "what changed in memory" is an open question with no obvious end.
 
-And the model of what an "agent action" is gets a little closer to the real shape of the system. Outbound side effects matter because they reach external parties. Memory writes matter because they reach the next run. Both are actions. Both deserve to be reserved, capped, and committed before they happen — not retroactively analyzed after the next agent has already read what the previous one wrote.
+And the model of what an "agent action" is gets a little closer to the real shape of the system. Outbound side effects matter because they reach external parties. Memory writes matter because they reach the next run. Both are actions. Both deserve a mandatory reservation before execution and accurate settlement afterward — not only retrospective analysis after the next agent has already read what the previous one wrote.
 
 ## Next Steps
 

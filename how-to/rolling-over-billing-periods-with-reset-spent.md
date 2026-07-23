@@ -5,7 +5,7 @@ description: "Use the RESET_SPENT funding operation in Cycles to start a new bil
 
 # Rolling Over Billing Periods with RESET_SPENT
 
-Budget ledgers in Cycles track four counters: `allocated`, `spent`, `reserved`, and `debt`. At the end of a billing period — monthly, weekly, or whatever your plan defines — you typically want to carry forward the *allocation* and clear the *spend*, while preserving in-flight reservations and any debt that should persist into the next period.
+Budget ledgers in Cycles track five counters: `allocated`, `spent`, `reserved`, `debt`, and `remaining` (`remaining = allocated − spent − reserved − debt`). At the end of a billing period — monthly, weekly, or whatever your plan defines — you typically want to restate the *allocation* and clear the *spend*, while preserving in-flight reservations and any debt that should persist into the next period.
 
 That is exactly what `RESET_SPENT` does. It was added in `cycles-server-admin` v0.1.25.18 as a narrower alternative to the existing `RESET` operation, and is available as a funding operation on `POST /v1/admin/budgets/fund`.
 
@@ -16,23 +16,24 @@ The two operations are easy to confuse. Here is how they differ:
 | Operation | Sets `allocated` | Clears `spent` | Preserves `reserved` | Preserves `debt` |
 |-----------|------------------|----------------|----------------------|------------------|
 | `RESET` | **Yes** — to the `amount` in the request | No — preserved | Yes | Yes |
-| `RESET_SPENT` | **Optional** — defaults to existing allocation | **Yes** — cleared (or set to the value in the request) | Yes | Yes |
+| `RESET_SPENT` | **Yes** — to the `amount` in the request (**required**) | **Yes** — to zero, or to the optional `spent` value | Yes | Yes |
 
 - **`RESET`** changes the size of the budget. The allocation counter is rewritten to whatever you passed in. `spent` carries over. Use this when a customer upgrades or downgrades mid-period.
-- **`RESET_SPENT`** starts a new billing period. The `spent` counter is zeroed out (or set to a specific starting value, e.g., for a prorated correction). `allocated` is left alone unless you explicitly pass a new value.
+- **`RESET_SPENT`** starts a new billing period. `allocated` is set to the (required) `amount` in the request — pass the current allocation if the ceiling is not changing — and the `spent` counter is zeroed out (or set to the optional `spent` value, e.g., for a prorated correction).
 
-The protocol was missing a way to roll over `spent` without either also rewriting `allocated` or issuing a corrective `DEBIT`, both of which were error-prone. `RESET_SPENT` closes that gap.
+The protocol was missing a way to clear `spent` at a period boundary: `RESET` resizes the allocation but preserves spend, and issuing corrective `DEBIT`s was error-prone. `RESET_SPENT` closes that gap with a single operation that sets the new period's allocation and resets the spend.
 
 ## Basic monthly rollover
 
-The most common case — a cron job that runs at the start of each billing period and zeroes out spend while keeping the allocation intact:
+The most common case — a cron job that runs at the start of each billing period and zeroes out spend while restating the allocation. `amount` is required and becomes the new `allocated` — pass the current allocation to keep the ceiling unchanged. When authenticating with the admin key, `tenant_id` is also required:
 
 ```bash
-curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-corp&unit=USD_MICROCENTS" \
+curl -X POST "http://localhost:7979/v1/admin/budgets/fund?tenant_id=acme-corp&scope=tenant:acme-corp&unit=USD_MICROCENTS" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "operation": "RESET_SPENT",
+    "amount": { "amount": 100000000, "unit": "USD_MICROCENTS" },
     "idempotency_key": "rollover-acme-2026-05",
     "reason": "Monthly rollover for billing period 2026-05"
   }'
@@ -40,11 +41,11 @@ curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-corp
 
 After this call:
 
-- `allocated` — unchanged.
+- `allocated` — set to the `amount` in the request (`100000000` here).
 - `spent` — zero.
 - `reserved` — unchanged. Any reservations that were live at the moment of the call continue to hold their budget, and commit normally.
 - `debt` — unchanged.
-- `remaining` — recomputed as `allocated - reserved - debt`.
+- `remaining` — recomputed as `allocated - spent - reserved - debt`.
 
 The idempotency key should encode the tenant and the period being started. If the cron retries, the replay returns the original response and the counters do not move twice.
 
@@ -53,11 +54,12 @@ The idempotency key should encode the tenant and the period being started. If th
 If a customer upgrades mid-period and you need to credit back some of the spend they incurred on the old plan, you can pass an explicit `spent` value instead of clearing to zero:
 
 ```bash
-curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-corp&unit=USD_MICROCENTS" \
+curl -X POST "http://localhost:7979/v1/admin/budgets/fund?tenant_id=acme-corp&scope=tenant:acme-corp&unit=USD_MICROCENTS" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "operation": "RESET_SPENT",
+    "amount": { "amount": 100000000, "unit": "USD_MICROCENTS" },
     "idempotency_key": "prorate-acme-2026-04-17",
     "spent": { "amount": 3200000, "unit": "USD_MICROCENTS" },
     "reason": "Prorated spend after mid-period plan change"
@@ -81,7 +83,7 @@ If you want to explicitly zero out reservations or debt, use the targeted operat
 
 ## Events emitted
 
-A successful `RESET_SPENT` emits `budget.reset_spent` (v0.1.25.18+). The payload includes both the pre-rollover `spent` value and the post-rollover value — useful for downstream billing systems that want to archive the period's total on the event stream rather than polling balances.
+A successful `RESET_SPENT` emits `budget.reset_spent` (v0.1.25.18+). The payload carries `previous_state` and `new_state` snapshots — including the pre-rollover `spent` — plus a `spent_override_provided` flag that distinguishes routine rollovers (`false`, spent defaulted to 0) from explicit adjustments (`true`, the request supplied a `spent` value). Useful for downstream billing systems that want to archive the period's total on the event stream rather than polling balances.
 
 ```json
 {
@@ -90,11 +92,23 @@ A successful `RESET_SPENT` emits `budget.reset_spent` (v0.1.25.18+). The payload
     "ledger_id": "led_acme_default",
     "scope": "tenant:acme-corp",
     "unit": "USD_MICROCENTS",
-    "allocated": 100000000,
-    "spent_before": 87340000,
-    "spent_after": 0,
-    "reserved": 1200000,
-    "debt": 0
+    "operation": "RESET_SPENT",
+    "previous_state": {
+      "allocated": 100000000,
+      "spent": 87340000,
+      "reserved": 1200000,
+      "debt": 0,
+      "remaining": 11460000
+    },
+    "new_state": {
+      "allocated": 100000000,
+      "spent": 0,
+      "reserved": 1200000,
+      "debt": 0,
+      "remaining": 98800000
+    },
+    "spent_override_provided": false,
+    "reason": "Monthly rollover for billing period 2026-05"
   }
 }
 ```
@@ -103,7 +117,7 @@ See the [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-proto
 
 ## Scheduling the rollover
 
-Cycles does not schedule rollovers for you — there is no built-in cron. You run the rollover however fits your operational model:
+Budget ledgers carry declarative period metadata — `rollover_policy` (`NONE`, `CARRY_FORWARD`, `CAP_AT_ALLOCATED`) plus `period_start`/`period_end` — that describes how unused budget should be handled at period boundaries. But the server does not execute those boundaries on a schedule: there is no built-in cron, and `RESET_SPENT` is the explicit operation you call to effect the rollover. You trigger it however fits your operational model:
 
 - **External cron.** A scheduled job that reads a list of active tenants from your own tenancy database and calls `RESET_SPENT` for each on the first of the month.
 - **Stripe webhook-driven.** A handler for Stripe's `invoice.finalized` event that rolls over the corresponding tenant as part of invoice reconciliation.
@@ -138,7 +152,7 @@ curl -X POST http://localhost:7979/v1/admin/budgets/bulk-action \
 # Per-tenant loop — substitute your tenant source of truth
 for TENANT in $(cat tenants-to-roll.txt); do
   COUNT=$(curl -s "http://localhost:7979/v1/admin/budgets?tenant_id=$TENANT&unit=USD_MICROCENTS" \
-    -H "X-Admin-API-Key: $ADMIN_KEY" | jq '.total')
+    -H "X-Admin-API-Key: $ADMIN_KEY" | jq '.ledgers | length')
 
   curl -X POST http://localhost:7979/v1/admin/budgets/bulk-action \
     -H "X-Admin-API-Key: $ADMIN_KEY" \
@@ -165,7 +179,7 @@ If each budget needs a different `allocated`, `amount` is too coarse — fall ba
 ### Prerequisites and per-row outcomes
 
 - **Budgets must be ACTIVE.** `RESET_SPENT` against a `FROZEN` or `CLOSED` budget lands in the `failed[]` bucket with `error_code=INVALID_TRANSITION`. If you intentionally froze some budgets during a dispute, either unfreeze them first or add `status=ACTIVE` to the filter to skip them: `"filter": { "tenant_id": "acme-corp", "unit": "USD_MICROCENTS", "status": "ACTIVE" }`.
-- **Other per-row outcomes:** `BUDGET_EXCEEDED` (only matters for DEBIT, not RESET_SPENT), `NOT_FOUND` (ledger deleted mid-operation), `INTERNAL_ERROR`.
+- **Other per-row outcomes:** `BUDGET_EXCEEDED` (only matters for DEBIT, not RESET_SPENT), `NOT_FOUND` (ledger deleted mid-operation), `PERMISSION_DENIED`, `INTERNAL_ERROR`.
 - The 500-row cap and 15-minute idempotency window apply the same as for tenants/webhooks bulk-action.
 - Emits one `budget.reset_spent` event per matched budget.
 - Emits one audit row for the whole invocation with per-budget `succeeded_ids` / `failed_rows` — triageable from the audit log alone (v0.1.25.30+).

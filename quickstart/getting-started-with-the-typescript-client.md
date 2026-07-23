@@ -18,8 +18,8 @@ The `withCycles` HOF wraps any async function in a reserve → execute → commi
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 :::
 
 ## Prerequisites
@@ -176,6 +176,8 @@ const chat = withCycles(
 | `client` | `undefined` | Explicit client. Falls back to module default. |
 | `useEstimateIfActualNotProvided` | `true` | If `true` and `actual` is not set, use estimate as actual at commit. |
 
+Since 0.3.0, `actionKind`, `actionName`, and the six subject fields (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) accept `string | ((...args) => string | undefined)` — a callable is resolved per call from the wrapped function's arguments.
+
 ## Accessing reservation context at runtime
 
 Inside a `withCycles`-guarded function, the current reservation context is available via `getCyclesContext()`:
@@ -254,7 +256,7 @@ try {
 | `DebtOutstandingError` | Outstanding debt blocks new reservations (when no overdraft limit configured) |
 | `ReservationExpiredError` | Operating on an expired reservation |
 | `ReservationFinalizedError` | Operating on an already-committed/released reservation |
-| `CyclesTransportError` | Network-level failure (connection, DNS, timeout) |
+| `CyclesTransportError` | Network-level failure (connection, DNS, timeout). Exported for user code — the SDK itself surfaces transport failures from `withCycles`/`reserveForStream` as `CyclesProtocolError` with `status: -1` |
 
 ## Streaming support
 
@@ -560,7 +562,7 @@ For each `withCycles`-guarded function call:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: exception is thrown, function does not run
-5. Heartbeat extension is scheduled (background, at half the TTL interval)
+5. Heartbeat extension is scheduled (background, at half the TTL interval, minimum 1s)
 6. Function executes
 7. Actual usage is evaluated (function, fixed value, or estimate)
 8. Commit is sent with actual amount and optional metrics

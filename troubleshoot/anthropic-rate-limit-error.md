@@ -78,7 +78,7 @@ Patterns that prevent the underlying class of incident, not just the symptom:
 - **Per-tenant token budgets.** Cap tenants at a fraction of your Anthropic quota. A single noisy customer cannot drain shared headroom. See [Multi-tenant SaaS](/how-to/multi-tenant-saas-with-cycles).
 - **Pre-execution gating.** Before sending the request to Anthropic, check whether *this caller* has budget. If not, deny locally — no 429, no retry, no incident. See [How decide works](/protocol/how-decide-works-in-cycles-preflight-budget-checks-without-reservation).
 - **Atomic reservations.** Ten parallel agents seeing the same available budget and all proceeding is the classic TOCTOU pattern. Cycles' atomic reserve → commit eliminates it. See [Concurrent agent overspend](/incidents/concurrent-agent-overspend).
-- **Graceful degradation.** When budget is low, Cycles returns `ALLOW_WITH_CAPS` with a reduced `max_tokens`, so the agent still runs but at a smaller cost footprint. See [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer).
+- **Graceful degradation.** When an operator configures caps on the deepest-scope budget, Cycles returns `ALLOW_WITH_CAPS` with those constraints (e.g. a reduced `max_tokens`), so the agent still runs but at a smaller cost footprint. See [Degradation paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer).
 
 ## Related
 

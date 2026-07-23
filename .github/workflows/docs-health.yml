@@ -1,0 +1,113 @@
+name: Documentation Health
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - '.lycheeignore'
+      - 'scripts/check-implementation-drift.mjs'
+      - 'scripts/__tests__/implementation-drift.test.ts'
+      - '.github/workflows/docs-health.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  schedule:
+    - cron: '20 6 * * 1'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      external_links_only:
+        description: Run only the post-deployment external-link check
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  implementation-drift:
+    if: inputs.external_links_only != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install documentation dependencies
+        run: npm install
+
+      - name: Clone implementation sources
+        run: |
+          set -euo pipefail
+          mkdir implementations
+          for repo in \
+            cycles-protocol \
+            cycles-server \
+            cycles-server-admin \
+            cycles-server-events \
+            cycles-dashboard \
+            cycles-client-python \
+            cycles-client-rust \
+            cycles-client-typescript \
+            cycles-mcp-server \
+            cycles-claude-plugin \
+            cycles-spring-ai-starter \
+            cycles-spring-boot-starter \
+            cycles-openai-agents \
+            cycles-openclaw-budget-guard \
+            cycles-ap2-python \
+            langchain-runcycles
+          do
+            git clone --depth 1 \
+              "https://github.com/runcycles/${repo}.git" \
+              "implementations/${repo}"
+          done
+
+      - name: Check versions and implementation coverage
+        run: node scripts/check-implementation-drift.mjs --root implementations
+
+      - name: Test drift-check helpers
+        run: npm test -- implementation-drift
+
+  external-links:
+    if: >-
+      inputs.external_links_only ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore link-check cache
+        uses: actions/cache@v5
+        with:
+          path: .lycheecache
+          key: lychee-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            lychee-${{ runner.os }}-
+
+      - name: Check deployed and external documentation links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --base-url https://runcycles.io
+            --accept '200..=399,403,429'
+            --cache
+            --max-cache-age 1d
+            --max-concurrency 16
+            --max-retries 3
+            --retry-wait-time 2
+            --exclude-all-private
+            --exclude-path '(^|/)(node_modules|\.git|\.agents|\.claude|\.outreach|seo-worktrees)(/|$)'
+            --scheme http
+            --scheme https
+            './**/*.md'
+          fail: true
+          jobSummary: true
+          token: ${{ secrets.GITHUB_TOKEN }}

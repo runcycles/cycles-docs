@@ -397,7 +397,7 @@ You can combine approaches — for example, use per-node callback handlers for L
 
 ## Full example
 
-See [`examples/langgraph_integration.py`](https://github.com/runcycles/cycles-client-python/blob/main/examples/langgraph_integration.py) for a complete, runnable script.
+See the complete LangGraph snippets above and the [`CyclesBudgetHandler` LangChain example](https://github.com/runcycles/cycles-client-python/blob/main/examples/langchain_integration.py) for the underlying callback setup.
 
 ## Next steps
 

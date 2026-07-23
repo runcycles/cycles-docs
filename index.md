@@ -41,7 +41,7 @@ features:
       src: /icons/book-text.svg
       alt: Topic guides icon
     title: "Topic Guides"
-    details: "Two reference maps covering the enforcement dimensions of runtime authority: LLM cost control (what agents spend) and risk & blast radius (what agents do)."
+    details: "Three reference maps covering the enforcement dimensions of runtime authority: LLM cost control (what agents spend), risk & blast radius (what agents do), and multi-tenant operations (who owns which budget)."
     link: /guides/
     linkText: Read the guides
   - icon:

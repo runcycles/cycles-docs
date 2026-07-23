@@ -1,6 +1,6 @@
 ---
 title: "Webhook Event Delivery Protocol"
-description: "Complete reference for Cycles webhook delivery: 47 registered event types, HTTP headers, payload format, HMAC-SHA256 signing, retry policy, delivery status lifecycle, and at-least-once guarantees."
+description: "Complete reference for Cycles webhook delivery: 51 registered event types, HTTP headers, payload format, HMAC-SHA256 signing, retry policy, delivery status lifecycle, and at-least-once guarantees."
 ---
 
 # Webhook Event Delivery Protocol
@@ -14,7 +14,7 @@ Every webhook delivery includes these HTTP headers:
 | Header | Value | Description |
 |--------|-------|-------------|
 | `Content-Type` | `application/json` | Always JSON |
-| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. If no secret was provided when the subscription was created, the server-generated secret is used. |
+| `X-Cycles-Signature` | `sha256=<hex>` | HMAC-SHA256 of the raw body using the subscription signing secret. Present whenever the subscription has a signing secret (if no secret was provided when the subscription was created, the server-generated secret is used); omitted when the subscription has no signing secret. |
 | `X-Cycles-Event-Id` | `evt_abc123...` | Unique event ID. Use for deduplication. |
 | `X-Cycles-Event-Type` | `budget.exhausted` | Dot-notation event type for routing. |
 | `X-Cycles-Trace-Id` | `0af7651916cd43dd8448eb211c80319c` | 32-hex W3C Trace Context identifier for the logical operation this event belongs to. Always present on deliveries from v0.1.25.7+ events services. |
@@ -51,7 +51,7 @@ The body is a JSON-serialized Event object:
     "remaining": 0,
     "spent": 10000
   },
-  "correlation_id": "batch_nightly_2026_04_18",
+  "correlation_id": "3f2a9c14e0b7d5a1",
   "request_id": "req_789",
   "trace_id": "0af7651916cd43dd8448eb211c80319c",
   "metadata": {}
@@ -60,11 +60,15 @@ The body is a JSON-serialized Event object:
 
 Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and `metadata` are optional (omitted when null).
 
-**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` is operator-populated and groups a family of related events. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` groups a family of related events — it is server-set in one of two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`) for governance/admin operations. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
-## Event types (47)
+## Event types (51)
 
-The current v0.1.25 Admin API `EventType` enum registers 47 event types across seven categories: budget (16), reservation (5), tenant (6), api_key (6), policy (3), webhook (6), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully.
+The current v0.1.25 Admin API `EventType` enum registers 51 event types across seven categories: budget (17), reservation (6), tenant (6), api_key (7), policy (3), webhook (7), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully. The per-category tables below list the 47 non-cascade types; the four `*_via_tenant_cascade` types (one each in the budget, reservation, api_key, and webhook categories, added to the enum in governance revision v0.1.25.35) are covered in [Tenant-close cascade fan-out](#tenant-close-cascade-fan-out).
+
+::: info Count note
+The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
+:::
 
 ### Budget events (16)
 
@@ -150,18 +154,39 @@ The current v0.1.25 Admin API `EventType` enum registers 47 event types across s
 
 ### Tenant-accessible events
 
-Tenants creating self-service webhooks via `/v1/webhooks` can subscribe to budget, reservation, and tenant events: 27 of the 47 registered event types. They will also receive the additive `_via_tenant_cascade` fan-out events that the reference admin server emits in those same categories on tenant close — see the next section. API key, policy, webhook lifecycle, and system events are admin-only.
+A webhook subscription **owned by a concrete tenant** can only carry — and can only receive — **tenant-accessible** event classes: `budget.*`, `reservation.*`, and `tenant.*` (29 of the 51 registered event types, including the `budget.*` and `reservation.*` cascade fan-out events the admin server emits on tenant close — see the next section). The **admin-only** classes — `api_key.*`, `policy.*`, `webhook.*`, and `system.*` — belong on subscriptions owned by the operator (the `__system__` owner), never on a tenant-owned row.
+
+This is **governance WEBHOOK SUBSCRIPTION INVARIANT 2** (normative, cross-plane, spec revisions v0.1.25.38–.41): a subscription whose owning `tenant_id` is present and `!= "__system__"` MUST NOT carry an admin-only event type or category — *by any provisioning mechanism*. The invariant is a property of the **owning tenant**, not of the caller or the endpoint, so it holds under tenant self-service auth, admin-key, and admin-on-behalf-of alike. The rationale is confidentiality: the owning tenant controls that subscription's delivery URL and signing secret, and `event_categories` is additive with `event_types` in delivery matching, so an admin-only selector on a tenant-owned row would leak admin governance/security telemetry (`api_key` / `policy` / `webhook` / `system` events) to a tenant-controlled endpoint.
+
+::: warning Enforced at three layers (issue #209)
+The guarantee is defense-in-depth across the two services — verify your fleet is fully upgraded:
+- **Write** — both provisioning planes reject an admin-only type or category on a concrete-tenant subscription with `400 INVALID_REQUEST`. The tenant self-service plane (`POST`/`PATCH /v1/webhooks`) since **cycles-server-admin 0.1.25.50** (governance v0.1.25.38); the admin plane (`POST /v1/admin/webhooks?tenant_id=X`, `PATCH /v1/admin/webhooks/{id}`) since **0.1.25.51** (governance v0.1.25.40) — update validates the *effective resulting* selectors (each array as it stands after the update — the request's value where provided, the stored value where omitted; `PATCH` replaces a supplied array, it does not merge), so a status-only reactivation validates the still-stored selectors and can't re-enable a disabled offender that holds admin-only ones. `__system__`-owned subscriptions are exempt (system-wide monitoring is legitimate).
+- **Dispatch** — since **0.1.25.51**, live dispatch and replay skip any admin-only event per-event for a concrete-tenant subscription, fail-closed and independent of stored-selector correctness (a default-on startup reconciler additionally strips legacy admin-only selectors from stored non-`DISABLED` rows — best-effort hygiene, see below).
+- **Last-mile delivery** — since **cycles-server-events 0.1.25.23**, the delivery worker re-checks the boundary immediately before every outbound POST (initial, retry, and recovered redeliveries), catching deliveries queued before the upgrade and every retry. **Rolling-deploy caveat:** this is a per-worker guarantee — airtight only once *all* delivery workers are on 0.1.25.23.
+
+**Operators upgrading past 0.1.25.49 (admin) / 0.1.25.22 (events)** should audit existing tenant subscriptions for admin-only selectors. Confidentiality does not depend on the audit — the fail-closed dispatch and last-mile boundaries already withhold the events. As storage hygiene, 0.1.25.51 also runs a **default-on, best-effort startup reconciler** (`webhook.category-boundary.reconcile-on-startup`, default `true`) that strips admin-only selectors from stored non-`DISABLED` concrete-tenant rows and disables empty-both rows; it is not the security mechanism (dispatch already withholds the events, and a `DISABLED` row delivers nothing). The [0.1.25.50 release notes](https://github.com/runcycles/cycles-server-admin/releases/tag/v0.1.25.50) carry a `redis-cli`/`jq` recipe to find offenders manually.
+:::
+
+#### Monitoring a specific tenant's admin-only events
+
+Because a tenant-owned subscription can no longer carry admin-only classes, per-tenant admin monitoring (e.g. one tenant's `api_key.*` or `policy.*` events pointed at an operator endpoint) moves to a **`__system__`-owned** subscription — create it via `POST /v1/admin/webhooks` with **no `tenant_id`** parameter. A `__system__`-owned subscription may carry admin-only selectors, so name the admin event types you want in `event_types` (create requires a non-empty `event_types` per INVARIANT 1); to cover whole admin categories, pair a representative admin type with `event_categories` (e.g. `event_types: ["api_key.created"]`, `event_categories: ["api_key", "policy"]`). Because `__system__` is in the dispatch union for every tenant, that subscription receives those admin events for **all** tenants; select the tenant you care about **client-side** on the delivered envelope's `tenant_id`.
+
+`scope_filter` generally can't do the per-tenant narrowing here: `api_key.*`, `webhook.*`, and `system.*` events are **null-scoped**, and a `scope_filter` excludes null-scoped events, so it would deliver none of them. The one exception is `policy.*`, which carries a real tenant-bounded `scope` and so *can* be `scope_filter`ed if you only need policy events. For everything else, client-side `tenant_id` filtering is the general solution. The `__system__` row is operator-owned, so its URL and secret stay operator-controlled.
+
+::: tip `/test` probe exception
+The owner-triggered webhook test (`POST /v1/webhooks/{id}/test` and its admin twin) POSTs a single synthetic `system.webhook_test` connectivity event **directly** to the subscription's own endpoint, bypassing the dispatch queue. A tenant-owned subscription MAY receive its own test probe even though `system.webhook_test` is a `system.*` (admin-only) type — the payload is an owner-requested `{subscription_id, test:true}` ping carrying no governance telemetry, and the subscription's stored selectors are unchanged and still must satisfy INVARIANT 2. This exception is limited to the synthetic test event on the `/test` operations; no real `system.*`/`api_key.*`/`policy.*`/`webhook.*` event from the event stream reaches a tenant-owned subscription.
+:::
 
 ### Tenant-close cascade fan-out
 
-The reference implementation also emits cascade fan-out event names with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). Treat these as additive implementation events and ignore any unrecognized event type gracefully:
+The admin server emits cascade fan-out events with the `_via_tenant_cascade` suffix as side effects of a `* → CLOSED` tenant transition (Rule 1 — Close Cascade). All four names are declared in the governance spec's `EventType` enum since document revision v0.1.25.35, so they count toward the 51 registered types and are filterable like any other lifecycle event. Emission is SHOULD-level in the spec (the matching per-object audit entries are a MUST), so non-reference servers may not emit them — keep ignoring unrecognized event types gracefully:
 
 - `budget.closed_via_tenant_cascade` — one per owned `BudgetLedger`.
-- `reservation.released_via_tenant_cascade` — one per open owned reservation. Reason `tenant_closed`; no overage debt.
+- `reservation.released_via_tenant_cascade` — a **ledger-level aggregate**: one per closed budget with `reserved > 0`, carrying `released_amount`. Reason `tenant_closed`; no overage debt.
 - `api_key.revoked_via_tenant_cascade` — one per owned API key.
 - `webhook.disabled_via_tenant_cascade` — one per owned webhook subscription.
 
-All four carry the `correlation_id` of the originating `tenant.closed` audit entry, letting subscribers correlate cascade side effects to the operator action that triggered them. The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
+All four carry a server-composed `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>`, letting subscribers correlate cascade side effects to the operator action that triggered them (audit rows for the operation join via `request_id`/`trace_id`). The dashboard (v0.1.25.43+) renders a "tenant cascade" chip on audit and event-timeline rows with these suffixes.
 
 See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) for the full Rule 1 / Rule 2 contract and Mode A / Mode B semantics.
 
@@ -238,8 +263,13 @@ The events service uses these Redis data structures (shared with the admin serve
 
 | Key | Type | Written By | Read By | Description |
 |-----|------|-----------|---------|-------------|
-| `dispatch:pending` | LIST | Admin (LPUSH) | Events (BRPOP) | Delivery IDs awaiting processing |
+| `dispatch:pending` | LIST | Admin (LPUSH) | Events (BLMOVE) | Delivery IDs awaiting processing |
+| `dispatch:processing` | LIST | Events (BLMOVE) | Events (LREM / recovery) | Claimed delivery IDs retained until acknowledged |
+| `dispatch:processing:claimed_at` | ZSET | Events | Events | Claim timestamps used for idle-gated crash recovery |
+| `dispatch:processing:claim_owner` | HASH | Events | Events | Per-delivery claim-generation token that prevents a stale worker from acknowledging a successor's claim |
+| `dispatch:ordering:lock` | STRING | Events | Events | Renewable owner token for the cross-replica claim/send critical section |
 | `dispatch:retry` | ZSET | Events (ZADD) | Events (ZRANGEBYSCORE) | Retry queue (score = timestamp) |
+| `dispatch:failed` | LIST | Events (LPUSH/LTRIM) | Operators | Bounded quarantine for corrupt delivery records |
 | `delivery:{id}` | STRING | Admin (SET) | Events (GET/SET) | Delivery record JSON (14-day TTL) |
 | `event:{id}` | STRING | Admin (SET) | Events (GET) | Event record JSON (90-day TTL) |
 | `webhook:{id}` | STRING | Admin (SET) | Events (GET/SET) | Subscription JSON |

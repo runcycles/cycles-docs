@@ -1,7 +1,11 @@
 ---
 title: Blog
-description: "Engineering insights, product updates, and best practices for AI agent runtime authority, exposure, and cost control — from the Cycles team."
+description: "Engineering analysis, product updates, and practical guidance for AI agent runtime authority, budget enforcement, action exposure, and cost-control systems."
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent governance, runtime authority, budget enforcement, action authority, AI agent cost control, Cycles engineering blog
 ---
 
 # The Cycles Blog

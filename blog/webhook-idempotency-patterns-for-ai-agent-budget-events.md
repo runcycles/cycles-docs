@@ -1,5 +1,5 @@
 ---
-title: "Webhook Idempotency Patterns for AI Agent Budget Events"
+title: "Webhook Idempotency for Agent Budget Events"
 date: 2026-04-24
 author: Albert Mavashev
 tags:

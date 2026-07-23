@@ -34,20 +34,26 @@ The `dry_run` flag on the `@cycles` decorator / `withCycles` HOF skips executing
 
 ::: code-group
 ```python [Python]
+import logging
+import uuid
+
 from runcycles import CyclesClient, CyclesConfig
 
-client = CyclesClient(CyclesConfig.from_env())
+logger = logging.getLogger(__name__)
+
+config = CyclesConfig.from_env()
+client = CyclesClient(config)
 
 def existing_chat_function(prompt: str) -> str:
     # Observe: check what Cycles would decide, but don't block
     try:
         decision = client.decide({
             "idempotency_key": str(uuid.uuid4()),
-            "subject": {"tenant": client._config.tenant},
+            "subject": {"tenant": config.tenant},
             "action": {"kind": "llm.completion", "name": "openai:gpt-4o"},
             "estimate": {"amount": 2000000, "unit": "USD_MICROCENTS"},
         })
-        logger.info("Cycles decision: %s", decision.body.get("decision"))
+        logger.info("Cycles decision: %s", decision.get_body_attribute("decision"))
     except Exception:
         pass  # Don't let observation failures affect production
 
@@ -62,13 +68,14 @@ const client = new CyclesClient(CyclesConfig.fromEnv());
 async function existingChatFunction(prompt: string) {
   // Observe: check what Cycles would decide, but don't block
   try {
+    // The client posts wire-format (snake_case) bodies verbatim
     const decision = await client.decide({
-      idempotencyKey: crypto.randomUUID(),
+      idempotency_key: crypto.randomUUID(),
       subject: { tenant: client.config.tenant! },
       action: { kind: "llm.completion", name: "openai:gpt-4o" },
       estimate: { amount: 2000000, unit: "USD_MICROCENTS" },
     });
-    console.log("Cycles decision:", decision.body.decision);
+    console.log("Cycles decision:", decision.body?.decision);
   } catch {
     // Don't let observation failures affect production
   }
@@ -124,7 +131,7 @@ async function generateSummary(document: string): Promise<string> {
 from runcycles import cycles
 
 @cycles(
-    estimate=lambda document: int(len(document) / 4 * 250 + 2000 * 1000) * 1.2,
+    estimate=lambda document: int((len(document) / 4 * 250 + 2000 * 1000) * 1.2),
     action_kind="llm.completion",
     action_name="openai:gpt-4o",
 )
@@ -141,7 +148,7 @@ import { withCycles } from "runcycles";
 
 const generateSummary = withCycles(
   {
-    estimate: (document: string) => Math.ceil(document.length / 4 * 250 + 2000 * 1000) * 1.2,
+    estimate: (document: string) => Math.ceil((document.length / 4 * 250 + 2000 * 1000) * 1.2),
     actionKind: "llm.completion",
     actionName: "openai:gpt-4o",
   },
@@ -158,7 +165,8 @@ const generateSummary = withCycles(
 ```java [Spring Boot]
 import io.runcycles.client.java.spring.annotation.Cycles;
 
-@Cycles(value = "#{ T(Math).ceil(#document.length() / 4 * 250 + 2000 * 1000) * 1.2 }",
+// The estimate is a raw SpEL expression — no #{...} template wrapper
+@Cycles(value = "T(Math).ceil((#document.length() / 4 * 250 + 2000 * 1000) * 1.2)",
         actionKind = "llm.completion", actionName = "openai:gpt-4o")
 public String generateSummary(String document) {
     // Same OpenAI call — business logic unchanged
@@ -190,33 +198,39 @@ except BudgetExceededError:
 ```typescript [TypeScript]
 import { BudgetExceededError } from "runcycles";
 
+let result: string;
+
 try {
-  const result = await generateSummary(document);
+  result = await generateSummary(document);
 } catch (err) {
-  if (err instanceof BudgetExceededError) {
-    // Option A: Return a graceful fallback
-    result = "Summary unavailable — budget limit reached.";
-    // Option B: Use a cheaper model
-    result = await generateSummaryCheap(document);
-    // Option C: Queue for later
-    queueForRetry(document);
+  if (!(err instanceof BudgetExceededError)) {
+    throw err;
   }
+  // Option A: Return a graceful fallback
+  result = "Summary unavailable — budget limit reached.";
+  // Option B: Use a cheaper model
+  result = await generateSummaryCheap(document);
+  // Option C: Queue for later
+  queueForRetry(document);
 }
 ```
 ```java [Spring Boot]
 import io.runcycles.client.java.spring.model.CyclesProtocolException;
 
+String result;
+
 try {
-    String result = summaryService.generateSummary(document);
+    result = summaryService.generateSummary(document);
 } catch (CyclesProtocolException e) {
-    if (e.isBudgetExceeded()) {
-        // Option A: Return a graceful fallback
-        result = "Summary unavailable — budget limit reached.";
-        // Option B: Use a cheaper model
-        result = summaryService.generateSummaryCheap(document);
-        // Option C: Queue for later
-        queueForRetry(document);
+    if (!e.isBudgetExceeded()) {
+        throw e;
     }
+    // Option A: Return a graceful fallback
+    result = "Summary unavailable — budget limit reached.";
+    // Option B: Use a cheaper model
+    result = summaryService.generateSummaryCheap(document);
+    // Option C: Queue for later
+    queueForRetry(document);
 }
 ```
 :::
@@ -263,7 +277,7 @@ Each wrapped function reserves independently. If the agent calls all three in se
 
 ## Stage 4: Switch to live enforcement
 
-Once you're confident in your budget allocations (from shadow mode data), remove `dry_run=True`:
+Wrapped calls enforce immediately unless `dry_run` is set — so if you followed Stages 1–3 as written, your wrapped paths are already live, and Stage 4 simply means retiring the Stage 1 `decide` side-channel once you're confident in your budget allocations. If you did set `dry_run=True` on any wrapped call during testing (recall from Stage 1 that it skips executing the wrapped function, so it's unsuitable for shadow-observing production traffic), remove it now:
 
 ::: code-group
 ```python [Python]

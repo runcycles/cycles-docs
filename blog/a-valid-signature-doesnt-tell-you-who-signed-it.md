@@ -10,7 +10,7 @@ tags:
   - agents
   - evidence
   - cryptography
-description: "A signed receipt proves the bytes came from a key — not that the key is the server's. That gap is signer authority, and closing it for the long haul means resolving keys and respecting rotation, not trusting whatever key the receipt handed you."
+description: "A valid signature proves bytes came from a key, not that the key is authoritative. Learn how signer resolution and key rotation establish durable trust."
 blog: true
 sidebar: false
 featured: false
@@ -49,9 +49,9 @@ Validity without authority is still worth something — we call it **binding-onl
 
 Closing the gap means anchoring the key to the server's own published identity rather than to the receipt. The server publishes its verification keys — public keys only, never the private signing key — at a well-known location derived from its identity. A consumer takes the signer reference on the envelope, resolves it to that published key set, and confirms the signing key is actually in it.
 
-Now the trust anchor is the server's identity, not a key the receipt handed you. A forger can still embed their own key and self-sign — but it won't be in the real server's published set, so it resolves to *not authorized*, not *authentic*. (The exact identifier and key-set format are being nailed down with our first cross-system consumer; the mechanics live in the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles) and the protocol issue it tracks.)
+Now the trust anchor is the server identity and its published key set, not a key the receipt handed you. A forger can still embed a key and self-sign, but that key will not resolve as authorized for the claimed server and issuance window. CyclesEvidence v0.2 defines the `did:cycles` identifier, server-relative JWK Set path, key-window rules, and distinct verification dispositions; the mechanics live in the [envelope reference](/protocol/cycles-evidence-envelopes-in-cycles).
 
-> **Status.** Signed, content-addressed evidence works today — and a server can publish its verification key set today. Full *signer resolution* (a consumer resolving the envelope's signer to that set, end-to-end) is being finalized with the first cross-system consumer. Until it round-trips, pin the expected signer and read the result as `binding_only` — which is exactly enough for a known counterparty. The boundary is deliberate, not a missing feature.
+> **Status.** Signer-authority resolution is normative in CyclesEvidence v0.2. The current server publishes its configured JWK Set, including retired-key history, and the v0.2 promotion was gated on an end-to-end consumer integration. A consumer that chooses not to resolve the set still reports `binding_only`; an expected-signer pin can provide a separate trust anchor for that posture.
 
 ## The rotation trap — the part that's easy to get catastrophically wrong
 
@@ -59,7 +59,7 @@ Keys rotate. They should: a signing key has a lifetime, and rotating it is hygie
 
 The tempting implementation fetches the key set and uses **the current key**. It passes every test you write today, because today's receipts were signed by today's key. Then you rotate — and every receipt signed before the rotation stops verifying, all at once, because it's being checked against a key that didn't exist when it was signed. For a live system that's an outage. For an audit trail meant to last *years*, it's the whole asset evaporating on a routine key change.
 
-So the design has the published key set **keep retired keys**, each stamped with the window of time it was valid, and the verifier selects the key whose window covers the receipt's *issuance time* — never "the latest." A receipt from eight months and two rotations ago still verifies, against the key that was genuinely valid when it was signed. This is the unglamorous mechanism that long-lived AI-governance records need: regimes like the [EU AI Act](/blog/a-200-ok-is-not-an-audit-trail) expect automated decision records to be retained and reviewable long after the fact — and "long after the fact" routinely outlives a signing key. Evidence has to survive the rotation, not silently rot on the next key change. (Today a server publishes a single active key; the retired-key history and validity windows are the next step on the publication side — but the verifier rule is built for them from the start, because retrofitting "pick the key for the signing time" *after* you've rotated is exactly the outage you're trying to avoid.)
+The published key set therefore keeps retired keys, each stamped with the window in which it was valid, and the verifier selects the unique key whose window covers the receipt's *issuance time*—never merely "the latest." The current server supports this through `EVIDENCE_SIGNING_RETIRED_KEYS`; operators must preserve correct, non-overlapping history and set the active key's validity start when rotating. A receipt from before a rotation can then verify against the key that was valid when it was signed.
 
 ## Honesty is a disposition, not a boolean
 
@@ -79,8 +79,8 @@ Three of those five are "valid signature, but not authentic" for three genuinely
 
 Two things this still isn't, because over-claiming an audit feature is its own risk:
 
-- **It's about *who signed*, not *whether the decision was right*.** Authority resolution tells you the receipt genuinely came from that server. It says nothing about whether the budget call was correct — enforcement is still the reserve/commit ledger.
-- **It's opt-in and still settling.** A server can publish its key set today; resolving it end-to-end is landing with our first cross-system consumer, and the identifier shape is being finalized with them. Until that round-trips, pin the expected signer for issuer trust — the binding-only path is exactly enough for the pinned case right now.
+- **It's about *who signed*, not *whether the decision was right*.** Authority resolution tells you the receipt genuinely came from that server. It says nothing about whether the budget call was correct—enforcement is still the reserve-commit ledger.
+- **It's opt-in and requires verifier policy.** A server can publish its key set, but each consumer must resolve and validate it—or intentionally use the `binding_only` path with an independent signer pin. Server identity trust, key-history retention, and archival availability remain operator responsibilities.
 
 ## Close the loop
 

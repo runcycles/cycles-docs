@@ -1,5 +1,5 @@
 ---
-title: "A Supply-Chain Playbook for Agent Skill Marketplaces"
+title: "Supply-Chain Playbook for Agent Skill Markets"
 date: 2026-05-08
 author: Albert Mavashev
 tags: [security, supply-chain, marketplace, governance, agents, runtime-authority, action-control, production]
@@ -13,13 +13,13 @@ head:
       content: "agent skill marketplace, supply chain security, ClawHub, MCP server registry, Sigstore provenance, Trusted Publishers OIDC, runtime authority, capability manifest, package registry security"
 ---
 
-# A Supply-Chain Playbook for Agent Skill Marketplaces
+# Supply-Chain Playbook for Agent Skill Markets
 
 A platform team is evaluating an agent skill marketplace ahead of a company-wide rollout. The marketplace has thousands of skills, a star rating, a search box, and a publisher field that's an unverified email. The team's security review starts with the question they ask of every other dependency source: *what's the trust model?* The answer comes back as a shrug. There's no signing requirement. There's no Trusted-Publisher-style OIDC path. There's no consumer-pinning enforcement, no capability manifest standard, no publish-time malware scanning that the team can point to. The "trust model" is the marketplace operator's reputation, applied uniformly to every skill regardless of what it does.
 
-This is exactly where npm was around 2014 and where PyPI was around 2016. We know what happens next — the [event-stream incident on npm in 2018](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), the `ctx` package takeover on PyPI in 2022, the typosquatting waves on every registry, the slow grind of getting 2FA mandated, then provenance attestations, then OIDC trusted publishing. Each predecessor took roughly a decade of incidents-then-controls to converge on a working playbook. [Our earlier analysis](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) cited a report of 1,184 malicious skills on OpenClaw's ClawHub in early 2026 — the exact number matters less than the pattern: agent skill marketplaces are already seeing package-registry-style abuse.
+This resembles the early trust model of npm and PyPI. Their history shows the likely failure modes — the [event-stream incident on npm in 2018](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), the `ctx` package takeover on PyPI in 2022, typosquatting waves, and the gradual adoption of mandatory 2FA, provenance attestations, and OIDC trusted publishing. Each predecessor took years of incidents and controls to converge on a stronger playbook. [Our earlier analysis](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) cited a report of 1,184 malicious skills on OpenClaw's ClawHub in early 2026 — the exact number matters less than the pattern: agent skill marketplaces are already seeing package-registry-style abuse.
 
-The question this post addresses isn't *whether* agent skill marketplaces will face the same supply-chain risks as the package registries. They will. The question is whether the response cycle has to take another decade, given that the controls that work — Sigstore provenance, OIDC-based trusted publishing, capability manifests, runtime blast-radius limits — already exist in deployable form. This is the playbook for not replaying the detour.
+Agent skill marketplaces should plan for supply-chain risks analogous to package registries, plus risks specific to prompts and tool composition. The response cycle does not have to repeat every predecessor incident: Sigstore provenance and OIDC-based trusted publishing have mature reference implementations, while capability manifests and runtime limits still need ecosystem-specific design and validation.
 
 <!-- more -->
 
@@ -34,8 +34,8 @@ The package-registry security playbook was written incrementally, usually after 
 | 2021 | npm | [ua-parser-js compromise](https://snyk.io/blog/typosquatting-attacks/) — popular library hijacked via maintainer-account takeover | Account hardening; password+2FA pressure |
 | 2021 | Industry | [Sigstore](https://www.sigstore.dev/) launched (Google + Linux Foundation): short-lived certs, transparency log | Foundation for ecosystem-wide signing |
 | 2022 | PyPI | `ctx` package takeover — maintainer's expired domain enabled email-based account reset | Email-domain controls; 2FA push for top maintainers |
-| 2023 | npm | [Provenance attestations via Sigstore](https://github.blog/security/supply-chain-security/introducing-npm-package-provenance/) — packages signed and logged with their build context | Cryptographic provenance for every published package |
-| 2023 | PyPI | [Trusted Publishers (OIDC)](https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/) — packages publish from CI without long-lived API tokens | OIDC-based publishing replaces classic API tokens |
+| 2023 | npm | [Provenance attestations via Sigstore](https://github.blog/security/supply-chain-security/introducing-npm-package-provenance/) — eligible publishers can attach signed build context | Cryptographic provenance for participating packages |
+| 2023 | PyPI | [Trusted Publishers (OIDC)](https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/) — participating projects can publish from CI without long-lived API tokens | OIDC-based publishing adds a token-free path |
 | 2024 | XZ Utils | [Multi-year social-engineering attack](https://thebrightbyte.com/playbook/insights/supply-chain-attacks-xz-npm-pypi) on a single maintainer | Recognition that maintainer trust is a long-horizon attack surface |
 | 2025 | npm | Mandatory 2FA for local publishing; classic tokens phased out | Identity becomes a hard requirement, not an optional control |
 
@@ -47,9 +47,9 @@ Stripped down to what each control *does*, independent of the registry:
 
 **1. Verified publisher identity with mandatory 2FA.** Email-only signup with a single password is where most attacks start. The fix is identity verification, mandatory 2FA on accounts that can publish, and shrinking the lifetime of any published-from-machine credentials.
 
-**2. Provenance attestations cryptographically tying artifact to source.** Sigstore-style: the published artifact carries a signed statement saying "this binary came from this commit on this repo, built by this CI workflow." The signature is logged in a public transparency log. Consumers can verify without trusting the registry itself. npm and PyPI both adopted this between 2023 and 2026.
+**2. Provenance attestations cryptographically tying artifact to source.** Sigstore-style: participating artifacts carry a signed statement tying the build to source and CI identity, with the signature logged in a transparency log. This establishes origin and build history, not that the artifact is benign. npm and PyPI both added provenance mechanisms between 2023 and 2026.
 
-**3. Trusted Publishers / OIDC-based publishing.** Long-lived API tokens are credential-theft amplifiers. OIDC-based publishing — where a CI workflow proves its identity to the registry per-publish, no static token — closes that vector. PyPI [introduced Trusted Publishers in 2023](https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/), [npm supports the same pattern](https://docs.npmjs.com/trusted-publishers/), and [OpenSSF describes the cross-repository model](https://repos.openssf.org/trusted-publishers-for-all-package-repositories.html).
+**3. Trusted Publishers / OIDC-based publishing.** Long-lived API tokens are credential-theft amplifiers. OIDC-based publishing lets a CI workflow prove its identity to the registry per publish without a static registry token. That removes one credential class from the flow, but CI compromise and identity-policy errors remain possible. PyPI [introduced Trusted Publishers in 2023](https://blog.pypi.org/posts/2023-04-20-introducing-trusted-publishers/), [npm supports the same pattern](https://docs.npmjs.com/trusted-publishers/), and [OpenSSF describes the cross-repository model](https://repos.openssf.org/trusted-publishers-for-all-package-repositories.html).
 
 **4. Typosquat detection at publish time.** Registry-side checks block obvious lookalikes before publication. Catch isn't perfect, but it's much better than nothing — npm explicitly [blocks typosquat publishes today](https://docs.npmjs.com/threats-and-mitigations/).
 
@@ -74,7 +74,7 @@ In aggregate — and necessarily generalizing — the agent skill marketplace ca
 
 This isn't a criticism of any specific marketplace — every package registry started here, and the leading ones took years to mature. It's a description of the category position. The agent skill ecosystem is in roughly the same place as npm circa 2015: rapidly growing user base, expanding plugin surface, ad-hoc moderation, no cryptographic provenance, and the first significant supply-chain incidents already starting to land.
 
-The good news is that none of this requires waiting for the next attack to motivate the controls. All six are off-the-shelf:
+The good news is that several building blocks are available off the shelf:
 
 - **Sigstore is already production-deployed** at npm and PyPI. The [`cosign` toolchain](https://www.sigstore.dev/) signs anything; an agent skill marketplace can adopt the same primitive without building cryptography.
 - **Trusted Publishers / OIDC** has a published spec via OpenSSF and reference implementations from npm and PyPI. Agent marketplaces can follow the same pattern.
@@ -103,14 +103,14 @@ Two additional controls follow that aren't in the package-registry playbook:
 
 ## What runtime authority adds at execution time
 
-Marketplace-side controls — identity, signing, scanning, OIDC, manifests — are the gate. They reduce the rate of compromised skills reaching consumers, and they make incident response possible (you know what was published, by whom, with what capabilities). They don't bound execution.
+Marketplace-side controls — identity, signing, scanning, OIDC, manifests — are the publication gate. They reduce the chance of compromised skills reaching consumers and improve attribution and incident response. Provenance establishes where an artifact came from and how it was built; it does not establish that the artifact is safe. These controls do not bound execution.
 
-[Runtime authority](/glossary#runtime-authority) does. The same primitives the [local-first runtime post](/blog/every-local-first-agent-runtime-needs-budget-authority) calls out for cross-runtime governance apply at the per-skill level inside any one runtime:
+A mandatory [runtime authority](/glossary#runtime-authority) boundary adds another layer. As [MCP Gateways Are Not Runtime Authority](/blog/mcp-gateways-are-not-runtime-authority) explains, access control and cumulative exposure are separate decisions. The same primitives the [local-first runtime post](/blog/every-local-first-agent-runtime-needs-budget-authority) calls out for cross-runtime governance can apply at the per-skill level inside a runtime:
 
-- **Capability declarations become enforceable contracts.** A skill that declares `tool:send_email` and the runtime caps `send_email` at 10 invocations per session will never send the 11th, regardless of what the skill's prompts try to talk the model into doing.
-- **[Risk-tier classification](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) assigns budget independent of cost.** A skill's declared `tier:write-external` actions don't share a pool with `tier:read-only` actions. A compromised skill that escalates from reads to writes hits the write budget separately, even if the read budget had room.
-- **The [three-way decision](/glossary#three-way-decision) survives prompt injection.** Whatever a malicious instruction in a Markdown file convinces the model to *try*, the runtime's [reservation](/glossary#reservation) for that action either ALLOWs, ALLOWs with caps, or DENYs. The decision is computed outside the model's context.
-- **Per-runtime, per-skill blast-radius is observable.** An authority layer that decides each action also produces a record of every decision. That record is what a security team needs when they ask "what did skill X actually do across our fleet last week?"
+- **Capability declarations can become enforceable contracts.** A host or handler can compare the proposed tool against an approved manifest before execution. Cycles can separately reserve a caller-assigned budget, but the current server does not maintain the capability manifest or automatically count invocations by action kind.
+- **[Risk-tier classification](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) can assign budget independent of cost.** The caller maps each attempted action to `RISK_POINTS` and makes the reservation mandatory. This is an application policy, not automatic server-side classification.
+- **The [three-way decision](/glossary#three-way-decision) is external to prompt content.** A dry-run or `decide` call returns `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`; a live reservation succeeds with `ALLOW` or `ALLOW_WITH_CAPS`, or rejects insufficient budget. The host still has to enforce the result before running the skill.
+- **Per-runtime, per-skill blast-radius can be made observable.** Live reservations and settlement produce budget lifecycle records. Because `decide` and dry-run evaluations are non-persisting, the host must also log attempted calls, preflight outcomes, and capability-policy decisions if a security team needs to answer "what did skill X actually try across our fleet last week?"
 
 The pattern that makes this work is the same one that makes the package-registry playbook work: enforce at the layer where the consequence happens, not at the layer where the artifact happens. Provenance proves the artifact wasn't tampered with. Runtime authority proves the action wasn't allowed beyond declared scope. They're complementary; neither replaces the other.
 
@@ -135,16 +135,16 @@ The package registries took roughly a decade because each control was reactive �
 
 1. **Now:** Marketplaces require verified publisher identity and 2FA on accounts that can publish. This is the cheapest control with the largest immediate effect.
 2. **Next:** Adopt Sigstore-based provenance attestations as the default for new publications. Don't reinvent — npm and PyPI's implementations are reference material.
-3. **Soon:** OIDC-based Trusted Publishing for CI workflows. Eliminates the long-lived-token attack class entirely.
+3. **Soon:** OIDC-based Trusted Publishing for CI workflows. Removes long-lived registry tokens from the normal publish path and narrows that attack surface.
 4. **In parallel:** Typosquat detection and automated malware scanning at publish. These are well-understood; the cost of adoption is integration, not research.
 5. **As the manifest standard matures:** Mandatory capability declarations as part of the published artifact, signed alongside the code.
-6. **At runtime, by every consumer:** Runtime authority hooks that turn declared capabilities into enforced caps. This isn't a marketplace control — it's the layer the consumer adds underneath any marketplace.
+6. **At runtime, for consumers that need hard caps:** Mandatory hooks that enforce declared capabilities and reserve caller-assigned budgets. This is a consumer-side control, not a marketplace feature.
 
-None of these steps are speculative. Each one has a working reference implementation in the package registry world. The question for any agent skill marketplace evaluating this list is *which controls to ship first*, not *whether the controls work*.
+The registry controls have working reference implementations in package ecosystems. Applying them to agent skills still requires threat modeling, integration work, and validation, especially for manifests and runtime action boundaries.
 
 ## The takeaway
 
-Every executable supply chain — packages, containers, CI actions, OS images — has converged on roughly the same set of controls, after roughly the same set of incidents. The convergence isn't coincidence; it's the residue of the actual attacks that hit each ecosystem. Agent skill marketplaces are an executable supply chain. The arguments that took npm a decade to settle — yes you need signing, yes 2FA has to be mandatory, yes you can't trust long-lived tokens, yes consumers need to pin versions — don't need to be re-litigated for the agent ecosystem. The work has been done.
+Major executable supply chains — packages, containers, CI actions, and OS images — increasingly use overlapping controls after repeated incidents. Agent skill marketplaces can reuse those lessons: signing and provenance, strong publisher identity, fewer long-lived tokens, immutable releases, and consumer pinning. The implementation details still need to fit the agent ecosystem.
 
 The asymmetric thing about the agent layer is that signed-and-scanned isn't enough. A skill is more than its code; the prompts, examples, and context it ships with can change agent behavior in ways static review doesn't catch. Marketplace-side controls reduce the rate of bad skills reaching consumers. Runtime authority bounds the damage when one does anyway. Both layers are necessary, neither is sufficient.
 

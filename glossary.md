@@ -27,7 +27,7 @@ The cumulative cost, risk, or side effects an autonomous system can create befor
 
 ### Reservation
 
-A temporary hold placed on a budget before work begins. Reservations lock an estimated amount so that concurrent operations cannot overspend the same budget. Every reservation must eventually be [committed](#commit) or [released](#release). See [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles).
+A temporary hold placed on a budget before work begins. Reservations lock an estimated amount so that concurrent operations cannot overspend the same budget. Every reservation ends in a terminal state: [committed](#commit), [released](#release), or expired (the hold is reclaimed when the [TTL](#ttl-time-to-live) lapses; `EXPIRED` is terminal). See [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles).
 
 ### Commit
 
@@ -61,11 +61,11 @@ The content address of a [CyclesEvidence](#cyclesevidence) envelope — the lowe
 
 ### Scope
 
-A hierarchical path that identifies a specific budget boundary. Scopes are built from [subject](#subject) fields and take the form `tenant:acme/workspace:prod/agent:summarizer`. Budgets are enforced at every level of the scope hierarchy. See [Understanding Tenants, Scopes, and Budgets](/how-to/understanding-tenants-scopes-and-budgets-in-cycles) and [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles).
+A hierarchical path that identifies a specific budget boundary. Scopes are built from [subject](#subject) fields and take the form `tenant:acme/workspace:prod/agent:summarizer`. Budgets are enforced at every level of the scope hierarchy that has a budget; levels without a budget are skipped during enforcement (at least one derived scope must have one). See [Understanding Tenants, Scopes, and Budgets](/how-to/understanding-tenants-scopes-and-budgets-in-cycles) and [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles).
 
 ### Subject
 
-The set of entity fields — `tenant`, `workspace`, `app`, `workflow`, `agent`, and `toolset` — that identify **who** is spending. Subjects are sent with every protocol request and used to derive the scope path.
+The set of entity fields — `tenant`, `workspace`, `app`, `workflow`, `agent`, and `toolset` — that identify **who** is spending. Subjects are sent with decide, reserve, and event requests and used to derive the scope path; commit, release, and extend identify the work by `reservation_id` instead.
 
 ### Scope Derivation
 
@@ -77,11 +77,11 @@ A constraint applied to execution when budget is running low but not yet exhaust
 
 ### Three-Way Decision
 
-The three possible responses to a reservation or decide request: **ALLOW** (proceed normally), **ALLOW_WITH_CAPS** (proceed with reduced limits), or **DENY** (reject the request). This model enables graceful degradation instead of hard pass/fail. See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
+The three possible outcomes of a budget evaluation: **ALLOW** (proceed normally), **ALLOW_WITH_CAPS** (proceed with reduced limits), or **DENY** (reject the request). `decision=DENY` appears only on `/decide` responses and `dry_run` reservations; a live (non-dry-run) reservation against an existing but insufficient budget is rejected with HTTP `409 BUDGET_EXCEEDED`; if no derived scope has a budget at all, the server returns `404 NOT_FOUND` (dry-run and `/decide` return `DENY` with `reason_code=BUDGET_NOT_FOUND`). This model enables graceful degradation instead of hard pass/fail. See [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
 
 ### Overage Policy
 
-Configures what happens when the actual cost committed exceeds the original estimate. Three policies are available: **REJECT** (deny the commit), **ALLOW_IF_AVAILABLE** (permit if remaining budget covers the difference), and **ALLOW_WITH_OVERDRAFT** (permit even if it creates debt). The default tenant policy is **ALLOW_IF_AVAILABLE** as of v0.1.24 (was REJECT in v0.1.23 and earlier). See [Commit Overage Policies](/protocol/commit-overage-policies-in-cycles-reject-allow-if-available-and-allow-with-overdraft).
+Configures what happens when the actual cost committed exceeds the original estimate. Three policies are available: **REJECT** (deny the commit), **ALLOW_IF_AVAILABLE** (the commit always succeeds — if the remaining budget cannot cover the full overage delta, the charged delta is capped to what is available and `is_over_limit` is set on the affected scopes; it never creates debt and never rejects a commit), and **ALLOW_WITH_OVERDRAFT** (permit debt up to the scope's `overdraft_limit`; beyond that the commit fails with `409 OVERDRAFT_LIMIT_EXCEEDED`). The default tenant policy is **ALLOW_IF_AVAILABLE** as of v0.1.24 (was REJECT in v0.1.23 and earlier). See [Commit Overage Policies](/protocol/commit-overage-policies-in-cycles-reject-allow-if-available-and-allow-with-overdraft).
 
 ## Units
 
@@ -129,11 +129,11 @@ Evaluating budget policies and computing the decision result **without** persist
 
 ### Idempotency Key
 
-A unique client-supplied key that ensures a protocol operation is processed exactly once, even if the request is retried due to network failures or timeouts. Each endpoint type has its own idempotency scope. See [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes).
+A unique client-supplied key that lets retries of the same operation reuse the stored result instead of applying the operation's effect twice after a network failure or timeout. It does not guarantee that a request which never reached the server succeeds. Each endpoint type has its own idempotency scope. See [Idempotency, Retries, and Concurrency](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes).
 
 ### Debt / Overdraft
 
-A negative budget balance that occurs when the actual cost committed exceeds the available budget. Debt is only permitted when the [overage policy](#overage-policy) is set to `ALLOW_WITH_OVERDRAFT`. See [Debt, Overdraft, and the Over-Limit Model](/protocol/debt-overdraft-and-the-over-limit-model-in-cycles).
+A non-negative amount, tracked separately from spend, that records consumption which could not be paid from available budget at commit time (the signed `remaining` field can go negative as a result). Debt is only created when the [overage policy](#overage-policy) is set to `ALLOW_WITH_OVERDRAFT`. See [Debt, Overdraft, and the Over-Limit Model](/protocol/debt-overdraft-and-the-over-limit-model-in-cycles).
 
 ### Event / Direct Debit
 
@@ -223,11 +223,11 @@ An HTTP POST callback triggered by a state change event. Cycles delivers webhook
 
 ### Event (Webhook)
 
-An immutable record of a state change (e.g., `budget.exhausted`, `reservation.denied`). The v0.1.25 Admin API `EventType` enum registers 47 event types across 7 categories (budget: 16, reservation: 5, tenant: 6, api_key: 6, policy: 3, webhook: 6, system: 5). The `webhook` category covers six lifecycle events (`webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted`) added in spec v0.1.25.33; the four `_via_tenant_cascade` event names are additive reference-server payloads emitted by the tenant-close cascade and not part of the registered enum. Events are stored in Redis with configurable TTL (default 90 days) and dispatched to matching webhook subscriptions.
+An immutable record of a state change (e.g., `budget.exhausted`, `reservation.denied`). The v0.1.25 Admin API `EventType` enum registers 51 event types across 7 categories (budget: 17, reservation: 6, tenant: 6, api_key: 7, policy: 3, webhook: 7, system: 5). The `webhook` category covers six lifecycle events (`webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted`) added in spec v0.1.25.33; the four `_via_tenant_cascade` event names emitted by the tenant-close cascade are part of the registered enum since governance revision v0.1.25.35. Events are stored in Redis with configurable TTL (default 90 days) and dispatched to matching webhook subscriptions.
 
 ### Signing Secret
 
-A shared secret used to compute HMAC-SHA256 signatures for webhook payload verification. Generated at subscription creation, returned once, encrypted at rest using AES-256-GCM.
+A shared secret used to compute HMAC-SHA256 signatures for webhook payload verification. Generated at subscription creation, returned once, and encrypted at rest with AES-256-GCM using `WEBHOOK_SECRET_ENCRYPTION_KEY`. Current admin and events services require that key by default; plaintext local development requires the explicit `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` escape hatch.
 
 ### HMAC-SHA256
 
@@ -243,7 +243,7 @@ A single attempt to deliver an event to a webhook endpoint via HTTP POST. Tracke
 
 ### Events Service
 
-The async webhook delivery service (`cycles-server-events`). Consumes from shared Redis queue via BRPOP and delivers via HTTP POST with HMAC signing. Optional — admin and runtime operate without it. As of v0.1.25.9, binds application port `7980` and management/actuator port `9980` (was consolidated on `7980` pre-.9); the reference service is an outbound worker, so neither port should be public.
+The async webhook delivery service (`cycles-server-events`). Consumes from the shared Redis queue via a reliable BLMOVE claim/ack pattern (destructive BRPOP before v0.1.25.18) and delivers via HTTP POST with HMAC signing. Optional — admin and runtime operate without it. As of v0.1.25.9, binds application port `7980` and management/actuator port `9980` (was consolidated on `7980` pre-.9); the reference service is an outbound worker, so neither port should be public.
 
 ### Dashboard
 
@@ -263,7 +263,7 @@ A server-generated identifier unique to one HTTP request. Appears in every `Erro
 
 ### trace_id
 
-A 32-hex-character W3C Trace Context-compatible identifier for a logical operation that may span many HTTP requests. Derived from inbound `traceparent` (when valid) → `X-Cycles-Trace-Id` (when valid) → server-generated. Echoed on every response as the `X-Cycles-Trace-Id` header and carried on webhook deliveries, events, audit rows, and (as of governance-admin v0.1.25.28) on `WebhookDelivery` schema fields. Introduced across the stack on 2026-04-18 (cycles-server v0.1.25.14, cycles-server-admin v0.1.25.31, cycles-server-events v0.1.25.7). Distinct from the application-level `metadata.trace_id` documented in [Standard Metrics and Metadata](/protocol/standard-metrics-and-metadata-in-cycles) (that one is operator-free-form; this one is server-managed W3C). See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+A 32-hex-character W3C Trace Context-compatible identifier for a logical operation that may span many HTTP requests. Derived from inbound `traceparent` (when valid) → `X-Cycles-Trace-Id` (when valid) → server-generated. Echoed on every response as the `X-Cycles-Trace-Id` header and carried on webhook deliveries, events, audit rows, and (as of governance-admin v0.1.25.28) on `WebhookDelivery` schema fields. Introduced across the stack on 2026-04-18 (cycles-server v0.1.25.14, cycles-server-admin v0.1.25.31, cycles-server-events v0.1.25.7). Distinct from application-level correlation keys in `metadata` (name those `external_trace_id` or similar — see [Standard Metrics and Metadata](/protocol/standard-metrics-and-metadata-in-cycles); this one is server-managed W3C). See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ### traceparent
 
@@ -271,7 +271,7 @@ The W3C Trace Context HTTP header (`00-<trace_id>-<span_id>-<flags>`). Cycles ac
 
 ### correlation_id
 
-An opaque, operator-populated identifier that groups a family of related events (for example, every event from a scheduled batch run). Cycles does not derive or inspect it — it only carries it through on event payloads. Distinct from `trace_id` (which Cycles owns) and `request_id` (which the server generates).
+A server-set identifier that groups a family of related events in the event stream, in one of two shapes: for protocol event-stream clusters, a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` — so threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs join without an operator supplying anything; for governance/admin operations, an explicit server-composed operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, tenant-cascade IDs). Scoped to the event stream only. Distinct from `trace_id` (logical-operation grain, W3C-compatible) and `request_id` (one HTTP request) — both of which are also server-managed but answer different questions.
 
 ## Admin Plane
 
@@ -281,7 +281,7 @@ The authentication scheme keyed on the `X-Admin-API-Key` header. Used for platfo
 
 ### Admin-on-Behalf-of
 
-An operation where a platform operator uses their admin key to act against tenant-owned resources (e.g., force-release a tenant's stuck reservation during incident response). Audit rows carry `metadata.actor_type=admin_on_behalf_of` for clear attribution. Intentionally excluded from admin auth: create/commit/extend reservations, create tenant webhook subscriptions, replay — operations where admin impersonation would distort semantics.
+An operation where a platform operator uses their admin key to act against tenant-owned resources (e.g., force-release a tenant's stuck reservation during incident response). Audit rows carry `metadata.actor_type=admin_on_behalf_of` for clear attribution (the lowercase wire value the admin server writes; spec prose sometimes shows the enum constant `ADMIN_ON_BEHALF_OF`). Intentionally excluded from admin auth: create/commit/extend reservations, create tenant webhook subscriptions, replay — operations where admin impersonation would distort semantics.
 
 ### Bulk Action
 
@@ -293,11 +293,11 @@ Two reserved `tenant_id` values on audit-log entries (v0.1.25.28+): `__admin__` 
 
 ### TENANT_CLOSED
 
-A `409` error code (v0.1.25.35+) returned by every mutating admin-plane operation on an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract; GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
+A `409` error code returned when mutating an object whose owning tenant is `CLOSED`. Enforced by the "Rule 2 — Terminal-Owner Mutation Guard" half of the cascade contract: on the admin plane since `cycles-server-admin` v0.1.25.35 (full coverage across every mutating admin-plane operation as of v0.1.25.36), and on the runtime plane for persisting reservation create/commit/release/extend since `cycles-server` 0.1.25.47 (runtime spec v0.1.25.13) and direct events since server 0.1.25.48 (spec revision v0.1.25.14). Fresh dry-run and `/v1/decide` evaluations instead return `200 decision=DENY` with `reason_code=TENANT_CLOSED`; `POST /v1/events` has no dry-run mode and returns the 409 on a fresh request. GET endpoints remain available for post-mortem audit reads. See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics) and [Error Codes — TENANT_CLOSED](/protocol/error-codes-and-error-handling-in-cycles#tenant-closed-409).
 
 ### Tenant-Close Cascade
 
-The two-rule contract (governance-admin spec v0.1.25.29/.30/.31) that makes `* → CLOSED` tenant transitions atomic (or eventually-atomic) across owned objects. **Rule 1 — Close Cascade**: server drives owned `BudgetLedger` → `CLOSED`, `ApiKey` → `REVOKED`, open `Reservation` → `RELEASED`, `WebhookSubscription` → `DISABLED`, emitting one `*_via_tenant_cascade` event per mutated object under the originating `tenant.closed` audit entry's `correlation_id`. **Rule 2 — Terminal-Owner Mutation Guard**: mutations on a closed tenant's children return `409 TENANT_CLOSED`. Two conformant modes: **Mode A** (atomic single-transaction) or **Mode B** (flip-first with guarded cascade; runcycles uses this). See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics).
+The two-rule contract (governance-admin spec v0.1.25.29/.30/.31) that makes `* → CLOSED` tenant transitions atomic (or eventually-atomic) across owned objects. **Rule 1 — Close Cascade**: server drives owned `BudgetLedger` → `CLOSED`, `ApiKey` → `REVOKED`, open `Reservation` → `RELEASED`, `WebhookSubscription` → `DISABLED`, emitting one `*_via_tenant_cascade` event per mutated object under a shared `correlation_id` of the form `tenant_close_cascade:<tenant_id>:<request_id>` (audit rows themselves carry `request_id`/`trace_id`, not `correlation_id`). **Rule 2 — Terminal-Owner Mutation Guard**: mutations on a closed tenant's children return `409 TENANT_CLOSED`. Two conformant modes: **Mode A** (atomic single-transaction) or **Mode B** (flip-first with guarded cascade; runcycles uses this). See [Tenant-Close Cascade Semantics](/protocol/tenant-close-cascade-semantics).
 
 ### RESET_SPENT
 

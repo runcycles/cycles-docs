@@ -22,7 +22,7 @@ For all of them, "the server said ALLOW" is hearsay. CyclesEvidence replaces hea
 For each authorization lifecycle event, Cycles can emit a **CyclesEvidence envelope**: the request and response, wrapped in a JSON object that is
 
 - **canonicalized** with [RFC 8785 JCS](https://www.rfc-editor.org/rfc/rfc8785) (a deterministic byte form),
-- **content-addressed** by `evidence_id` = the SHA-256 of those bytes — so the id *is* the integrity check, and
+- **content-addressed** by `evidence_id` = the SHA-256 of those canonical bytes, computed with the `evidence_id` and `signature` fields both present and set to the empty string `""` — so the id *is* the integrity check, and
 - **Ed25519-signed** by the Cycles server's key — so the origin is provable.
 
 Five artifact types cover the whole lifecycle: `decide`, `reserve`, `commit`, `release`, and `error`.
@@ -50,11 +50,11 @@ A consumer records the `evidence_id`, then fetches the signed envelope at `cycle
 
 **Long-horizon retention.** Content-addressed, signed records are well-suited to long-horizon record-keeping — for example EU AI Act Article 12 retention — verifiable years later, independent of whether the original server is still running.
 
-**Zero friction to produce.** The `evidence_id` is computed *synchronously* and returned in-band on the response; the expensive signing and storage happen asynchronously. Producing the proof costs the caller nothing extra — there is no separate "generate evidence" call.
+**Zero friction to produce.** The `evidence_id` is computed *synchronously* and returned in-band on the response; the expensive signing and storage happen asynchronously. Producing the proof costs the caller nothing extra — there is no separate "generate evidence" call. One consequence of the async split: a freshly returned `cycles_evidence_url` may transiently `404` while signing and storage complete — consumers should treat that as not-yet-available and retry briefly.
 
 ## What it is not
 
-CyclesEvidence is the **receipt, not the gate.** Enforcement is the reserve/commit ledger itself; evidence does not change a real-time decision or make budgets "safer" in the moment. Its entire value is *after* the decision: audit, dispute resolution, cross-system trust, and compliance.
+CyclesEvidence is the **receipt, not the gate.** Enforcement is the reserve-commit ledger itself; evidence does not change a real-time decision or make budgets "safer" in the moment. Its value comes after the decision: audit, dispute resolution, cross-system trust, and compliance.
 
 It is also **off until configured.** A deployment must set a shared signing identity before any verifiable evidence is produced — see the operator [identity enablement runbook](https://github.com/runcycles/cycles-server-events/blob/main/docs/evidence-identity-enablement.md). Until then, Cycles enforces budgets exactly as before; it just doesn't emit signed receipts.
 

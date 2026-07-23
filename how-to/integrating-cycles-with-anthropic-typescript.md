@@ -205,12 +205,12 @@ async function streamWithBudget(prompt: string) {
 
 ## Per-tool-call budget tracking
 
-When Claude uses tools, each LLM turn consumes tokens. Use the programmatic client to create a reservation per turn:
+When Claude uses tools, each LLM turn consumes tokens. Use `reserveForStream` to create a reservation per turn:
 
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  CyclesClient, CyclesConfig, BudgetExceededError,
+  CyclesClient, CyclesConfig, reserveForStream, BudgetExceededError,
 } from "runcycles";
 
 const cyclesClient = new CyclesClient(CyclesConfig.fromEnv());
@@ -225,14 +225,22 @@ async function chatWithTools(prompt: string): Promise<string> {
   ];
 
   for (let turn = 1; turn <= 5; turn++) {
-    // Reserve budget for this turn
-    const handle = await reserveForStream({
-      client: cyclesClient,
-      estimate: 2_000_000,
-      unit: "USD_MICROCENTS",
-      actionKind: "llm.completion",
-      actionName: "claude-sonnet-4-20250514",
-    });
+    // Reserve budget for this turn — a denial ends the conversation gracefully
+    let handle;
+    try {
+      handle = await reserveForStream({
+        client: cyclesClient,
+        estimate: 2_000_000,
+        unit: "USD_MICROCENTS",
+        actionKind: "llm.completion",
+        actionName: "claude-sonnet-4-20250514",
+      });
+    } catch (err) {
+      if (err instanceof BudgetExceededError) {
+        return "Budget exhausted mid-conversation.";
+      }
+      throw err;
+    }
 
     try {
       const response = await anthropic.messages.create({

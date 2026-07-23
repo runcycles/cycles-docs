@@ -1,18 +1,22 @@
 ---
-title: "AI Agent Action Authority: Blocking a Customer Email Before Execution"
+title: "Block Agent Emails Before Execution"
 date: 2026-03-22
 author: Albert Mavashev
 tags: [action-authority, demo, agents, runtime-authority, walkthrough, action-control, side-effects]
 description: "A support agent can use CRM, notes, and email — but should every run send? Cycles blocks the customer email before execution. Three decorators, one exception."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent action authority, block agent email, pre-execution control, customer support agent, runtime authority, risk budgets
 ---
 
 # AI Agent Action Authority: Blocking a Customer Email Before Execution
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-A support agent handles a billing dispute. Its workflow has four steps: read the case, log an internal note, update the CRM status, and send the customer a reply. Without a runtime decision layer, all four steps execute — including the email. With Cycles, the first three steps proceed normally. The fourth — `send_customer_email` — is blocked before execution because the `send-email` toolset has a zero-dollar budget. The email function never runs. The customer never receives an unauthorized message.
+A support agent handles a billing dispute. Its workflow has four steps: read the case, log an internal note, update the CRM status, and send the customer a reply. Without a runtime decision layer, all four steps execute—including the email. In this demo, the first three submitted reservations fit their ledgers. The fourth—`send_customer_email`—is rejected before execution because `send-email` has an explicit zero-allocation ledger. The email function never runs.
 
 The tools in this demo are mocked. No real CRM, email service, or ticketing system is involved. The [action authority](/glossary#action-authority) is real. This post walks through the [action authority demo](https://github.com/runcycles/cycles-agent-action-authority-demo) step by step: what the agent does, how the unguarded and guarded runs differ, and what the code change looks like.
 
@@ -39,7 +43,7 @@ Steps 1–3 are internal operations. The CRM status change is a state mutation, 
 
 ## Without Cycles: all actions execute
 
-When the agent runs without Cycles, every step completes with a green checkmark:
+When the agent runs without Cycles, every step completes:
 
 ```
 ╭──────────── Support Case #4782 ───────────────╮
@@ -50,24 +54,24 @@ When the agent runs without Cycles, every step completes with a green checkmark:
 ╰───────────────────────────────────────────────╯
 
 ╭──────────── Action Log ───────────────────────╮
-│  ✓ read_case                                  │
+│  EXECUTED read_case                           │
 │    Loaded case #4782 — Acme Corp              │
 │                                               │
-│  ✓ append_internal_note  [internal-notes]     │
+│  EXECUTED append_internal_note [internal-notes]│
 │    Billing discrepancy: $847 invoiced vs $720 │
 │    contract. Investigating.                   │
 │                                               │
-│  ✓ update_crm_status     [crm-updates]        │
+│  EXECUTED update_crm_status [crm-updates]     │
 │    Status: Open → Investigating               │
 │                                               │
-│  ✓ send_customer_email   [send-email]         │
+│  EXECUTED send_customer_email [send-email]    │
 │    Email sent to jane@acme.com                │
 ╰───────────────────────────────────────────────╯
 
 ╭──────────── Result — UNGUARDED ───────────────╮
 │ All actions executed — including the customer │
 │ email.                                        │
-│ 4 actions approved · 0 actions blocked        │
+│ 4 actions executed · 0 budget rejections      │
 ╰───────────────────────────────────────────────╯
 ```
 
@@ -86,28 +90,28 @@ Same agent, same tools, same workflow. The only difference is that each tool cal
 ╰───────────────────────────────────────────────╯
 
 ╭──────────── Action Log ───────────────────────╮
-│  ✓ read_case                                  │
+│  EXECUTED read_case                           │
 │    Loaded case #4782 — Acme Corp              │
 │                                               │
-│  ✓ append_internal_note  [internal-notes]     │
+│  FUNDED append_internal_note [internal-notes] │
 │    POST /v1/reservations → 200 ALLOW          │
 │    Billing discrepancy: $847 invoiced vs $720 │
 │    contract. Investigating.                   │
 │                                               │
-│  ✓ update_crm_status     [crm-updates]        │
+│  FUNDED update_crm_status [crm-updates]       │
 │    POST /v1/reservations → 200 ALLOW          │
 │    Status: Open → Investigating               │
 │                                               │
-│  ✗ send_customer_email   [send-email]         │
+│  REJECTED send_customer_email [send-email]    │
 │    POST /v1/reservations → 409 BUDGET_EXCEEDED│
-│    Email blocked — not approved for autonomous│
-│    execution. Escalated to human review.      │
+│    Exposure budget unavailable. The app       │
+│    escalates the proposed action for review.  │
 ╰───────────────────────────────────────────────╯
 
 ╭──────────── Result — GUARDED ─────────────────╮
-│ Cycles blocked the customer email before it   │
-│ was sent.                                     │
-│ 3 actions approved · 1 action blocked         │
+│ The configured budget rejected the email      │
+│ reservation; the application did not send it. │
+│ 3 reservations succeeded · 1 was rejected     │
 ╰───────────────────────────────────────────────╯
 ```
 
@@ -156,10 +160,10 @@ def send_customer_email(case_id, to, subject, body):
 try:
     send_customer_email(case_id, to, subject, body)
 except BudgetExceededError:
-    # email blocked — not approved for autonomous execution
+    # budget unavailable; escalate for authorization
 ```
 
-Three decorators. One except. The next unapproved action never executes. The tool functions themselves are unchanged — the same `append_internal_note`, `update_crm_status`, and `send_customer_email` implementations from `tools.py` are called inside each wrapper.
+Three decorators. One except. The action whose reservation was rejected never executes. The tool functions themselves are unchanged — the same `append_internal_note`, `update_crm_status`, and `send_customer_email` implementations from `tools.py` are called inside each wrapper.
 
 ## How toolset scoping works
 
@@ -173,15 +177,15 @@ tenant:demo-tenant
    └─ app:default
       └─ workflow:default
          └─ agent:support-bot
-            ├─ toolset:internal-notes   → $1.00 budget ✓
-            ├─ toolset:crm-updates      → $1.00 budget ✓
-            └─ toolset:send-email       → $0 budget     ✗
+            ├─ toolset:internal-notes   → $1.00 budget (funded)
+            ├─ toolset:crm-updates      → $1.00 budget (funded)
+            └─ toolset:send-email       → $0 budget (explicit zero)
 ```
 
-The provisioning script creates $1.00 budgets at every level of the hierarchy — [tenant](/glossary#tenant), workspace, app, workflow, agent — and then creates toolset-level budgets. Approved actions get $1.00; blocked actions get $0:
+The provisioning script creates $1.00 budgets at every level of the hierarchy — [tenant](/glossary#tenant), workspace, app, workflow, agent — and then creates toolset-level budgets. Funded toolsets get $1.00; the explicitly disabled exposure scope gets $0:
 
 ```bash
-# Toolset budgets — approved actions get $1.00
+# Funded toolsets get $1.00
 for TOOLSET in "internal-notes" "crm-updates"; do
   SCOPE="tenant:$TENANT_ID/workspace:default/app:default/workflow:default/agent:support-bot/toolset:$TOOLSET"
   curl -X POST "$ADMIN_URL/budgets" \
@@ -191,7 +195,7 @@ for TOOLSET in "internal-notes" "crm-updates"; do
          \"allocated\": {\"amount\": 100000000, \"unit\": \"USD_MICROCENTS\"}}"
 done
 
-# send-email: $0 budget — Cycles returns 409 on any reservation attempt
+# send-email: explicit zero allocation rejects submitted reservations
 SCOPE="tenant:$TENANT_ID/workspace:default/app:default/workflow:default/agent:support-bot/toolset:send-email"
 curl -X POST "$ADMIN_URL/budgets" \
   -H "Content-Type: application/json" \
@@ -202,7 +206,7 @@ curl -X POST "$ADMIN_URL/budgets" \
 
 When the `@cycles` decorator tries to reserve budget for `toolset:send-email`, the server walks the hierarchy, finds a $0 budget at the toolset level, and returns `409 BUDGET_EXCEEDED`. The decorator raises the exception. The action never runs.
 
-This is the operational model: **approving or revoking an agent action = setting a budget**. Want the agent to send emails? Set a budget for `toolset:send-email`. Want to revoke it? Set the budget to zero. No code changes. No redeployment. No new API keys.
+This is an operational exposure control, not a permission grant. The host still decides whether the agent may call `send-email` and validates its arguments. Funding the toolset ledger makes submitted reservations possible; setting its allocation to zero rejects them without changing the application code or API key.
 
 ## Why not just use an allowlist?
 
@@ -210,9 +214,9 @@ In this demo, a static allowlist that includes `send-email` would have let the e
 
 The gap is between "can" and "should." The agent *can* send emails — the tool exists, the credentials work. But that does not mean this specific run *should* send this specific email right now. An allowlist encodes the first judgment. It cannot encode the second.
 
-Cycles fills that gap by making a per-action decision before execution. In the demo, the `send-email` toolset has no budget, so the reservation is denied. But the control is operational, not structural — add a budget and the agent can send emails on the next run, without a code change or redeployment. Remove the budget during an incident and all automated emails stop immediately.
+Cycles adds a budget decision at the instrumented action boundary. In the demo, the `send-email` toolset has an explicit zero-allocation ledger, so the reservation is rejected with `409 BUDGET_EXCEEDED`. The control is operational: fund that ledger and the next submitted reservation can succeed without a code change or redeployment; set it back to zero during an incident to reject subsequent submitted email reservations. Deleting the ledger is not equivalent—the reference server skips absent scope ledgers.
 
-This is what [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) means in practice: not a static permission check, but a live enforcement point that can allow, constrain, or deny each consequential action as it happens.
+This is one part of [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) in practice: a live budget enforcement point composed with static permissions and application authorization. Preflight evaluation can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`; a live insufficient reservation returns an error such as `409 BUDGET_EXCEEDED`.
 
 ## Run it yourself
 

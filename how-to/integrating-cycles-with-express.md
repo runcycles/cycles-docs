@@ -64,9 +64,11 @@ export function cyclesGuard(options: CyclesGuardOptions) {
       // Attach the handle so route handlers can commit/release
       res.locals.cyclesHandle = handle;
 
-      // Release budget if the client disconnects
+      // Release budget if the client disconnects.
+      // handle.finalized is true once commit() or release() has run,
+      // so no manual bookkeeping flag is needed.
       res.on("close", async () => {
-        if (!res.locals.cyclesCommitted) {
+        if (!handle.finalized) {
           await handle.release("client_disconnect");
         }
       });
@@ -130,12 +132,10 @@ app.post(
         tokensInput: response.usage.prompt_tokens,
         tokensOutput: response.usage.completion_tokens,
       });
-      res.locals.cyclesCommitted = true;
 
       res.json({ message: response.content });
     } catch (err) {
       await handle.release("handler_error");
-      res.locals.cyclesCommitted = true;
       throw err;
     }
   },
@@ -144,12 +144,16 @@ app.post(
 app.listen(3000);
 ```
 
+Note: `throw err` inside an async route handler only reaches Express's error handling on Express 5 — on Express 4, call `next(err)` instead.
+
 ## Inline pattern with withCycles
 
 For simpler routes, use `withCycles` directly:
 
 ```typescript
-import { withCycles, CyclesClient, CyclesConfig, setDefaultClient } from "runcycles";
+import {
+  withCycles, CyclesClient, CyclesConfig, setDefaultClient, BudgetExceededError,
+} from "runcycles";
 
 const cyclesClient = new CyclesClient(CyclesConfig.fromEnv());
 setDefaultClient(cyclesClient);

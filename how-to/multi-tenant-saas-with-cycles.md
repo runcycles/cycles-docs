@@ -42,7 +42,7 @@ Map your pricing tiers to budget allocations:
 | Pro | $50 (5,000,000,000 microcents) | $5 overdraft | 5 |
 | Enterprise | $500 (50,000,000,000 microcents) | $50 overdraft | Unlimited |
 
-When a customer hits their budget limit, Cycles returns `DENY` on the next reservation. Your application decides what happens: show an upgrade prompt, queue the request, or degrade to a cheaper model. See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for patterns.
+When a customer hits their budget limit, the next live reservation fails with `409 BUDGET_EXCEEDED` (a `/v1/decide` or dry-run check returns `DENY`). Your application decides what happens: show an upgrade prompt, queue the request, or degrade to a cheaper model. See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for patterns.
 
 ## Customer onboarding workflow
 
@@ -55,11 +55,11 @@ import httpx
 
 ADMIN_URL = "http://localhost:7979"  # Admin Server
 ADMIN_KEY = "your-admin-api-key"
-CYCLES_KEY = "your-cycles-api-key"   # key with admin:write permission
+CYCLES_KEY = "your-cycles-api-key"   # key with budgets:write permission
 
-# Tenant and API key operations use X-Admin-API-Key
+# Tenant, API key, and budget PATCH operations use X-Admin-API-Key
 admin_headers = {"X-Admin-API-Key": ADMIN_KEY, "Content-Type": "application/json"}
-# Budget operations use X-Cycles-API-Key with admin:write permission
+# Budget create/fund operations use X-Cycles-API-Key with budgets:write permission
 budget_headers = {"X-Cycles-API-Key": CYCLES_KEY, "Content-Type": "application/json"}
 
 def onboard_customer(customer_id: str, plan: str) -> dict:
@@ -86,7 +86,7 @@ def onboard_customer(customer_id: str, plan: str) -> dict:
     key_resp.raise_for_status()
     api_key = key_resp.json()["key_secret"]
 
-    # 3. Create and fund budget ledger (uses cycles key with admin:write)
+    # 3. Create and fund budget ledger (uses cycles key with budgets:write)
     budgets = {
         "free":       {"amount": 500_000_000, "overdraft": 0},
         "pro":        {"amount": 5_000_000_000, "overdraft": 500_000_000},
@@ -114,10 +114,11 @@ def onboard_customer(customer_id: str, plan: str) -> dict:
     ).raise_for_status()
 
     # Set overdraft limit if applicable
+    # (PATCH /v1/admin/budgets accepts only X-Admin-API-Key)
     if plan_budget["overdraft"] > 0:
         httpx.patch(
             f"{ADMIN_URL}/v1/admin/budgets?scope={scope}&unit=USD_MICROCENTS",
-            headers=budget_headers,
+            headers=admin_headers,
             json={
                 "overdraft_limit": {"amount": plan_budget["overdraft"], "unit": "USD_MICROCENTS"},
                 "commit_overage_policy": "ALLOW_WITH_OVERDRAFT",
@@ -132,14 +133,14 @@ def onboard_customer(customer_id: str, plan: str) -> dict:
 ```typescript
 const ADMIN_URL = "http://localhost:7979";
 const ADMIN_KEY = "your-admin-api-key";
-const CYCLES_KEY = "your-cycles-api-key"; // key with admin:write permission
+const CYCLES_KEY = "your-cycles-api-key"; // key with budgets:write permission
 
-// Tenant and API key operations use X-Admin-API-Key
+// Tenant, API key, and budget PATCH operations use X-Admin-API-Key
 const adminHeaders = {
   "X-Admin-API-Key": ADMIN_KEY,
   "Content-Type": "application/json",
 };
-// Budget operations use X-Cycles-API-Key with admin:write permission
+// Budget create/fund operations use X-Cycles-API-Key with budgets:write permission
 const budgetHeaders = {
   "X-Cycles-API-Key": CYCLES_KEY,
   "Content-Type": "application/json",
@@ -184,7 +185,7 @@ async function onboardCustomer(
   if (!keyResp.ok) throw new Error(`API key creation failed: ${keyResp.status}`);
   const { key_secret: apiKey } = await keyResp.json();
 
-  // 3. Create and fund budget ledger (uses cycles key with admin:write)
+  // 3. Create and fund budget ledger (uses cycles key with budgets:write)
   const budgets = {
     free:       { amount: 500_000_000, overdraft: 0 },
     pro:        { amount: 5_000_000_000, overdraft: 500_000_000 },
@@ -218,12 +219,13 @@ async function onboardCustomer(
     },
   );
 
+  // PATCH /v1/admin/budgets accepts only X-Admin-API-Key
   if (planBudget.overdraft > 0) {
     await fetch(
       `${ADMIN_URL}/v1/admin/budgets?scope=${encodeURIComponent(scope)}&unit=USD_MICROCENTS`,
       {
         method: "PATCH",
-        headers: budgetHeaders,
+        headers: adminHeaders,
         body: JSON.stringify({
           overdraft_limit: { amount: planBudget.overdraft, unit: "USD_MICROCENTS" },
           commit_overage_policy: "ALLOW_WITH_OVERDRAFT",
@@ -277,15 +279,19 @@ app.use("/api", tenantContext);
 Pass the tenant to every Cycles operation via the `Subject`:
 
 ```python
+from fastapi import Request
 from runcycles import cycles
 
 @cycles(
     estimate=2_000_000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    tenant=request.state.tenant,  # scoped to requesting customer
+    # A callable is re-evaluated on every call with the function's
+    # arguments — a plain `request.state.tenant` would be captured
+    # once at decoration time and pin every call to the same tenant.
+    tenant=lambda request, prompt: request.state.tenant,
 )
-async def handle_chat(prompt: str) -> dict:
+async def handle_chat(request: Request, prompt: str) -> dict:
     ...
 ```
 
@@ -380,10 +386,13 @@ For downgrades, the remaining budget stays as-is until the billing period resets
 At the start of each billing period, reset budgets to the plan allocation with `RESET_SPENT`:
 
 ```python
+from datetime import datetime, timezone
+
 def monthly_reset(customer_id: str, plan: str):
     """Reset tenant budget for the new billing cycle."""
     budgets = {"free": 500_000_000, "pro": 5_000_000_000, "enterprise": 50_000_000_000}
     scope = f"tenant:{customer_id}"
+    period = datetime.now(timezone.utc).strftime("%Y-%m")  # e.g. "2026-07"
 
     httpx.post(
         f"{ADMIN_URL}/v1/admin/budgets/fund?scope={scope}&unit=USD_MICROCENTS",
@@ -391,7 +400,7 @@ def monthly_reset(customer_id: str, plan: str):
         json={
             "operation": "RESET_SPENT",
             "amount": {"amount": budgets[plan], "unit": "USD_MICROCENTS"},
-            "idempotency_key": f"reset-{customer_id}-{plan}-2026-04",
+            "idempotency_key": f"reset-{customer_id}-{plan}-{period}",
             "reason": "Monthly billing period reset",
         },
     ).raise_for_status()
@@ -420,11 +429,11 @@ async def usage(request: Request):
         "tenant": tenant,
         "balances": [
             {
-                "scope": b["scope"],
-                "allocated": b["allocated"]["amount"],
-                "spent": b["spent"]["amount"],
-                "remaining": b["remaining"]["amount"],
-                "unit": b["allocated"]["unit"],
+                "scope": b.get("scope"),
+                "allocated": b.get("allocated", {}).get("amount"),
+                "spent": b.get("spent", {}).get("amount"),
+                "remaining": b.get("remaining", {}).get("amount"),
+                "unit": b.get("allocated", {}).get("unit"),
                 "is_over_limit": b.get("is_over_limit", False),
             }
             for b in balances
@@ -487,13 +496,13 @@ def close_customer(customer_id: str):
 Set up alerts for per-tenant budget exhaustion using [Webhook Integrations](/how-to/webhook-integrations):
 
 ```python
-# Example: Slack alert when a tenant exceeds 80% of budget
+# Example: Slack alert when a tenant crosses 80% budget utilization
 # Configure via Admin API webhook:
 # POST /v1/admin/webhooks
 # {
 #   "url": "https://hooks.slack.com/services/...",
-#   "events": ["budget.threshold.reached"],
-#   "filters": {"threshold_percent": 80}
+#   "event_types": ["budget.threshold_crossed"],
+#   "thresholds": {"budget_utilization": [0.80]}
 # }
 ```
 

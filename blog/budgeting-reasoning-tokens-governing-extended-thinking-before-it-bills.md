@@ -1,15 +1,19 @@
 ---
-title: "Budgeting Reasoning Tokens: Governing Extended Thinking"
-description: "Reasoning tokens are billed but often hidden from callers. Output-length heuristics and provider caps don't govern them cleanly. Here's how to cap at runtime."
+title: "Budgeting Reasoning Tokens Before They Bill"
+description: "Reserve worst-case reasoning tokens before model calls, enforce provider limits in your app, and settle actual thinking plus output usage after execution."
 date: 2026-04-22
 author: Albert Mavashev
 tags: [governance, budgets, production, costs, risk]
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: reasoning token budget, extended thinking costs, AI token limits, pre-execution budget, token settlement, AI cost control
 ---
 
-# Budgeting Reasoning Tokens: Governing Extended Thinking
+# Budgeting Reasoning Tokens Before They Bill
 
 A team migrated a triage agent from `claude-3-5-sonnet` to `claude-sonnet-4-6` with extended thinking enabled. Same prompts, same tools. They bumped `max_tokens` to 40,000 so the model would have room for chain-of-thought, accepted Anthropic's default `budget_tokens`, and deployed. The next morning's invoice was 7x higher. The visible answers looked identical — short, correct, on-topic. The difference was hidden from the user-facing UI: each call burned 18,000–32,000 thinking tokens that either never appeared in the app at all or were summarized away. Nobody had set a per-call thinking cap tied to the run's overall budget. The budget wasn't wrong. It was blind.
 
@@ -52,14 +56,14 @@ sequenceDiagram
     participant Anthropic
 
     Agent->>Cycles: reserve(estimate: output_tokens + thinking_budget)
-    Cycles-->>Agent: ALLOW_WITH_CAPS (thinking_budget=8000, max_tokens=10000)
+    Cycles-->>Agent: proposed future caps (thinking_budget=8000, max_tokens=10000)
     Agent->>Anthropic: messages.create(thinking={budget_tokens: 8000}, max_tokens: 10000)
     Anthropic-->>Agent: response (output: 800, thinking: 6200)
     Agent->>Cycles: commit(actual: 7000 total output tokens)
     Cycles-->>Agent: OK (remaining budget updated)
 ```
 
-The key is that Cycles returns the **enforced thinking cap** as part of the decision — the agent doesn't choose it, the governance layer does, based on remaining budget, tenant tier, and tool risk class.
+In this proposed extension, an operator-configured policy would return the reasoning cap and the application would enforce it at the provider call. The current server does not infer a thinking budget from remaining balance, tenant tier, or tool risk class; today the application selects the provider-specific reasoning limit and can store it as metadata while reserving the combined worst-case token estimate.
 
 ## Concrete integration: Claude extended thinking
 
@@ -228,7 +232,7 @@ Related reading:
 ## References
 
 - Anthropic: [Extended thinking documentation](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking) — `thinking.budget_tokens`, billing semantics, `max_tokens` > `budget_tokens` requirement
-- Anthropic: [What's new in Claude Opus 4.7](https://platform.claude.com/docs/en/about-claude/models/whats-new-claude-4-7) — adaptive thinking, `output_config.effort`, task budgets
+- Anthropic: [Introducing Claude Opus 4.7](https://www.anthropic.com/news/claude-opus-4-7) — adaptive thinking, `output_config.effort`, task budgets
 - OpenAI: [Reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) — Responses API, `reasoning.effort`, `reasoning_tokens` in usage, `max_output_tokens`
 - Google: [Understand and count tokens (Gemini API)](https://ai.google.dev/gemini-api/docs/tokens) — `thoughts_token_count` returned separately; output pricing includes thinking tokens
 - DeepSeek: [R1 model card](https://api-docs.deepseek.com/guides/reasoning_model) — `reasoning_content` returned alongside `content`; both billed

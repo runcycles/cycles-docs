@@ -3,7 +3,7 @@ title: "Why Cycles Runs Budget Authority on Redis Lua"
 date: 2026-04-15
 author: Albert Mavashev
 tags: [engineering, architecture, operations, redis, lua, concurrency, runtime-authority]
-description: "Budget authority sits in the hot path of every agent action. Three constraints — atomicity, sub-10ms envelope, correctness under retry storms — named the substrate. Here's what we picked and what we gave up."
+description: "Learn why Cycles uses Redis and Lua for atomic budget authority, low-latency decisions, retry safety, and correctness under concurrent agent traffic at scale."
 blog: true
 sidebar: false
 featured: false
@@ -27,7 +27,7 @@ This is the reasoning — what the constraints are, why the alternatives didn't 
 
 1. **Atomicity across scopes.** A single reserve touches multiple budgets — user, team, tenant, global. Either all of them reserve the estimate or none of them do. A partial reserve is worse than no reserve: it debits budgets the agent never actually used.
 
-2. **Sub-10ms single-operation envelope.** The [benchmark post](/blog/cycles-server-performance-benchmarks) has the numbers: Reserve 6.2ms p50, Commit 4.1ms p50, full Reserve+Commit lifecycle 14.9ms p50 end-to-end. That envelope is a product requirement, not an aspiration. Any substrate that can't hold it is out.
+2. **Low-latency single-operation envelope.** In the original v0.1.25.3 benchmark environment, Reserve measured 6.2ms p50, Commit 4.1ms p50, and the full Reserve+Commit lifecycle 14.9ms p50 end to end. Those figures are environment-specific observations, not an SLA; the design requirement is to keep authority overhead small relative to model and tool execution and to regression-test hot-path releases on comparable hardware.
 
 3. **Correctness under retry storms.** Agent frameworks retry aggressively. An agent that times out on reserve will retry; a network blip between client and server produces duplicate commits. The substrate must make "same reserve attempted twice" exactly equivalent to "same reserve attempted once" — and it has to do so without a coordinator that reintroduces the latency problem. The [retry-storm post](/blog/retry-storms-and-idempotency-in-agent-budget-systems) covers the semantics; here we care about what substrate enforces them.
 
@@ -51,7 +51,7 @@ Four properties, each with a concrete pointer into the code.
 
 **Atomicity by construction.** Redis is single-threaded during script execution — while a script runs, nothing else runs on that Redis instance. The TOCTOU window between "check if remaining ≥ estimate" and "decrement remaining" closes by definition. `reserve.lua` uses this directly: it reads `status`, `remaining`, `debt`, `is_over_limit`, and `overdraft_limit` for every affected scope in a single `HMGET` pass, validates all of them, *then* does the `HINCRBY` mutations. If any scope fails validation, no scope gets mutated. This is atomic across scopes because it's atomic across the whole script — no lock, no transaction, no retry logic.
 
-**One round-trip per mutation.** `EVALSHA` sends a 40-character SHA1 hash of the script and arguments. Redis executes; returns. No multi-step transaction, no optimistic retry, no coordinator. This is a big reason the 14.9ms p50 exists. Every millisecond you'd spend on a second round-trip is a millisecond you don't have.
+**One round-trip per mutation.** `EVALSHA` sends the script digest and arguments. Redis executes and returns without a multi-step transaction, optimistic retry, or coordinator. Avoiding extra network turns is one reason the original v0.1.25.3 test measured a 14.9ms Reserve+Commit p50; absolute latency still depends on host, container, JVM, and Redis placement.
 
 **Time authority inside the script.** Every Cycles Lua script calls `redis.call('TIME')` for the current timestamp rather than accepting a client-supplied one. The comment at the top of `expire.lua` says why directly:
 
@@ -90,7 +90,7 @@ First 30-minute run: 179,944 reserves, 91,507 commits, 0 errors. Heap 1.14× bas
 
 **Automated performance-regression gate.** Every release runs the benchmark suite three times, medians the results, and compares against `baseline.json` at a 25% threshold. A change that regresses Reserve+Commit p50 or 32-thread throughput by more than 25% fails the release job before the Docker image gets built. A looser 30% trend threshold runs nightly against a rolling 7-run median; real regressions show as sustained steps, not single-run noise.
 
-**Concurrent throughput numbers.** The [benchmark post](/blog/cycles-server-performance-benchmarks) has the full table; the architectural point here is that those numbers are a *consequence* of the substrate choice, not a tuning achievement on top of it. One round-trip, atomic, single-threaded-inside-the-script — that's where sub-10ms write operations and 2,870+ ops/sec come from.
+**Concurrent throughput numbers.** The [benchmark post](/blog/cycles-server-performance-benchmarks) has the original table; the architectural point is that one-round-trip atomic scripts enable high throughput without a separate coordinator. The historical 2,870+ lifecycle/s result belongs to that documented v0.1.25.3 environment, not every server version or deployment.
 
 ## When Lua on Redis stops being the right answer
 
@@ -105,7 +105,7 @@ If one of those is load-bearing for your system, the shape of the answer changes
 
 ## Bottom line
 
-We built budget authority on Redis Lua because the requirements named the substrate. Atomicity across scopes, a sub-10ms envelope on the mutation path, and correctness under retry storms don't leave many options that keep all three. `EVALSHA` gives you one-round-trip atomicity; single-threaded script execution closes the TOCTOU window without a lock; `redis.call('TIME')` removes clock skew as a failure mode; returning post-mutation snapshots from inside the script removes a second network hop.
+We built budget authority on Redis Lua because the requirements named the substrate: atomicity across scopes, low request-path overhead, and correctness under retry storms. `EVALSHA` gives one-round-trip atomicity; single-threaded script execution closes the shared-ledger check/reserve TOCTOU window without an application lock; `redis.call('TIME')` removes application-clock skew; and returning post-mutation snapshots from inside the script removes a second network hop.
 
 The trade-offs — single-shard atomicity, Redis as a coupled failure domain, hard-to-debug scripts — are real and we account for them with fail-safe semantics, property tests at the script layer, a soak invariant suite, and a release-time regression gate that fails the build before a slower script ever reaches production.
 

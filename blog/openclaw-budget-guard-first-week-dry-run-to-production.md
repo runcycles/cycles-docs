@@ -1,5 +1,5 @@
 ---
-title: "Your First Week with Cycles Budget Guard for OpenClaw"
+title: "First Week with OpenClaw Budget Guard"
 date: 2026-05-06
 author: Albert Mavashev
 tags: [openclaw, budgets, agents, production, operations, dry-run, cost-control, best-practices]
@@ -7,6 +7,10 @@ description: "An operator playbook for the first week after installing cycles-op
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: OpenClaw Budget Guard, dry run rollout, budget calibration, canary deployment, OpenClaw plugin, agent cost control
 ---
 
 # Your First Week with Cycles Budget Guard for OpenClaw

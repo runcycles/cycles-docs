@@ -86,7 +86,7 @@ Every agent action ultimately resolves to a credential at the call site. Authori
 
 ## Audit trail and attribution
 
-Authority decisions create an audit trail by side effect: every allow/deny, every degraded action, every reservation that was made and committed or rolled back. That audit is the substrate for compliance, post-incident review, and tenant-level reporting.
+Live reservations and settlement create a budget lifecycle trail by side effect. Preflight `decide` and dry-run results, degraded actions, tool arguments, and identity-policy outcomes need application-side logging. Together, those records can support compliance, post-incident review, and tenant-level reporting.
 
 - [The AI Agent Audit Trail You're Already Building](/blog/runtime-authority-byproducts-audit-trail-and-attribution-by-default)
 - [Operational Runbook: Using Cycles Runtime Events](/blog/operational-runbook-using-cycles-runtime-events)

@@ -15,7 +15,7 @@ Today, paid plans support self-hosted Cycles deployments. A managed cloud (runcy
 - **No agent-spend tax.** We never take a percentage of your model, tool, or agent spend. Support pricing is flat and independent of tokens, requests, agents, tenants, or downstream provider spend — the opposite of gateways that bill a cut of every call.
 - **You pay for the production layer, not the software.** The software stays open. Paid plans add response targets, upgrade guidance, incident support, architecture review, and audit-ready evidence configuration for teams running Cycles as a control point in their agent infrastructure.
 
-For regulated or enterprise deployments, paid support can include evidence retention, signed CyclesEvidence exports, audit-readiness review, and control-narrative support — see the [Compliance Evidence Package](#fixed-scope-services) below.
+For regulated or enterprise deployments, paid support can include evidence retention, signed CyclesEvidence exports, audit-readiness review, and control-narrative support.
 
 <Pricing />
 

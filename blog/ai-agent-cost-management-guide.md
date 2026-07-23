@@ -6,6 +6,10 @@ tags: [costs, engineering, best-practices]
 description: "A practical maturity model for AI agent costs — from no controls through monitoring, alerting, soft limits, and hard enforcement with trade-offs per tier."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent cost management, LLM budgets, agent spend control, hard budget limits, cost monitoring, runtime authority
 ---
 
 # AI Agent Cost Management: The Complete Guide
@@ -162,11 +166,11 @@ The atomic check-and-decrement is critical. It's what prevents the TOCTOU race c
 
 | Capability | Description |
 |---|---|
-| Pre-execution prevention | Overspend cannot happen — calls are denied before execution |
-| Atomic concurrency control | No race conditions between concurrent agents |
-| Per-run granularity | Each agent run has its own budget, independent of daily/monthly caps |
-| Hierarchical budgets | Tenant > workspace > app > workflow > agent > toolset budgets, each enforced independently |
-| [Graceful degradation](/glossary#graceful-degradation) | Agents receive a clear signal to downgrade instead of crashing |
+| Pre-execution budget hold | An insufficient estimated reservation is rejected before instrumented execution; actual overage follows the configured commit policy |
+| Atomic concurrency control | Concurrent estimated holds against the same configured ledgers cannot oversubscribe the available balance |
+| Per-run granularity | A run can receive its own enforceable scope by placing a unique run ID in a standard Subject field |
+| Hierarchical budgets | Configured ledgers along tenant → workspace → app → workflow → agent → toolset are checked atomically; absent ledgers are skipped |
+| [Graceful degradation](/glossary#graceful-degradation) | Preflight can return `ALLOW_WITH_CAPS`; the application interprets and applies the caps |
 | Audit trail | Every reservation and denial is logged with full context |
 
 **What Cycles provides at this tier:**

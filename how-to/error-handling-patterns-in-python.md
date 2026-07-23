@@ -23,12 +23,14 @@ CyclesError (base)
 │   ├── DebtOutstandingError
 │   ├── ReservationExpiredError
 │   └── ReservationFinalizedError
-└── CyclesTransportError (network-level failure)
+└── CyclesTransportError (exported for user code; not raised by the SDK)
 ```
+
+`CyclesTransportError` is exported but never raised by the SDK itself — transport failures surface as `status == -1` instead. See [Transport errors](#transport-errors) below.
 
 ## CyclesProtocolError
 
-When the `@cycles` decorator encounters a DENY decision or a protocol error, it raises `CyclesProtocolError` (or a specific subclass):
+When the `@cycles` decorator encounters a DENY decision or a protocol error, it raises `CyclesProtocolError`. A specific subclass (`BudgetExceededError`, etc.) is raised only when the server returns a matching HTTP error code; a 200 response with `decision=DENY` raises plain `CyclesProtocolError` with `reason_code` set:
 
 ```python
 from runcycles import CyclesProtocolError
@@ -134,21 +136,11 @@ except OverdraftLimitExceededError:
 
 ## Handling expired reservations
 
-If a function takes longer than the reservation TTL plus grace period, the commit will fail with `RESERVATION_EXPIRED`. The decorator handles heartbeat extensions automatically, but network issues can prevent extensions.
+If a function takes longer than the reservation TTL plus grace period, the commit fails with `RESERVATION_EXPIRED`. The decorator handles heartbeat extensions automatically, but network issues can prevent extensions.
 
-```python
-from runcycles import ReservationExpiredError
+With the decorator, a commit-time `RESERVATION_EXPIRED` is **not** raised to your code. The decorator logs a warning (`"Reservation already finalized/expired"` on the `runcycles` logger) and the decorated call returns its result normally — the work succeeded, but the spend was not recorded. Detect these cases through logs or monitoring, and record the usage as an event if the spend must land on the ledger. If you need to observe commit failures directly, use the programmatic client, where `commit_reservation()` returns a `CyclesResponse` whose error code you can inspect (see [Programmatic client error handling](#programmatic-client-error-handling)).
 
-try:
-    result = long_running_process(data)
-except ReservationExpiredError:
-    logger.warning(
-        "Reservation expired during processing. "
-        "Consider increasing ttl_ms or checking network connectivity."
-    )
-    # The work already ran — record the usage as an event
-    record_as_event(data)
-```
+`ReservationExpiredError` is raised only when reservation *creation* returns the `RESERVATION_EXPIRED` error code — never from a commit inside the decorator.
 
 ## Catching all Cycles errors
 
@@ -157,9 +149,7 @@ from runcycles import (
     BudgetExceededError,
     DebtOutstandingError,
     OverdraftLimitExceededError,
-    ReservationExpiredError,
     CyclesProtocolError,
-    CyclesTransportError,
     CyclesError,
 )
 
@@ -172,15 +162,13 @@ except DebtOutstandingError:
     result = "Service paused"
 except OverdraftLimitExceededError:
     result = "Budget limit reached"
-except ReservationExpiredError:
-    record_as_event(data)
 except CyclesProtocolError as e:
-    # Any other protocol error
-    logger.error("Protocol error: %s (code=%s, status=%d)", e, e.error_code, e.status)
-    raise
-except CyclesTransportError as e:
-    # Network-level failure
-    logger.error("Transport error: %s (cause=%s)", e, e.cause)
+    if e.status == -1:
+        # Network-level failure at reserve time — retry with backoff
+        logger.error("Transport error: %s", e)
+    else:
+        # Any other protocol error
+        logger.error("Protocol error: %s (code=%s, status=%d)", e, e.error_code, e.status)
     raise
 ```
 
@@ -201,7 +189,7 @@ with CyclesClient(config) as client:
         # Server error — retry with backoff
         logger.warning("Cycles server error: %s", response.error_message)
     elif response.is_transport_error:
-        # Network failure — retry with backoff
+        # Network failure (status == -1) — retry with backoff
         logger.warning("Transport error: %s", response.error_message)
     else:
         # Client error (4xx) — do not retry
@@ -214,21 +202,27 @@ with CyclesClient(config) as client:
         )
 ```
 
-## CyclesTransportError
+## Transport errors
 
-Raised when the HTTP request itself fails (DNS resolution, connection refused, timeout):
+When the HTTP request itself fails (DNS resolution, connection refused, timeout), how it surfaces depends on the API:
+
+- **Decorator:** a transport failure at reserve time raises `CyclesProtocolError` with `status == -1` and `error_code=None`. Transport failures at commit time are retried in the background by the commit retry engine, not raised.
+- **Programmatic client:** calls never raise for transport failures — they return a `CyclesResponse` with `is_transport_error == True` and `status == -1`.
 
 ```python
-from runcycles import CyclesTransportError
+from runcycles import CyclesProtocolError
 
 try:
     result = guarded_func()
-except CyclesTransportError as e:
-    logger.error("Network error: %s", e)
-    if e.cause:
-        logger.error("Underlying cause: %s", e.cause)
-    # Retry or degrade
+except CyclesProtocolError as e:
+    if e.status == -1:
+        logger.error("Network error reaching Cycles: %s", e)
+        # Retry or degrade
+    else:
+        raise
 ```
+
+The `CyclesTransportError` class is exported for use in your own code (e.g. wrapping transport-level failures in higher-level integrations), but the SDK itself never raises it.
 
 ## FastAPI / Starlette error handler
 
@@ -268,8 +262,11 @@ async def cycles_error_handler(request: Request, exc: CyclesProtocolError):
 | Error | Retryable? | Action |
 |---|---|---|
 | `BUDGET_EXCEEDED` (409) | Maybe | Budget may free up after other reservations commit. Retry with backoff or degrade. |
+| `BUDGET_FROZEN` (409) | Wait | Budget scope frozen by an operator. Retry after it is unfrozen. |
+| `BUDGET_CLOSED` (409) | No | Budget scope is permanently closed. Route spend elsewhere. |
 | `DEBT_OUTSTANDING` (409) | Wait | Requires operator to fund the scope or configure an overdraft limit. Retry after funding. |
 | `OVERDRAFT_LIMIT_EXCEEDED` (409) | Wait | Requires operator intervention. |
+| `MAX_EXTENSIONS_EXCEEDED` (409) | No | Tenant's `max_reservation_extensions` limit reached. Commit or release; use a longer initial `ttl_ms`. |
 | `RESERVATION_EXPIRED` (410) | No | Create a new reservation or record as event. |
 | `RESERVATION_FINALIZED` (409) | No | Reservation already settled. No action needed. |
 | `IDEMPOTENCY_MISMATCH` (409) | No | Fix the idempotency key or payload. |
@@ -289,7 +286,7 @@ Use `e.is_retryable()` to check programmatically — it returns `True` for `INTE
 4. **Distinguish between DENY and server errors** — DENY means the system is working correctly, server errors mean something is wrong
 5. **Log `error_code` and `status`** for debugging
 6. **Never swallow errors silently** — at minimum, log them
-7. **Handle `RESERVATION_EXPIRED`** by recording usage as an event if the work already completed
+7. **Watch for commit-time `RESERVATION_EXPIRED`** in logs/monitoring (the decorator does not raise it) and record usage as an event if the work already completed
 8. **Register a global exception handler** in web frameworks for consistent API error responses
 
 ## Next steps

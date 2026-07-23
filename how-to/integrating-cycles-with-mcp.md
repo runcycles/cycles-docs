@@ -5,13 +5,13 @@ description: "Expose Cycles runtime tools — decide, reserve, commit, release, 
 
 # Integrating Cycles with MCP
 
-::: tip New MCP guide
-Read: [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) — a TypeScript reserve/commit wrapper you can drop around any MCP tool handler.
+::: tip Put budget checks in the execution path
+For MCP tool handlers, read [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) for a TypeScript reserve-commit wrapper. On Claude Code, [Cycles Budget Guard for Claude Code](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools at the harness layer instead of relying on the model to cooperate.
 :::
 
 The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is the standard way AI hosts discover and call tools. The Cycles MCP Server exposes Cycles runtime authority as MCP tools, so MCP-compatible agents (Claude Desktop, Claude Code, Cursor, Windsurf, custom agents) can call `decide`, `reserve`, `commit`, `release`, and balance tools without an SDK integration.
 
-This gives agents a standard way to participate in Cycles workflows. **For hard production enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require `reserve` or `decide` before the costly or risky action fires.** The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
+This gives agents a standard way to participate in Cycles workflows. **For hard budget enforcement, make the Cycles check part of the actual execution path: the tool call, model call, gateway, or harness must require a successful live `reserve` before the costly action fires.** `decide` is a non-locking preflight whose result the application must apply. The MCP server alone exposes tools; it does not automatically gate every other action the agent might take.
 
 This guide covers the integration patterns, resources, prompts, and transport options available through the MCP server.
 
@@ -63,7 +63,7 @@ The most common pattern — reserve budget before a costly operation, commit act
 }
 ```
 
-Response includes `decision: "ALLOW"` and a `reservationId`.
+An accepted response includes `decision: "ALLOW"` or `decision: "ALLOW_WITH_CAPS"` and a `reservationId`. Apply any returned caps before executing. A live denial is returned as an MCP tool error, such as `BUDGET_EXCEEDED`, rather than as `decision: "DENY"`.
 
 **Step 2 — Execute** the LLM call or tool invocation.
 
@@ -85,13 +85,13 @@ Response includes `decision: "ALLOW"` and a `reservationId`.
 
 The unused 15,000 microcents are returned to the budget pool.
 
-**If the operation fails**, call `cycles_release` instead:
+**If the operation never starts and incurs no usage**, call `cycles_release` instead. If execution starts and incurs partial usage before failing, call `cycles_commit` with that actual usage so the cost is not lost:
 
 ```json
 {
   "reservationId": "rsv_...",
   "idempotencyKey": "release-a1b2c3d4",
-  "reason": "LLM call failed with timeout"
+  "reason": "Operation cancelled before dispatch"
 }
 ```
 
@@ -108,11 +108,11 @@ Use `cycles_decide` for a lightweight check before committing to a reservation. 
 }
 ```
 
-If the decision is `ALLOW`, proceed with a full `cycles_reserve`. If `DENY`, the agent can switch to a cheaper model or skip the operation — without having locked any budget.
+If the decision is `ALLOW`, proceed with a full `cycles_reserve`. If it is `ALLOW_WITH_CAPS`, apply the returned caps and reserve the constrained estimate. If it is `DENY`, the agent can switch to a cheaper model or skip the operation — without having locked any budget.
 
 ## Pattern 3: Graceful degradation
 
-When budget is running low, `cycles_reserve` may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell the agent how to constrain the operation:
+When the deepest matching budget has caps configured, `cycles_reserve` can return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. This is configuration-driven; it is not an automatic low-balance transition. Caps tell the caller how to constrain the operation:
 
 ```json
 {
@@ -161,7 +161,7 @@ For operations that may exceed the default 60-second TTL, use `cycles_extend` as
 }
 ```
 
-**Commit when done.** If the agent crashes, the reservation expires automatically and the budget is returned to the pool.
+**Commit when done.** If the agent crashes, TTL expiry can recover an abandoned hold, but it is not accurate settlement when execution may have started. Reconcile the outcome and commit the best-known actual usage. If the outcome is ambiguous, do not release the reservation merely to restore budget.
 
 See [TTL, Grace Period, and Extend](/protocol/reservation-ttl-grace-period-and-extend-in-cycles) for the full TTL model.
 
@@ -201,7 +201,7 @@ For workflows with multiple costly steps, check the balance first, then reserve 
 
 **Step 2:** `cycles_reserve` → execute → `cycles_commit`
 
-**Step 3:** `cycles_reserve` → **DENY** (budget exhausted) → degrade or stop
+**Step 3:** `cycles_reserve` → **`BUDGET_EXCEEDED` tool error** (budget exhausted) → degrade or stop
 
 Each step gets its own reservation, so the budget authority can deny mid-workflow if the agent is burning through budget too fast. **Do not reserve once for an entire long workflow unless you are comfortable locking that whole estimate up front** — per-step reservations give the authority layer a chance to stop mid-run, and unused budget returns to the pool sooner. See [Common Budget Patterns](/how-to/common-budget-patterns) for more examples.
 
@@ -218,7 +218,7 @@ The MCP server exposes 9 tools:
 | `cycles_decide` | Lightweight budget check without creating a reservation |
 | `cycles_create_event` | Record usage directly without a reservation (post-hoc metering) |
 | `cycles_check_balance` | Query current budget balance for a tenant/scope |
-| `cycles_list_reservations` | List active reservations with optional filters |
+| `cycles_list_reservations` | List reservations with optional status and subject filters |
 | `cycles_get_reservation` | Get details of a specific reservation by ID |
 
 ## Resources
@@ -275,31 +275,37 @@ Recommends scope hierarchy, budget limits, units, TTL settings, and degradation 
 
 The Cycles MCP server supports two transports:
 
-- **STDIO** *(default)* — the AI client launches the server as a subprocess via `npx`. One server per developer, per machine. This is what every per-client quickstart uses ([Claude Desktop](/quickstart/mcp-claude-desktop), [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), [Windsurf](/quickstart/mcp-windsurf)).
-- **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; SSE is the older shape, supported for legacy clients. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
+- **STDIO** *(default)* — the AI client launches a local server subprocess. The recommended [Claude Desktop](/quickstart/mcp-claude-desktop) path installs the bundled `.mcpb` extension; manual Desktop configuration and the [Claude Code](/quickstart/mcp-claude-code), [Cursor](/quickstart/mcp-cursor), and [Windsurf](/quickstart/mcp-windsurf) quickstarts launch the npm package with `npx`.
+- **Streamable HTTP / SSE compatibility** — the server runs as a long-lived process and clients connect remotely. Streamable HTTP is the current MCP transport; the older standalone HTTP+SSE transport is not implemented. Use this for shared team gateways, cloud co-deploys with `cycles-server`, CI sidecars, or any case where you want auth and audit in front of MCP.
 
 Quick HTTP start:
 
 ```bash
+HOST=127.0.0.1 \
+MCP_HTTP_AUTH_TOKEN='replace-with-a-long-random-secret' \
 npx @runcycles/mcp-server --transport http
 ```
+
+This keeps the listener on the local machine and requires a bearer token for `/mcp`. The server does not currently validate the HTTP `Origin` header, so place remote deployments behind a trusted reverse proxy that validates origins, terminates TLS, and applies authorization.
 
 The server starts on port 3000 (configurable via `PORT`) with:
 
 - `GET /health` — health check (`{"status": "ok", "version": "..."}`)
 - `POST /mcp` — MCP Streamable HTTP endpoint
-- `GET /mcp` — MCP SSE endpoint
-- `DELETE /mcp` — MCP session cleanup
+- `GET /mcp` — Streamable HTTP SSE stream (server-to-client notifications)
+- `DELETE /mcp` — requests Streamable HTTP transport termination; authenticate and restrict it like the other `/mcp` methods
 
 For the full decision tree, docker-compose example, and auth/scope behavior, see **[Running the MCP server over Streamable HTTP / SSE](/how-to/running-the-mcp-server-over-http)**.
 
 ## Error handling
 
+Errors from live mutating calls are returned as MCP tool errors containing the Cycles error code, message, request ID, and HTTP status. In particular, a denied live reservation normally surfaces as a 409-class error; `decision: "DENY"` is reserved for `cycles_decide` and dry-run reserve responses.
+
 | Error Code | Meaning | Recommended Action |
 |---|---|---|
 | `BUDGET_EXCEEDED` | Not enough budget | Degrade to cheaper model or stop |
-| `RESERVATION_EXPIRED` | TTL elapsed before commit | Re-reserve if work is still needed |
-| `RESERVATION_FINALIZED` | Already committed or released | No action needed |
+| `RESERVATION_EXPIRED` | TTL elapsed before commit | Inspect the outcome and reconcile any usage already incurred; re-reserve only for new work |
+| `RESERVATION_FINALIZED` | Already committed or released | Read the reservation status and verify the expected settlement; record missing usage idempotently rather than assuming it was charged |
 | `DEBT_OUTSTANDING` | Scope has unpaid debt (no overdraft limit) | Wait for admin to fund the budget or configure an overdraft limit |
 | `OVERDRAFT_LIMIT_EXCEEDED` | Over-limit state | Wait for admin to reconcile |
 
@@ -308,7 +314,7 @@ See [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in
 ## Key points
 
 - **No SDK changes for tool exposure.** Add the MCP server to your agent's config and it discovers Cycles tools automatically. Hard enforcement still requires those tools to sit in the execution path.
-- **Always finalize reservations.** Every `cycles_reserve` must be followed by `cycles_commit` or `cycles_release` — never leave reservations dangling.
+- **Always finalize reservations.** Commit actual usage when execution incurred cost, even if it later failed. Release only an unused reservation when execution was cancelled, skipped, or failed before starting. Never leave reservations dangling.
 - **Use stable idempotency keys.** Use a unique, stable `idempotencyKey` per logical Cycles operation so retries replay safely and do not double-settle reservations. The same retry of the same logical call must use the **same** key, not a new UUID per attempt.
 - **Respect caps.** When the decision is `ALLOW_WITH_CAPS`, constrain the operation accordingly.
 - **Heartbeat long operations.** Use `cycles_extend` for operations that may exceed the reservation TTL.

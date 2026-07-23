@@ -1,6 +1,6 @@
 ---
 title: "How to Add Budget Control to a LangChain Agent"
-description: "Wrap a LangChain AgentExecutor with per-run budget limits using Cycles reservations — without rewriting agent logic. Python examples with the @cycles decorator."
+description: "Wrap a LangChain create_agent run with per-run budget limits using Cycles reservations — without rewriting agent logic. Python examples with the @cycles decorator."
 ---
 
 # How to Add Budget Control to a LangChain Agent
@@ -25,7 +25,7 @@ Three patterns, three different scopes — pick based on what you actually want 
 Here's a typical LangChain agent loop:
 
 ```python
-from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 
@@ -34,11 +34,15 @@ def search_web(query: str) -> str:
     """Search the web for information."""
     return your_search_implementation(query)
 
-llm = ChatOpenAI(model="gpt-4o")
-agent = create_openai_functions_agent(llm, [search_web], prompt)
-executor = AgentExecutor(agent=agent, tools=[search_web])
+agent = create_agent(
+    model=ChatOpenAI(model="gpt-4o"),
+    tools=[search_web],
+    system_prompt="You are a research assistant.",
+)
 
-result = executor.invoke({"input": "Research the top 10 competitors..."})
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Research the top 10 competitors..."}]}
+)
 ```
 
 This works. But there's no limit on how many LLM calls the agent makes, how many tool invocations it triggers, or what it costs. If the agent gets stuck in a loop, retries a failing tool, or expands scope unexpectedly, it keeps running — and spending — until it either finishes or hits the provider's rate limits.
@@ -70,11 +74,11 @@ export OPENAI_API_KEY="sk-..."
 
 ## Per-run budget wrapper
 
-Wrap your `AgentExecutor` invocation in a single Cycles reservation:
+Wrap your agent invocation in a single Cycles reservation:
 
 ```python
 import uuid
-from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from runcycles import (
@@ -119,18 +123,21 @@ def run_agent_with_budget(
     reservation_id = res.get_body_attribute("reservation_id")
     decision = res.get_body_attribute("decision")
 
-    # 2. Execute the agent — optionally downgrade if budget is tight
+    # 2. Execute the agent — apply any configured caps
     try:
         if decision == "ALLOW_WITH_CAPS":
             llm = ChatOpenAI(model="gpt-4o-mini")
         else:
             llm = ChatOpenAI(model="gpt-4o")
-        agent = create_openai_functions_agent(llm, [search_web], prompt)
-        executor = AgentExecutor(
-            agent=agent, tools=[search_web], max_iterations=10,
+        agent = create_agent(
+            model=llm,
+            tools=[search_web],
+            system_prompt="You are a research assistant.",
         )
 
-        result = executor.invoke({"input": user_input})
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": user_input}]}
+        )
 
         # 3. Commit actual usage
         client.commit_reservation(reservation_id, CommitRequest(
@@ -215,7 +222,7 @@ Each customer's spend is tracked independently. One customer burning through the
 
 ## Graceful degradation with ALLOW_WITH_CAPS
 
-When budget is running low, Cycles can return `ALLOW_WITH_CAPS` instead of a hard denial. Use the decision to switch to a cheaper model or limit tool access:
+When the deepest matching budget has caps configured, Cycles can return `ALLOW_WITH_CAPS`. Use the returned caps to switch to a cheaper model or limit tool access. This is configuration-driven, not an automatic low-balance transition:
 
 ```python
 res = client.create_reservation(ReservationCreateRequest(
@@ -240,7 +247,7 @@ if not res.is_success:
 decision = res.get_body_attribute("decision")
 
 if decision == "ALLOW_WITH_CAPS":
-    # Budget is tight — switch to a cheaper model
+    # This example maps the configured caps policy to a cheaper model.
     llm = ChatOpenAI(model="gpt-4o-mini")
 else:
     # ALLOW — full capacity

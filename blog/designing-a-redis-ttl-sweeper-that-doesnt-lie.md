@@ -3,7 +3,7 @@ title: "Designing a Redis TTL Sweeper That Doesn't Lie"
 date: 2026-04-17
 author: Albert Mavashev
 tags: [engineering, architecture, operations, redis, lua, background-jobs, ttl]
-description: "A TTL sweeper sits on top of your ledger — it must never double-act, miss a candidate, or lose itself to clock skew. Here are seven properties a correct one enforces, and two bugs we shipped before we got there."
+description: "A Redis TTL sweeper must avoid duplicate action, missed candidates, and clock-skew errors. Learn seven correctness properties and two production bugs."
 blog: true
 sidebar: false
 featured: false

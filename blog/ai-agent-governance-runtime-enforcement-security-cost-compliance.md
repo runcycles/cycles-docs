@@ -7,6 +7,10 @@ description: "Most AI agent deployments lack runtime governance. Pre-execution e
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: AI agent governance, runtime enforcement, agent security, AI cost control, compliance audit trail, MCP governance, runtime authority
 ---
 
 # AI Agent Governance: Runtime Enforcement for Security, Cost, and Compliance
@@ -15,7 +19,7 @@ featured: true
 
 Since December 2025, NIST, OWASP, Google Research, and the Linux Foundation ecosystem have all signaled the same thing from different angles: agentic systems need stronger standards, clearer execution boundaries, and real runtime governance. OWASP published its [Top 10 for Agentic Applications](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/) in December 2025. The same month, the Linux Foundation announced the [Agentic AI Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation) — co-founded by Anthropic, OpenAI, and Block, with Google, Microsoft, and AWS as platinum members. In January 2026, Google Research published [scaling principles for multi-agent architectures](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/). In February, [NIST launched its AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure).
 
-The reason is not theoretical. It's empirical: **more than half of enterprises have not implemented an AI governance framework.** A [Gartner survey](https://futurecio.tech/the-what-why-and-how-of-ai-governance-in-2024/) found that only 46% of organizations have implemented one — meaning the majority are operating without formal governance. An [EY survey](https://assets.ey.com/content/dam/ey-sites/ey-com/en_gl/topics/emerging-technologies/ey-ai-survey-2024.pdf) found that 64% of companies with over $1 billion in revenue have lost more than $1 million to AI failures broadly — a figure that is likely worse for [autonomous agents](/glossary#autonomous-agent), where each failure can compound through tool calls and sub-agent delegation. By some estimates, [over 80% of AI projects fail to reach production](https://www.rand.org/pubs/research_reports/RRA2680-1.html).
+The reason is not theoretical. It's empirical: **more than half of enterprises have not implemented an AI governance framework.** A [Gartner survey](https://futurecio.tech/the-what-why-and-how-of-ai-governance-in-2024/) found that only 46% of organizations have implemented one — meaning the majority are operating without formal governance. A [2025 EY survey](https://www.ey.com/en_uk/insights/ai/how-can-responsible-ai-bridge-the-gap-between-investment-and-impact) found that 64% of surveyed organizations experienced more than $1 million in losses from AI-related risks broadly — a figure that is likely worse for [autonomous agents](/glossary#autonomous-agent), where each failure can compound through tool calls and sub-agent delegation. By some estimates, [over 80% of AI projects fail to reach production](https://www.rand.org/pubs/research_reports/RRA2680-1.html).
 
 These are not model capability problems. They are governance problems — and they have a common root cause.
 
@@ -44,7 +48,7 @@ The security surface of AI agents expanded dramatically in early 2026. Real inci
 - **ClawJacked** (February 2026): Researchers demonstrated that malicious websites can hijack locally-running AI agents via WebSocket, executing arbitrary tool calls through the user's agent session.
 - **Tool hub [exposure](/glossary#exposure)**: An audit of ClawHub found [824 unauthorized or harmful capabilities](https://blog.sshh.io/p/everything-wrong-with-mcp) out of 10,700 published tools. Separately, Knostic discovered 1,862 internet-exposed [MCP servers](/glossary#mcp-server) — all 119 manually verified had zero authentication.
 - **Replit database deletion**: Replit's AI coding assistant [deleted a user's production database](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/) containing 100+ executive contacts, then fabricated 4,000 fake records to cover its tracks.
-- **OpenAI Operator purchase**: OpenAI's Operator agent [made an unauthorized $31.43 purchase from Instacart](https://www.theregister.com/2025/01/31/openai_operator_agent/), bypassing user confirmation safeguards.
+- **OpenAI Operator purchase**: OpenAI's Operator agent [reportedly made an unauthorized $31.43 purchase from Instacart](https://incidentdatabase.ai/cite/1028/), bypassing user confirmation safeguards.
 - **Rogue agent collaboration**: Researchers [demonstrated](https://www.theregister.com/2026/03/12/rogue_ai_agents_worked_together/) that compromised agents can coordinate to escalate privileges and compromise downstream systems. In connected multi-agent architectures, a single poisoned agent can rapidly corrupt downstream decision-making — what OWASP categorizes as [ASI08: Cascading Failures](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/).
 
 These incidents share a pattern: the agent had the _capability_ to act but no _authority_ check before acting. MCP defines how agents discover and call tools. It does not define whether a given agent, in a given context, should be allowed to call a given tool right now.
@@ -84,28 +88,28 @@ Each category of existing tools covers a fragment of the governance problem. Mos
 | **Provider caps** (OpenAI monthly limits) | No | Coarse, org-level | No |
 | **Content guardrails** (Guardrails AI, NeMo) | Content filtering | No | No |
 | **MCP / A2A protocols** | Tool discovery | No | No |
-| **[Runtime authority](/glossary#runtime-authority)** | Pre-execution enforcement | Pre-execution enforcement | Full audit trail |
+| **[Runtime authority](/glossary#runtime-authority)** | Pre-execution decision point | Pre-execution budget enforcement | Enforcement and settlement evidence |
 
 The common thread: observability, rate limiting, and content guardrails are all either **retrospective** (they record what happened) or **wrong-granularity** (they control velocity, not total exposure, and operate at org level instead of per-agent, per-run, per-tenant).
 
-Governance requires a system that sits between "the agent decided to act" and "the action executed" — and makes an allow/deny decision at that boundary, for every action, atomically, with a full audit record. This is the definition of [runtime authority](/blog/what-is-runtime-authority-for-ai-agents).
+Governance requires mandatory controls between "the agent decided to act" and "the action executed." For instrumented actions, [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) can make an atomic budget decision there. Application authorization, argument validation, identity controls, and full tool-call audit records remain part of the wider control system.
 
 ## Runtime Authority as the Governance Layer
 
-Runtime authority is a single architectural layer that enforces all three governance pillars through one mechanism: the **reserve-commit lifecycle**.
+Runtime authority is an architectural layer for pre-execution budget decisions and settlement evidence through the **reserve-commit lifecycle**. It supports cost and caller-assigned exposure budgets, but it does not replace the application's security policy or compliance logging.
 
 ### How it works
 
-1. **Reserve** — Before any consequential action (model call, tool invocation, side effect), the agent requests authorization. The system atomically checks available budget, validates permissions, and returns ALLOW, ALLOW_WITH_CAPS, or DENY.
+1. **Reserve** — Before a consequential action, a mandatory runtime boundary requests a budget reservation. A successful live reservation returns `ALLOW` or `ALLOW_WITH_CAPS`; insufficient budget is an error such as `409 BUDGET_EXCEEDED`. `DENY` is used by `decide` and dry-run flows. Application authorization remains a separate check unless the deployment implements the governance extensions.
 2. **Execute** — Only if authorized. The action happens.
-3. **Commit** — After execution, the agent reports actual cost. The difference between estimated and actual is returned to the budget pool.
-4. **Release** — If execution fails, the full [reservation](/glossary#reservation) is returned. No budget is lost to failed operations.
+3. **Commit** — After execution starts, the runtime reports best-known actual usage, including partial usage from a failed operation. The difference between estimated and actual is returned to the budget pool.
+4. **Release** — If execution is skipped, cancelled before it starts, or demonstrably consumes zero usage, the client releases the [reservation](/glossary#reservation).
 
-Every step is recorded: scope, timestamp, amount, unit, action kind, decision, and reason. This is the audit trail that compliance requires — and it's generated as a side effect of enforcement, not as a separate logging concern.
+Reserve, commit, and release operations create budget lifecycle records with fields such as scope, timestamp, amount, unit, action context, and status; optional evidence can support later verification. Non-persisting `decide` and dry-run evaluations are not a complete audit log. Record tool arguments, identity-policy decisions, and application rationale in the application or gateway.
 
-### Security enforcement with RISK_POINTS
+### Modeling action exposure with RISK_POINTS
 
-Dollar budgets control spend. [RISK_POINTS](/glossary#risk-points) control what agents _do_. Each action class gets a point value based on blast radius:
+Dollar budgets control spend. [RISK_POINTS](/glossary#risk-points) let an application budget a caller-assigned measure of action exposure. Each action class can receive a point value based on blast radius:
 
 | Action class | Risk points | Rationale |
 |---|:---:|---|
@@ -116,11 +120,11 @@ Dollar budgets control spend. [RISK_POINTS](/glossary#risk-points) control what 
 | Database mutation (update/delete) | 25 | Potentially irreversible |
 | Deploy or CI trigger | 50 | Production impact |
 
-A workflow capped at 100 risk points can send 5 emails (100 points) or trigger 2 deploys (100 points) — not both. The cap forces containment. For the full [action authority](/glossary#action-authority) model, see [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects).
+A mandatory handler that reserves 20 points per email and 50 per deploy can use a 100-point budget to bound those attempts. The current server treats `RISK_POINTS` as a budget unit; the caller assigns the points and must make the reservation unavoidable. The published v0.1.26 governance extension describes richer action registries and allow/deny policy, but that extension is not yet implemented in `cycles-server`. For the broader [action authority](/glossary#action-authority) model, see [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects).
 
 ### Hierarchical scope as organizational governance
 
-Cycles enforces budgets at every level of an organization's hierarchy atomically in a single operation:
+Cycles enforces configured budgets across the standard subject hierarchy atomically in a single reservation:
 
 ```
 tenant:acme-corp
@@ -133,69 +137,35 @@ tenant:acme-corp
 
 When a reservation is created at the agent level, the system checks budget availability at every ancestor scope simultaneously. A single agent cannot exceed its own budget, the workflow budget, the workspace budget, or the tenant budget — and concurrent agents drawing from the same pool cannot oversubscribe it, because reservations are atomic (backed by Redis Lua scripts).
 
-This is organizational governance expressed as infrastructure: the budget hierarchy mirrors the org chart, and enforcement is automatic.
+This lets a budget hierarchy mirror organizational boundaries. Enforcement applies where budgets and the mandatory reservation boundary are configured.
 
-### Code example: governance in Python
+### Outcome-aware governance flow
 
-```python
-from runcycles import (
-    CyclesClient, CyclesConfig, ReservationCreateRequest,
-    CommitRequest, DecisionRequest, Subject, Action, Amount, Unit,
-)
+The dispatch adapter must report whether execution started; a `finally` block alone cannot distinguish a pre-dispatch validation failure from a partial side effect:
 
-config = CyclesConfig(
-    base_url="http://localhost:7878",
-    api_key="cyc_live_...",
-    tenant="acme-corp",
-)
+```text
+reserve 20 caller-assigned RISK_POINTS with a stable idempotency key
+if the live reservation is rejected or malformed:
+    do not call send_email
 
-with CyclesClient(config) as client:
-    # 1. Check action authority before a dangerous operation
-    decision_resp = client.decide(DecisionRequest(
-        idempotency_key="decide-triage-001",
-        subject=Subject(
-            tenant="acme-corp",
-            workspace="engineering",
-            agent="ticket-triage",
-        ),
-        action=Action(kind="tool.email", name="send_email"),
-        estimate=Amount(unit=Unit.RISK_POINTS, amount=20),
-    ))
+persist the active hold
+attempt = send_email_with_outcome(ticket)  # returns started, actual, result/error
 
-    decision = decision_resp.get_body_attribute("decision")
+if attempt.started:
+    commit best-known actual usage with a stable commit key
+else if attempt was skipped or demonstrably used zero:
+    release with a stable release key
+else:
+    retain the hold for reconciliation; do not release an ambiguous attempt
 
-    if decision == "DENY":
-        print("Governance denied: risk-point budget exhausted")
-        # Agent degrades to read-only — no email sent
-    else:
-        # 2. Reserve cost budget for the LLM call
-        res_resp = client.create_reservation(ReservationCreateRequest(
-            idempotency_key="res-triage-001",
-            subject=Subject(
-                tenant="acme-corp",
-                workspace="engineering",
-                agent="ticket-triage",
-            ),
-            action=Action(kind="llm.completion", name="claude-sonnet-4-6"),
-            estimate=Amount(unit=Unit.USD_MICROCENTS, amount=150_000),
-            ttl_ms=30_000,
-        ))
-
-        reservation_id = res_resp.get_body_attribute("reservation_id")
-
-        # 3. Execute only if authorized
-        result = call_llm_and_send_email(ticket)
-
-        # 4. Commit actual usage — audit trail generated automatically
-        client.commit_reservation(reservation_id, CommitRequest(
-            idempotency_key="commit-triage-001",
-            actual=Amount(unit=Unit.USD_MICROCENTS, amount=127_400),
-        ))
+verify COMMITTED, RELEASED, or an idempotent APPLIED usage event
+before clearing the durable settlement record
+report the original tool error and any settlement error separately
 ```
 
-### Code example: adding governance to Claude Code or Cursor via MCP
+### Code example: exposing Cycles tools to Claude Code or Cursor
 
-Zero code changes. One config addition:
+One config addition exposes the Cycles tools:
 
 ```json
 {
@@ -212,29 +182,29 @@ Zero code changes. One config addition:
 }
 ```
 
-The agent gains 9 budget-aware tools (`cycles_reserve`, `cycles_commit`, `cycles_decide`, etc.) that wrap around its existing tool calls. Every action passes through a governance check. For setup details, see [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server).
+The agent gains nine budget-aware tools (`cycles_reserve`, `cycles_commit`, `cycles_decide`, and others). They do not automatically wrap its existing tools. Use **Cycles Budget Guard for Claude Code**, or place Cycles in a required tool handler, gateway, harness, or service boundary, to ensure every protected action passes through the check. For setup details, see [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server).
 
 ## The Governance Checklist for Production Agents
 
-Before deploying any agent to production, answer these seven questions. If you cannot answer all of them with "yes, enforced at runtime," your agents have governance gaps.
+Before deploying an agent to production, use these questions to identify control gaps. A "yes" requires evidence from the actual execution path, not merely a documented intent.
 
 1. **Budget boundaries** — Does every agent run have a maximum cost, enforced before execution?
-2. **Action severity tiers** — Are consequential actions (emails, deploys, mutations) scored by risk and capped per run?
+2. **Action severity tiers** — Does the application classify consequential actions and assign any `RISK_POINTS` used for per-run exposure budgets?
 3. **[Tenant isolation](/glossary#tenant-isolation)** — Is it impossible for Agent A's workload to consume Agent B's budget, even under concurrent execution?
-4. **Audit trail** — Is every reservation, commit, release, and denial logged with scope, timestamp, amount, and reason?
+4. **Audit trail** — Are budget lifecycle records joined with application logs for identity, tool arguments, authorization decisions, and rationale?
 5. **[Graceful degradation](/glossary#graceful-degradation)** — When budget is exhausted, do agents degrade to read-only instead of hard-failing or silently continuing?
 6. **Retry safety** — Are commits idempotent, so retries cannot cause double-settlement?
 7. **Scope hierarchy** — Do budgets enforce at every organizational level (tenant → workspace → agent) atomically?
 
-Teams that answer "yes" to all seven have runtime authority. Teams that answer "we have dashboards" have observability — which is necessary, but not governance.
+Teams that answer "yes" to all seven have a stronger runtime-control foundation, not a complete governance guarantee. Dashboards provide necessary observability, but they do not establish pre-execution enforcement.
 
 ## Getting Started
 
 Three paths, depending on your current state:
 
-1. **See what governance would do — without blocking anything.** [Shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) runs Cycles alongside your existing agents in observation mode. Every action is evaluated against budgets and policies, but nothing is denied. You get a report of what _would_ have been blocked — a governance gap analysis with zero production risk.
+1. **See what budget enforcement would do — without blocking anything.** [Shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) evaluates calls without denying them. It lowers rollout risk, but still requires ordinary production safeguards and does not validate unimplemented action-governance policy.
 
-2. **Add governance to MCP-based agents immediately.** If your agents use Claude Desktop, Claude Code, Cursor, or Windsurf, the [MCP server integration](/quickstart/getting-started-with-the-mcp-server) adds budget and action authority with a single config change. No SDK. No code modifications.
+2. **Expose budget tools to MCP-based agents.** If your agents use Claude Desktop, Claude Code, Cursor, or Windsurf, the [MCP server integration](/quickstart/getting-started-with-the-mcp-server) adds Cycles tools with a config change. Add a mandatory enforcement boundary for hard limits.
 
 3. **See enforcement stop a runaway agent in real time.** The [60-second demo](/demos/) shows budget enforcement preventing a [tool loop](/glossary#tool-loop) — from reservation to denial to graceful degradation. No setup required.
 
@@ -245,7 +215,7 @@ Three paths, depending on your current state:
 3. [Linux Foundation Agentic AI Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation) — December 9, 2025
 4. [Google Research: Scaling Agent Systems](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) — January 28, 2026
 5. [Gartner AI Governance Survey](https://futurecio.tech/the-what-why-and-how-of-ai-governance-in-2024/) — 46% have implemented a framework
-6. [EY AI survey](https://assets.ey.com/content/dam/ey-sites/ey-com/en_gl/topics/emerging-technologies/ey-ai-survey-2024.pdf) — 64% of $1B+ companies lost >$1M to AI failures broadly
+6. [EY Responsible AI survey](https://www.ey.com/en_uk/insights/ai/how-can-responsible-ai-bridge-the-gap-between-investment-and-impact) — 64% of surveyed organizations experienced more than $1M in losses from AI-related risks broadly
 7. [RAND Corporation](https://www.rand.org/pubs/research_reports/RRA2680-1.html) — AI project failure estimates
 8. [Knostic MCP security analysis](https://blog.sshh.io/p/everything-wrong-with-mcp) — 1,862 exposed servers
 9. [Replit database deletion incident](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/) — TechCrunch, October 2025

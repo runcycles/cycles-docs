@@ -195,7 +195,7 @@ def chat_view(request):
 
 ## Per-tenant isolation
 
-Extract the tenant from request headers and scope budgets per tenant:
+Extract the tenant from request headers and scope budgets per tenant. Subject fields on `@cycles` accept callables (runcycles 0.4.0+) that are invoked with the decorated function's arguments at reservation time — so the tenant can be resolved per call:
 
 ```python
 # myapp/views.py
@@ -208,10 +208,11 @@ def get_tenant(request) -> str:
     estimate=1_000_000,
     action_kind="llm.completion",
     action_name="gpt-4o",
+    # Resolved from this call's kwargs; returning None falls back to the
+    # client-config default (CYCLES_TENANT)
+    tenant=lambda prompt, **kw: kw.get("tenant", "acme"),
 )
 def tenant_scoped_call(prompt: str, tenant: str = "acme") -> dict:
-    # tenant is passed as a function argument — the decorator uses it
-    # for subject scoping via set_default_client's tenant
     ...
 
 @require_POST
@@ -258,10 +259,6 @@ urlpatterns = [
 - **Preflight with `decide()`** — lightweight budget check before expensive work.
 - **Isolate tenants** — use the `Subject.tenant` field from request headers.
 - **Set a default client** — avoids passing `client=` to every `@cycles` decorator.
-
-## Full example
-
-See [`examples/django_integration/`](https://github.com/runcycles/cycles-client-python/blob/main/examples/django_integration/) for a complete, runnable project.
 
 ## Next steps
 

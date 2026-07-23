@@ -1,5 +1,5 @@
 ---
-title: "Bulk Operations Are Incident Response Infrastructure"
+title: "Bulk Operations for Incident Response"
 date: 2026-04-30
 author: Albert Mavashev
 tags:

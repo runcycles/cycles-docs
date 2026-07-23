@@ -3,10 +3,14 @@ title: "Why I'm Building Cycles"
 date: 2026-04-04
 author: Albert Mavashev
 tags: [founder, vision, agents, governance]
-description: "After nearly three decades building middleware governance, I saw the same catastrophic gap emerge in AI agents. This is why I'm building Cycles."
+description: "After decades building middleware governance, Albert Mavashev saw the same control gap emerge in AI agents. This is why he is building Cycles for production."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: why Cycles, AI agent governance, runtime authority, agent budget enforcement, production AI infrastructure, founder story
 ---
 
 # Why I'm Building Cycles
@@ -35,15 +39,15 @@ In the middleware world, circa 2000, teams would deploy message brokers and inte
 
 We built systems to solve that — systems that intercepted transactions before execution, enforced policies on message flow, and gave operators deterministic control over what could happen — not just visibility into what had already happened. Policy-based routing, message flow control, pre-execution validation. The shift from "detect and respond" to "prevent and enforce" is what made enterprise middleware production-safe.
 
-That scalerX incident brought the pattern into focus: today's AI agents have the same governance gap that enterprise middleware had 25 years ago. **Teams have observability but no enforcement.** Different technology, identical control-plane gap.
+That scalerX incident brought the pattern into focus: many AI-agent deployments have the same governance gap that enterprise middleware had 25 years ago. Teams may have observability without a shared pre-execution budget boundary. Different technology, similar control-plane problem.
 
 ## Why Cycles, Why Now
 
 When I started sketching what became Cycles, I kept coming back to three principles from the middleware governance world:
 
-**1. Enforcement must be atomic.** In enterprise middleware, a half-applied policy is worse than no policy. If you reserve capacity for a transaction, that [reservation](/glossary#reservation) must be atomic — either the full budget is locked or none of it is. Cycles uses a reserve-commit lifecycle borrowed directly from this principle. Budget is atomically reserved before an agent acts, actual usage is committed after, and unused budget is released. No race conditions. No [time-of-check-to-time-of-use](https://dev.to/amavashev/your-ai-agent-budget-check-has-a-race-condition-33ei) gaps.
+**1. Enforcement must be atomic.** In enterprise middleware, a half-applied policy is worse than no policy. If you reserve capacity for a transaction, that [reservation](/glossary#reservation) must be atomic—either the full amount is locked across applicable ledgers or none of it is. The Cycles reserve-commit lifecycle closes the shared-ledger [time-of-check-to-time-of-use](https://dev.to/amavashev/your-ai-agent-budget-check-has-a-race-condition-33ei) window between checking and reserving. It does not eliminate races elsewhere in the application or external side effect.
 
-**2. Authority must attenuate, not propagate.** In middleware, a message broker doesn't grant downstream systems the same permissions as the originating system. Each hop in the chain has narrower scope. Cycles applies the same principle to agent delegation: when an agent spawns a sub-agent, the sub-agent gets a carved-out sub-budget and a restricted action mask. Authority can only decrease with depth, never increase.
+**2. Authority should attenuate, not propagate.** In middleware, a message broker does not have to grant downstream systems the same permissions as the originating system. An orchestrator can apply that principle to agent delegation by provisioning a smaller child scope budget and exposing a narrower tool set at each hop. Cycles enforces the explicitly provisioned sub-budget; the orchestrator owns tool permissions and depth limits.
 
 **3. Control must be structural, not semantic.** You can't rely on an LLM to respect a system prompt that says "don't spend more than $10." That's a semantic control — a suggestion to a probabilistic system. Structural controls operate outside the LLM, at the infrastructure layer, and enforce boundaries deterministically. One is a hope. The other is an engineering guarantee.
 
@@ -53,13 +57,13 @@ These aren't novel ideas. They're battle-tested patterns from decades of distrib
 
 Cycles is not an observability platform. There are excellent tools for watching what agents do. Cycles is not an eval framework. There are good tools for testing agent outputs. Cycles is not an LLM proxy. There are solid products for routing and caching inference calls.
 
-Cycles is the enforcement layer that sits between the agent's decision to act and the action itself. It answers one question: **is this agent allowed to do this, right now, given what it's already done?**
+Cycles is a budget-enforcement layer that an application places between the agent's proposal and protected execution. It answers a narrower question: **does the submitted spend or caller-assigned exposure fit the applicable scope ledgers right now?**
 
-That's it. One question, answered deterministically, at every tool call, for every agent, in every delegation chain. And if the answer is no, the action doesn't happen. Not "gets logged for later review." Not "triggers an alert." Doesn't happen.
+At a correctly instrumented mandatory boundary, an insufficient reservation prevents that code path from calling the protected operation. The application must still authorize the tool and arguments and ensure no alternative path bypasses the boundary.
 
 ## The Road Ahead
 
-Cycles is early and open source under [Apache 2.0](https://github.com/runcycles). The protocol, server, and client SDKs are available across Python, TypeScript, Java, and Rust. We integrate with [27 frameworks and LLM providers](/blog/26-integrations-every-ai-framework-one-budget-protocol).
+Cycles is early and open source under [Apache 2.0](https://github.com/runcycles). The protocol, server, and client SDKs are available across Python, TypeScript, Java, and Rust. The linked historical post records [26 integration guides at publication](/blog/26-integrations-every-ai-framework-one-budget-protocol); the [integration overview](/how-to/integrations-overview) is the current list.
 
 I've seen this movie before. I know how the first act goes — the technology is exciting, adoption outpaces governance, incidents accumulate, and eventually the industry builds the enforcement layer it should have built from the start.
 

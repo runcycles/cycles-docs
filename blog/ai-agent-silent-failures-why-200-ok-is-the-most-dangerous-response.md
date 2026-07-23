@@ -1,11 +1,15 @@
 ---
-title: "AI Agent Silent Failures: Why 200 OK Is the Most Dangerous Response in Production"
+title: "AI Agent Silent Failures in Production"
 date: 2026-03-26
 author: Cycles Team
 tags: [agents, production, reliability, observability, silent-failures, multi-agent]
-description: "Your AI agent returns success, but the answer is wrong. Silent failures are costing teams more than crashes — here's why they happen and the architectural pattern to catch them before damage spreads."
+description: "AI agents can return success while producing damaging results. Learn why silent failures happen and which runtime controls expose them before impact spreads."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent silent failures, 200 OK failures, agent reliability, production AI agents, runtime controls, observability
 ---
 
 # AI Agent Silent Failures: Why 200 OK Is the Most Dangerous Response in Production

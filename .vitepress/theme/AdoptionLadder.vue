@@ -5,7 +5,7 @@ const steps = [
     iconAlt: 'Rocket',
     heading: 'Run the local demo',
     time: '~5 min',
-    detail: 'docker compose up. No API keys. See $10→$1 budget enforcement in 30 seconds.',
+    detail: 'One script, no API keys. Watch a runaway agent stopped at the $1 cap in ~30 seconds.',
     link: '/demos/',
   },
   {

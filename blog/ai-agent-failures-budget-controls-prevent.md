@@ -3,9 +3,13 @@ title: "5 AI Agent Failures Budget Controls Would Prevent"
 date: 2026-03-14
 author: Cycles Team
 tags: [incidents, costs, best-practices]
-description: "Five AI agent failure scenarios with dollar estimates, and how pre-execution budget enforcement would have caught each one."
+description: "Review five AI agent failure scenarios with cost estimates and learn how pre-execution budget enforcement can stop runaway work before spend escapes safely."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent failures, budget controls, runaway agent costs, pre-execution budgets, LLM spend limits, runtime authority
 ---
 
 # 5 AI Agent Failures Budget Controls Would Prevent

@@ -96,7 +96,7 @@ The intermediate levels (`workspace`, `app`, `workflow`) are not present and are
 
 ### Custom dimensions
 
-For budgeting dimensions that do not fit the standard hierarchy, the Subject supports a `dimensions` field with custom key-value pairs:
+For attribution facets that do not fit the standard hierarchy, the Subject supports a `dimensions` field with custom key-value pairs:
 
 ```json
 {
@@ -111,7 +111,7 @@ For budgeting dimensions that do not fit the standard hierarchy, the Subject sup
 }
 ```
 
-This is how concepts like **run budgets** are modeled — by passing a unique run identifier through dimensions, each execution gets its own scope.
+Dimensions are not budget-scope fields — they never derive scopes and servers MAY ignore them for budgeting decisions, but they do serve reporting, enterprise taxonomies, and policy uses (including the v0.1.26 `per_run` action-quota window, which keys off `dimensions.run_id`). To give each execution an enforceable **run budget**, encode the run identifier in a standard Subject field instead (e.g. `workflow: "run-{id}"`, deriving the scope `workflow:run-{id}`) — see [modeling tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
 
 For the full technical specification, see [How Scope Derivation Works](/protocol/how-scope-derivation-works-in-cycles).
 
@@ -155,11 +155,11 @@ For example:
 
 A reservation for the chatbot must pass all three levels — even if the chatbot scope has room, the reservation fails if the tenant or workspace scope is exhausted.
 
-### A budget must exist before enforcement
+### At least one budget must exist
 
-If no budget exists at a scope, the scope is treated as having zero allocation. Any reservation targeting it will be denied with `BUDGET_EXCEEDED`.
+Scopes without budgets are simply **skipped** during enforcement — a missing budget at one level never causes a denial on its own. You do not need a budget at every possible scope, only at scopes where you want enforcement.
 
-You do not need a budget at every possible scope — only at scopes where you want enforcement. Scopes without budgets are skipped during enforcement, as long as at least one derived scope has a budget defined.
+The one requirement: at least one derived scope must have a budget. If **none** of the derived scopes has a budget in the requested unit, the server rejects the request with `404 NOT_FOUND`. That is different from a budget denial — a reservation that exceeds an existing budget is rejected with `409 BUDGET_EXCEEDED`.
 
 For setting up budgets, see [Budget Allocation and Management](/how-to/budget-allocation-and-management-in-cycles).
 
@@ -180,7 +180,8 @@ Here is what happens when a reservation request flows through the system:
    → tenant:acme-corp/workspace:prod
    → tenant:acme-corp/workspace:prod/app:chatbot
 
-4. The server checks budgets at EVERY derived scope atomically:
+4. The server checks budgets at EVERY derived scope that has one,
+   atomically (scopes without a budget are skipped):
    ┌─────────────────────────────────────────┬───────────┬────────┐
    │ Scope                                   │ Remaining │ Result │
    ├─────────────────────────────────────────┼───────────┼────────┤
@@ -239,7 +240,7 @@ tenant:acme-corp/workspace:prod/app:research-agent  → $50
 
 ### Add per-execution budgets for safety
 
-Use the `workflow` field or custom dimensions to cap individual runs:
+Use the `workflow` field to cap individual runs (a standard field is required — `dimensions` are not enforceable):
 
 ```
 tenant:acme-corp                           → $100  (tenant cap)
@@ -260,7 +261,7 @@ When deciding which scopes to use, ask:
 | "How much can this type of process consume?" | `workflow` |
 | "How much can this individual agent use?" | `agent` |
 | "How much can this set of tools cost?" | `toolset` |
-| "How much can this single execution consume?" | `workflow:run-id` or `dimensions.run` |
+| "How much can this single execution consume?" | `workflow: "run-{id}"` (a standard field — `dimensions` are not enforceable) |
 
 You do not need all of them. Most teams start with tenant + one or two additional levels.
 
@@ -471,7 +472,7 @@ This shows the remaining and reserved amounts at every scope level — giving yo
 - **Start with the fewest scope levels that solve your problem.** Tenant-only is a valid starting point. Add workspace, app, or workflow levels only when you need finer control.
 - **Keep Subject fields consistent across all code paths.** If some requests include `workspace` and others do not, enforcement becomes inconsistent — some requests bypass the workspace-level check. See [Scope Misconfiguration and Budget Leaks](/incidents/scope-misconfiguration-and-budget-leaks).
 - **Use the canonical hierarchy.** The protocol defines `tenant → workspace → app → workflow → agent → toolset`. Map your concepts to these standard levels rather than fighting the ordering.
-- **Prefer standard fields over custom dimensions.** Standard fields have built-in scope derivation support. Use `dimensions` only for concepts that truly do not fit (e.g., per-run IDs, cost centers).
+- **Prefer standard fields over custom dimensions.** Standard fields have built-in scope derivation support. Use `dimensions` only for reporting facets that never need enforcement (e.g., cost centers, regions) — anything you want to budget, including per-run IDs, belongs in a standard field.
 - **Validate scope consistency in tests.** Write tests that verify all code paths for the same operation include the same Subject fields. Inconsistencies cause silent budget bypasses.
 - **Only create budgets at scopes you need to enforce.** You do not need a budget at every level — scopes without budgets are skipped during enforcement.
 

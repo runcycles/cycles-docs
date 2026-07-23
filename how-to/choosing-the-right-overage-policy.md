@@ -14,7 +14,7 @@ For detailed mechanics and implementation, see [Commit Overage Policies](/protoc
 Ask these questions in order:
 
 1. **Has the work already happened?** (external import, retroactive accounting, side effect already fired)
-   → **ALLOW_WITH_OVERDRAFT** — the ledger must reflect reality
+   → **ALLOW_WITH_OVERDRAFT** — the ledger must reflect reality. Note that debt is bounded by the scope's `overdraft_limit`: if the commit would push debt beyond it, the server rejects it with `409 OVERDRAFT_LIMIT_EXCEEDED`, so size the limit for your import volumes
 
 2. **Can you estimate costs reliably?** (fixed-price APIs, known token counts, deterministic operations)
    → **REJECT** with a 10–20% buffer — hard enforcement is safe when estimates are tight
@@ -84,7 +84,7 @@ Set `default_commit_overage_policy: ALLOW_IF_AVAILABLE` at the tenant level. Thi
 
 **Recommended:** ALLOW_WITH_OVERDRAFT
 
-When an operation must succeed regardless of budget state — critical alerts, compliance actions, safety-related tool calls — use ALLOW_WITH_OVERDRAFT so the action is never blocked by budget exhaustion. Set an appropriate `overdraft_limit` and monitor debt.
+When an operation must succeed even when the budget is exhausted — critical alerts, compliance actions, safety-related tool calls — use ALLOW_WITH_OVERDRAFT so budget exhaustion alone does not block the action. This is not unlimited: debt is bounded by the scope's `overdraft_limit`, and a commit that would push debt beyond that limit is rejected with `409 OVERDRAFT_LIMIT_EXCEEDED`. Set an `overdraft_limit` large enough to cover your worst-case SLA-critical burst, and monitor debt so it is repaid before the limit is reached.
 
 ### Background batch processing
 
@@ -102,15 +102,18 @@ Most production systems use different policies for different action classes:
 | Fixed-cost tools | REJECT | Predictable, retry-safe |
 | External imports | ALLOW_WITH_OVERDRAFT | Already happened |
 | Agent orchestration | ALLOW_IF_AVAILABLE | Variable, multi-step |
-| Safety-critical ops | ALLOW_WITH_OVERDRAFT | Must never be blocked |
+| Safety-critical ops | ALLOW_WITH_OVERDRAFT | Not blocked by exhaustion (up to `overdraft_limit`) |
 
 ## Setting the default
 
-The overage policy resolves in this order:
+The overage policy resolves in this order (most specific wins):
 
-1. **Request-level** `overage_policy` field — per-call override
-2. **Tenant default** `default_commit_overage_policy` — set via Admin API
-3. **Hardcoded fallback** — `ALLOW_IF_AVAILABLE`
+1. **Request-level** `overage_policy` field — per-call override on the reservation or event
+2. **Policy-level** — pattern-based override configured via the Admin API
+3. **Budget ledger-level** `commit_overage_policy` — override for a specific scope's ledger
+4. **Tenant default** `default_commit_overage_policy` — set via Admin API
+
+If none of these is set, the server falls back to `ALLOW_IF_AVAILABLE`.
 
 For most teams, leaving the default as ALLOW_IF_AVAILABLE and overriding per-request for specific action classes is the simplest approach.
 

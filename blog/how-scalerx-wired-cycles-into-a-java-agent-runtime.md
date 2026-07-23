@@ -1,5 +1,5 @@
 ---
-title: "How scalerX.ai Wired Cycles Into a Java Agent Runtime"
+title: "How scalerX Added Cycles to a Java Agent Runtime"
 date: 2026-05-05
 author: Cycles Team
 tags:
@@ -9,7 +9,7 @@ tags:
   - spring-boot
   - agents
   - budgets
-description: "How scalerX.ai added budget reservations to a Java Spring Boot agent runtime — the @Cycles annotation, scope hierarchies, and reserve/commit on OpenAI calls."
+description: "See how scalerX.ai added scoped budget reservations to a Java Spring Boot agent runtime with @Cycles and reserve-commit around OpenAI calls in production."
 blog: true
 sidebar: false
 featured: false
@@ -19,7 +19,7 @@ head:
       content: scalerX.ai integration, Cycles Java SDK, Spring Boot LLM budget, agent platform cost control, @Cycles annotation, OpenAI Responses API budget, AI agent governance Java
 ---
 
-# How scalerX.ai Wired Cycles Into a Java Agent Runtime
+# How scalerX Added Cycles to a Java Agent Runtime
 
 scalerX.ai is a multi-[tenant](/glossary#tenant) agent platform built on Spring Boot. Before Cycles, every user request flowed through two cost-control systems: a subscription tier with per-feature monthly request limits, and an optional [credits](/glossary#credits) ledger that debited a pre-priced amount per call. The team described the result as multiple checks per request — two sources of truth for what a user could afford, evaluated independently on the way to each LLM call.
 
@@ -143,7 +143,7 @@ Three things in this path are worth pointing out:
 
 **`synchronized` is a local guard, not the correctness boundary.** Both `createReservation` and `commitReservation` carry the `synchronized` modifier. That serializes calls within one JVM and reduces accidental same-process overlap, but the actual correctness boundary is the [Cycles server](/glossary#cycles-server)'s atomic reservation logic — multiple JVMs, pods, or threads across machines all rely on the server, not on Java synchronization. Worth knowing because `synchronized` on a Spring singleton can also serialize more than intended across tenants and workspaces; treat it as a conservative belt-and-braces in scalerX's wrapper, not a load-bearing primitive.
 
-**`ALLOW` and `ALLOW_WITH_CAPS` are not the same green light.** Both can proceed, but `_WITH_CAPS` means *the reservation was approved under constraints* — e.g., a lower token cap, fewer steps, a cheaper model, or a restricted toolset compared to what was requested. The application has to apply the returned constraints; ignoring them weakens the control. scalerX's current usage doesn't generate caps in practice (the estimate is a flat 1 credit), but any platform that requests larger or variable estimates will see this branch and needs to honor what comes back.
+**`ALLOW` and `ALLOW_WITH_CAPS` are not the same green light.** Both can proceed, but `_WITH_CAPS` means the deepest matching budget supplied operator-configured constraints — for example, a lower token cap, fewer steps, or a restricted toolset. The application has to apply them. scalerX's current budgets do not configure caps, so its flat one-credit reservations return `ALLOW`; larger or variable estimates do not cause caps by themselves.
 
 **Deny reason comes from a structured field.** When the decision is anything else, the helper `extractDenyReason` pulls a `reason_code` out of `deny_detail`. The codes — `INSUFFICIENT_BALANCE`, `EXPIRED`, `RATE_LIMITED`, etc. — are stable strings the application can branch on. scalerX surfaces them to the user as friendly errors without round-tripping to a separate metadata service.
 

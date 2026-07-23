@@ -171,10 +171,10 @@ Without workflow budgets, all usage competes at the tenant level, which is often
 
 A platform might define workflows like:
 
-- `workflow/support-triage`
-- `workflow/refund-assistant`
-- `workflow/report-generator`
-- `workflow/research-agent`
+- `workflow:support-triage`
+- `workflow:refund-assistant`
+- `workflow:report-generator`
+- `workflow:research-agent`
 
 Each can have a different budget profile.
 
@@ -194,7 +194,9 @@ It is where teams begin translating product intent into execution boundaries.
 
 Run budgets are the most local and execution-specific scope.
 
-In the Cycles protocol, "run" is not a built-in subject field like tenant or workflow. Instead, run-level budgets are modeled by passing a unique run identifier through the `dimensions` field on each subject (for example, `dimensions: { "run": "run-12345" }`). This gives each execution its own scope in the budget hierarchy.
+In the Cycles protocol, "run" is not a built-in subject field like tenant or workflow. Instead, run-level budgets are modeled by passing a unique run identifier through one of the standard subject fields — for example, setting `workflow="run-12345"` derives the scope `workflow:run-12345`, or the `agent` field can carry the run identifier. This gives each execution its own scope in the budget hierarchy.
+
+Do not use the `dimensions` field for run budgets. Scopes are derived only from the six standard subject fields (tenant, workspace, app, workflow, agent, toolset). The `dimensions` map never derives scopes, and servers MAY ignore `dimensions` entirely for budgeting decisions — a run identifier placed there would not be enforced.
 
 A run budget answers:
 
@@ -229,11 +231,12 @@ That protects against:
 A workflow run might be allowed:
 
 - up to 500 units total
-- no more than 10 model/tool steps
 - downgrade behavior after 400 units
 - hard stop at exhaustion
 
 This gives each run a bounded envelope.
+
+Step limits (for example, "no more than 10 model/tool steps") are not something budgets enforce. They come from **Caps** — soft-landing constraints such as `max_steps_remaining` that the server can return from `/decide` or alongside an `ALLOW_WITH_CAPS` reservation decision. Combine a run budget (spend ceiling) with Caps (step and tool constraints) for full run-level control.
 
 ### Why run budgets should usually be strict
 
@@ -413,4 +416,4 @@ That is how teams move from simple usage caps to real autonomous execution contr
 - [API Key Management](/how-to/api-key-management-in-cycles) — create tenant-scoped API keys
 - [Scope Derivation](/protocol/how-scope-derivation-works-in-cycles) — how subject fields map to hierarchical scope paths
 - [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) — set up the Cycles infrastructure from scratch
-- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](/how-to/integrating-cycles-with-spring-ai)

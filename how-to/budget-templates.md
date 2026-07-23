@@ -10,7 +10,7 @@ Ready-to-use setup scripts for common Cycles deployment patterns. Each template 
 **Prerequisites:**
 - Cycles server running ([deployment guide](/quickstart/deploying-the-full-cycles-stack))
 - `ADMIN_KEY` set to your admin API key
-- `CYCLES_API_KEY` set to an API key with `admin:write` permission
+- `CYCLES_API_KEY` set to an API key with `budgets:write` permission
 
 ## Template 1: Single-Tenant (One Organization)
 
@@ -52,7 +52,7 @@ curl -s -X POST "$ADMIN_URL/v1/admin/api-keys" \
     \"name\": \"app-server\",
     \"permissions\": [\"reservations:create\", \"reservations:commit\", \"reservations:release\", \"reservations:extend\", \"reservations:list\", \"balances:read\"]
   }"
-echo -e "\n>>> Save the api_key value above — it won't be shown again\n"
+echo -e "\n>>> Save the key_secret value above — it won't be shown again\n"
 
 echo "=== Creating tenant-level budget (\$${MONTHLY_BUDGET_USD}/month) ==="
 curl -s -X POST "$ADMIN_URL/v1/admin/budgets" \
@@ -87,6 +87,8 @@ echo "Remaining for staging/dev: \$$((MONTHLY_BUDGET_USD - PROD_BUDGET_USD))/mon
 
 ```bash
 # Add to crontab: 0 0 1 * * /path/to/reset-budget.sh
+ADMIN_URL="http://localhost:7979"
+
 curl -s -X POST "$ADMIN_URL/v1/admin/budgets/fund?scope=tenant:my-company&unit=USD_MICROCENTS" \
   -H "X-Cycles-API-Key: $CYCLES_API_KEY" \
   -H "Content-Type: application/json" \
@@ -160,7 +162,7 @@ curl -s -X POST "$ADMIN_URL/v1/admin/api-keys" \
     \"name\": \"$CUSTOMER_ID-app\",
     \"permissions\": [\"reservations:create\", \"reservations:commit\", \"reservations:release\", \"reservations:extend\", \"reservations:list\", \"balances:read\"]
   }"
-echo -e "\n>>> Save the api_key value above\n"
+echo -e "\n>>> Save the key_secret value above\n"
 
 echo "--- Creating budget ledger ---"
 curl -s -X POST "$ADMIN_URL/v1/admin/budgets" \
@@ -242,7 +244,7 @@ curl -s -X POST "$ADMIN_URL/v1/admin/api-keys" \
     \"name\": \"app-server\",
     \"permissions\": [\"reservations:create\", \"reservations:commit\", \"reservations:release\", \"reservations:extend\", \"reservations:list\", \"balances:read\"]
   }"
-echo -e "\n>>> Save the api_key value above\n"
+echo -e "\n>>> Save the key_secret value above\n"
 
 echo "=== Creating USD cost budget ($((USD_BUDGET / 100000000))/month) ==="
 curl -s -X POST "$ADMIN_URL/v1/admin/budgets" \

@@ -63,7 +63,7 @@ The `remaining` field shows available budget after accounting for active reserva
 
 **Fixes:**
 
-- **Increase TTL** when creating reservations. Default is often 30 seconds. For long-running operations, use 60-120 seconds.
+- **Increase TTL** when creating reservations. The default is 60 seconds (`ttl_ms: 60000`). For long-running operations, use 120 seconds or more.
 - **Use automatic heartbeat.** The SDK clients (Python `@cycles`, TypeScript `withCycles`, Java `@Cycles`) automatically extend the reservation TTL while the operation is running. Ensure you're using the decorator/HOF pattern rather than raw HTTP.
 - **For raw HTTP users:** call `POST /v1/reservations/{id}/extend` periodically before the TTL expires.
 
@@ -103,7 +103,7 @@ curl -s -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-c
 **Checklist:**
 
 1. Is the `X-Cycles-API-Key` header present in the request?
-2. Is the key value correct? (Keys start with `cyc_live_`)
+2. Is the key value correct? (Keys start with `cyc_live_` or `cyc_test_`)
 3. Has the key been revoked? Validate it:
 
 ```bash
@@ -165,10 +165,20 @@ curl -s -X POST http://localhost:7979/v1/auth/validate \
 
 ::: code-group
 ```python [Python]
-config = CyclesConfig(base_url="http://localhost:7878", timeout=10.0)  # 10 seconds
+config = CyclesConfig(
+    base_url="http://localhost:7878",
+    api_key="cyc_live_...",
+    connect_timeout=5.0,  # seconds (default 2.0)
+    read_timeout=10.0,    # seconds (default 5.0)
+)
 ```
 ```typescript [TypeScript]
-const config = new CyclesConfig({ baseUrl: "http://localhost:7878", timeout: 10000 });
+const config = new CyclesConfig({
+  baseUrl: "http://localhost:7878",
+  apiKey: "cyc_live_...",
+  connectTimeout: 5_000, // ms (default 2000)
+  readTimeout: 10_000,   // ms (default 5000)
+});
 ```
 :::
 
@@ -347,7 +357,8 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 
 1. Is `CYCLES_API_KEY` set in the MCP server environment? Without it, the server cannot authenticate.
 2. Is `CYCLES_BASE_URL` set? **There is no default** — this variable is required. Set it to your Cycles server URL (e.g., `http://localhost:7878` for local development).
-3. Is `CYCLES_MOCK` set to `"true"`? Mock mode returns realistic responses without contacting a real server. Remove it for production use.
+3. Is `CYCLES_MOCK` set to `"true"`? Mock mode returns synthetic responses without contacting a real server and performs no live enforcement. Remove it for production use. The MCP server refuses mock mode when `NODE_ENV=production` unless `CYCLES_ALLOW_MOCK_IN_PRODUCTION=true` is also set.
+4. Does the API key have the permission for the requested tool? The MCP tool set uses the valid runtime permissions `reservations:create`, `reservations:commit`, `reservations:release`, `reservations:extend`, `reservations:list`, and `balances:read`. There are no separate `decide` or `events:create` permission values.
 
 ### MCP server not appearing in Claude Desktop or Cursor
 
@@ -366,7 +377,7 @@ Use [shadow mode / dry-run](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget
 
 **Symptom:** Every reservation or decide call returns `ALLOW` regardless of budget state.
 
-**Cause:** The server is running in mock mode (`CYCLES_MOCK=true`), which returns deterministic mock responses.
+**Cause:** The server is running in mock mode (`CYCLES_MOCK=true`), which returns synthetic `ALLOW` responses. Generated IDs and timestamps are not deterministic.
 
 **Fix:** Remove the `CYCLES_MOCK` environment variable and ensure `CYCLES_BASE_URL` and `CYCLES_API_KEY` are set correctly.
 
@@ -420,15 +431,15 @@ The same pattern applies to the patch endpoint: `PATCH /v1/admin/budgets?scope=.
 
 ## Common first-integration mistakes
 
-### Commit fails with 404 NOT_FOUND
+### Commit fails with 410 RESERVATION_EXPIRED
 
-**Symptom:** Reserve succeeds, but commit returns `404 NOT_FOUND`.
+**Symptom:** Reserve succeeds, but commit returns `410 RESERVATION_EXPIRED`.
 
-**Cause:** The reservation expired before the commit arrived. The default TTL may be too short for long-running LLM calls.
+**Cause:** The reservation expired before the commit arrived. The default TTL (60000 ms) may be too short for long-running LLM calls. (A `404 NOT_FOUND` on commit is a different problem: the reservation never existed — check the `reservation_id` you are passing.)
 
 **Fix:**
 
-- Increase the `ttl_ms` when creating reservations. For LLM calls, 60000-120000 ms is typical.
+- Increase the `ttl_ms` when creating reservations. For LLM calls, 120000 ms or more is typical.
 - Use the SDK decorators (`@cycles` in Python, `withCycles` in TypeScript, `@Cycles` in Spring) which automatically extend TTL via heartbeat.
 - For raw HTTP: call `POST /v1/reservations/{id}/extend` periodically before the TTL expires.
 
@@ -537,7 +548,7 @@ def handle_webhook(event):
 2. **Retry backoff.** If your endpoint returned a non-2xx response, the next retry is delayed by exponential backoff (1s → 2s → 4s → 8s → 16s).
 3. **Stale delivery protection.** Deliveries older than 24 hours are auto-failed on pickup. If the events service was down for 24+ hours, events from that period are not delivered — use the replay API to recover them.
 
-**Ordering guarantee:** Events for the same tenant are dispatched in order. Cross-tenant ordering is not guaranteed.
+**Ordering guarantee:** Delivery order is not guaranteed — dispatch uses a shared queue with concurrent consumers, and retried deliveries re-enter out of order. Only the stored event log is ordered; consumers should dedupe and sequence on `event_id` and the envelope `timestamp`.
 
 ### Expected event type not firing
 

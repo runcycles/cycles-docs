@@ -163,7 +163,7 @@ client.commit_reservation(reservation_id, CommitRequest(
         latency_ms=320,
         model_version="gpt-4o-2024-08-06",
     ),
-    metadata={"request_id": "req-abc-123"},
+    metadata={"app_request_id": "req-abc-123"},
 ))
 ```
 ```java [Java]
@@ -177,7 +177,7 @@ CommitRequest commitRequest = CommitRequest.builder()
     .idempotencyKey("commit-" + UUID.randomUUID())
     .actual(new Amount(Unit.USD_MICROCENTS, 3200L))
     .metrics(metrics)
-    .metadata(Map.of("request_id", "req-abc-123"))
+    .metadata(Map.of("app_request_id", "req-abc-123"))
     .build();
 
 CyclesResponse<Map<String, Object>> commitResponse =
@@ -193,7 +193,7 @@ await client.commitReservation(reservationId, {
     latency_ms: 320,
     model_version: "gpt-4o-2024-08-06",
   },
-  metadata: { request_id: "req-abc-123" },
+  metadata: { app_request_id: "req-abc-123" },
 });
 ```
 :::
@@ -425,7 +425,7 @@ response = client.decide(DecisionRequest(
     estimate=Amount(unit=Unit.USD_MICROCENTS, amount=50_000),
 ))
 
-decision = response.get_body_attribute("decision")  # "ALLOW" or "DENY"
+decision = response.get_body_attribute("decision")  # "ALLOW", "ALLOW_WITH_CAPS", or "DENY"
 if decision == "DENY":
     print("Budget low — show warning in UI")
 ```
@@ -469,7 +469,9 @@ if (decision === "DENY") {
 response = client.get_balances(tenant="acme", workspace="production")
 if response.is_success:
     for balance in response.body.get("balances", []):
-        print(f"Scope: {balance['scope']}, remaining: {balance['remaining']}")
+        # remaining is a SignedAmount object: {"unit": ..., "amount": ...}
+        remaining = balance["remaining"]
+        print(f"Scope: {balance['scope']}, remaining: {remaining['amount']} {remaining['unit']}")
 ```
 ```java [Java]
 Map<String, String> params = Map.of(
@@ -478,16 +480,19 @@ Map<String, String> params = Map.of(
 );
 
 CyclesResponse<Map<String, Object>> balanceResponse = cyclesClient.getBalances(params);
-List<Map<String, Object>> balances =
-    (List<Map<String, Object>>) balanceResponse.getBody().get("balances");
 
-for (Map<String, Object> balance : balances) {
-    String scope = (String) balance.get("scope");
-    Number allocated = (Number) balance.get("allocated");
-    Number spent = (Number) balance.get("spent");
-    Number reserved = (Number) balance.get("reserved");
-    System.out.printf("Scope: %s, allocated: %d, spent: %d, reserved: %d%n",
-        scope, allocated.longValue(), spent.longValue(), reserved.longValue());
+// Balance amounts are objects ({unit, amount}), not raw numbers. Use the
+// typed BalanceQueryResult / Balance accessors instead of casting to Number.
+BalanceQueryResult result = BalanceQueryResult.fromMap(balanceResponse.getBody());
+
+for (Balance balance : result.getBalances()) {
+    SignedAmount remaining = balance.getRemaining();  // can be negative (overdraft)
+    Amount spent = balance.getSpent();
+    Amount reserved = balance.getReserved();
+    System.out.printf("Scope: %s, remaining: %d %s, spent: %d, reserved: %d%n",
+        balance.getScope(),
+        remaining.getAmount(), remaining.getUnit(),
+        spent.getAmount(), reserved.getAmount());
 }
 ```
 ```typescript [TypeScript]

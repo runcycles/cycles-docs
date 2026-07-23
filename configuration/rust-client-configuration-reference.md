@@ -48,21 +48,21 @@ These fields hold subject values that are stored on the config and available via
 
 ### Retry configuration
 
-The retry-related fields are present on `CyclesConfig` as configuration surface for a future automatic-retry engine; **the engine is not wired in `runcycles` 0.2.x.** Transient commit failures (network, 5xx, timeouts) surface to the caller as `Error::Transport` or `Error::Api { .. }` and the caller decides whether to retry. The fields below are documented here because they are already public on the struct; setting them in 0.2.x has no runtime effect, and any wiring behavior in a future release will be announced separately.
+In `runcycles` 0.2.7+, `ReservationGuard::commit()` retries retryable failures inline: transport errors, 5xx responses, and API error codes that `Error::is_retryable()` classifies as transient. Retries reuse the original `CommitRequest` and idempotency key, while the heartbeat keeps the reservation alive until the final outcome. No retry continues after `commit()` returns.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `retry_enabled` | `bool` | `true` | Future: enable automatic commit retries |
-| `retry_max_attempts` | `u32` | `5` | Future: maximum number of retry attempts |
-| `retry_initial_delay` | `Duration` | `500 ms` | Future: delay before the first retry |
-| `retry_multiplier` | `f64` | `2.0` | Future: exponential backoff multiplier between retries |
-| `retry_max_delay` | `Duration` | `30_000 ms` | Future: maximum delay between retries (cap) |
+| `retry_enabled` | `bool` | `true` | Enable automatic commit retries |
+| `retry_max_attempts` | `u32` | `5` | Maximum retry attempts after the initial commit attempt |
+| `retry_initial_delay` | `Duration` | `500 ms` | Delay before the first retry |
+| `retry_multiplier` | `f64` | `2.0` | Exponential backoff multiplier between retries |
+| `retry_max_delay` | `Duration` | `30_000 ms` | Maximum delay between retries |
 
-For now, callers wrap commits in their own retry loop using the `Error::is_retryable()` / `retry_after()` convenience methods. See [Error Handling in Rust](/how-to/error-handling-patterns-in-rust) for the in-app pattern. `BudgetExceeded` carries a server-suggested `retry_after` regardless of whether the engine is wired.
+Under a persistent outage, `commit()` waits for the configured backoff schedule before returning the final error. Reduce the retry limits or set `retry_enabled(false)` for fail-fast, single-attempt commits. Use `Error::is_retryable()` and `retry_after()` when deciding how to handle the final result or errors from operations other than guarded commit. See [Error Handling in Rust](/how-to/error-handling-patterns-in-rust).
 
 ## Programmatic configuration
 
-The builder API is the recommended way to construct a client. The builder exposes the fields that callers tune in practice — connection settings, subject defaults, and the retry-enabled toggle. The remaining retry-engine fields (initial delay, multiplier, max delay) are configured by constructing `CyclesConfig` directly when the future engine lands; they are not yet on the builder.
+The builder API is the recommended way to construct a client. It exposes connection settings, subject defaults, and every commit-retry setting.
 
 ```rust
 use runcycles::CyclesClient;
@@ -79,10 +79,13 @@ let client = CyclesClient::builder(
 .read_timeout(Duration::from_millis(5_000))
 .retry_enabled(true)
 .retry_max_attempts(5)
+.retry_initial_delay(Duration::from_millis(500))
+.retry_multiplier(2.0)
+.retry_max_delay(Duration::from_secs(30))
 .build();
 ```
 
-To set the retry-engine fields that aren't on the builder, construct `CyclesConfig` directly:
+You can also construct `CyclesConfig` directly:
 
 ```rust
 use runcycles::{CyclesClient, CyclesConfig};
@@ -237,13 +240,14 @@ The blocking client must not be called from inside a Tokio runtime (it will bloc
 | `.toolset(s)` | config subject default | |
 | `.connect_timeout(d)` | HTTP | Takes `std::time::Duration` |
 | `.read_timeout(d)` | HTTP | Takes `std::time::Duration` |
-| `.retry_enabled(b)` | retry-future | Sets the field for the future retry engine; no runtime effect in 0.2.x |
-| `.retry_max_attempts(n)` | retry-future | Sets the field for the future retry engine |
+| `.retry_enabled(b)` | commit retry | Enables or disables inline commit retry |
+| `.retry_max_attempts(n)` | commit retry | Sets retry attempts after the initial commit attempt |
+| `.retry_initial_delay(d)` | commit retry | Sets the delay before the first retry |
+| `.retry_multiplier(n)` | commit retry | Sets the exponential backoff multiplier |
+| `.retry_max_delay(d)` | commit retry | Caps the delay between retries |
 | `.http_client(c)` | HTTP | Provide a custom `reqwest::Client`; overrides timeouts |
 | `.build()` | finalizes | Returns `CyclesClient` (async) |
 | `.build_blocking()` | finalizes | Returns `Result<BlockingCyclesClient, Error>`; requires the `blocking` feature |
-
-The `retry_initial_delay`, `retry_multiplier`, and `retry_max_delay` fields are reachable only by constructing `CyclesConfig` directly (see [Programmatic configuration](#programmatic-configuration)).
 
 ## Next steps
 

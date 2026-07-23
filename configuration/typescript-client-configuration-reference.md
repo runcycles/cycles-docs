@@ -63,8 +63,10 @@ Attempt 1: wait 500ms
 Attempt 2: wait 1000ms
 Attempt 3: wait 2000ms
 Attempt 4: wait 4000ms
-Attempt 5: wait 8000ms (capped at retryMaxDelay)
+Attempt 5: wait 8000ms
 ```
+
+With the default settings the backoff never reaches the cap; `retryMaxDelay` only kicks in once the exponential delay would exceed 30000ms (e.g. with a higher `retryMaxAttempts`).
 
 Non-retryable errors (4xx responses) are not retried. Retries are fire-and-forget — the guarded function returns immediately while the commit is retried in the background.
 
@@ -132,23 +134,25 @@ The `withCycles` HOF accepts an options object that controls reservation behavio
 |---|---|---|---|
 | `estimate` | `number \| Function` | (required) | Estimated cost. Number constant or function receiving the wrapped function's arguments. |
 | `actual` | `number \| Function \| undefined` | `undefined` | Actual cost. Number constant or function receiving the return value. Defaults to estimate. |
-| `actionKind` | `string` | `"unknown"` | Action category (e.g. `"llm.completion"`). |
-| `actionName` | `string` | `"unknown"` | Action identifier (e.g. `"gpt-4"`). |
+| `actionKind` | `string \| ((...args) => string \| undefined)` | `"unknown"` | Action category (e.g. `"llm.completion"`). |
+| `actionName` | `string \| ((...args) => string \| undefined)` | `"unknown"` | Action identifier (e.g. `"gpt-4"`). |
 | `actionTags` | `string[] \| undefined` | `undefined` | Tags for filtering and reporting. |
 | `unit` | `string` | `"USD_MICROCENTS"` | Budget unit: `"USD_MICROCENTS"`, `"TOKENS"`, `"CREDITS"`, `"RISK_POINTS"`. |
 | `ttlMs` | `number` | `60000` | Reservation TTL in milliseconds (range: 1000–86400000). |
 | `gracePeriodMs` | `number \| undefined` | `undefined` | Grace period after TTL expiry in milliseconds. When `undefined`, the server applies its default (5000ms). Valid range: 0–60,000. |
 | `overagePolicy` | `string` | `"ALLOW_IF_AVAILABLE"` | `"REJECT"`, `"ALLOW_IF_AVAILABLE"`, or `"ALLOW_WITH_OVERDRAFT"`. |
 | `dryRun` | `boolean` | `false` | If `true`, evaluate without persisting. Function does not execute. |
-| `tenant` | `string \| undefined` | `undefined` | Subject tenant override (takes precedence over config default). |
-| `workspace` | `string \| undefined` | `undefined` | Subject workspace override. |
-| `app` | `string \| undefined` | `undefined` | Subject app override. |
-| `workflow` | `string \| undefined` | `undefined` | Subject workflow override. |
-| `agent` | `string \| undefined` | `undefined` | Subject agent override. |
-| `toolset` | `string \| undefined` | `undefined` | Subject toolset override. |
+| `tenant` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject tenant override (takes precedence over config default). |
+| `workspace` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject workspace override. |
+| `app` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject app override. |
+| `workflow` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject workflow override. |
+| `agent` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject agent override. |
+| `toolset` | `string \| ((...args) => string \| undefined)` | `undefined` | Subject toolset override. |
 | `dimensions` | `Record<string, string> \| undefined` | `undefined` | Custom dimensions for the subject. |
 | `client` | `CyclesClient \| undefined` | `undefined` | Explicit client. Falls back to module-level default. |
 | `useEstimateIfActualNotProvided` | `boolean` | `true` | If `true` and `actual` is not set, use estimate as actual at commit. |
+
+Since 0.3.0, `actionKind`, `actionName`, and the six subject fields accept a callable that receives the wrapped function's arguments and is resolved per call. If the callable returns `undefined`, the field falls back to the `CyclesConfig` default for subject fields, or to `"unknown"` for `actionKind`/`actionName`.
 
 ## Setting a default client
 

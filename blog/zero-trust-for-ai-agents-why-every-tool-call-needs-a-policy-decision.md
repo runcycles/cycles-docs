@@ -1,20 +1,24 @@
 ---
-title: "Zero Trust for AI Agents: Why Every Tool Call Needs a Policy Decision"
+title: "Zero Trust for AI Agents at the Tool Boundary"
 date: 2026-03-24
 author: Cycles Team
 tags: [security, zero-trust, agents, MCP, OWASP, production, tool-calling, governance]
-description: "Microsoft, Cisco, and OWASP converged on one conclusion: AI agents need zero trust at the tool-call layer. What changed and how to enforce it."
+description: "Apply zero-trust principles to AI agent tools with mandatory pre-execution checks, scoped budgets, application authorization, and auditable settlement."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: zero trust AI agents, tool call authorization, MCP security, pre-execution policy, scoped agent budgets, runtime authority, agent governance
 ---
 
-# Zero Trust for AI Agents: Why Every Tool Call Needs a Policy Decision
+# Zero Trust for AI Agents at the Tool Boundary
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
 In a single week in March 2026, Microsoft announced [Zero Trust for AI](https://www.microsoft.com/en-us/security/blog/2026/03/19/new-tools-and-guidance-announcing-zero-trust-for-ai/), Cisco unveiled [Zero Trust Access for AI Agents](https://blogs.cisco.com/security/security-agentic-ai-how-cisco-brings-zero-trust-to-your-new-digital-workforce) at RSAC 2026, and the Cloud Security Alliance published its [Agentic Trust Framework](https://cloudsecurityalliance.org/blog/2026/02/02/the-agentic-trust-framework-zero-trust-governance-for-ai-agents). Meanwhile, on Hacker News, developers kept asking the same question: ["How are you enforcing permissions for AI agent tool calls in production?"](https://news.ycombinator.com/item?id=46740645)
 
-The industry and the community arrived at the same answer simultaneously: **every tool call an AI agent makes needs a policy decision before it executes.**
+A practical conclusion is emerging: **every consequential tool call should cross a mandatory authorization boundary before it executes.**
 
 <!-- more -->
 
@@ -30,7 +34,7 @@ For AI agents, the same principle applies — but at the **tool call layer**. An
 
 Zero trust for agents means:
 
-1. **Every tool call is evaluated against policy before execution** — not logged after.
+1. **Every protected tool call is evaluated against application policy before execution** — not merely logged after.
 2. **Agent identity is explicit** — each agent has its own credentials, not inherited user [tokens](/glossary#tokens).
 3. **Permissions are scoped to the current task** — least privilege, not broad access.
 4. **Budget is part of the policy** — cost authorization is security authorization.
@@ -42,7 +46,7 @@ Cisco's approach at RSAC 2026 targets the same gap: new Duo IAM capabilities wil
 
 ## Why This Matters Now: The OWASP Top 10 for Agentic Applications
 
-The [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) — developed by 100+ experts and peer-reviewed — identified the ten most critical risks in production agent systems. Nearly every one of them traces back to a tool call that should have been denied:
+The [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) — developed by 100+ experts and peer-reviewed — identified critical risks in production agent systems. Several involve actions that a stronger execution boundary could reject or constrain:
 
 | OWASP Risk | What Happens | Zero Trust Mitigation |
 |---|---|---|
@@ -69,7 +73,7 @@ A [Show HN post on runtime authorization for AI agents](https://news.ycombinator
 LLM → Proposed Action → Policy Engine → Allow / Deny / Escalate → Execution
 ```
 
-The post notes that most agent systems today are **"fail-open"** — the model proposes an action, the tool executes, logs are written, and monitoring happens after the fact. Zero trust flips this to **fail-closed**: nothing executes until policy says yes.
+The post describes a common **fail-open** pattern: the model proposes an action, the tool executes, logs are written, and monitoring happens after the fact. A fail-closed boundary instead ensures that protected actions do not execute until the required controls succeed.
 
 On DEV Community, a [widely-discussed post on structural failures in AI agents](https://dev.to/deiu/the-three-things-wrong-with-ai-agents-in-2026-492m) highlights a related gap: **cost opacity**. "Power users burn $30 to $800/month in API calls with minimal visibility." A commenter raised a fourth structural failure: "no audit layer verifying whether agent actions matched declarations." When agents malfunction, logs show _what_ happened but not _whether it was authorized_.
 
@@ -79,7 +83,7 @@ Synthesizing the Microsoft, Cisco, CSA, and OWASP frameworks with what developer
 
 ### 1. Pre-Execution Policy Evaluation
 
-Every tool call passes through a policy decision before execution. The policy engine is external to the agent — deterministic, testable, and not influenced by the agent's reasoning.
+Every tool call placed in scope passes through a policy decision before execution. The policy engine is external to the agent — deterministic, testable, and not influenced by the agent's reasoning.
 
 This is the difference between a guardrail and an enforcement layer. A guardrail inspects the agent's output. An enforcement layer controls whether the action _happens_.
 
@@ -93,53 +97,54 @@ Flat allow/deny lists don't scale. Production systems need hierarchical scopes: 
 
 ### 4. Concurrency-Safe Authorization
 
-In any non-trivial deployment, multiple agents run simultaneously against shared budgets. Without atomic [reservation](/glossary#reservation), two agents can each check that $50 remains, both proceed, and spend $100. This is not a theoretical concern — it's the default behavior of every agent framework that checks budgets with a simple read-before-write pattern. Authorization decisions must be atomic.
+In many deployments, multiple agents run simultaneously against shared budgets. Without atomic [reservation](/glossary#reservation), two agents can each check that $50 remains, both proceed, and spend $100. Any framework integration that uses a simple read-before-write budget check has this race. Budget authorization decisions must be atomic.
 
 ### 5. Auditable Decision Trail
 
-Zero trust without an audit trail is unverifiable trust. Every policy decision — allow, deny, escalate — must be recorded with the full context: which agent, which tool, which arguments, which scope, how much budget remained, and why the decision was made. This is what compliance teams need, and it's what [OWASP's observability principle](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) demands.
+Zero trust without an audit trail is difficult to verify. The application should log the authorization decision, agent, tool, relevant arguments, and policy rationale for each protected action. Cycles separately records budget lifecycle data such as subject scope, amount, unit, reservation status, and settlement evidence. The current server does not inspect tool arguments or generate the application's authorization rationale.
 
 ## How Runtime Authority Implements Zero Trust
 
-If you've read the Cycles documentation, these five requirements should sound familiar. [Runtime authority](/glossary#runtime-authority) is zero trust applied to AI agent actions.
+If you've read the Cycles documentation, parts of these requirements should sound familiar. [Runtime authority](/glossary#runtime-authority) can supply the budget decision and settlement layer; identity, application authorization, argument validation, and complete tool-call logging remain separate controls.
 
 Here's how the mapping works:
 
 | Zero Trust Requirement | Cycles Implementation |
 |---|---|
-| Pre-execution policy evaluation | [Reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) — every action requires a reservation that passes policy before execution |
+| Pre-execution budget evaluation | [Reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) — protected actions require a successful reservation before execution |
 | Budget as policy | [Hard spend limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits) — per-run, per-agent, per-tenant budgets enforced atomically |
 | Hierarchical scoping | [Scope derivation](/protocol/how-scope-derivation-works-in-cycles) — tenant → workspace → app → workflow → agent → toolset |
 | Concurrency safety | [Atomic reservations](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes) — no double-spend across concurrent agents |
-| Auditable decisions | Every reserve/commit/release is logged with full context, scope, and decision rationale |
+| Auditable decisions | Reserve/commit/release lifecycle records capture budget scope, amounts, status, and optional evidence; application logs capture tool arguments and authorization rationale |
 
-The architectural position matters: Cycles sits _after_ the agent decides what to do but _before_ it does it. The agent's orchestration framework (LangGraph, CrewAI, OpenAI Agents SDK) handles planning and tool selection. The observability layer (Langfuse, LangSmith) handles tracing and debugging. Cycles handles the authorization decision: **should this action be allowed right now, given the current budget, permissions, and risk profile?**
+The architectural position matters: a mandatory Cycles integration sits _after_ the agent decides what to do but _before_ it does it. The orchestration framework handles planning and tool selection, while the observability layer handles tracing and debugging. Cycles atomically answers whether the configured budget can cover the proposed estimate.
 
-This is precisely the enforcement point that the Hacker News community identified as missing — a layer where "the agent cannot bypass" the policy, because the policy is evaluated external to the agent's reasoning context.
+Application authorization, argument validation, identity policy, and tool allowlists remain separate controls. `RISK_POINTS` can budget application-assigned action exposure, but the current server does not infer risk, inspect arguments, or maintain the action registry described by the not-yet-implemented governance extension.
 
 ### Adding Zero Trust to Existing Agents
 
-For teams already using MCP-compatible tools (Claude Code, Cursor, Windsurf), zero trust enforcement is a [single config change](/quickstart/getting-started-with-the-mcp-server). The Cycles [MCP server](/glossary#mcp-server) adds budget-aware tools (`cycles_reserve`, `cycles_commit`, `cycles_decide`) that wrap existing tool calls. No code changes to the agent.
+For teams already using MCP-compatible tools, a [config change](/quickstart/getting-started-with-the-mcp-server) exposes `cycles_reserve`, `cycles_commit`, `cycles_decide`, and the other Cycles tools. It does not wrap existing tool calls automatically. Hard enforcement requires **Cycles Budget Guard for Claude Code** or a mandatory check in the tool handler, gateway, harness, or service boundary.
 
-For teams building with Python, TypeScript, or Spring Boot, the SDK wraps your existing LLM calls and tool invocations with reserve-commit checks. The integration pattern:
+For teams building with Python, TypeScript, or Spring Boot, the SDK exposes reserve and settlement operations that your application places around LLM calls and tool invocations. The outcome-aware pattern is:
 
-```python
-# Before: uncontrolled tool call
-result = tool.execute(args)
+```text
+reservation = create_live_reservation(stable_reserve_key, scope, estimate)
+if reservation is rejected or malformed:
+    stop before dispatch
 
-# After: zero trust enforcement
-reservation = cycles.reserve(scope, estimated_cost, action_metadata)
-if reservation.decision == "ALLOW":
-    result = tool.execute(args)
-    cycles.commit(reservation.id, actual_cost)
-elif reservation.decision == "ALLOW_WITH_CAPS":
-    result = tool.execute(args, caps=reservation.caps)
-    cycles.commit(reservation.id, actual_cost)
-else:  # DENY
-    handle_denial(reservation.reason)
+attempt = dispatch_with_explicit_outcome(args)
+if attempt is skipped before execution or demonstrably used zero:
+    release(reservation, stable_release_key)
+else if attempt started:
+    commit(reservation, best_known_actual_usage, stable_commit_key)
+else:
+    retain the hold and reconcile; never release an ambiguous attempt
+
+verify RELEASED, COMMITTED, or an idempotent APPLIED usage event
+before deleting the durable settlement record
 ```
 
-Three outcomes — ALLOW, ALLOW_WITH_CAPS, DENY — give agents [graceful degradation](/blog/what-is-runtime-authority-for-ai-agents) instead of binary pass/fail.
+`decide` and dry-run flows use the three-way `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY` model for [graceful degradation](/blog/what-is-runtime-authority-for-ai-agents). A live reservation succeeds with `ALLOW` or `ALLOW_WITH_CAPS`, or rejects insufficient budget.
 
 ## The Convergence Is Not a Coincidence
 
@@ -150,9 +155,9 @@ When Microsoft, Cisco, OWASP, the Cloud Security Alliance, and Hacker News comme
 3. Teams added observability — and watched the next incident happen in real time.
 4. The realization: **you can't observe your way to safety. You need enforcement.**
 
-Zero trust for AI agents is not a new idea bolted onto an old framework. It's the inevitable conclusion of deploying autonomous systems in production: every action must prove it's authorized before it executes.
+Zero trust for AI agents extends an established security model to a new execution boundary: consequential actions should prove identity, authorization, and applicable budget before they execute.
 
-The infrastructure to enforce this exists today. The question is whether teams adopt it before or after the next incident.
+The component patterns exist today. Their effectiveness depends on placing them in every execution path being protected and combining budget controls with identity, authorization, validation, sandboxing, and monitoring.
 
 ## Sources
 

@@ -1,12 +1,16 @@
 ---
-title: "How to Add Runtime Enforcement Without Breaking Your Agents"
+title: "Add Runtime Enforcement Without Breaking Agents"
 date: 2026-04-06
 author: Albert Mavashev
 tags: [engineering, production, best-practices, agents, runtime-authority, architecture, shadow-mode]
-description: "Shadow mode is the safe way to add runtime enforcement to AI agents. Roll out observe-first, calibrate, then enforce without breaking production."
+description: "Use shadow mode to introduce runtime enforcement, calibrate policy against real traffic, and cut over safely without disrupting production AI agents reliably."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: runtime enforcement, AI agent shadow mode, policy calibration, safe rollout, production agents, runtime authority
 ---
 
 # How to Add Runtime Enforcement Without Breaking Your Agents
@@ -44,13 +48,13 @@ Here's the progression we recommend, and the questions each phase answers:
 
 | Phase | Duration | Mode | Question it answers |
 |---|---|---|---|
-| **1. Instrument** | 1-2 days | Reservation calls with `dry_run: true`, no budget state created | Are we sending the right signals? |
+| **1. Instrument** | 1-2 days | Reservation calls with `dry_run: true`; no reservation or balance mutation | Are we sending the right signals? |
 | **2. Shadow observation** | 1-2 weeks | `dry_run: true` — evaluate but don't block | What *would* enforcement have done? |
 | **3. Calibrate** | 1 week | Adjust budgets based on shadow data | Are our budgets the right size? |
 | **4. Progressive enforcement** | 2-4 weeks | Enforce on low-risk paths first | Does enforcement work in practice? |
 | **5. Full enforcement** | Ongoing | All scopes enforcing | Are budgets still right as usage evolves? |
 
-The first four phases take **4-8 weeks** for most teams. That might sound long — it's not. The cost of breaking a production agent system with over-tight budgets on day one is larger than the cost of a careful rollout.
+The durations are illustrative, not product requirements. Adjust them to traffic volume, workload criticality, and how quickly your application-side observation store accumulates representative outcomes.
 
 ## Phase 1: Instrument
 
@@ -62,15 +66,15 @@ This phase is about catching **missing signals**. If the agent sometimes calls a
 
 ## Phase 2: Shadow Observation
 
-This is the meat of the rollout. Shadow mode logs what enforcement *would* do — which reservations would be DENIED, which would return ALLOW_WITH_CAPS, which would pass — without actually blocking anything.
+This is the core observation phase. Shadow mode returns what enforcement *would* do—which reservations would return `DENY`, `ALLOW_WITH_CAPS`, or `ALLOW`—without blocking or persisting a reservation.
 
-Every reservation returns a decision. The agent proceeds regardless. But now you have a record of what enforcement would have looked like.
+Every dry-run request returns a decision and the agent proceeds regardless. The server does not create a durable shadow reservation, so the application must log each response with the proposed action, run identifier, and actual outcome if you want a record to analyze later.
 
 **What to measure during shadow mode:**
 
 1. **Denial rate** — what percentage of reservations would have been denied?
 2. **Denial location** — which scopes fire most often? (per-run, per-tenant, per-workflow?)
-3. **Estimate accuracy** — how far off are your cost predictions from actual commits?
+3. **Estimate accuracy** — how far are estimates from actual usage captured separately by the application? Dry-run produces no commit.
 4. **Workflow distribution** — are denials concentrated in specific agent workflows?
 5. **Runaway indicators** — are there bursts of reservations that look like retry loops?
 
@@ -78,7 +82,7 @@ This data is what distinguishes calibrated enforcement from decorative enforceme
 
 ## Phase 3: Calibrate — The Goldilocks Zone
 
-After 1-2 weeks of shadow observation, you have real numbers. Now you decide what your budgets should actually be.
+After enough representative traffic, your application-side shadow dataset can inform budget sizing.
 
 There's a useful heuristic for denial rates:
 
@@ -89,11 +93,7 @@ There's a useful heuristic for denial rates:
 | **1-3%** | The goldilocks zone — catching real anomalies without blocking legitimate work | Ready to enforce |
 | **0%** | Budgets are decorative — too loose to catch anything | Tighten limits, they're not doing work |
 
-The 5% threshold isn't arbitrary. At that rate, one in twenty legitimate user interactions would fail in production. That's not enforcement — that's an incident.
-
-But zero denials is equally wrong. A budget that never fires isn't preventing anything. It's documentation that says *"we have a budget,"* and that documentation has no enforcement value. If shadow mode shows 0% denial rate over two weeks of real traffic, your limits are too high to catch the incidents you're trying to prevent.
-
-The honest answer is usually somewhere in the 1-3% range. That's the zone where enforcement catches real anomalies (retry loops, runaway agents, tool access abuse) without blocking legitimate work. Note that this is the calibration-time shadow rate — once you're enforcing in steady state, target a [sustained denial rate under 2%](/blog/operating-budget-enforcement-in-production).
+The percentages in this table are starting examples, not universal SLOs. A 5% shadow-denial rate would block one in twenty submitted actions if the same traffic were enforced, which deserves investigation before rollout. A zero rate can be valid for stable traffic, but it does not demonstrate that the chosen limits catch the failure scenarios you care about. Exercise known runaway, retry, and fan-out cases as well as normal traffic, then set an acceptable production denial rate from your own workload and user-impact objectives.
 
 ## Phase 4: Progressive Enforcement
 
@@ -121,7 +121,7 @@ Beyond calibration, shadow mode surfaces three things production monitoring alon
 
 ### Runaway loop signatures
 
-A shadow log that shows 47 reservation attempts from a single run in 90 seconds isn't a calibration issue. It's a retry loop your agent is in. Shadow mode catches this as a pattern — the enforcement layer is the first system that sees the loop as a loop, because it's the only system counting reservations per scope.
+An application shadow log showing 47 reservation attempts from one run in 90 seconds may indicate a retry loop. Correlate the dry-run responses with application traces to distinguish retries, intentional fan-out, and duplicate instrumentation.
 
 ### Delegation chain amplification
 
@@ -145,11 +145,11 @@ Shadow mode doesn't just tell you *whether* to enforce. It tells you *where you 
 
 ## The Take
 
-Shadow mode is the pattern that makes runtime enforcement deployable. It turns enforcement from a risky all-or-nothing cutover into a measurable, reversible rollout. It's how Stripe launches rate limiters, how Cloudflare launches WAF rules, how Google launches binary authorization policies. The same pattern works for AI agents — with the specific twist that agents generate failure patterns (retry loops, delegation fan-out) that static infrastructure doesn't.
+Shadow mode turns enforcement from an all-or-nothing cutover into a measurable, reversible rollout. The same observe-before-block pattern used in policy and traffic-control systems applies to AI agents, with application logging added because Cycles dry-run responses do not persist reservation state.
 
 If you're considering adding runtime enforcement to your agents and the fear is "what if it blocks something legitimate" — shadow mode is the answer. You don't have to guess. Run it in observe mode for two weeks, look at the denial rate, decide if your budgets are the right size, then enforce progressively from low-risk to high-risk paths.
 
-Most importantly: **don't skip it**. The teams that skip shadow mode and go straight to enforcement are the teams that have the "enforcement blocked legitimate work" incident in week one. That incident is how organizations lose trust in enforcement entirely — and end up with observability-only systems that can see problems but can't prevent them.
+For production paths with meaningful user impact, skipping observation increases the chance that an incorrectly sized or mis-scoped budget blocks legitimate work. If an emergency or low-risk rollout cannot support a long shadow period, compensate with narrower scope, explicit degradation behavior, and a tested rollback switch.
 
 ---
 

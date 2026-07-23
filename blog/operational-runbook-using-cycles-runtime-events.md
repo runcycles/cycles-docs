@@ -3,10 +3,14 @@ title: "Operational Runbook: Using Cycles Runtime Events"
 date: 2026-04-07
 author: Albert Mavashev
 tags: [engineering, operations, production, incident-response, webhooks, observability, runtime-authority]
-description: "Wire Cycles runtime events into on-call: severity tiers, diagnostic trees, and auto-remediation patterns for critical AI agent budget events."
+description: "Wire Cycles runtime events into on-call workflows with severity tiers, diagnostic trees, and remediation patterns designed for AI agent budget incidents."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: Cycles runtime events, AI agent runbook, budget incident response, webhook operations, agent monitoring, on-call automation
 ---
 
 # Operational Runbook: Using Cycles Runtime Events

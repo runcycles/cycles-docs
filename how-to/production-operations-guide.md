@@ -71,6 +71,8 @@ Cycles uses Lua scripts for atomic operations. All keys for a single reservation
 - **AOF backups** for point-in-time recovery
 - **Test restores regularly** — untested backups are not backups
 
+Use the [Redis Backup, Restore, and Disaster Recovery Runbook](/how-to/redis-backup-restore-disaster-recovery) for a Cycles-aware procedure. Restoring Redis rolls back budget balances, reservations, idempotency records, webhook queues, audit records, and evidence state together; do not restore selected key families independently.
+
 ## Cycles Server configuration
 
 ### Running multiple instances
@@ -79,14 +81,14 @@ The Cycles Server is stateless. You can run multiple instances behind a load bal
 
 ```yaml
 cycles-server-1:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.39
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
 
 cycles-server-2:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.39
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -97,22 +99,26 @@ Any load balancing strategy works (round-robin, least-connections). No sticky se
 
 ### Health checks
 
-All three services expose Spring Boot Actuator health at `/actuator/health`. Only the Admin Server also enables Spring's dedicated Kubernetes liveness/readiness probes (`management.endpoint.health.probes.enabled=true`); the runtime and events services expose only the aggregate endpoint.
+All three services (runtime, admin, events) enable Spring's dedicated Kubernetes liveness/readiness probes (`management.endpoint.health.probes.enabled=true`) and serve them at `/actuator/health/liveness` and `/actuator/health/readiness`. The probe endpoints are public (unauthenticated). Since 0.1.25.45, all **other** actuator endpoints — the aggregate `/actuator/health`, `/actuator/info`, and `/actuator/prometheus` — require the admin API key via the `X-Admin-API-Key` header.
 
 ```bash
-# Cycles Server (aggregate only)
-curl http://localhost:7878/actuator/health
+# Cycles Server (Kubernetes probes, public)
+curl http://localhost:7878/actuator/health/liveness
+curl http://localhost:7878/actuator/health/readiness
 
-# Admin Server (aggregate + Kubernetes probes)
-curl http://localhost:7979/actuator/health
+# Admin Server (Kubernetes probes, public)
 curl http://localhost:7979/actuator/health/liveness
 curl http://localhost:7979/actuator/health/readiness
 
-# Events Service (aggregate only, management port)
-curl http://localhost:9980/actuator/health
+# Events Service (Kubernetes probes, management port)
+curl http://localhost:9980/actuator/health/liveness
+curl http://localhost:9980/actuator/health/readiness
+
+# Aggregate health requires the admin API key (since 0.1.25.45)
+curl -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7878/actuator/health
 ```
 
-Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire the Admin Server's liveness/readiness probes to `/actuator/health/liveness` and `/actuator/health/readiness`. For the runtime service, probe `/actuator/health` on port 7878. For the events service, probe `/actuator/health` on its management port 9980, not the app port 7980. All three services rely on Spring Boot's default Redis health indicator — the aggregate `/actuator/health` status turns `DOWN` when Redis is unreachable. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
+Configure your load balancer or orchestrator to check these endpoints. On Kubernetes, wire liveness probes to `/actuator/health/liveness` and readiness probes to `/actuator/health/readiness` on all three services — the runtime service on port 7878, the Admin Server on port 7979, and the Events Service on its management port 9980, not the app port 7980. Readiness includes a Redis `PING` health contributor and turns `DOWN` when Redis is unreachable; liveness stays process-only. There is no custom queue-consumption health check on the Events Service today; for backlog monitoring, watch `LLEN dispatch:pending` (see [Monitoring and Alerting](/how-to/monitoring-and-alerting)).
 
 ### JVM tuning
 
@@ -144,7 +150,7 @@ The **Cycles Events Service** (`cycles-server-events`) delivers webhook notifica
 
 | Variable | Default | Description |
 |---|---|---|
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | (empty) | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Same across all services. Generate: `openssl rand -base64 32` |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | required by default | AES-256-GCM key for signing secret encryption. Base64, 32 bytes. Same across all services. Generate: `openssl rand -base64 32`. Missing key fails admin/events startup unless `WEBHOOK_SECRET_ALLOW_PLAINTEXT=true` is explicitly set for local development. |
 | `EVENT_TTL_DAYS` | 90 | Redis TTL for event records |
 | `DELIVERY_TTL_DAYS` | 14 | Redis TTL for delivery records |
 | `MAX_DELIVERY_AGE_MS` | 86400000 | Stale deliveries auto-fail after this age (24h default) |
@@ -160,11 +166,11 @@ The per-subscription retry policy (exponential backoff) defaults to `max_retries
 
 ### Running multiple instances
 
-The Events Service is safe to run as multiple instances. Each instance consumes from the `dispatch:pending` Redis queue via BRPOP, which is atomic — each delivery job is processed by exactly one instance.
+The Events Service is safe to run as multiple instances. `BLMOVE` moves a claimed job from `dispatch:pending` to the recoverable `dispatch:processing` list, and owner-token-checked acknowledgement prevents a stale worker from removing a successor's claim. A fleet-wide ordering lease currently serializes the claim/send critical section, so replicas provide failover rather than linear webhook throughput. Delivery semantics are at least once, not exactly once — webhook receivers should deduplicate on the event ID.
 
 ```yaml
 cycles-events-1:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -172,7 +178,7 @@ cycles-events-1:
     WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY}
 
 cycles-events-2:
-  image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+  image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -239,13 +245,15 @@ Add more **Cycles Server** instances when:
 Add more **Events Service** instances when:
 - The `dispatch:pending` queue depth grows consistently (`redis-cli LLEN dispatch:pending`)
 - Webhook delivery latency exceeds acceptable thresholds
-- Multiple instances are safe — BRPOP is atomic, so each delivery is processed exactly once
+- Multiple instances are safe — each delivery job is claimed by one instance at a time via `BLMOVE`, with at-least-once delivery semantics
 
 Scale **Redis** when:
 - Memory utilization exceeds 80%
 - Command latency exceeds 5ms
 
 ## Upgrade procedures
+
+For the full preflight, service order, migration matrix, rollback boundaries, and verification checklist, use [Upgrading Cycles Safely](/how-to/upgrading-cycles).
 
 ### Rolling upgrade
 
@@ -254,7 +262,7 @@ All three services (Cycles Server, Admin Server, Events Service) are stateless �
 1. Pull the new image: `docker pull ghcr.io/runcycles/cycles-server:NEW_VERSION`
 2. Stop one instance at a time
 3. Start the new version
-4. Verify health check passes (`/actuator/health` on ports 7878, 7979, and events management port 9980)
+4. Verify health check passes (`/actuator/health/readiness` on ports 7878, 7979, and events management port 9980)
 5. Repeat for remaining instances
 
 The Events Service can be upgraded independently. While it is down, webhook deliveries queue in Redis and are processed when the new version starts.
@@ -341,7 +349,7 @@ If all retries are exhausted or the client process crashes entirely, the reserva
 1. **Check for expired reservations that were never committed:**
    ```bash
    curl -s "http://localhost:7878/v1/reservations?tenant=acme-corp&status=EXPIRED" \
-     -H "X-Cycles-API-Key: $API_KEY" | jq '.reservations[] | {reservation_id, scope_path, estimate: .estimate.amount, created_at, expired_at}'
+     -H "X-Cycles-API-Key: $API_KEY" | jq '.reservations[] | {reservation_id, scope_path, reserved: .reserved.amount, created_at_ms, expires_at_ms}'
    ```
 2. **Reconcile using events:** For each expired reservation that represents real work, record the actual cost as a standalone event:
    ```bash
@@ -381,7 +389,7 @@ If all retries are exhausted or the client process crashes entirely, the reserva
 **Symptom:** Webhook endpoints are not receiving events. Queue depth grows.
 
 **Response:**
-1. Check Events Service health: `GET http://localhost:9980/actuator/health`
+1. Check Events Service health: `GET http://localhost:9980/actuator/health/readiness`
 2. Check queue depth: `redis-cli LLEN dispatch:pending`
 3. Check if subscription was auto-disabled: `GET /v1/admin/webhooks/{subscription_id}`
 4. Re-enable if needed: `PATCH /v1/admin/webhooks/{subscription_id}` with `{"status": "ACTIVE"}`
@@ -394,3 +402,5 @@ If all retries are exhausted or the client process crashes entirely, the reserva
 - [Security Hardening](/how-to/security-hardening) — Redis AUTH, TLS, key rotation, webhook security
 - [Monitoring and Alerting](/how-to/monitoring-and-alerting) — metrics and alerting setup
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — all configuration properties
+- [Redis Backup, Restore, and Disaster Recovery](/how-to/redis-backup-restore-disaster-recovery) — backup validation and full-dataset recovery
+- [Upgrading Cycles Safely](/how-to/upgrading-cycles) — rolling order, migrations, rollback, and verification

@@ -45,9 +45,9 @@ The full 2026 incident catalog is documented in detail in [The State of AI Agent
 | **Security incidents** | 84.2% MCP tool poisoning success rate; [postmark-mcp supply chain attack](https://cyberpress.org/malicious-mcp-server/) (~300 orgs); 1,862 exposed MCP servers without auth | Tool governance + scoped identity |
 | **Multi-agent cascades** | [MAST failure rates of 41-86.7%](https://arxiv.org/abs/2503.13657) across 7 frameworks; DeepMind 17x error amplification | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) at delegation boundaries |
 
-The common thread: **each category has a known control primitive that would have prevented the incident**. What's missing isn't detection. It's structural enforcement at the right layer.
+The common thread is that each category has controls that could have reduced likelihood or blast radius. The mapping is not one-to-one, and no single runtime control can prove that a historical incident would have been prevented.
 
-Cost failures would be caught by pre-execution budget enforcement. Action failures would be caught by RISK_POINTS limiting high-blast-radius tools. Security failures would be caught by scoped agent identity and tool allowlists. Multi-agent cascades would be caught by budget/authority attenuation at each delegation hop. The controls exist. The gap is adoption.
+Pre-execution reservations can bound configured spend. Application-assigned `RISK_POINTS` can bound action exposure when a mandatory handler reserves them. Security incidents require authentication, authorization, provenance, scanning, sandboxing, and egress controls in addition to budgets. Delegated budgets can contain resource use, while validation and coordination controls address error propagation.
 
 ## Regulatory Convergence: Four Frameworks, One Direction
 
@@ -107,7 +107,7 @@ Published December 2025 by the OWASP Gen AI Security Project ([official list](ht
 9. **ASI09: Human-Agent Trust Exploitation** — agents exploit perceived authority
 10. **ASI10: Rogue Agents** — misaligned agents as internal threats
 
-Six of ten are directly addressable by runtime authority patterns: ASI01, ASI02, ASI03, ASI04, ASI08, ASI10.
+Runtime authority patterns can contribute to mitigations for several of these risks, especially tool misuse and cascading resource consumption. Identity abuse, supply-chain compromise, code execution, and rogue-agent behavior also require controls outside a budget ledger.
 
 ### Where They Converge
 
@@ -126,7 +126,7 @@ The frameworks aren't redundant. They're independent validations of the same arc
 
 ### Why Convergence Matters for Procurement
 
-The practical implication of this convergence is that organizations don't need to satisfy four separate governance regimes with four separate architectures. The same underlying enforcement layer — pre-execution authority with scoped identity, auditable logs, and stop mechanisms — produces evidence for all four frameworks simultaneously.
+The practical implication of this convergence is that organizations can reuse parts of one control architecture across multiple regimes. A pre-execution boundary, scoped identity, auditable logs, and stop mechanisms may produce evidence relevant to several frameworks, but applicability and sufficiency remain system- and auditor-specific.
 
 This is why enterprise AI procurement is starting to ask vendors a consistent set of governance questions regardless of regulatory jurisdiction:
 
@@ -135,7 +135,7 @@ This is why enterprise AI procurement is starting to ask vendors a consistent se
 - Can you prove your agents respect stop mechanisms?
 - Can you document which tools were invoked, by which agent, with what authorization?
 
-Organizations that implement one coherent enforcement architecture can answer all four questions with the same artifacts. Organizations that bolted on separate controls per framework end up with partial answers that satisfy no auditor completely.
+Organizations that implement one coherent control architecture can often reuse evidence across these questions. They still need a framework-specific legal and audit assessment.
 
 ## Five Runtime Control Primitives for AI Agents
 
@@ -157,19 +157,19 @@ The reserve-commit pattern solves three failure modes agents run into constantly
 
 Dollar budgets don't capture [the risk of an action](/blog/ai-agent-action-control-hard-limits-side-effects). Sending 200 emails costs $1.40 in tokens but can do $50K in damage. Running a database `DELETE` costs $0.02 in compute but can destroy 1,200 customer records.
 
-RISK_POINTS is a unit that scores tools by blast radius — read operations cost 1 point, mutations cost 20 points, deploys cost 50 points — letting enforcement distinguish cheap harmful actions from expensive harmless ones. A single RISK_POINTS budget lets an agent search freely while capping how many emails it can send, database writes it can execute, or deployments it can trigger. This is how governance encodes the distinction between "cost" and "consequence" at the infrastructure layer.
+`RISK_POINTS` is a budget unit an application can assign by blast radius — for example, one point for a read, 20 for a mutation, or 50 for a deploy. A mandatory handler can reserve those points to distinguish cheap harmful actions from expensive harmless ones. The current server does not infer tiers, count action kinds automatically, or maintain the action registry described by the not-yet-implemented governance extension.
 
 ### 4. Authority Attenuation for Delegation
 
-In [multi-agent systems](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation), authority must decrease with delegation depth, never increase. Each sub-agent gets a carved-out sub-budget and a restricted action mask. This prevents the DeepMind 17x amplification problem from becoming unbounded.
+In [multi-agent systems](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation), a useful application policy is to narrow authority with delegation depth. A parent can carve out a sub-budget and the orchestrator can apply a restricted action mask. This can bound delegated resource exposure, but it does not by itself prevent downstream agents from propagating incorrect information.
 
-The principle is borrowed from capability-based security: authority propagates downward only, and each hop can only narrow what the child inherits. A parent agent with $100 budget and ability to send emails can delegate to a child with $30 budget and email disabled — it can never delegate something it doesn't have. The attenuation rule makes multi-agent blast radius bounded by construction, which is a much stronger guarantee than hoping each sub-agent respects its parent's intent. Recent research on [scaling agent systems](https://arxiv.org/abs/2512.08296) quantifies the stakes: independent agents can amplify errors 17.2x, while centralized coordination contains amplification to 4.4x — the difference between bounded and unbounded failure modes.
+The principle is borrowed from capability-based security: a correctly implemented orchestrator propagates authority downward and allows each hop only to narrow what the child inherits. A parent agent with a $100 budget and permission to send emails could delegate a $30 budget with email disabled; the application must prevent it from delegating authority it does not hold. This limits the resource and permission blast radius covered by those controls, though it does not bound every failure mode or prevent bad information from propagating. Recent research on [scaling agent systems](https://arxiv.org/abs/2512.08296) quantifies the stakes: in the study's settings, independent agents amplified errors 17.2x while centralized coordination limited amplification to 4.4x.
 
 ### 5. Three-Way Decision Model
 
-Enforcement responses have three outcomes, not two: **ALLOW**, **ALLOW_WITH_CAPS**, **DENY**. The middle option — proceed with constraints like model downgrade, tool denylist, or step-count cap — is what enables graceful degradation instead of cliff-edge failures. Pure allow/deny forces the agent to stop; allow-with-caps lets the agent adapt.
+Preflight and dry-run decisions have three outcomes: **ALLOW**, **ALLOW_WITH_CAPS**, and **DENY**. A live reservation succeeds with `ALLOW` or `ALLOW_WITH_CAPS`, or rejects insufficient budget. The middle option can support graceful degradation when the caller applies returned caps such as a model downgrade, tool denylist, or step-count limit.
 
-The operational difference is significant. A 2-way enforcement system pages on-call every time a budget approaches its limit (because the next denial will break a user-facing workflow). A 3-way system degrades gracefully first — drops to a cheaper model, narrows the tool set, reduces retry depth — and only pages when degradation paths are exhausted. This shifts enforcement from a binary gate into a control dial, and substantially reduces the false-positive cost of tight budgets.
+The operational difference can be significant when callers implement degradation. A two-way system moves directly from allow to deny. With configured caps, a three-way caller can first switch to a cheaper model, narrow the tool set, or reduce retry depth, then alert or stop when no acceptable path remains. This can reduce avoidable workflow failures, but paging and false-positive behavior depend on the application's alerting policy. `ALLOW_WITH_CAPS` reflects configured caps, not an automatic response to low remaining balance.
 
 ## Framework Gaps: What the Ecosystem Doesn't Solve
 

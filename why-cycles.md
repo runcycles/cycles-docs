@@ -32,7 +32,7 @@ If you're deploying AI agents — to customers or inside the enterprise — Cycl
 
 ## Why now
 
-Regulatory frameworks are converging on a single requirement: if your AI system acts autonomously, you must be able to prove what it did, why it was allowed to do it, and how you would have stopped it. The EU AI Act's high-risk obligations are currently scheduled to apply from August 2, 2026. NIST launched its [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February 2026. Organizations can already pursue [ISO 42001 certification](https://www.iso.org/standard/81230.html). The window between "we should govern our agents" and "we must prove we govern our agents" is closing. [Full regulatory mapping →](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement)
+Regulatory frameworks are converging on a single requirement: if your AI system acts autonomously, you must be able to prove what it did, why it was allowed to do it, and how you would have stopped it. The EU AI Act's Article 50 transparency obligations and GPAI enforcement apply from August 2, 2026; the June 2026 Digital Omnibus moved Annex III high-risk obligations to December 2, 2027 ([what actually happens in August →](/blog/eu-ai-act-what-actually-happens-august-2-2026)). NIST launched its [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February 2026. Organizations can already pursue [ISO 42001 certification](https://www.iso.org/standard/81230.html). The window between "we should govern our agents" and "we must prove we govern our agents" is closing. [Full regulatory mapping →](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement)
 
 ## By role
 
@@ -65,7 +65,7 @@ Every reservation, commit, release, and event in Cycles creates a structured, qu
 
 This means every budget operation — every reservation, commit, release, and event — is logged with the context needed for audit. You can answer "which agent spent how much, on what, and when" from the event log alone, without reconstructing it from scattered application logs.
 
-The event log is queryable via the REST API. Retention is 90 days in hot storage (Redis), with export to cold storage (S3, GCS) for long-term compliance. The admin server records audit logs for all administrative operations — API key creation, tenant changes, budget modifications.
+The event log is queryable via the REST API. Hot retention defaults to 90 days (configurable via `EVENT_TTL_DAYS`); export events via the API to your own cold storage (e.g. S3, GCS) for long-term compliance — there is no built-in exporter. The admin server records audit logs for all administrative operations — API key creation, tenant changes, budget modifications.
 
 Access control separates the runtime plane (port 7878, scoped API keys with least-privilege permissions) from the management plane (port 7979, admin-only, never exposed to the public internet). API keys support rotation, revocation, and per-permission scoping.
 
@@ -93,13 +93,13 @@ Budget enforcement is not a cost center. It is the mechanism that makes AI featu
 
 Your SDK tells you what each call cost — after it happened. You could track that locally. But a local counter breaks when 20 of you run concurrently against the same customer budget — you all read "remaining: $500" and all proceed. If you crash, your local state is gone. And you can't see the tenant's allocation, the workflow's run budget, or the workspace capacity. That context lives outside you. This isn't a gap you close with [more tools](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — it requires a shared authority.
 
-Cycles is that authority. Call `check_balance` before you plan. Call `reserve` before each costly step. You get back:
+Cycles is that authority. Call `cycles_check_balance` before you plan. Call `cycles_reserve` before each costly step. You get back:
 
 - **ALLOW** — proceed.
-- **ALLOW_WITH_CAPS** — proceed with constraints (`maxTokens`, `toolDenylist`, `maxStepsRemaining`). The authority tells you *how* to adapt, not just whether to proceed.
+- **ALLOW_WITH_CAPS** — proceed with constraints (`max_tokens`, `tool_denylist`, `max_steps_remaining`). The authority tells you *how* to adapt, not just whether to proceed.
 - **DENY** — do not execute. Summarize what you completed, tell the user what remains, exit cleanly.
 
-Call `commit` after execution so unused budget returns to the pool. If you crash, reservations expire and budget recovers automatically.
+Call `cycles_commit` after execution so unused budget returns to the pool. If you crash, reservations expire and budget recovers automatically.
 
 This is the difference between being killed mid-action and [choosing how to wind down](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer). Drop to a cheaper model, skip optional calls, defer work — and explain the trade-off. Bounds you can see, not limits you discover by crashing into them.
 
@@ -111,7 +111,7 @@ Cycles gives them that evidence. Every reservation is a record that you checked 
 
 ### What about latency?
 
-A full reserve+commit cycle adds [~11ms](/blog/cycles-server-performance-benchmarks) end-to-end. A typical LLM call takes 500ms–30s. Budget enforcement adds less time than the variance in your provider's response latency. You won't notice it.
+A full reserve+commit cycle adds [~15ms](/blog/cycles-server-performance-benchmarks) end-to-end (p50; ~11ms per lifecycle under 32-thread concurrency). A typical LLM call takes 500ms–30s. Budget enforcement adds less time than the variance in your provider's response latency. You won't notice it.
 
 ### What if the budget is set too low?
 
