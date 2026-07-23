@@ -416,4 +416,4 @@ That is how teams move from simple usage caps to real autonomous execution contr
 - [API Key Management](/how-to/api-key-management-in-cycles) — create tenant-scoped API keys
 - [Scope Derivation](/protocol/how-scope-derivation-works-in-cycles) — how subject fields map to hierarchical scope paths
 - [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) — set up the Cycles infrastructure from scratch
-- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [Spring AI](/how-to/integrating-cycles-with-spring-ai)

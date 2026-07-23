@@ -550,6 +550,7 @@ export default defineConfig({
             { text: 'TypeScript Client Configuration', link: '/configuration/typescript-client-configuration-reference' },
             { text: 'Rust Client Configuration', link: '/configuration/rust-client-configuration-reference' },
             { text: 'Spring Client Configuration', link: '/configuration/client-configuration-reference-for-cycles-spring-boot-starter' },
+            { text: 'Spring AI Starter Configuration', link: '/configuration/spring-ai-starter-configuration-reference' },
             { text: 'Server Configuration', link: '/configuration/server-configuration-reference-for-cycles' },
             { text: 'SpEL Expression Reference', link: '/configuration/spel-expression-reference-for-cycles' },
           ]
@@ -570,6 +571,8 @@ export default defineConfig({
           items: [
             { text: 'Security', link: '/security' },
             { text: 'Production Operations', link: '/how-to/production-operations-guide' },
+            { text: 'Upgrading Cycles', link: '/how-to/upgrading-cycles' },
+            { text: 'Redis Backup and Recovery', link: '/how-to/redis-backup-restore-disaster-recovery' },
             { text: 'Admin API Guide', link: '/admin-api/guide' },
             { text: 'Client Performance Tuning', link: '/how-to/client-performance-tuning' },
             { text: 'Observability Setup', link: '/how-to/observability-setup' },

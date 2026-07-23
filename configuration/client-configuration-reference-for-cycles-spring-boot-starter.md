@@ -11,6 +11,10 @@ See the [Python Client Configuration Reference](/configuration/python-client-con
 
 This is the complete reference for all configuration properties available in the Cycles Spring Boot Starter.
 
+::: tip Using Spring AI advisors?
+This page covers the underlying `cycles.*` client properties. See the [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) for the separate `cycles.spring-ai.*` advisor, token-estimation, tool-gating, and tracing properties.
+:::
+
 All properties are under the `cycles` prefix in your project's `application.yml` (or `application.properties`).
 
 ## Required properties

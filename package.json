@@ -23,6 +23,7 @@
     "build:og:force": "node scripts/generate-og-images.mjs --force",
     "build": "npm run convert-spec && node scripts/generate-llms-full.mjs && npm run build:og && vitepress build && node scripts/generate-pdfs.js",
     "build:fast": "npm run convert-spec && node scripts/generate-llms-full.mjs && npm run build:og && vitepress build",
+    "check:implementation-drift": "node scripts/check-implementation-drift.mjs --git-ref origin/main",
     "pdfs": "node scripts/generate-pdfs.js",
     "dev": "npm run convert-spec && vitepress dev",
     "test": "vitest run",

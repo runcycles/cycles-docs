@@ -46,6 +46,8 @@ Recipes for common tasks with Cycles, organized by what you're trying to do.
 ## Operate Cycles in production
 
 - [Production operations guide](/how-to/production-operations-guide)
+- [Upgrade Cycles safely](/how-to/upgrading-cycles) — preflight, rolling order, migration checks, rollback, and verification.
+- [Redis backup, restore, and disaster recovery](/how-to/redis-backup-restore-disaster-recovery) — protect and recover the complete Cycles state store.
 - [Monitoring and alerting](/how-to/monitoring-and-alerting) · [Observability setup](/how-to/observability-setup) · [Prometheus metrics reference](/how-to/prometheus-metrics-reference)
 - [Security hardening](/how-to/security-hardening)
 - [Tenant management](/how-to/tenant-creation-and-management-in-cycles) · [API key management](/how-to/api-key-management-in-cycles)

@@ -130,7 +130,7 @@ The Events Service delivers webhooks asynchronously. Its management port is 9980
 ## Alerting rules
 
 ::: info Custom `cycles_*` metrics ship with the server
-Runtime `cycles-server` ≥ `0.1.25.10` emits the reservation-lifecycle counters (`cycles_reservations_*_total`, `cycles_events_total`, `cycles_overdraft_incurred_total`). Admin `cycles-server-admin` ≥ `0.1.25.9` emits `cycles_admin_events_emitted_total` and `cycles_admin_webhook_dispatched_total`; `cycles_admin_events_payload_invalid_total` arrived in `0.1.25.12` and `cycles_admin_audit_writes_total` in `0.1.25.20`. All are exposed at `/actuator/prometheus`. See [Custom Cycles metrics](./observability-setup#custom-cycles-metrics) for the full catalogue (reservation lifecycle, events, overdraft, admin webhooks/events).
+Runtime `cycles-server` ≥ `0.1.25.10` emits the reservation-lifecycle counters (`cycles_reservations_*_total`, `cycles_events_total`, `cycles_overdraft_incurred_total`). Admin `cycles-server-admin` ≥ `0.1.25.9` emits `cycles_admin_events_emitted_total` and `cycles_admin_webhook_dispatched_total`; `cycles_admin_events_payload_invalid_total` arrived in `0.1.25.12` and `cycles_admin_audit_writes_total` in `0.1.25.20`. All are exposed at `/actuator/prometheus`. See [Custom Cycles metrics](/how-to/observability-setup#custom-cycles-metrics) for the full catalogue (reservation lifecycle, events, overdraft, admin webhooks/events).
 
 The alert rules below use these counters directly where they exist. For signals without a first-class counter (budget utilization, active-reservation count, dispatch-queue depth), derive from balance polling or Redis directly — shown where relevant.
 :::
