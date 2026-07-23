@@ -40,3 +40,11 @@ jobs:
           path: .vitepress/dist
       - uses: actions/deploy-pages@v5
         id: deployment
+
+  documentation-health:
+    needs: deploy
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docs-health.yml
+    with:
+      external_links_only: true
