@@ -13,6 +13,12 @@ on:
   schedule:
     - cron: '20 6 * * 1'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      external_links_only:
+        description: Run only the post-deployment external-link check
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -23,6 +29,7 @@ concurrency:
 
 jobs:
   implementation-drift:
+    if: inputs.external_links_only != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -69,7 +76,10 @@ jobs:
         run: npm test -- implementation-drift
 
   external-links:
-    if: github.event_name != 'pull_request'
+    if: >-
+      inputs.external_links_only ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
