@@ -3,9 +3,13 @@ title: "AI Agent Budget Control: Enforce Hard Spend Limits"
 date: 2026-03-17
 author: Cycles Team
 tags: [budgets, agents, engineering, best-practices]
-description: "Why AI agent cost control must happen before execution — not after — and how the reserve-commit pattern enforces hard spend limits at runtime."
+description: "Why AI agent cost control must happen before execution — not after — and how atomic reserve-commit settlement securely enforces hard spend limits at runtime."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent budget control, hard spend limits, reserve commit, runtime authority, LLM cost control, agent cost enforcement
 ---
 
 # AI Agent Budget Control: Enforce Hard Spend Limits
@@ -76,13 +80,13 @@ The mechanism that makes hard budget control work is the **reserve-commit lifecy
 1. **Reserve** — before doing anything expensive, the agent requests a budget [reservation](/glossary#reservation) for the estimated cost. The system atomically checks available budget and, if sufficient, locks that amount. If insufficient, it rejects the reservation.
 2. **Execute** — only if the reservation succeeded. The agent makes the model call, runs the tool, or triggers the side effect.
 3. **Commit** — after execution, the agent reports the actual cost. Any difference between the estimated and actual cost is automatically returned to the budget pool.
-4. **Release** — if execution fails or is cancelled before commit, the agent explicitly releases the reservation. The full estimated amount returns to the pool.
+4. **Release** — if execution is skipped, cancelled before it starts, or demonstrably consumes zero usage, the agent explicitly releases the reservation. If execution starts, it commits the best-known actual usage even when the operation fails.
 
 This pattern survives the failure modes that break simpler approaches:
 
 - **Retries**: each retry attempt is a new reservation. The budget tracks cumulative exposure across all attempts, not just the latest one.
 - **Concurrency**: the reservation is atomic. Two workers cannot both claim the last $5 — one gets the reservation, the other is denied with `BUDGET_EXCEEDED`.
-- **Partial failures**: unreported reservations expire after a TTL (default 60 seconds, with a [grace period](/glossary#grace-period) for in-flight commits). Budget is not permanently lost if a process crashes mid-execution.
+- **Partial failures**: TTL expiry recovers an abandoned hold, but it does not accurately charge work that started before a crash. Reconcile the outcome and commit the best-known actual usage; if the reservation is already gone, record the missing usage idempotently instead of treating expiry as settlement.
 - **[Fan-out](/glossary#fan-out)**: sub-agents share the parent scope's budget. The total is enforced across all branches, not per-branch.
 
 When a reservation is denied, the agent has options beyond hard-stopping. It can degrade — use a cheaper model, skip optional steps, reduce context length, or defer the task. The enforcement point gives the agent a structured moment to make that decision, rather than failing silently when it runs out of API [credits](/glossary#credits).
@@ -109,7 +113,7 @@ Budget enforcement generates data that dashboards alone cannot provide:
 | Budget exhaustion events | How often budgets run dry before tasks complete |
 | Spend by [tenant](/glossary#tenant) / workflow / run | Where cost concentrates across your system |
 | Time-to-exhaustion | How quickly budgets are consumed — early warning for runaway patterns |
-| Released reservations | Failed or cancelled operations — indicates error rates and wasted budget |
+| Released reservations | Calls skipped, cancelled before execution, or measured at zero usage |
 
 These metrics close the loop: enforcement generates the signal, and the signal informs how you set budgets, estimate costs, and design degradation paths.
 
@@ -137,7 +141,7 @@ Cost overruns are a symptom. The root cause is the absence of a pre-execution en
 - **[AI Agent Budget Patterns: A Practical Guide](/blog/agent-budget-patterns-visual-guide)** — six common patterns with code examples and trade-offs
 - **[Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation)** — per-tenant budgets, quotas, and isolation for SaaS platforms
 - **[Vibe Coding a Budget Wrapper vs. Owning a Runtime Authority](/blog/vibe-coding-budget-wrapper-vs-budget-authority)** — why the gap between a prototype and production enforcement is larger than it looks
-- **[Getting Started](/quickstart/getting-started-with-the-python-client)** — integrate with the [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [MCP Server](/quickstart/getting-started-with-the-mcp-server) client
+- **Getting Started** — integrate with the [Python](/quickstart/getting-started-with-the-python-client), [TypeScript](/quickstart/getting-started-with-the-typescript-client), or [MCP Server](/quickstart/getting-started-with-the-mcp-server) client
 
 ## Related how-to guides
 

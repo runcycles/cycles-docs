@@ -151,7 +151,7 @@ A quota says:
 you may use up to this much over time
 :::
 
-A reserve/commit model says:
+A reserve-commit model says:
 
 ::: info
 this execution is allowed to consume up to this bounded amount now
@@ -277,5 +277,5 @@ To learn more:
 - Manage tenants and budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)
 - [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents) — real-world failure modes and costs of running agents without budget limits

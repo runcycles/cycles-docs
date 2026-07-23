@@ -3,9 +3,13 @@ title: "Introducing the Cycles Blog"
 date: 2026-03-13
 author: Cycles Team
 tags: [announcement]
-description: "We're launching our blog to share engineering insights, product updates, and best practices for runtime authority in autonomous systems."
+description: "The Cycles blog covers engineering, product updates, and practical patterns for AI agent runtime authority, exposure management, and cost control in practice."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: Cycles blog, AI agent engineering, runtime authority, agent cost control, exposure management, AI governance
 ---
 
 # Introducing the Cycles Blog

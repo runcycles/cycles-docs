@@ -73,7 +73,7 @@ Runtime authority for AI agents is a category that did not exist 18 months ago. 
 ## Related
 
 - [Why Cycles](/why-cycles) — the problems Cycles solves, by role
-- [Demos](/demos/) — see runtime authority in 5 minutes, no API keys
-- [End-to-End Tutorial](/quickstart/end-to-end-tutorial) — production-quality integration in 30 minutes
+- [Demos](/demos/) — see runtime authority in action, no API keys
+- [End-to-End Tutorial](/quickstart/end-to-end-tutorial) — production-quality integration in about 10 minutes
 - [Security](/security) — self-hosted, no prompt storage, what we log and what we don't
 - [Runtime Authority vs Runtime Authorization](/concepts/runtime-authority-vs-runtime-authorization) — how Cycles fits alongside identity-based agent governance

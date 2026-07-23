@@ -154,19 +154,17 @@ Any result means at least one document hit 5+ retries.
 
 Use these Prometheus-style rules to detect retry storms before they drain budgets.
 
-::: warning Derived from Spring Boot default metrics
-The server builds shipping at time of writing (runtime 0.1.25.8) don't register custom `cycles_reservations_*` counters yet. The rules below use Spring Boot's default `http_server_requests_seconds*` histogram (labels `method`, `uri`, `status`, `application`), which `/actuator/prometheus` exposes out of the box. Ratio-style rules tagged "requires sidecar" depend on gauges pushed by a balance-polling sidecar (see [Monitoring and Alerting](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter)).
+::: tip Built on the server's `cycles_*` counters
+Current server builds (runtime 0.1.25.58) register operation counters under the `cycles.*` namespace — `cycles_reservations_reserve_total`, `cycles_reservations_commit_total`, `cycles_reservations_release_total`, `cycles_reservations_extend_total`, `cycles_reservations_expired_total`, `cycles_events_total`, and `cycles_overdraft_incurred_total` — tagged with `decision`, `reason`, `overage_policy`, and (toggleable) `tenant`. Spring Boot's default `http_server_requests_seconds*` histogram is also available; denied reservations return HTTP `409`, so denial spikes show up there under `status="409"`. Ratio-style rules tagged "requires sidecar" still depend on gauges pushed by a balance-polling sidecar (see [Monitoring and Alerting](/how-to/monitoring-and-alerting#balance-polling-alerts-for-signals-without-a-counter)).
 :::
 
 ```yaml
-# Alert when reservation POST rate spikes relative to commit rate.
+# Alert when reservation rate spikes relative to commit rate.
 # A ratio above 3 means most reservations are not committing — likely retries.
-# Note: both ALLOW and DENY reservations return HTTP 200, so this counts all POSTs;
-# a denial-heavy spike will show up more cleanly on CyclesBudgetDenialSpike below.
 - alert: CyclesRetryStormDetected
   expr: |
-    sum(rate(http_server_requests_seconds_count{application="cycles-protocol-service",uri="/v1/reservations",method="POST"}[5m]))
-      / sum(rate(http_server_requests_seconds_count{application="cycles-protocol-service",uri=~"/v1/reservations/.+/commit",method="POST"}[5m]))
+    sum(rate(cycles_reservations_reserve_total[5m]))
+      / sum(rate(cycles_reservations_commit_total[5m]))
       > 3
   for: 2m
   labels:
@@ -186,12 +184,12 @@ The server builds shipping at time of writing (runtime 0.1.25.8) don't register 
     summary: "Over 50% of budget is in active reservations — retries may be stacking"
 
 # Alert when reservation denials spike (retries hitting the wall).
-# POST /v1/reservations always returns HTTP 200 — DENY is surfaced in the response body with reason_code,
-# so this rule CANNOT be built from http_server_requests_seconds*. Subscribe to reservation.denied events
-# and push cycles_reservations_denied_total{reason_code=...} from a sidecar.
+# A live denial is an HTTP 409 with the reason in the error code; the server also
+# increments cycles_reservations_reserve_total{decision="DENY", reason=...} for it.
+# Equivalent HTTP-layer form: http_server_requests_seconds_count{uri="/v1/reservations", status="409"}.
 - alert: CyclesBudgetDenialSpike
   expr: |
-    sum(rate(cycles_reservations_denied_total{reason_code=~"BUDGET_EXCEEDED|OVERDRAFT_LIMIT_EXCEEDED|BUDGET_FROZEN|BUDGET_CLOSED|DEBT_OUTSTANDING"}[5m])) > 10
+    sum(rate(cycles_reservations_reserve_total{decision="DENY",reason=~"BUDGET_EXCEEDED|OVERDRAFT_LIMIT_EXCEEDED|BUDGET_FROZEN|BUDGET_CLOSED|DEBT_OUTSTANDING"}[5m])) > 10
   for: 1m
   labels:
     severity: warning
@@ -246,17 +244,27 @@ This limits total retry spend per document to the workflow budget, regardless of
 Before each retry, use `decide` to check if budget is available without creating a reservation. This avoids creating reservations you'll immediately release:
 
 ```python
-from runcycles import decide
+import os
+import uuid
+
+from runcycles import (
+    Action, Amount, CyclesClient, CyclesConfig, DecisionRequest, Subject, Unit,
+)
+
+client = CyclesClient(CyclesConfig(
+    base_url=os.environ["CYCLES_BASE_URL"],
+    api_key=os.environ["CYCLES_API_KEY"],
+))
 
 def process_document(doc, doc_id):
     for attempt in range(10):
-        allowed = decide(
-            estimate=5000000,
-            action_kind="llm.completion",
-            action_name="gpt-4o",
-            workflow=f"doc-{doc_id}",
-        )
-        if not allowed:
+        resp = client.decide(DecisionRequest(
+            idempotency_key=f"doc-{doc_id}-decide-{uuid.uuid4()}",
+            subject=Subject(tenant="acme-corp", workflow=f"doc-{doc_id}"),
+            action=Action(kind="llm.completion", name="gpt-4o"),
+            estimate=Amount(amount=5_000_000, unit=Unit.USD_MICROCENTS),
+        ))
+        if resp.body["decision"] == "DENY":
             return f"Document {doc_id}: budget exhausted after {attempt} attempts."
         response = call_llm_guarded(f"Process this document: {doc}")
         if validate(response):
@@ -265,17 +273,23 @@ def process_document(doc, doc_id):
 
 ### 3. Track retry cost separately
 
-Use the `metrics` field on commit to tag retries. This lets you build dashboards that show what fraction of your spend goes to retries versus first attempts:
+Use the `metrics` field on commit to tag retries. Inside a `@cycles`-guarded function, `get_cycles_context()` exposes the live reservation context; setting `ctx.metrics` attaches custom metrics to the commit. This lets you build dashboards that show what fraction of your spend goes to retries versus first attempts:
 
 ```python
+from runcycles import CyclesMetrics, cycles, get_cycles_context
+
 @cycles(
-    estimate=5000000,
+    estimate=5_000_000,
     action_kind="llm.completion",
     action_name="gpt-4o",
-    metrics=lambda attempt: {"retry_attempt": attempt, "is_retry": attempt > 0},
 )
 def call_llm_guarded(prompt: str, attempt: int = 0) -> str:
-    return call_llm(prompt)
+    result = call_llm(prompt)
+    ctx = get_cycles_context()
+    ctx.metrics = CyclesMetrics(
+        custom={"retry_attempt": attempt, "is_retry": attempt > 0},
+    )
+    return result
 ```
 
 ### 4. Set a maximum retry budget as a fraction of first-attempt cost
@@ -284,7 +298,7 @@ A useful heuristic: retries should never cost more than 2x the original call. If
 
 ```python
 MAX_RETRY_MULTIPLIER = 2
-first_attempt_cost = 5000000  # microcredits
+first_attempt_cost = 5_000_000  # microcents
 
 def process_with_capped_retries(doc, doc_id):
     total_spent = 0
@@ -293,7 +307,11 @@ def process_with_capped_retries(doc, doc_id):
         if attempt > 0 and total_spent >= max_retry_budget:
             return f"Document {doc_id}: retry budget exhausted."
         response = call_llm_guarded(f"Process this document: {doc}")
-        total_spent += get_last_commit_cost()
+        # @cycles commits the estimate unless an actual-cost expression is
+        # configured, so the same constant tracks spend here. For the live
+        # reservation details (reservation_id, caps, balances), call
+        # get_cycles_context() inside the guarded function.
+        total_spent += first_attempt_cost
         if validate(response):
             return response
 ```

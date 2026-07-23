@@ -20,6 +20,8 @@ Metrics and metadata can be attached to two operations:
 
 Both accept an optional `metrics` field and an optional `metadata` field.
 
+Neither field is echoed back in the response. Commit responses carry `status`, `charged`, `released`, `balances`, and `cycles_evidence`; event responses carry `status`, `event_id`, `charged`, and `balances`. To read metadata back after the fact, retrieve the reservation (see below).
+
 ## Standard metrics
 
 The protocol defines a `StandardMetrics` schema with four named fields and an extensible custom map:
@@ -134,14 +136,15 @@ Metadata is accepted on several other operations beyond commits and events:
 
 - **Reservation creation** (`POST /v1/reservations`) — attach context to the reservation itself
 - **Reservation extend** (`POST /v1/reservations/{id}/extend`) — attach debugging metadata to extend operations
+- **Decide** (`POST /v1/decide`) — attach context to preflight budget checks
 
 This means a full reservation lifecycle can carry metadata from creation through commit:
 
-1. Create reservation with `metadata: { "trace_id": "..." }`
+1. Create reservation with `metadata: { "external_trace_id": "..." }`
 2. Extend with `metadata: { "heartbeat_seq": "3" }`
-3. Commit with `metadata: { "request_id": "..." }` and `metrics: { ... }`
+3. Commit with `metadata: { "app_request_id": "..." }` and `metrics: { ... }`
 
-Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field — so the metadata attached at commit is auditable after the fact, not just sent and forgotten.
+Commit metadata is preserved on the reservation and returned by `GET /v1/reservations/{id}` as `committed_metadata` — distinct from the reserve-time `metadata` field, which is returned on the same response — so the metadata attached at reserve and commit time is auditable after the fact, not just sent and forgotten.
 
 ## Metrics in client code
 
@@ -163,8 +166,8 @@ def chat(prompt: str) -> str:
         model_version=response.model,
     )
     ctx.commit_metadata = {
-        "request_id": request_id,
-        "trace_id": trace_id,
+        "app_request_id": app_request_id,
+        "external_trace_id": otel_trace_id,
     }
 
     return response.text
@@ -184,8 +187,8 @@ public ChatResponse chat(String prompt) {
     ctx.setMetrics(metrics);
 
     ctx.setCommitMetadata(Map.of(
-        "request_id", requestId,
-        "trace_id", traceId
+        "app_request_id", appRequestId,
+        "external_trace_id", otelTraceId
     ));
 
     return response;
@@ -228,6 +231,8 @@ Over time, standard metrics enable aggregate analysis:
 - cache hit rates across workflows
 - cost efficiency trends
 
+Note that the protocol defines how metrics are *submitted*, not how they are retrieved or aggregated. v0 defines no endpoint that returns stored metrics, so retrieval and aggregation are implementation-defined — via server-side export, a log pipeline, or direct store access.
+
 ## Best practices
 
 ### Always include tokens and model version on LLM calls
@@ -236,7 +241,7 @@ These are the minimum metrics that make budget data actionable. Without them, co
 
 ### Use metadata for correlation IDs
 
-Attach `request_id`, `trace_id`, or `session_id` to every commit. This makes it possible to join budget data with application logs and distributed traces.
+Attach your own correlation keys — e.g. `app_request_id`, `external_trace_id`, or `session_id` — to every commit. This makes it possible to join budget data with application logs and distributed traces. (Use distinct names rather than `request_id`/`trace_id`, which are server-managed and should not be duplicated into metadata — see the trace-context note above.)
 
 ### Keep custom metrics stable
 
@@ -260,7 +265,7 @@ These fields are optional but recommended. They turn budget accounting from raw 
 
 ## Server-side operational metrics
 
-The metrics above describe the **execution-context fields** a client attaches to each commit or event. They are stored with the protocol record and surface on commit / event responses and in admin audit trails.
+The metrics above describe the **execution-context fields** a client attaches to each commit or event. They are stored with the protocol record and surface in admin audit trails — they are not echoed on commit or event responses.
 
 Cycles also exposes **Prometheus metrics** on each service's `/actuator/prometheus` endpoint for operational monitoring. These are aggregate counters and histograms — they do not replace per-request metrics, they complement them.
 
@@ -276,9 +281,9 @@ The runtime server (`cycles-server` v0.1.25.10+) publishes seven domain counters
 
 The admin server (`cycles-server-admin` v0.1.25.20+) adds `cycles_admin_audit_writes_total{path_class, outcome}` — **alert on `outcome=error` nonzero** to catch silent audit-coverage loss.
 
-The events service (`cycles-server-events` v0.1.25.6+) publishes eight webhook delivery metrics under `cycles_webhook_*` — see [Server Configuration Reference → Events service metrics](/configuration/server-configuration-reference-for-cycles#events-service-metrics) for the full inventory.
+The events service (`cycles-server-events` v0.1.25.6+) publishes webhook delivery, evidence-worker, and dispatcher metrics under `cycles_webhook_*` and `cycles_evidence_*` — see [Server Configuration Reference → Events service metrics](/configuration/server-configuration-reference-for-cycles#events-service-metrics) for the current inventory.
 
-The `tenant` label on all three services is gated by `cycles.metrics.tenant-tag.enabled` (default `true`) — set to `false` in deployments with many thousands of tenants to bound Prometheus cardinality.
+The runtime and events services gate their optional `tenant` label with `cycles.metrics.tenant-tag.enabled`. The runtime defaults it to `true`; the events service defaults it to `false`. Admin `cycles_admin_*` counters do not carry a tenant label, so this toggle does not apply there.
 
 ## Next steps
 
@@ -289,4 +294,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

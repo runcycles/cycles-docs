@@ -2,7 +2,7 @@
 title: "Pre-Call Budget Reservation as a Spring AI Advisor"
 date: 2026-05-14
 author: Albert Mavashev
-tags: [spring-ai, java, integration, runtime-authority, agents, engineering]
+tags: [spring-ai, java, integrations, runtime-authority, agents, engineering]
 description: "How cycles-spring-ai-starter inserts reserve-commit-release into Spring AI's advisor chain — call advisor, Flux streaming, SubjectResolver, tool gating."
 blog: true
 sidebar: false
@@ -19,7 +19,7 @@ A Spring AI agent calling `chatClient.prompt(...).call()` looks like one line of
 
 For a plain Spring Boot service wrapping a raw OpenAI client, we covered that integration shape in [How scalerX.ai Wired Cycles Into a Java Agent Runtime](/blog/how-scalerx-wired-cycles-into-a-java-agent-runtime) — a `@Cycles` annotation on the method that calls the provider. Spring AI changes the shape: there is no single provider call to annotate, because Spring AI already abstracts the call. The right insertion point is Spring AI's own advisor chain.
 
-This post walks through how `cycles-spring-ai-starter` (currently 0.3.1) inserts the [reserve-commit-release lifecycle](/glossary#reservation) into that chain — for non-streaming chat, for streaming `Flux`, for tools, and for the trace correlation that ties it all together.
+This post walks through how `cycles-spring-ai-starter` 0.3.1, current at publication, inserts the [reserve-commit lifecycle](/glossary#reservation) into that chain—for non-streaming chat, streaming `Flux`, tools, and the trace correlation that ties it together.
 
 <!-- more -->
 
@@ -174,7 +174,7 @@ class ToolWiring {
 }
 ```
 
-`CyclesToolGate.wrap(...)` returns a `CyclesToolCallback` that runs the reserve/commit/release lifecycle around the wrapped tool's `call`. Tool reservations report `tool.call` as `action.kind` and `spring-ai-tool:<tool-name>` as `action.name` — distinct from chat's `llm.chat` / `spring-ai-chat`, so they're separable in audit history. A platform operator looking at a tenant's reservation log can answer "how much of this tenant's spend was tool calls vs. chat" without parsing free-text.
+`CyclesToolGate.wrap(...)` returns a `CyclesToolCallback` that runs the reserve-commit lifecycle around the wrapped tool's `call`. Tool reservations report `tool.call` as `action.kind` and `spring-ai-tool:<tool-name>` as `action.name`—distinct from chat's `llm.chat` / `spring-ai-chat`, so they're separable in audit history. A platform operator looking at a tenant's reservation log can answer "how much of this tenant's spend was tool calls vs. chat" without parsing free text.
 
 One honest limitation: tool callbacks don't expose token usage to the gate, so the current commit uses `default-estimate` as actual. For tools whose cost is fixed-price or close enough to be approximated with one number, that is fine. For tools that wrap a variable-cost downstream API, the commit is a placeholder and the per-call accuracy needs to come from elsewhere (a dedicated metering call, or a future starter extension point). If a tool internally calls an LLM via the auto-configured `ChatClient`, that call goes through the chat advisor and the LLM cost lands on the right scope through a different path — but only via the auto-configured `ChatClient`. Tools that bypass it (raw provider SDKs, hand-built `ChatClient.Builder` instances that omit the starter's `ChatClientCustomizer`) get neither the tool-gate commit nor the chat-advisor reservation, and their LLM cost is invisible to Cycles.
 

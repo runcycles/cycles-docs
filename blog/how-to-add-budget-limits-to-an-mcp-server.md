@@ -76,12 +76,12 @@ MCP tool call proposed
   ↓
 reserve budget for this tenant, run, toolset, and estimate
   ↓
-ALLOW / ALLOW_WITH_CAPS / DENY
+ALLOW / ALLOW_WITH_CAPS, or a budget-exceeded error
   ↓
 execute handler only if allowed
   ↓
-commit actual usage on success
-release reservation on failure or cancellation
+commit best-known actual usage after execution starts
+release only when execution never starts or usage is demonstrably zero
 ```
 
 The important property is ordering. The handler runs after the budget decision, not before it.
@@ -90,9 +90,10 @@ That gives the MCP server a clear failure mode:
 
 - If the reserve call returns `ALLOW`, execute normally.
 - If it returns `ALLOW_WITH_CAPS`, apply the cap before execution when the tool supports a smaller limit.
-- If it returns `DENY` or a budget-exceeded error, do not call the handler.
-- If the handler fails, release the [reservation](/glossary#reservation).
-- If the handler succeeds, commit actual usage.
+- If a live reserve returns a budget-exceeded error, do not call the handler. `DENY` is returned by `decide` or dry-run flows, not a successful live reservation.
+- If the handler fails after execution begins, commit the best-known actual usage, including partial usage.
+- Release the [reservation](/glossary#reservation) only when the handler was skipped, cancelled before execution, or failed with demonstrably zero usage.
+- Treat an ambiguous commit failure as unsettled. Retry the commit with the same idempotency key; never convert it to a release.
 
 The protocol details are in [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles). For a concrete TypeScript wrapper, use [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) as the implementation companion to this checklist.
 
@@ -130,7 +131,7 @@ For variable-cost tools, start conservative:
 - Search tools: estimate by maximum result count or provider price.
 - Batch actions: estimate per item, then cap the item count.
 
-After success, commit the actual usage. That feedback loop is what lets operators tune budgets without guessing forever. If a tool regularly commits much less than it reserves, lower the estimate. If it regularly commits more, raise the estimate or cap the request.
+After an execution attempt, commit the best-known actual usage whether the operation succeeded or failed. That feedback loop is what lets operators tune budgets without guessing forever. If a tool regularly commits much less than it reserves, lower the estimate. If it regularly commits more, raise the estimate or cap the request.
 
 For unit choices, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
 
@@ -144,8 +145,9 @@ Use a small test budget and a harmless tool first:
 2. Configure one MCP tool handler to reserve before execution.
 3. Call the tool until the budget is exhausted.
 4. Confirm the next call is denied before the handler runs.
-5. Confirm successful calls commit actual usage.
-6. Confirm failed calls release reservations.
+5. Confirm successful and partially failed calls commit actual usage.
+6. Confirm skipped calls and failures before execution release reservations.
+7. Simulate an ambiguous commit response and confirm the client retries that commit with the same idempotency key instead of releasing.
 
 Then test the operator path:
 

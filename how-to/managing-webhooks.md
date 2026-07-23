@@ -15,7 +15,7 @@ Every action in this guide — create, test, replay, pause/enable, reset failure
 
 ### Admin subscription
 
-Required fields: `url` and `event_types` (at least one event type). Add `?tenant_id=acme-corp` to scope the subscription to a specific tenant; omit for system-wide subscriptions (all tenants). All other fields are optional — the server provides sensible defaults (`signing_secret` is auto-generated if omitted).
+Required fields: `url` and `event_types` (at least one event type on create). Add `?tenant_id=acme-corp` to scope the subscription to a specific tenant; omit for system-wide subscriptions (all tenants). All other fields are optional — the server provides sensible defaults (`signing_secret` is auto-generated if omitted). On update (`PATCH`), `event_types` may be cleared to empty as long as `event_categories` is non-empty (a category-only subscription); the server rejects only the empty-both state.
 
 ```bash
 # Tenant-scoped subscription (receives events for acme-corp only)
@@ -67,10 +67,10 @@ The generated secret (e.g., `whsec_dGVzdC1zZWNy...`) is in the response. Copy it
 
 ### Category-based subscriptions
 
-Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: `event_types` is always required (at least one), so include a representative type alongside the category wildcard.
+Subscribe to **all events in a category** using `event_categories`. This is additive with `event_types` — if you specify both, you get the union. Note: on **create**, `event_types` must be non-empty, so include a representative type alongside the category wildcard. (A later `PATCH` may clear `event_types` to leave a category-only subscription; the server rejects only the state where both arrays are empty.)
 
 ```bash
-# All budget events (15 types) + all reservation events (5 types)
+# All budget events (17 types) + all reservation events (6 types)
 curl -X POST http://localhost:7979/v1/admin/webhooks \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
@@ -210,12 +210,12 @@ If `dispatch:pending` grows continuously, the events service may be down or over
 
 ### Prometheus metrics (v0.1.25.6+)
 
-The events service publishes webhook delivery metrics on `/actuator/prometheus` under the `cycles_webhook_*` namespace. The operationally most useful alerts:
+The events service publishes webhook delivery metrics on `/actuator/prometheus` (management port `9980`, which is unauthenticated in the reference deployment — restrict it at the network layer) under the `cycles_webhook_*` namespace. The operationally most useful alerts:
 
 - **`cycles_webhook_subscription_auto_disabled_total`** — any increase means a receiver has gone from healthy to dead. Page on `rate(cycles_webhook_subscription_auto_disabled_total[5m]) > 0`.
-- **`cycles_webhook_delivery_failed_total`** — failed delivery attempts, tagged by `reason`. Spikes in non-client-error reasons (`connect_timeout`, `read_timeout`, `5xx`) signal either a widespread receiver outage or a configuration regression.
+- **`cycles_webhook_delivery_failed_total`** — failed delivery attempts, tagged by `reason`. The reason values are `event_not_found`, `subscription_not_found`, `subscription_inactive`, `http_4xx`, `http_5xx`, `transport_error`, and `ssrf_blocked`. Spikes in `http_5xx` or `transport_error` (connect/read timeouts, DNS failures) signal either a widespread receiver outage or a configuration regression.
 - **`cycles_webhook_delivery_stale_total`** — non-zero means the `MAX_DELIVERY_AGE_MS` gate (default 24h) is firing. Usually benign after an events-service outage; persistently firing means dispatch is not catching up.
-- **`cycles_webhook_delivery_latency_seconds`** — Timer with `outcome` tag. Watch p99 — a creeping tail latency is often the first signal that a receiver is degrading before it starts outright failing.
+- **`cycles_webhook_delivery_latency_seconds`** — Timer with `outcome` tag. Percentile histograms are not enabled by default, so no `_bucket` series exist and `histogram_quantile()` won't work out of the box — watch `cycles_webhook_delivery_latency_seconds_max` and the `_sum`/`_count` average instead. A creeping `_max` is often the first signal that a receiver is degrading before it starts outright failing. (To get true percentiles, enable percentile histograms for this timer via Micrometer configuration.)
 
 See [Deploying the Events Service](/quickstart/deploying-the-events-service#prometheus-metrics) for the full metric inventory.
 
@@ -226,8 +226,8 @@ See [Deploying the Events Service](/quickstart/deploying-the-events-service#prom
 | Status | Meaning | Deliveries | How to fix |
 |---|---|---|---|
 | `ACTIVE` | Normal operation | Delivering | — |
-| `PAUSED` | Manually paused | Queued but not delivered | `PATCH` status to `ACTIVE` |
-| `DISABLED` | Auto-disabled after consecutive failures | Stopped | Fix endpoint, then `PATCH` status to `ACTIVE` |
+| `PAUSED` | Manually paused | **Not queued** — events emitted during the pause are dropped for this subscription, not held for later | `PATCH` status to `ACTIVE`, then [replay](#replaying-events) the pause window to backfill |
+| `DISABLED` | Auto-disabled after consecutive failures | **Not queued** | Fix endpoint, then `PATCH` status to `ACTIVE`; replay to backfill |
 
 ### Re-enabling a disabled subscription
 
@@ -274,6 +274,13 @@ curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"event_types": ["budget.exhausted", "budget.threshold_crossed", "reservation.denied"]}'
+
+# Switch to a category-only subscription: clear event_types, keep categories.
+# Valid on update (unlike create); the server rejects only the empty-both state.
+curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
+  -H "X-Admin-API-Key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"event_types": [], "event_categories": ["budget", "reservation"]}'
 
 # Adjust retry policy
 curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
@@ -345,7 +352,7 @@ curl -X DELETE http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 ```
 
-Returns `204 No Content`. Pending deliveries for this subscription will fail when processed (subscription not found).
+Returns `204 No Content`. Deletion is irreversible, and pending deliveries for the subscription are cancelled.
 
 ## Querying Events
 
@@ -368,6 +375,8 @@ curl http://localhost:7979/v1/admin/events/evt_abc123 \
 ## Tenant Self-Service
 
 Tenants manage their own webhooks via `/v1/webhooks` using `X-Cycles-API-Key`. The tenant is derived from the key; do not pass a tenant query parameter with tenant-scoped auth.
+
+A tenant-owned subscription is restricted to **tenant-accessible** event classes — `budget.*`, `reservation.*`, `tenant.*` — for both `event_types` and `event_categories`; admin-only classes (`api_key.*`, `policy.*`, `webhook.*`, `system.*`) are rejected with `400 INVALID_REQUEST` (governance WEBHOOK SUBSCRIPTION INVARIANT 2). The same rule binds a tenant-owned row created via the admin plane (`POST /v1/admin/webhooks?tenant_id=X`) or admin-on-behalf-of — it is a property of the owning tenant, not the caller. To monitor a specific tenant's admin-only events, create a `__system__`-owned subscription (no `tenant_id`) and filter client-side on the envelope `tenant_id` — see [Tenant-accessible events](/protocol/webhook-event-delivery-protocol#tenant-accessible-events).
 
 ```bash
 # Create (restricted to budget.*, reservation.*, tenant.* events)

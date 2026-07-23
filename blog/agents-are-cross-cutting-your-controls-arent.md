@@ -3,7 +3,7 @@ title: "Agents Are Cross-Cutting. Your Controls Aren't."
 date: 2026-04-11
 author: Albert Mavashev
 tags: [runtime-authority, governance, architecture, comparisons, multi-tenant, multi-agent, observability]
-description: "Agents span providers, tools, tenants, and workers. Tool-local controls govern only one slice — here is why agent governance has to be cross-cutting."
+description: "Agents span providers, tools, tenants, and workers. Learn why governance needs cross-cutting budget authority plus application-side authorization at runtime."
 blog: true
 sidebar: false
 featured: true
@@ -109,7 +109,7 @@ If the layer has to live outside any one tool, the requirements follow from that
 - **Atomic, distributed [reservations](/glossary#reservation).** Concurrency-safe by construction. Two agents on two workers cannot both claim the same remaining budget. The race condition that breaks the in-process counter cannot exist by design.
 - **Hierarchical [scope](/glossary#scope).** Tenant → workspace → app → workflow → agent → toolset, with budgets enforced at every level. The same primitive answers "how much can this customer spend?" and "how much can this single run spend?"
 - **Reserve, commit, release.** Budget is held before the action runs, finalized with the actual cost after, and any unused estimate is returned. This is what makes pre-execution enforcement accurate over time — estimates can be conservative without permanently locking budget the agent never spent.
-- **A [three-way decision](/glossary#three-way-decision).** ALLOW, ALLOW_WITH_CAPS, DENY — so an agent that is running low can degrade gracefully (cheaper model, smaller context, skip optional steps) instead of hard-failing.
+- **A [three-way decision](/glossary#three-way-decision).** `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY` let the caller apply operator-configured degradation such as a cheaper model, smaller context, or skipped optional work. The current server does not tighten caps automatically as balance falls.
 - **Provider-, tool-, and framework-agnostic.** The same primitive applies regardless of which slice the action lives in. A [reservation](/glossary#reservation) against the agent's budget is the same protocol call whether the spend is an OpenAI token, a Stripe charge, or an outbound email.
 
 These properties are not arbitrary. Each one falls out of "the agent is cross-cutting, so the controls have to be too." Drop any one of them and the layer collapses back into something with a local view — a per-provider cap, a per-process counter, a per-orchestrator limit.

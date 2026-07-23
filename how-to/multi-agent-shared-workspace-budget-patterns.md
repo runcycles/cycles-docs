@@ -128,24 +128,24 @@ const plannerCall = withCycles(
 Give expensive agents (e.g. those using GPT-4) smaller budgets than cheap agents (e.g. those using GPT-4o-mini), reflecting their different cost profiles.
 
 ```bash
-# Expensive planner agent — small budget, large model
+# Expensive planner agent — small budget ($5), large model
 curl -s -X POST http://localhost:7979/v1/admin/budgets \
   -H "Content-Type: application/json" \
   -H "X-Cycles-API-Key: $CYCLES_API_KEY" \
   -d '{
     "scope": "tenant:acme-corp/workspace:prod/agent:planner",
     "unit": "USD_MICROCENTS",
-    "allocated": { "amount": 2000000000, "unit": "USD_MICROCENTS" }
+    "allocated": { "amount": 500000000, "unit": "USD_MICROCENTS" }
   }'
 
-# Cheap executor agent — larger budget, smaller model
+# Cheap executor agent — larger budget ($20), smaller model
 curl -s -X POST http://localhost:7979/v1/admin/budgets \
   -H "Content-Type: application/json" \
   -H "X-Cycles-API-Key: $CYCLES_API_KEY" \
   -d '{
     "scope": "tenant:acme-corp/workspace:prod/agent:executor",
     "unit": "USD_MICROCENTS",
-    "allocated": { "amount": 500000000, "unit": "USD_MICROCENTS" }
+    "allocated": { "amount": 2000000000, "unit": "USD_MICROCENTS" }
   }'
 ```
 

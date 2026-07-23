@@ -57,7 +57,7 @@ from any_agent import AgentCancel
 from runcycles import (
     CyclesClient, CyclesConfig, ReservationCreateRequest, CommitRequest,
     ReleaseRequest, Subject, Action, Amount, Unit, CyclesMetrics,
-    BudgetExceededError, CyclesProtocolError,
+    CyclesProtocolError,
 )
 
 
@@ -409,10 +409,6 @@ if response.is_success:
 - **`AgentCancel` stops cleanly.** `BudgetExceeded` extends `AgentCancel`, so AnyAgent preserves the partial trace and stops the agent without wrapping the error.
 - **Per-agent scoping with subject hierarchy.** Use `tenant`, `workflow`, and `agent` to mirror your agent topology in Cycles budget paths.
 - **Preflight checks with `client.decide()`.** Check budget availability before creating or running the agent to avoid wasting resources.
-
-## Full example
-
-See [`examples/anyagent_integration.py`](https://github.com/runcycles/cycles-client-python/blob/main/examples/anyagent_integration.py) for a complete, runnable script.
 
 ## Next steps
 

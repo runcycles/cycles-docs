@@ -50,7 +50,7 @@ The dashboard is a static SPA served by nginx. It talks to **two backends** — 
 
 The default path (left branch) carries the governance/admin pages. The split path (right branch) carries runtime-plane Reservations and Evidence calls, including force-release, evidence lookup, and signer JWKS resolution.
 
-The nginx routing split in `nginx.conf`:
+The nginx routing split in `default.conf.template` (the TLS variant is `nginx-ssl.conf.example`):
 
 | Request path | Upstream | Used by |
 |---|---|---|
@@ -103,7 +103,7 @@ services:
       - cycles
 
   dashboard:
-    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.63
+    image: ghcr.io/runcycles/cycles-dashboard:0.1.25.85
     restart: unless-stopped
     # No exposed ports — only reachable through Caddy.
     environment:
@@ -123,16 +123,17 @@ services:
   # Its ADMIN_API_KEY must match cycles-admin's so admin-on-behalf-of calls
   # authenticate on both sides.
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.39
+    image: ghcr.io/runcycles/cycles-server:0.1.25.58
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_ORIGIN:-https://admin.example.com}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7878/actuator/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7878/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -145,19 +146,20 @@ services:
 
   # Governance plane — tenants, budgets, policies, webhooks, events, audit.
   cycles-admin:
-    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.42
+    image: ghcr.io/runcycles/cycles-server-admin:0.1.25.55
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
       ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY must be set}
-      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:-}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
+      WEBHOOK_SECRET_ALLOW_PLAINTEXT: "false"
       DASHBOARD_CORS_ORIGIN: ${DASHBOARD_ORIGIN:-https://admin.example.com}
       EVENT_TTL_DAYS: ${EVENT_TTL_DAYS:-90}
       DELIVERY_TTL_DAYS: ${DELIVERY_TTL_DAYS:-14}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7979/actuator/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7979/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -170,13 +172,13 @@ services:
 
   # Async webhook delivery and optional CyclesEvidence signing.
   cycles-events:
-    image: ghcr.io/runcycles/cycles-server-events:0.1.25.15
+    image: ghcr.io/runcycles/cycles-server-events:0.1.25.25
     restart: unless-stopped
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?WEBHOOK_SECRET_ENCRYPTION_KEY must be set}
       # Evidence signing is off unless these are set consistently with cycles-server:
       # EVIDENCE_SERVER_ID, EVIDENCE_SIGNING_SIGNER_DID,
       # EVIDENCE_SIGNING_PRIVATE_KEY_HEX.
@@ -189,11 +191,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -222,10 +226,18 @@ admin.example.com {
 Deploy:
 
 ```bash
-cat > .env << 'EOF'
-ADMIN_API_KEY=$(openssl rand -base64 32)
-REDIS_PASSWORD=$(openssl rand -base64 32)
-WEBHOOK_SECRET_ENCRYPTION_KEY=$(openssl rand -base64 32)
+# Generate the secrets into shell variables first. Do NOT write the
+# $(openssl ...) calls inside a quoted heredoc — the command substitution
+# would never run, and every deployment would use the literal string
+# "$(openssl rand -base64 32)" as its key.
+ADMIN_API_KEY="$(openssl rand -base64 32)"
+REDIS_PASSWORD="$(openssl rand -base64 32)"
+WEBHOOK_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+
+cat > .env <<EOF
+ADMIN_API_KEY=$ADMIN_API_KEY
+REDIS_PASSWORD=$REDIS_PASSWORD
+WEBHOOK_SECRET_ENCRYPTION_KEY=$WEBHOOK_SECRET_ENCRYPTION_KEY
 EOF
 
 docker compose -f docker-compose.prod.yml up -d
@@ -268,11 +280,11 @@ Each page manages its own polling lifecycle via a `usePolling` composable. Inter
 - **Set `REDIS_PASSWORD`** — the default has no authentication.
 - **Store secrets in a secrets manager** (Vault, AWS Secrets Manager, etc.), not in git or `.env` files committed to the repo.
 - **Subresource Integrity (SRI)** hashes are baked into all production assets via `vite-plugin-sri-gen`.
-- Default `nginx.conf` ships with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, CSP, Permissions-Policy, and `server_tokens off`. The TLS variant adds HSTS.
+- The default `default.conf.template` ships with `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, CSP, Permissions-Policy, and `server_tokens off`. The TLS variant (`nginx-ssl.conf.example`) adds HSTS.
 
 ## Monitoring
 
-- Admin server exposes `/actuator/health` — use for liveness checks.
+- Admin server exposes `/actuator/health/liveness` and `/actuator/health/readiness` — use those for probes. The aggregate `/actuator/health` (like `/actuator/prometheus`) requires the `X-Admin-API-Key` header.
 - `GET /v1/admin/overview` is a good synthetic monitoring target — if it returns 200, the full stack (Redis + admin + auth) is working.
 - Alert on the overview payload's `failing_webhooks` and `over_limit_scopes` arrays.
 - For deeper metric-based alerting, see [Observability Setup](/how-to/observability-setup) and [Monitoring and Alerting](/how-to/monitoring-and-alerting).
@@ -283,7 +295,7 @@ Each page manages its own polling lifecycle via a `usePolling` composable. Inter
 |---|---|---|---|
 | `ADMIN_API_KEY` | Yes | — | Admin API key for `X-Admin-API-Key`. **Must be the same value on `cycles-admin` and `cycles-server`** — admin-on-behalf-of calls (force-release reservation) authenticate on both. |
 | `REDIS_PASSWORD` | Recommended | (empty) | Redis authentication password |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Recommended | (empty) | AES-256-GCM key for webhook signing secrets at rest |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Yes | — | AES-256-GCM key for webhook signing secrets at rest; required by the admin and events services unless their explicit local-development plaintext escape hatch is enabled |
 | `DASHBOARD_CORS_ORIGIN` | Dev only | `http://localhost:5173` | CORS origin — only needed when the browser calls the admin server directly (dev mode); unused in standard production |
 | `ADMIN_UPSTREAM` | No | `http://cycles-admin:7979` | Governance-plane upstream for the dashboard container's nginx proxy |
 | `RUNTIME_UPSTREAM` | No | `http://cycles-server:7878` | Runtime-plane upstream for reservations, evidence lookup, and signer JWKS |

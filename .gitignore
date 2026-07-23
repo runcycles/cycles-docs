@@ -10,3 +10,4 @@ public/og/**/*.png
 coverage/
 .claude/settings.local.json
 .local-tools/
+.lycheecache

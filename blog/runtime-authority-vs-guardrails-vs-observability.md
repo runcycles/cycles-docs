@@ -7,6 +7,10 @@ description: "Runtime authority, guardrails, and observability solve different a
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: runtime authority, AI guardrails, AI observability, agent controls, pre-execution enforcement, AI governance
 ---
 
 # Runtime Authority vs Guardrails vs Observability

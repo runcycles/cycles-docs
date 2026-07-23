@@ -1,11 +1,15 @@
 ---
-title: "Cycles vs LLM Proxies and Observability Tools: Where Budget Enforcement Fits"
+title: "Cycles vs LLM Proxies and Observability"
 date: 2026-03-17
 author: Cycles Team
 tags: [architecture, comparisons, best-practices]
-description: "LLM proxies route calls. Observability tools trace them. Neither enforces budget before execution. See where Cycles fits."
+description: "Compare LLM proxies, observability tools, and Cycles to understand where routing, tracing, and pre-execution budget enforcement fit in an agent stack."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: LLM proxy comparison, AI observability, budget enforcement, pre-execution budgets, agent cost control, Cycles
 ---
 
 # Cycles vs LLM Proxies and Observability Tools: Where Budget Enforcement Fits
@@ -76,22 +80,22 @@ The gap appears when you need to **enforce** a budget, not just **track** spend.
 
 **No hierarchical scopes.** Proxies track spend per API key or per model. They cannot enforce limits at the level your business actually needs: per [tenant](/glossary#tenant), per workspace, per workflow, per run. If three tenants share the same API key, the proxy cannot distinguish their budgets.
 
-**No degradation signals.** A proxy can route to a cheaper model when the primary is unavailable. It cannot tell the agent "you are at 80% of your budget — skip the enrichment step and return a basic response." That [three-way decision](/glossary#three-way-decision) (allow, cap, deny) requires budget awareness that proxies do not have.
+**No shared budget-degradation signal.** A proxy can route to a cheaper model when the primary is unavailable. A Cycles preflight can return the canonical `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` decision from configured budget state; the application must interpret any caps and perform the downgrade.
 
 ### Comparison
 
 | Capability | LLM Proxy | Cycles |
 |---|---|---|
-| Model routing and fallback | ✅ | ✗ (not its job) |
-| Unified provider API | ✅ | ✗ |
-| Cost tracking (post-hoc) | ✅ | ✅ |
-| Pre-execution budget check | ✗ | ✅ |
-| Non-LLM action coverage | ✗ | ✅ (tools, APIs, any action) |
-| Atomic reservations | ✗ | ✅ |
-| Per-tenant / per-agent scopes | ✗ | ✅ |
-| [Graceful degradation](/glossary#graceful-degradation) | ◐ (model fallback only) | ✅ (three-way decision) |
-| Caching | ✅ | ✗ |
-| Concurrency-safe accounting | ✗ | ✅ |
+| Model routing and fallback | Yes | No (not its role) |
+| Unified provider API | Yes | No |
+| Cost tracking (post-hoc) | Yes | Yes |
+| Pre-execution budget check | No | Yes |
+| Non-LLM action coverage | No | Instrumented tools and APIs |
+| Atomic reservations | No | Yes |
+| Per-tenant / per-agent scopes | Limited by proxy keys/metadata | Yes |
+| [Graceful degradation](/glossary#graceful-degradation) | Partial (model fallback) | Three-way decision; caller applies caps |
+| Caching | Yes | No |
+| Concurrency-safe accounting | No | Yes |
 
 ### Using both together
 
@@ -167,15 +171,15 @@ By the time an alert fires and a human responds, the system has already spent. T
 
 | Capability | Observability Platform | Cycles |
 |---|---|---|
-| Trace visualization | ✅ | ✗ (not its job) |
-| Cost attribution | ✅ | ✅ (via hierarchical scopes) |
-| Prompt debugging | ✅ | ✗ |
-| Pre-execution enforcement | ✗ | ✅ |
-| Automated budget denial | ✗ | ✅ |
-| Real-time alerting | ✅ | ◐ (via events API) |
-| Concurrency-safe accounting | ✗ | ✅ |
-| Shadow mode evaluation | ✗ | ✅ |
-| Latency analysis | ✅ | ✗ |
+| Trace visualization | Yes | No (not its role) |
+| Cost attribution | Yes | Yes (via hierarchical scopes) |
+| Prompt debugging | Yes | No |
+| Pre-execution budget enforcement | No | Yes |
+| Live reservation rejection | No | Yes |
+| Real-time alerting | Yes | Partial (through events/webhooks) |
+| Concurrency-safe accounting | No | Yes |
+| Shadow mode evaluation | Varies by platform | Yes; caller persists responses |
+| Latency analysis | Yes | No |
 
 ### Using both together
 

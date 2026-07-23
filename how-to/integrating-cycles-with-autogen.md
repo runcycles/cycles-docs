@@ -29,9 +29,10 @@ export OPENAI_API_KEY="sk-..."
 import asyncio
 from autogen_agentchat.agents import AssistantAgent
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-from runcycles import CyclesClient, CyclesConfig, cycles, set_default_client
+from runcycles import AsyncCyclesClient, CyclesConfig, cycles, set_default_client
 
-set_default_client(CyclesClient(CyclesConfig.from_env()))
+# `ask` below is async, so the default client must be an AsyncCyclesClient
+set_default_client(AsyncCyclesClient(CyclesConfig.from_env()))
 model_client = OpenAIChatCompletionClient(model="gpt-4o")
 
 @cycles(estimate=2_000_000, action_kind="llm.completion", action_name="gpt-4o")
@@ -55,7 +56,7 @@ import uuid
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.models import CreateResult, RequestUsage
 from runcycles import (
-    CyclesClient, CyclesConfig, ReservationCreateRequest, CommitRequest,
+    AsyncCyclesClient, CyclesConfig, ReservationCreateRequest, CommitRequest,
     ReleaseRequest, Subject, Action, Amount, Unit, CyclesMetrics,
     BudgetExceededError, CyclesProtocolError,
 )
@@ -74,7 +75,7 @@ class CyclesBudgetClient:
     def __init__(
         self,
         inner: OpenAIChatCompletionClient,
-        cycles_client: CyclesClient,
+        cycles_client: AsyncCyclesClient,
         tenant: str = "acme",
         workflow: str | None = None,
         agent: str | None = None,
@@ -89,7 +90,7 @@ class CyclesBudgetClient:
         key = str(uuid.uuid4())
 
         # Reserve budget
-        res = self._cycles.create_reservation(ReservationCreateRequest(
+        res = await self._cycles.create_reservation(ReservationCreateRequest(
             idempotency_key=key,
             subject=self._subject,
             action=Action(kind="llm.completion", name="gpt-4o"),
@@ -121,7 +122,7 @@ class CyclesBudgetClient:
             output_tokens = result.usage.completion_tokens if result.usage else 0
             actual = input_tokens * PRICE_PER_INPUT_TOKEN + output_tokens * PRICE_PER_OUTPUT_TOKEN
 
-            self._cycles.commit_reservation(rid, CommitRequest(
+            await self._cycles.commit_reservation(rid, CommitRequest(
                 idempotency_key=f"commit-{key}",
                 actual=Amount(unit=Unit.USD_MICROCENTS, amount=actual),
                 metrics=CyclesMetrics(
@@ -134,14 +135,15 @@ class CyclesBudgetClient:
         except BudgetExceededError:
             raise
         except Exception:
-            self._cycles.release_reservation(
+            await self._cycles.release_reservation(
                 rid, ReleaseRequest(idempotency_key=f"release-{key}"),
             )
             raise
 
     def create_stream(self, messages, **kwargs):
         # Streaming calls are delegated without budget governance.
-        # For per-stream budget control, use reserveForStream patterns instead.
+        # For per-stream budget control, use client.stream_reservation(...) —
+        # see /how-to/handling-streaming-responses-with-cycles.
         return self._inner.create_stream(messages, **kwargs)
 
     async def close(self):
@@ -168,6 +170,8 @@ class CyclesBudgetClient:
         return self._inner.model_info
 ```
 
+Streaming calls (`create_stream`) pass through without governance in this wrapper. For per-stream budget control, use `client.stream_reservation(...)` — see [Handling Streaming Responses](/how-to/handling-streaming-responses-with-cycles).
+
 ## Using the budget-gated client
 
 ### Single agent
@@ -178,9 +182,9 @@ Pass the wrapped client to any `AssistantAgent`:
 import asyncio
 from autogen_agentchat.agents import AssistantAgent
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-from runcycles import CyclesClient, CyclesConfig, BudgetExceededError
+from runcycles import AsyncCyclesClient, CyclesConfig, BudgetExceededError
 
-cycles_client = CyclesClient(CyclesConfig.from_env())
+cycles_client = AsyncCyclesClient(CyclesConfig.from_env())
 inner = OpenAIChatCompletionClient(model="gpt-4o")
 
 model = CyclesBudgetClient(
@@ -291,7 +295,8 @@ For coarser-grained control — budgeting the entire team run rather than indivi
 ```python
 from runcycles import cycles, set_default_client, BudgetExceededError
 
-set_default_client(CyclesClient(CyclesConfig.from_env()))
+# The decorated function is async, so it needs an AsyncCyclesClient
+set_default_client(AsyncCyclesClient(CyclesConfig.from_env()))
 
 @cycles(estimate=10_000_000, action_kind="llm.completion", action_name="research-pipeline")
 async def run_research_pipeline(topic: str) -> str:
@@ -358,12 +363,8 @@ You can combine approaches — for example, use per-agent `CyclesBudgetClient` w
 - **Wrap the model client, not the agent.** AutoGen v0.4+ doesn't have callback hooks, so wrap `OpenAIChatCompletionClient` with `CyclesBudgetClient` for per-call budget governance.
 - **Per-agent scoping with separate wrappers.** Create wrappers with different `agent` values to track and limit costs per team member independently.
 - **Tool-calling turns are automatically covered.** Each LLM call in a tool-use loop gets its own reservation through the model client wrapper.
-- **Everything is async.** AutoGen v0.4+ is fully async — use `asyncio.run()` or `await` for all agent and team operations.
+- **Everything is async.** AutoGen v0.4+ is fully async — use `AsyncCyclesClient`, and `asyncio.run()` or `await` for all agent and team operations. The `@cycles` decorator requires an `AsyncCyclesClient` when the decorated function is async.
 - **Errors stop the agent.** `BudgetExceededError` raised in the model client propagates up and stops the agent or team.
-
-## Full example
-
-See [`examples/autogen_integration.py`](https://github.com/runcycles/cycles-client-python/blob/main/examples/autogen_integration.py) for a complete, runnable script.
 
 ## Next steps
 

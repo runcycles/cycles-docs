@@ -1,14 +1,18 @@
 ---
-title: "AI Agent Action Control: Hard Limits on Side Effects"
+title: "Hard Limits on AI Agent Side Effects"
 date: 2026-03-19
 author: Cycles Team
 tags: [action-control, risk, agents, engineering, best-practices]
-description: "Why controlling what AI agents DO matters more than controlling what they spend — and how to enforce hard limits on emails, deploys, and file writes."
+description: "Use mandatory tool boundaries and caller-assigned risk budgets to limit AI agent side effects, while keeping application authorization separate at runtime."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent action control, AI agent side effects, RISK_POINTS, runtime authority, tool call budgets, pre-execution enforcement
 ---
 
-# AI Agent Action Control: Hard Limits on Side Effects
+# Hard Limits on AI Agent Side Effects
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
@@ -100,7 +104,7 @@ When an agent requests a reservation and the server determines that the action i
 - **`tool_denylist`** — these specific tools are blocked (everything else is allowed)
 - **`max_steps_remaining`** — the agent has this many steps left before it must stop
 
-This enables a pattern teams can implement on their server: **progressive capability narrowing** — a degradation strategy where the server narrows an agent's available tools as risk-point budget runs low. For example, an operator might assign risk points per tool and configure narrowing thresholds:
+This enables an application pattern: **progressive capability narrowing**. The application assigns risk points per tool and selects among budgets or policy scopes with different configured caps as the workflow changes. The current server does not compute utilization thresholds or automatically tighten caps as risk points are consumed.
 
 | Tool | Risk points | Tier |
 |------|:----------:|------|
@@ -110,14 +114,14 @@ This enables a pattern teams can implement on their server: **progressive capabi
 | `create_ticket` | 20 | Write-external |
 | `deploy` | 50 | Execution |
 
-With a 100-point risk budget per run, the server applies progressive narrowing:
+With a 100-point risk budget per run, an application could select this policy progression:
 
-| Risk budget consumed | Decision | Caps applied | Effect |
-|:-------------------:|----------|-------------|--------|
-| 0–50% | ALLOW | _(none)_ | Full tool access |
-| 50–80% | ALLOW_WITH_CAPS | `tool_denylist: ["deploy", "send_email"]` | High-blast-radius actions disabled |
-| 80–100% | ALLOW_WITH_CAPS | `tool_allowlist: ["read_file", "search"]` | Read-only mode |
-| 100% | DENY | — | No further actions |
+| Application-selected phase | Decision | Configured caps | Effect |
+|---|---|---|---|
+| Normal | ALLOW | _(none)_ | Full tool access |
+| Restricted | ALLOW_WITH_CAPS | `tool_denylist: ["deploy", "send_email"]` | High-blast-radius actions disabled |
+| Read-only | ALLOW_WITH_CAPS | `tool_allowlist: ["read_file", "search"]` | Read-only mode |
+| Insufficient budget | Live reservation error | — | No further metered actions |
 
 The agent degrades gracefully instead of hard-stopping. It can still complete useful work — reading files, running searches, generating summaries — while the most dangerous capabilities are removed from its reach. This is the "disable" degradation strategy applied to action authority rather than cost control.
 

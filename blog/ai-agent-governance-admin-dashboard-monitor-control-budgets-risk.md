@@ -3,7 +3,7 @@ title: "AI Agent Governance Dashboard: Budgets, Risk, Keys"
 date: 2026-04-09
 author: Albert Mavashev
 tags: [product, operations, dashboard, runtime-authority]
-description: "AI agents have budgets and risk limits. But when something breaks at 2am, what do you actually do? Three production scenarios, the pattern behind governance UIs, and why read-only dashboards aren't enough."
+description: "Learn how operators monitor AI agent budgets, risk limits, and API keys during incidents, with practical workflows for diagnosing and containing failures."
 blog: true
 sidebar: false
 head:

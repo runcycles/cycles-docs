@@ -1,5 +1,5 @@
 ---
-title: "Why Local-First Agent Runtimes Need Runtime Authority"
+title: "Local-First Agent Runtimes Need Budget Authority"
 date: 2026-05-07
 author: Albert Mavashev
 tags: [agents, governance, runtime-authority, local-first, byok, budgets, cost-control, comparisons, best-practices, marketplace]
@@ -13,7 +13,7 @@ head:
       content: "local-first AI agents, BYOK agent runtime, OpenClaw, Cline, Aider, Continue, agent runtime authority, action authority, budget authority, risk-tier enforcement, marketplace blast radius"
 ---
 
-# Why Local-First Agent Runtimes Need Runtime Authority
+# Local-First Agent Runtimes Need Budget Authority
 
 A twelve-engineer software shop standardizes on local-first agent tools. Three engineers prefer Cline in VS Code. Four use Aider in a terminal. The rest are split between Continue and Cursor's agent mode. Most are running BYOK — each developer supplies an OpenAI, Anthropic, OpenRouter, or local-model key from their own machine. Even on the runtimes that also offer managed account-based setup, agent execution is distributed across local processes, editor windows, and developer-controlled credentials. One Wednesday, an engineer runs a research-mode Cline session that gets stuck on a refactor, calls the API two hundred times overnight, and burns $187 of personal Anthropic budget by morning. The same session also fired a deploy tool — twice — that took down staging until the on-call engineer rolled back. Nobody noticed the spend, and nobody had a way to know the deploy tool was reachable from a research-mode session in the first place. There's no shared dashboard. There's no central operator. There's no rate limiter that aggregates across the twelve developers, because each developer is on their own key, on their own machine, in their own process.
 
@@ -105,9 +105,9 @@ The missing piece has a recognizable shape:
 - **External to the runtime.** Lives outside Cline, Aider, Continue, OpenClaw, so it can see across whichever ones the team uses simultaneously.
 - **Per-user and per-session [scoped](/glossary#scope).** Each developer's spend and action attempts are visible to the team's enforcement layer even though the API key isn't. Spend lands on the user's provider account; the *decision* lands on the team's authority.
 - **Pre-execution.** A [reserve-commit](/glossary#reservation) primitive that runs before the action. By the time the bill — or the deploy — lands, it's too late.
-- **Cost AND risk in the same primitive.** A reservation isn't only "do you have $X budget left?" It's also "given this action's tier — read-only, write-local, write-external, mutation, execution — does the policy ALLOW, ALLOW_WITH_CAPS, or DENY?" Spend and side-effect blast-radius are decided in one place. The risk-tier framework is in [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk).
-- **Three-way decisional.** ALLOW, ALLOW_WITH_CAPS, DENY — so a developer crossing a soft threshold sees [graceful degradation](/glossary#graceful-degradation) (cheaper model, fewer tools, shorter responses) on the spend side, and capability narrowing (denylist of high-tier tools, max-steps shrinkage) on the risk side, instead of a hard stop in the middle of a refactor. The general framing is in [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
-- **Marketplace-aware.** Plugin / skill / MCP-server invocations are first-class budget *and* action events, not opaque tool calls. A team can cap `send_email` at 10/session and DENY `deploy` outright for *every* runtime using *any* skill that wraps those APIs, without auditing each skill individually.
+- **Cost and caller-assigned risk in the same budget primitive.** A reservation can ask whether the remaining USD, token, credit, or `RISK_POINTS` budget can cover an estimate. The application assigns risk points; the current server does not infer an action tier or maintain an action registry. The risk-tier framework in [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) is an application pattern.
+- **Three-way decision.** `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY` let a dry-run or preflight decision suggest [graceful degradation](/glossary#graceful-degradation). A live reservation instead returns `ALLOW` or `ALLOW_WITH_CAPS`, or rejects insufficient budget. The general framing is in [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles).
+- **Marketplace context supplied by the caller.** A hook or wrapper can record plugin, skill, and MCP-server identifiers as action or metadata fields and reserve against a relevant budget. Cross-runtime tool permission rules still have to be enforced by the host, gateway, handler, or another mandatory policy boundary.
 
 These properties don't fall out of any one runtime's roadmap. They fall out of "the team needs to govern across the four runtimes its developers chose, on both cost and side-effect risk, and none of those runtimes is going to grow into the others."
 
@@ -122,7 +122,7 @@ The four existing posts in this series document what that integration looks like
 - [Five Lessons from Building a Production OpenClaw Plugin](/blog/openclaw-plugin-lessons-learned) — the plugin-author internals: which hooks block cleanly, which don't, what's missing.
 - [Your First Week with Cycles Budget Guard for OpenClaw](/blog/openclaw-budget-guard-first-week-dry-run-to-production) — the operator playbook: dry-run, calibrate, cut over.
 
-That stack is one runtime's chapter of the category-level pattern. The pattern itself — pre-execution decision, scoped budgets, three-way decisional, marketplace-aware — is what every other local-first runtime is going to need. The shape will look different in each.
+That stack is one runtime's chapter of the category-level pattern. The reusable parts are a pre-execution decision, scoped budgets, three-way decisions, and caller-supplied marketplace context. Other local-first runtimes may need similar controls in shapes that fit their own hook and execution models.
 
 ## What the rest of the category looks like at scale
 
@@ -131,15 +131,15 @@ Cline, Aider, and Continue today rely on **user-side discipline**: your own mont
 Possible integration shapes when these runtimes need a governance layer:
 
 - **Native plugin lifecycle**, the OpenClaw shape. Cleanest. Requires the runtime to expose hook points; not all of these runtimes do.
-- **[MCP server](/glossary#mcp-server)**, the [Claude Code / Cursor / Windsurf](/blog/claude-code-cursor-windsurf-budget-limits-mcp) shape. Works for any runtime with MCP support — Cline and Continue both speak MCP today. CLI-first runtimes that don't host MCP natively need a different shape.
+- **[MCP server](/glossary#mcp-server)**, the [Claude Code / Cursor / Windsurf](/blog/claude-code-cursor-windsurf-budget-limits-mcp) tool-exposure shape. MCP support makes Cycles tools available, but a host hook or wrapped handler is still required for hard enforcement. CLI-first runtimes that don't host MCP natively need a different shape.
 - **CLI wrapper**, the Aider-friendly shape. A script around the runtime that intercepts each API call and consults an authority. Works for any binary; trades elegance for portability.
-- **Shared local proxy**, the team-deployed shape. A small process every developer's runtime points at, which talks to a central authority. The proxy routes decision-making, not LLM traffic — it receives action metadata and estimated spend, asks the authority for ALLOW / ALLOW_WITH_CAPS / DENY, and lets the local runtime call the provider directly if allowed. Prompt bodies and provider responses don't pass through it. This resolves the BYOK-vs-team-visibility tension without violating the privacy framing.
+- **Shared local proxy**, the team-deployed shape. A small process every developer's runtime points at, which talks to a central authority. For a hard budget, the proxy creates a live reservation before allowing the local runtime to call the provider, applies any returned caps, then commits best-known actual usage or releases only an unused hold. Prompt bodies and provider responses need not pass through it. A non-locking `decide` call alone is advisory and can race under concurrency.
 
 None of these is the right answer for every runtime. The constant is the **layer**: an authority that sees what no individual runtime can see, that decides before the action runs, and that scopes per-user/session/team rather than per-account/month.
 
 ## The takeaway
 
-Local-first agent runtimes are a category, and the category has a governance gap that the runtimes themselves can't close, the providers can't close, and the observability tools can't close. The gap is on both axes — uncontrolled cost *and* uncontrolled action risk — and the same primitive (reserve, decide, commit, with risk-tier classification) handles both. OpenClaw's plugin and the four-post series above are one worked example of what the close looks like when a runtime exposes the right hook points. The other runtimes will need their own version, in whatever integration shape fits their architecture. Teams that adopt these tools across more than a handful of developers will discover the gap whether or not the runtimes have shipped a fix yet — usually as a Slack message titled "is this normal?"
+Local-first agent runtimes are a category, and teams using several of them can develop a governance gap that no single runtime, provider control, or observability product sees end to end. The gap spans uncontrolled cost and action risk. Cycles can reserve and settle spend or caller-assigned `RISK_POINTS`; the application still classifies actions and enforces permissions at a mandatory execution boundary. OpenClaw's plugin and the four-post series above are one worked example when a runtime exposes the necessary hooks. Other runtimes need an integration shape that fits their own execution model.
 
 The pattern recurs because it's structural. Provider caps are at the wrong granularity. Framework limits are at the wrong scope. Observability is at the wrong moment. Marketplaces are at the wrong layer. None of them sees both spend and side-effect risk on the same decision. The only thing that closes a layer gap is a layer.
 

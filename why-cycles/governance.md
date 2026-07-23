@@ -3,9 +3,9 @@ title: "Prove to Auditors Your Agents Are Under Control"
 description: "Auditors ask how you control your AI agents. Dashboards show what happened. Cycles answers: pre-execution enforcement with a structured audit trail."
 ---
 
-# Prove to an Auditor That Your Agents Are Under Control
+# Produce Runtime Budget-Control Evidence for Audits
 
-An auditor asks how you govern your AI agents. You show a monitoring dashboard — cost graphs, token counts, action logs. They ask: "What prevents the agent from taking an unauthorized action before the dashboard updates?"
+An auditor asks how you govern your AI agents. You show a monitoring dashboard—cost graphs, token counts, action logs. They ask: "What prevents the agent from exceeding an approved budget before the dashboard updates?"
 
 You don't have an answer. The dashboard shows what happened. It does not prevent what should not happen. For high-risk or tightly governed AI uses, observation alone is not governance.
 
@@ -21,7 +21,7 @@ You don't have an answer. The dashboard shows what happened. It does not prevent
 
 Every budget operation in Cycles — every [reservation, commit, release, and event](/protocol/how-events-work-in-cycles-direct-debit-without-reservation) — produces a structured record with amount, timestamp, and status. Each record can carry up to six levels of scope context — tenant, workspace, app, workflow, agent, and toolset — depending on how your integration populates the subject hierarchy.
 
-The scope hierarchy maps directly to organizational accountability. Tenant = business unit or customer. Workspace = environment. Workflow = process or run. An auditor can trace any action to the budget scope that authorized it — without reconstructing the chain from scattered application logs.
+The scope hierarchy can map to organizational accountability. Tenant can represent a business unit or customer; workspace can represent an environment; workflow can represent a process or run. An auditor can trace a reservation lifecycle to the budget scopes that accepted it. Application logs are still required to prove identity-policy authorization, tool arguments, business rationale, and the external outcome.
 
 ```bash
 # Which agent spent how much, on what, and when?
@@ -33,31 +33,31 @@ The event log is queryable two ways: through the [Cycles Admin Dashboard](/how-t
 
 ## What happens now
 
-- **Every action is recorded before execution.** The reservation creates a pre-execution control record, and the full audit trail is completed by commit, release, and event records. The evidence exists before and after the action runs — not reconstructed from logs after an incident.
-- **Scope hierarchy maps to organizational accountability.** Tenant, workspace, workflow, agent — each level maps to a responsible party. Auditors can trace any action to the budget scope that authorized it.
-- **Pre-execution denial is provable.** When a budget is exhausted, the reservation is denied and the action never executes. The denial itself is a record — proof the control worked.
-- **Retention and export are configurable.** Hot storage for operational queries, queryable via dashboard or API, exportable to cold storage for long-term compliance — sized to your deployment. No log pipeline to build.
+- **Instrumented budget lifecycles are recorded.** A successful reservation creates a pre-execution budget record; commit or release records how the hold settled. That does not by itself record the complete action or external outcome.
+- **Scope hierarchy supports organizational attribution.** Tenant, workspace, workflow, and agent fields can map a lifecycle record to responsible parties when integrations populate them consistently. The record proves budget treatment, not the application's separate permission decision.
+- **Pre-execution rejection can be retained.** When an instrumented live reservation returns an error such as `409 BUDGET_EXCEEDED`, the application does not execute the protected action. Retain the error response, optional evidence reference, and correlated event/application record to prove the control fired.
+- **Retention and export are configurable.** Keep lifecycle and event data for operational queries and export the required records to your long-term evidence store. You still need a pipeline that joins them with application authorization and outcome logs.
 
 ## The difference
 
 | | Without Cycles | With Cycles |
 |---|---|---|
-| Audit trail | Reconstructed from scattered logs after incident | Structured record per action, queryable via API |
+| Audit trail | Reconstructed from scattered logs after incident | Structured budget lifecycle records, correlated with application action logs |
 | Cost visibility | Fragmented across provider dashboards | Unified budget per tenant/workflow/run, all providers |
-| Stop mechanism | Dashboard alert → human checks Slack | Budget exhaustion → DENY before execution |
+| Stop mechanism | Dashboard alert → human checks Slack | Budget exhaustion → live reservation rejected before instrumented execution |
 | Scope attribution | "Something spent $4,200" | "tenant:acme/workflow:run-123 spent $4,200" |
 | Auditor evidence | Screenshots of monitoring dashboards (post-hoc observation) | Audit view with structured filters + CSV/JSON export, or REST API |
-| Time to produce audit report | Days of log reconstruction | Filter the Audit view, export — or a single API query |
+| Time to produce audit report | Ad hoc log reconstruction | Query/export lifecycle records and join them to the retained application evidence |
 
 ## Regulatory context
 
-The applicability of these frameworks depends on your system's risk classification, jurisdiction, and intended use. Cycles provides the runtime enforcement layer — one component of the governance infrastructure these frameworks require, not the full organizational governance system.
+The applicability of these frameworks depends on your system's risk classification, jurisdiction, and intended use. The June 2026 Digital Omnibus moved the EU AI Act's Annex III high-risk obligations (Articles 9, 12, 14 below) to December 2, 2027, while Article 50 transparency and GPAI enforcement still apply from August 2, 2026 — see [what actually happens on August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). Cycles provides the runtime enforcement layer — one component of the governance infrastructure these frameworks require, not the full organizational governance system.
 
 | Framework | What it requires | What Cycles provides |
 |---|---|---|
 | EU AI Act Art. 9 (high-risk systems) | Risk management system throughout lifecycle | Hierarchical budgets bound cost and action risk per scope |
 | EU AI Act Art. 12 (high-risk systems) | Automatic logging for traceability | Cycles contributes runtime enforcement records: reservations, commits, denials, events, scope, timestamp, and status |
-| EU AI Act Art. 14 (high-risk systems) | Human oversight / intervention mechanisms | Budget exhaustion produces a `DENY` that stops execution before the action runs — one runtime control point in a broader oversight design |
+| EU AI Act Art. 14 (high-risk systems) | Human oversight / intervention mechanisms | Budget exhaustion rejects a live reservation before the instrumented action runs—one runtime control point in a broader oversight design |
 | NIST AI RMF — Map | Identify context and risk surfaces | Scope hierarchy + [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) classify tool-level blast radius |
 | NIST AI RMF — Manage | Enforce limits, degrade gracefully | Reserve-commit gate enforces limits before execution |
 | ISO 42001 | AI management system with documented controls | Budget policies and event logs serve as documented, enforceable controls |

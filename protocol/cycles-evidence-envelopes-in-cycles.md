@@ -75,7 +75,7 @@ This is the same id-then-signature ordering used elsewhere in the agent-trust ec
 
 ## Non-self-referential
 
-The `cycles_evidence` ref is stamped onto the response **after** `evidence_id` is computed. So the `payload.<artifact>.response` inside the envelope never contains `cycles_evidence` — the content hash is never self-referential. The response mirrors in the draft keep `additionalProperties: false` and omit the ref to make this explicit.
+The `cycles_evidence` ref is stamped onto the response **after** `evidence_id` is computed. So the `payload.<artifact>.response` inside the envelope never contains `cycles_evidence` — the content hash is never self-referential. The response mirrors in the normative v0.2 spec keep `additionalProperties: false` and omit the ref to make this explicit.
 
 ## How to verify
 
@@ -88,7 +88,24 @@ Given an envelope:
 
 Signature *validity* proves the envelope was signed by the key in `signer_did`. Signer *authority* proves that key was published by the issuing `server_id` for the envelope's issuance window. The JWK Set is the normative v0.2 authority layer. If a server does not publish JWKS, consumers can still run in a pinned-signer (`binding_only`) posture by comparing `signer_did` to an expected signer out of band. Why validity and authority are different questions: [A Valid Signature Doesn't Tell You Who Signed It](/blog/a-valid-signature-doesnt-tell-you-who-signed-it).
 
+### Verification dispositions
+
+A conformant verifier reports **exactly one** of five dispositions, keeping the two axes distinct:
+
+- `authentic` — signature valid **and** authority established: the verifying key is the one window-covering key selected deterministically from `server_id`'s JWK Set.
+- `binding_only` — signature cryptographically valid, but no JWKS authority was resolved (raw-hex with no set lookup, or a pin-only deployment). The companion `signer_pin_matched` boolean says whether an `expected_signer` pin was present and matched `signer_did`.
+- `signer_authority_failed` — resolution *succeeded* (the JWK Set was fetched and parsed) but the key is not authorized for this envelope: DID↔`server_id` hash mismatch, no window-covering key, the raw-hex key absent from the set, or an ambiguous / duplicate-`kid` selection. Neither a network failure nor a forgery.
+- `signer_resolution_failed` — the JWK Set could not be retrieved or parsed (network, 404/transient, unparseable body). About *obtaining* the set, not searching it; establishes nothing about the bytes and must never be reported as `signature_invalid`.
+- `signature_invalid` — the bytes do not verify against the resolved/named key (tamper).
+
 ## Signer-key resolution and rotation
+
+### The two `signer_did` forms
+
+`signer_did` names the Ed25519 signer in one of two forms:
+
+1. **Raw hex** — the 32-byte public key as 64 lowercase hex chars. Self-describing: a verifier checks the `signature` against it directly, with no resolution (the only form v0.1 requires). Authority then means "a window-covering JWK whose `x` decodes to the same 32 bytes exists in `server_id`'s set" — no `kid` needed (a JWK's `x` is `base64url(pubkey)`, the raw-hex form is `hex(pubkey)`; same bytes).
+2. **`did:cycles:<server_id_hash>#<kid>`** — `<server_id_hash>` is lowercase `hex(sha256(server_id))`, binding the DID to the envelope's `server_id`; the `#<kid>` fragment names the key within the server's JWK Set (it equals that JWK's `kid`). A verifier resolves this form to establish signer *authority*, not just signature validity. A DID whose `<server_id_hash>` doesn't equal `hex(sha256(server_id))` fails authority — the DID does not bind to this envelope's `server_id`.
 
 Step 2 needs the right public key. A server publishes its keys as a JWK Set:
 
@@ -112,6 +129,8 @@ Public and unauthenticated (it carries public keys only). Each entry is an Ed255
 The **active** key omits `cycles_exp_ms` (open-ended) and has `status: active`. A server not doing signer-key resolution publishes nothing — the endpoint `404`s, and consumers stay on the pinned-signer (`binding_only`) path.
 
 **Window-gated selection.** A verifier selects the key whose `[cycles_nbf_ms, cycles_exp_ms)` window covers the envelope's `issued_at_ms` — never "the current key." So an envelope signed two rotations ago still verifies against the key that was valid when it was signed; the set keeps **retired** keys for exactly this. `status` is advisory — selection is by window. (The forgery this prevents: [Rotating Keys Shouldn't Rewrite History](/blog/rotating-keys-shouldnt-rewrite-history).)
+
+**Exactly one candidate.** Selection is a total function with no implementation discretion: the window gate must be satisfied by **exactly one** candidate key. Zero covering keys, overlapping windows that leave two candidates, a duplicate `kid` in the set, a `did:cycles` fragment with no matching `kid`, or (raw-hex) zero or multiple window-covering JWKs matching the key bytes — all are `signer_authority_failed`, never a silent pick.
 
 ### Rotating the signing key (operator procedure)
 

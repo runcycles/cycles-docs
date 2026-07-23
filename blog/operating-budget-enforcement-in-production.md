@@ -1,9 +1,9 @@
 ---
-title: "When Budget Enforcement Fires: An Operator's Guide to Cycles in Production"
+title: "Operating Cycles Budget Enforcement"
 date: 2026-04-01
 author: Albert Mavashev
 tags: [operations, incident-response, production, observability]
-description: "What to do when reservation.denied fires at 2am. Diagnostic decision trees, emergency playbooks, and metrics that predict budget incidents."
+description: "Respond to reservation denials with diagnostic decision trees, emergency playbooks, and leading metrics for operating Cycles budget controls in production."
 blog: true
 sidebar: false
 head:
@@ -107,12 +107,12 @@ curl "http://localhost:7979/v1/admin/budgets?scope_prefix=tenant:acme-corp/works
   -H "X-Cycles-API-Key: $API_KEY"
 # Look for: remaining=0, status=ACTIVE
 
-# 2. Emergency top-up (add $10 = 10,000,000 microcents)
+# 2. Emergency top-up (add $10 = 1,000,000,000 microcents)
 curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-corp/workspace:prod&unit=USD_MICROCENTS" \
   -H "X-Cycles-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "amount": {"unit": "USD_MICROCENTS", "amount": 10000000},
+    "amount": {"unit": "USD_MICROCENTS", "amount": 1000000000},
     "operation": "CREDIT",
     "reason": "emergency top-up: agents blocked in prod"
   }'

@@ -26,7 +26,7 @@ The migration is **zero-risk** because Cycles runs in [shadow mode](/how-to/shad
 ### Start the server
 
 ```bash
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.full-stack.yml up -d
 ```
 
 See the [full deployment guide](/quickstart/deploying-the-full-cycles-stack) for details. The Cycles server runs on port 7878, the admin server on port 7979.
@@ -47,9 +47,9 @@ curl -X POST http://localhost:7979/v1/admin/api-keys \
   -d '{
     "tenant_id": "acme-corp",
     "name": "app-server",
-    "permissions": ["reservations:create", "reservations:commit", "reservations:release", "reservations:extend", "reservations:list", "balances:read"]
+    "permissions": ["reservations:create", "reservations:commit", "reservations:release", "reservations:extend", "reservations:list", "balances:read", "budgets:write"]
   }'
-# Save the returned api_key value — it won't be shown again
+# Save the returned key_secret value — it won't be shown again
 ```
 
 ### Create a budget matching your current cap
@@ -304,7 +304,7 @@ The migration is safe because:
 | Cross-provider budget | Manual per-provider tracking | Single scope hierarchy |
 | Retry deduplication | No | Idempotency keys on every operation |
 | Action-level risk control | No | RISK_POINTS budgets |
-| Webhook alerts | Custom implementation | Built-in (47 registered event types across 7 categories, PagerDuty/Slack) |
+| Webhook alerts | Custom implementation | Built-in (51 registered event types across 7 categories, PagerDuty/Slack) |
 | Multi-tenant isolation | Manual Redis key prefixing | Built-in scope hierarchy |
 | Delegation attenuation | No | Sub-budget carving for sub-agents |
 | Shadow mode validation | No | `decide()` endpoint for shadow evaluation |

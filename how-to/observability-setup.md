@@ -23,7 +23,7 @@ In Docker Compose:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.39
+  image: ghcr.io/runcycles/cycles-server:0.1.25.58
   environment:
     REDIS_HOST: redis
     REDIS_PORT: 6379
@@ -35,28 +35,35 @@ cycles-server:
 
 ### Step 2: Verify
 
+Since `cycles-server` 0.1.25.45, `/actuator/prometheus` (and the aggregate `/actuator/health`) require the `X-Admin-API-Key` header on the runtime and admin servers; only `/actuator/health/liveness` and `/actuator/health/readiness` remain public. The events service's management port (9980) has no auth filter in the reference deployment — restrict it at the network layer.
+
 ```bash
-curl -s http://localhost:7878/actuator/prometheus | head -20
+curl -s -H "X-Admin-API-Key: $ADMIN_KEY" http://localhost:7878/actuator/prometheus | head -20
 ```
 
 You should see Micrometer metrics in Prometheus exposition format:
 
 ```
 # HELP http_server_requests_seconds Duration of HTTP server request handling
-# TYPE http_server_requests_seconds histogram
-http_server_requests_seconds_bucket{method="POST",uri="/v1/reservations",status="201",le="0.005"} 142.0
+# TYPE http_server_requests_seconds summary
+http_server_requests_seconds_count{method="POST",uri="/v1/reservations",status="200"} 142.0
 ...
 ```
 
+(A successful reserve returns HTTP **200**. `_bucket` histogram series only appear if you enable percentile histograms — see the latency note below.)
+
 ### Step 3: Configure Prometheus scrape
 
-Add the Cycles Server as a target in your `prometheus.yml`:
+Add the Cycles Server as a target in your `prometheus.yml`. Because the runtime and admin scrape endpoints require `X-Admin-API-Key` (0.1.25.45+), the scrape config must send that header — Prometheus supports custom headers via `http_headers` (Prometheus v3.0+; on older versions, front the endpoint with a proxy that injects the header):
 
 ```yaml
 scrape_configs:
   - job_name: "cycles-server"
     metrics_path: "/actuator/prometheus"
     scrape_interval: 15s
+    http_headers:
+      X-Admin-API-Key:
+        secrets: ["${ADMIN_API_KEY}"]
     static_configs:
       - targets: ["cycles-server:7878"]
         labels:
@@ -66,10 +73,22 @@ scrape_configs:
   - job_name: "cycles-admin"
     metrics_path: "/actuator/prometheus"
     scrape_interval: 30s
+    http_headers:
+      X-Admin-API-Key:
+        secrets: ["${ADMIN_API_KEY}"]
     static_configs:
       - targets: ["cycles-admin:7979"]
         labels:
           service: "cycles-admin"
+
+  # Events service — management port 9980, no admin-key requirement
+  - job_name: "cycles-events"
+    metrics_path: "/actuator/prometheus"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["cycles-events:9980"]
+        labels:
+          service: "cycles-events"
 ```
 
 ## Key metrics reference
@@ -113,7 +132,7 @@ Key `uri` labels for Cycles endpoints:
 
 ### Custom Cycles metrics
 
-The runtime server (`cycles-server` ≥ `0.1.25.8`) emits custom Micrometer counters under the `cycles.*` namespace, exposed in Prometheus format as `cycles_*`:
+The runtime server (`cycles-server` ≥ `0.1.25.10`) emits custom Micrometer counters under the `cycles.*` namespace, exposed in Prometheus format as `cycles_*`:
 
 | Metric | Tags | Description |
 |---|---|---|
@@ -124,18 +143,20 @@ The runtime server (`cycles-server` ≥ `0.1.25.8`) emits custom Micrometer coun
 | `cycles_reservations_expired_total` | `tenant` | Per reservation actually marked EXPIRED by the sweep (not per candidate). |
 | `cycles_events_total` | `tenant`, `decision`, `reason`, `overage_policy` | Outcome of every `POST /v1/events` one-shot debit. |
 | `cycles_overdraft_incurred_total` | `tenant` | Count of commits/events that actually accrued non-zero debt (unit-free — amount is in the balance store, not leaked to metrics). |
+| `cycles_evidence_emit_failed_total` | `artifact_type` | Evidence-source enqueue failures (fail-open) — the rare loss window where a lifecycle op committed but its evidence record could not be queued. |
 
-The admin server (`cycles-server-admin` ≥ `0.1.25.18`) additionally exposes:
+The admin server additionally exposes (`cycles_admin_events_emitted_total` and `cycles_admin_webhook_dispatched_total` since `0.1.25.9`; `cycles_admin_events_payload_invalid_total` since `0.1.25.12`; `cycles_admin_audit_writes_total` since `0.1.25.20`):
 
 | Metric | Description |
 |---|---|
-| `cycles_admin_webhook_dispatched_total` | Webhook deliveries attempted. |
+| `cycles_admin_webhook_dispatched_total` | Webhook-delivery enqueue attempts (`result=queued`/`failure`). |
 | `cycles_admin_events_emitted_total` | Events produced by admin controllers (budget/tenant/policy/api_key/system). |
 | `cycles_admin_events_payload_invalid_total` | Payload contract violations caught at emit time. |
+| `cycles_admin_audit_writes_total` | Audit-write attempts by `path_class` and `outcome` (`written`/`error`/`sampled-out`). Alert on any `outcome="error"`. |
 
-The high-cardinality `tenant` tag can be disabled via `cycles.metrics.tenant-tag.enabled=false` in deployments with many thousands of tenants. Empty/null tag values are normalised to the sentinel `UNKNOWN` so series names stay stable.
+The high-cardinality `tenant` tag is controlled per service by `cycles.metrics.tenant-tag.enabled`: the runtime server defaults it to **`true`**, the events service defaults it to **`false`**, and the admin `cycles_admin_*` counters carry no tenant tag at all. Disable it on the runtime server in deployments with many thousands of tenants. Empty/null tag values are normalised to the sentinel `UNKNOWN` so series names stay stable.
 
-For denial-rate, overdraft-rate, and tenant-level alerts, prefer these `cycles_*` counters over `http_server_requests_seconds_count` — HTTP histograms can't see the response body (reservation DENY returns HTTP 200), so they would miscount.
+For denial-rate, overdraft-rate, and tenant-level alerts, prefer these `cycles_*` counters over `http_server_requests_seconds_count` — a live reserve denial is an HTTP 409, but 409 also covers idempotency mismatches and frozen budgets, and `/v1/decide`/dry-run denials are HTTP 200 with `decision: DENY` in the body, which HTTP metrics can't see. Status codes alone would miscount.
 
 ## PromQL query cookbook
 
@@ -152,6 +173,10 @@ rate(http_server_requests_seconds_count{uri=~"/v1/reservations/.+/commit",method
 ```
 
 ### Reservation latency (p50, p95, p99)
+
+::: warning Requires percentile histograms
+The quantile queries below (and the latency panels in the Grafana dashboard) rely on `http_server_requests_seconds_bucket` series, which none of the Cycles services publish by default. Enable them with `management.metrics.distribution.percentiles-histogram.http.server.requests=true` (env var `MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILES_HISTOGRAM_HTTP_SERVER_REQUESTS=true`). Without that, use `http_server_requests_seconds_max` and the `_sum`/`_count` average.
+:::
 
 ```promql
 # p50
@@ -172,6 +197,8 @@ rate(http_server_requests_seconds_count{uri="/v1/reservations",method="POST",sta
 rate(http_server_requests_seconds_count{uri="/v1/reservations",method="POST"}[5m])
 ```
 
+This is an approximation: 409 also covers idempotency mismatches and frozen budgets, and it misses `/v1/decide`/dry-run denials (HTTP 200 with `decision: DENY`). For an exact denial rate, use `cycles_reservations_reserve_total{decision="DENY"}` — see [Custom Cycles metrics](#custom-cycles-metrics).
+
 ### Server error rate (5xx)
 
 ```promql
@@ -188,7 +215,7 @@ jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}
 
 ## Grafana dashboard
 
-Import the following JSON into Grafana (**Dashboards > Import > Paste JSON**). It creates a "Cycles Overview" dashboard with three rows: throughput, latency, and infrastructure.
+Import the following JSON into Grafana (**Dashboards > Import > Paste JSON**). It creates a "Cycles Overview" dashboard with three rows: throughput, latency, and infrastructure. The two latency panels use `histogram_quantile` over `_bucket` series, so they require percentile histograms to be enabled (see the warning above); the other panels work with the default metric set.
 
 ::: details Click to expand dashboard JSON
 ```json

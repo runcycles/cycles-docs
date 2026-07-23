@@ -17,8 +17,8 @@ Same wire protocol as the [Python](/quickstart/getting-started-with-the-python-c
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 :::
 
 The `runcycles` crate provides three levels of budget enforcement for any async Rust application:
@@ -428,7 +428,7 @@ For each `with_cycles()` call or `ReservationGuard`:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: `Error::BudgetExceeded` is returned, operation does not run
-5. Heartbeat extension is scheduled (background tokio task at TTL/2)
+5. Heartbeat extension is scheduled (background tokio task at TTL/2, minimum 1s)
 6. Operation executes
 7. On success: commit is sent with actual amount and optional metrics
 8. On error: reservation is released to return budget

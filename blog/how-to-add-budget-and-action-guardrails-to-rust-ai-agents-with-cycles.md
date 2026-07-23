@@ -1,27 +1,31 @@
 ---
-title: "How to Add Budget and Action Guardrails to Rust AI Agents with Cycles"
+title: "Budget and Action Guardrails for Rust AI Agents"
 date: 2026-03-31
 author: Albert Mavashev
 tags: [rust, agents, engineering, costs, governance, audit, guide]
-description: "Add budget, action, and audit authority to Rust AI agents — control spend, tool access, token limits, step counts, and produce signed audit events for compliance and incident review, with compile-time safety."
+description: "Add pre-execution budget controls to Rust AI agents, apply configured caps, settle partial failures safely, and preserve lifecycle evidence across retries."
 blog: true
 sidebar: false
 featured: false
+head:
+  - - meta
+    - name: keywords
+      content: Rust AI agent budget, runcycles crate, ReservationGuard, AI action guardrails, RISK_POINTS, reserve commit lifecycle
 ---
 
-# How to Add Budget and Action Guardrails to Rust AI Agents with Cycles
+# Budget and Action Guardrails for Rust AI Agents
 
 A retry loop on a Rust agent service hit a transient 503 from the LLM provider. The exponential backoff reset. The loop retried — with a fresh prompt each time. Three minutes and 47 retries later, the team got a $200 invoice for a single user request. The function worked exactly as designed. The budget was the thing nobody designed.
 
 <!-- more -->
 
-This is the gap that Cycles fills. It's not just a billing meter — it's a **[runtime authority](/glossary#runtime-authority)** for **budget, action control, and audit**. Before an agent calls an LLM and after every decision settles, Cycles answers three questions:
+This is the gap that Cycles fills. It is a **[runtime authority](/glossary#runtime-authority)** for scoped budgets and caller-assigned exposure. Before an agent calls an LLM, the integration asks three practical questions:
 
 1. **Budget:** Does this agent have enough budget for this operation?
-2. **Action:** Is this agent *allowed* to take this action right now? (Which tools? How many [tokens](/glossary#tokens)? How many steps remaining? Is there a cooldown?)
-3. **Audit:** Is every decision, cap, and outcome recorded as a signed event — so compliance, incident review, and per-agent attribution come for free, not as a separate logging project?
+2. **Constraints:** Did the deepest matching budget return configured caps, and can this host enforce the relevant fields?
+3. **Evidence:** How will the application correlate its tool outcome and any non-persisting preflight result with the reservation and settlement lifecycle?
 
-The server returns either ALLOW, ALLOW_WITH_CAPS (proceed but with constraints), or DENY — and the client enforces it before the expensive call happens. Every reservation, commit, release, and decision drops into an append-only event log that the events service streams to [webhooks](/how-to/webhook-integrations) for downstream audit pipelines.
+A preflight evaluation can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error, which the client surfaces before the expensive call happens. Reservations, commits, releases, and direct-usage events create lifecycle records; `decide` and dry-run results are non-persisting, so applications that need a complete audit trail must log those results and external outcomes themselves. Optional [webhooks](/how-to/webhook-integrations) can feed emitted lifecycle events into downstream pipelines.
 
 The `runcycles` crate brings this to Rust with an API designed around ownership semantics and compile-time safety. This post shows how to integrate it into existing Rust agent code at three levels of control.
 
@@ -252,13 +256,13 @@ The error type is an enum, not an exception hierarchy — you get exhaustive mat
 
 ## Action authority: caps, tool control, and step limits
 
-Budget is only half the story. Cycles also governs **what an agent can do** through caps — runtime constraints returned alongside the budget decision. When the server returns `ALLOW_WITH_CAPS`, it's saying: "you have budget, but here are the rules."
+Budget is only half the story. Cycles can return operator-configured caps alongside an accepted budget decision. The application must enforce tool permissions and apply those caps; the current server does not inspect tool arguments or infer action risk.
 
 Caps include:
 
 | Cap | What it controls | Example |
 |-----|-----------------|---------|
-| `max_tokens` | Maximum tokens for this operation | Reduce from 4000 → 500 as budget runs low |
+| `max_tokens` | Maximum tokens for this operation | Apply an operator-configured 500-token limit |
 | `max_steps_remaining` | How many more agent steps are allowed | Prevent infinite tool-call loops |
 | `tool_allowlist` | Only these tools may be used | `["web_search"]` — block code execution |
 | `tool_denylist` | These tools are blocked | `["shell_exec", "file_write"]` — safety guardrails |

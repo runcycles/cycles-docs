@@ -2,10 +2,14 @@
 title: "Multi-Agent Systems Fail 87% — What It Costs"
 date: 2026-03-29
 author: Cycles Team
-tags: [multi-agent, failures, cost, coordination, production, MAST, runtime-authority, engineering]
-description: "UC Berkeley's MAST taxonomy found 14 failure modes across 1,600+ multi-agent traces with 41–87% failure rates. We built the cost model."
+tags: [multi-agent, failures, costs, coordination, production, MAST, runtime-authority, engineering]
+description: "UC Berkeley's MAST taxonomy found 14 failure modes across 1,600+ multi-agent traces with 41–87% failure rates. See how scoped budgets contain cascading spend."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: multi-agent system failures, MAST taxonomy, AI agent coordination cost, cascading agent failures, scoped budgets, runtime authority
 ---
 
 # Multi-Agent Systems Fail Up to 87% of the Time — Here's What Each Failure Actually Costs
@@ -160,7 +164,7 @@ With a per-run budget, the loop is bounded:
 ```
 Run budget: $15.00
 Iteration 1-4: $3.50 each → $14.00 committed
-Iteration 5: Reserve $3.50 → DENY (budget: $1.00 remaining)
+Iteration 5: Reserve $3.50 → 409 BUDGET_EXCEEDED (budget: $1.00 remaining)
 ```
 
 The run fails, but at $15 — not at an unbounded amount. The system can [gracefully degrade](/blog/ai-agent-failures-budget-controls-prevent): fall back to a simpler strategy, escalate to a human, or return a partial result with a cost-exceeded flag.

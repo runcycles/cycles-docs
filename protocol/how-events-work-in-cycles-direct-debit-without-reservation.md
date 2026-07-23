@@ -75,7 +75,7 @@ Both are useful. They solve different problems.
 
 An event request includes:
 
-- **subject** — the budget scopes to charge (tenant, workspace, app, workflow, agent, toolset, dimensions)
+- **subject** — the six standard fields that derive budget scopes (tenant, workspace, app, workflow, agent, toolset), plus optional `dimensions` metadata that does not derive scopes in the reference server
 - **action** — what happened (kind, name, optional tags)
 - **actual** — the amount consumed (unit and amount)
 - **idempotency_key** — ensures the same event is not recorded twice
@@ -86,12 +86,21 @@ An event request includes:
 
 The server applies the charge atomically across all derived scopes, or rejects the entire event.
 
-On success, the response includes:
+On success, the server returns `201` — the event has been created and atomically applied to balances before the response is sent. The response includes:
 
 - `status: APPLIED`
 - `event_id` — a unique identifier for the event
 - `charged` — the amount actually applied (optional; present when `ALLOW_IF_AVAILABLE` caps the charge to remaining budget, so the client can see the effective charge)
 - `balances` — updated balance state for affected scopes
+
+### Error cases
+
+Beyond the `409` overage rejections described below, the spec defines these error responses for `POST /v1/events`:
+
+- `400 UNIT_MISMATCH` — the actual's unit doesn't match the budget stored for the target scope (a budget exists at the scope, but in a different unit)
+- `404 NOT_FOUND` — no budget exists at any of the event's derived scopes in *any* unit; the message field carries the specific `"Budget not found for provided scope: ..."` detail
+- `403 FORBIDDEN` — the request's `subject.tenant` doesn't match the effective tenant derived from auth
+- `409 IDEMPOTENCY_MISMATCH` — the same idempotency key was reused with a different payload (see Idempotency below)
 
 ## Overage policies on events
 
@@ -105,9 +114,9 @@ REJECT prevents any accounting that would put the scope into negative remaining.
 
 ### ALLOW_IF_AVAILABLE (default)
 
-If sufficient budget remains across all affected scopes, the full actual amount is applied atomically. If any scope has insufficient remaining, the charge is capped to available budget and `is_over_limit` is set on affected scopes.
+If sufficient budget remains across all affected scopes, the full actual amount is applied atomically. If any scope has insufficient remaining, the charge is capped to available remaining (the minimum across all derived scopes, floor 0) and `is_over_limit` is set to `true` only on the scopes where the full amount could not be covered.
 
-ALLOW_IF_AVAILABLE is the default when neither the request nor the tenant's `default_commit_overage_policy` specifies a policy. It never creates debt and never rejects an event.
+ALLOW_IF_AVAILABLE is the default when the request does not specify a policy. It never creates debt and never rejects an event.
 
 ### ALLOW_WITH_OVERDRAFT
 
@@ -189,4 +198,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

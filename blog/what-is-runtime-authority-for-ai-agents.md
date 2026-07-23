@@ -3,10 +3,14 @@ title: "What Is Runtime Authority for AI Agents?"
 date: 2026-03-20
 author: Albert Mavashev
 tags: [runtime-authority, agents, concepts, guide]
-description: "Runtime authority is the pre-execution layer that decides if an AI agent's next action should proceed — distinct from observability and rate limits."
+description: "Runtime authority decides whether an AI agent action proceeds before execution. See how it differs from observability, rate limits, and model guardrails."
 blog: true
 sidebar: false
 featured: true
+head:
+  - - meta
+    - name: keywords
+      content: runtime authority, AI agent governance, pre-execution control, agent action control, runtime budgets, AI agent guardrails
 ---
 
 # What Is Runtime Authority for AI Agents?

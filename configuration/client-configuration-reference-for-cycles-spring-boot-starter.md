@@ -11,6 +11,10 @@ See the [Python Client Configuration Reference](/configuration/python-client-con
 
 This is the complete reference for all configuration properties available in the Cycles Spring Boot Starter.
 
+::: tip Using Spring AI advisors?
+This page covers the underlying `cycles.*` client properties. See the [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) for the separate `cycles.spring-ai.*` advisor, token-estimation, tool-gating, and tracing properties.
+:::
+
 All properties are under the `cycles` prefix in your project's `application.yml` (or `application.properties`).
 
 ## Required properties
@@ -87,6 +91,7 @@ The `@Cycles` annotation controls reservation behavior per-method. These are sep
 | `value` | `String` | `""` | SpEL expression for estimated cost. Shorthand: `@Cycles("1000")`. Synonym for `estimate`. |
 | `estimate` | `String` | `""` | SpEL expression for estimated cost. Synonym for `value`. |
 | `actual` | `String` | `""` | SpEL expression for actual cost, evaluated after method returns. `#result` is bound to the return value. |
+| `metadata` | `String` | `""` | SpEL expression for commit metadata, evaluated after method returns (`#result` available). Must yield `Map<String, Object>`. Merged with programmatic `CyclesContextHolder` metadata; programmatic wins on key conflicts. Since 0.2.5. |
 | `actionKind` | `String` | `""` | Action category (e.g. `"llm.completion"`). Defaults to declaring class simple name if blank. |
 | `actionName` | `String` | `""` | Action identifier (e.g. `"gpt-4"`). Defaults to method name if blank. |
 | `actionTags` | `String[]` | `{}` | Tags for filtering and reporting (e.g. `{"prod", "customer-facing"}`). |
@@ -103,6 +108,10 @@ The `@Cycles` annotation controls reservation behavior per-method. These are sep
 | `agent` | `String` | `""` | Subject agent override. |
 | `toolset` | `String` | `""` | Subject toolset override. |
 | `dimensions` | `String[]` | `{}` | Custom dimensions as `"key=value"` pairs (e.g. `{"cost_center=engineering"}`). |
+
+::: tip SpEL on subject attributes (since 0.2.1)
+Subject attributes (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) whose value starts with `#` are evaluated as SpEL against the method invocation, e.g. `tenant = "#tenantId"`. Literal values are passed through unchanged. Parse or evaluation failures surface as `ParseException`/`SpelEvaluationException` when the aspect runs, before the reservation is created.
+:::
 
 ## HTTP configuration
 
@@ -231,6 +240,7 @@ The starter auto-configures the following beans, all with `@ConditionalOnMissing
 | `retryEngine` | `CommitRetryEngine` | Handles commit retries (`InMemoryCommitRetryEngine`) |
 | `cyclesLifecycleService` | `CyclesLifecycleService` | Orchestrates the full lifecycle |
 | `aspect` | `CyclesAspect` | AOP aspect for `@Cycles` annotation |
+| `cyclesSelfInvocationDetector` | `CyclesSelfInvocationDetector` | Bean post-processor (declared as a `static` `@Bean`) that warns at startup about beans susceptible to the self-invocation pitfall |
 
 ### Overriding a bean
 

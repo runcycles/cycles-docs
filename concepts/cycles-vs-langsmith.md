@@ -78,7 +78,7 @@ Request → Cycles (should this execute?) → LLM call → LangSmith (what happe
 
 A customer support agent built with LangChain:
 
-1. **Cycles** checks budget before each LLM call and tool invocation. If the per-tenant budget is low, it returns `ALLOW_WITH_CAPS` with a reduced `max_tokens` limit. If exhausted, it returns `DENY` and the agent degrades gracefully.
+1. **Cycles** checks budget before each instrumented LLM call and tool invocation. If the deepest matching budget has `max_tokens` configured, an accepted request returns `ALLOW_WITH_CAPS`; if a live reservation lacks budget, it returns an error such as `409 BUDGET_EXCEEDED`. The application applies caps or handles the denial.
 
 2. **LangSmith** traces the full execution — every chain step, tool call, and LLM response. The traces show token counts, latency, and error rates. The team uses this data to optimize prompts, evaluate response quality, and debug failures.
 
@@ -86,11 +86,11 @@ Neither tool can do the other's job. LangSmith cannot block an LLM call. Cycles 
 
 ### Feeding Cycles data into LangSmith
 
-The `CyclesMetrics` attached to each commit (tokens, latency, model version) are available through the Cycles API. Teams that want unified dashboards can:
+The commit metrics (`StandardMetrics` — tokens, latency, model version) attached to each commit are available through the Cycles API. Teams that want unified dashboards can:
 
 - Tag LangSmith traces with the Cycles `reservation_id` for cross-referencing
 - Use LangSmith's custom metadata to include Cycles decision outcomes (`ALLOW`, `DENY`, `ALLOW_WITH_CAPS`)
-- Build alerting rules in LangSmith that flag traces where Cycles returned `ALLOW_WITH_CAPS` — indicating budget pressure
+- Build alerting rules in LangSmith that flag traces where Cycles returned `ALLOW_WITH_CAPS` — indicating that configured caps applied
 
 ## Decision guide
 

@@ -88,7 +88,7 @@ But exposing a tool is not the same as granting permission. If an MCP server exp
 
 That is why [MCP gateways are not runtime authority](/blog/mcp-gateways-are-not-runtime-authority). A gateway can centralize traffic and policy hooks, but it must still make or call a pre-execution decision before the tool side effect happens.
 
-The implementation pattern is covered in [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution): reserve budget before the tool executes, commit actual usage after success, and release the [reservation](/glossary#reservation) when the tool fails or is canceled.
+The implementation pattern is covered in [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution): reserve budget before the tool executes, commit best-known actual usage after execution starts, and release the [reservation](/glossary#reservation) only when execution never starts or usage is demonstrably zero.
 
 ## Where runtime authority fits
 
@@ -143,7 +143,7 @@ When teams adopt A2A and MCP together, the architecture review should ask five c
 
 **Where is the pre-execution decision made?** The decision can sit in an SDK hook, MCP tool wrapper, gateway, worker, or service boundary. It has to happen before the action.
 
-**What gets committed after execution?** Estimates are useful before the call. Actual usage should be recorded after success so operators can tune future budgets.
+**What gets committed after execution?** Estimates are useful before the call. Best-known actual usage should be recorded after every execution attempt, including partial failures, so operators can tune future budgets.
 
 **What evidence survives the workflow?** Multi-agent systems need a record of who delegated what, which tool ran, what budget was reserved, and why any action was denied.
 

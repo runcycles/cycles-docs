@@ -6,6 +6,10 @@ tags: [costs, agents, guide]
 description: "AI agent cost breakdown across OpenAI, Anthropic, Google, and AWS Bedrock — with real-world scenarios for support bots, coding agents, and data pipelines."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent costs, LLM pricing, agent cost calculator, OpenAI costs, Anthropic costs, AI budget planning
 ---
 
 # How Much Do AI Agents Actually Cost?

@@ -3,9 +3,13 @@ title: "AI Agent Budget Patterns: A Practical Guide"
 date: 2026-03-15
 author: Cycles Team
 tags: [patterns, budgets, architecture, guide]
-description: "A practical reference for structuring AI agent budgets — covering tenant isolation, workflow caps, run-level limits, graceful degradation, and more."
+description: "Structure AI agent budgets for tenant isolation, workflow caps, run-level limits, and graceful degradation with practical patterns for production systems."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: AI agent budget patterns, tenant budgets, workflow budgets, run-level limits, graceful degradation, runtime authority
 ---
 
 # AI Agent Budget Patterns: A Practical Guide

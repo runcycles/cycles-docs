@@ -28,7 +28,7 @@ Cycles ships two complementary Java starters. Pick based on your call surface:
 **Use [`cycles-spring-boot-starter`](#path-2-cycles-annotation-cycles-client-java-spring)** for non-Spring-AI code paths (custom HTTP clients, LangChain4j, vector store queries, etc.) — or when you need SpEL-driven per-method estimates.
 
 ::: warning Don't double-charge
-Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the [`cycles-spring-ai-starter` README "Double-charge gotcha" section](https://github.com/runcycles/cycles-spring-ai-starter#the-double-charge-gotcha).
+Wrapping a Spring AI chat call inside an `@Cycles`-annotated method produces **two reservations** for one operation — once from the AOP wrapper, once from the Spring AI advisor. Pick one strategy per call path. See the "Double-charge gotcha" section in the [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter).
 :::
 
 ---
@@ -44,11 +44,11 @@ The simplest path for Spring AI apps — add the dependency, configure a few `cy
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.3.0'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.3.1'
 ```
 :::
 
@@ -159,7 +159,7 @@ cycles:
 
 The jtokkit dep is `optional=true` on the starter — only opt-in users pay the size cost. Setting the property without the dep on the classpath logs a WARN at app startup and falls back to chars/4. For provider-specific tokenizers, register your own `PromptTokenEstimator` bean.
 
-See [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#whats-new-in-030) for the full 0.3.0 feature surface, the Extension Points section with longer examples, and the full configuration reference.
+See the [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) for every property, auto-configuration condition, extension point, and failure-mode boundary.
 
 ---
 
@@ -179,11 +179,11 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.2</version>
+    <version>0.2.5</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.2'
+implementation 'io.runcycles:cycles-client-java-spring:0.2.5'
 ```
 :::
 
@@ -314,7 +314,7 @@ The `actual` SpEL attribute on `@Cycles` handles cost calculation. Use `CyclesMe
 
 ## Respecting budget caps in Spring AI
 
-When budget is running low, Cycles may return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. Caps tell you how to constrain the operation — for example, reducing max tokens to conserve budget. Read them from the reservation context:
+When the deepest matching budget has caps configured, Cycles can return `ALLOW_WITH_CAPS` instead of a flat `ALLOW`. This is configuration-driven, not an automatic low-balance transition. Read the caps from the reservation context and apply them — for example, by reducing max tokens:
 
 ```java
 @Cycles(value = "#maxTokens * 250",
@@ -416,16 +416,18 @@ public class GuardedToolService {
 }
 ```
 
-Then register these as Spring AI function callbacks:
+Then register these as Spring AI tool callbacks:
 
 ```java
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.function.FunctionToolCallback;
+
 @Configuration
 public class ToolConfig {
 
     @Bean
-    public FunctionCallback webSearchTool(GuardedToolService tools) {
-        return FunctionCallback.builder()
-            .function("web_search", (String query) -> tools.webSearch(query))
+    public ToolCallback webSearchTool(GuardedToolService tools) {
+        return FunctionToolCallback.builder("web_search", (String query) -> tools.webSearch(query))
             .description("Search the web")
             .inputType(String.class)
             .build();
@@ -460,8 +462,8 @@ public class StreamingChatService {
         );
 
         var response = cyclesClient.createReservation(body);
-        String reservationId = (String) response.get("reservation_id");
-        String decision = (String) response.get("decision");
+        String reservationId = response.getBodyAttributeAsString("reservation_id");
+        String decision = response.getBodyAttributeAsString("decision");
 
         if (!"ALLOW".equals(decision) && !"ALLOW_WITH_CAPS".equals(decision)) {
             throw new CyclesProtocolException("Budget denied: " + decision);
@@ -534,7 +536,7 @@ Start in shadow mode to measure budget impact before enforcing:
         actionKind = "llm.completion",
         actionName = "gpt-4o",
         dryRun = true)
-public String shadowChat(String prompt, int maxTokens) {
+public Object shadowChat(String prompt, int maxTokens) {  // returns DryRunResult, not the chat content
     return chatClient.prompt(prompt).call().content();
 }
 ```
@@ -602,7 +604,8 @@ public class AgentOrchestrator {
 
 For **Path 1 (`cycles-spring-ai-starter`):**
 
-- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter#cycles-spring-ai-starter--runtime-authority-for-spring-ai-agents) — full Quick Start, Extension Points, Configuration reference, and the "Don't double-charge" gotcha section
+- [Spring AI Starter Configuration Reference](/configuration/spring-ai-starter-configuration-reference) — every property, extension point, auto-configuration condition, and the double-charge boundary
+- [`cycles-spring-ai-starter` README](https://github.com/runcycles/cycles-spring-ai-starter) — source-repository quickstart and examples
 - [`cycles-spring-ai-starter` on Maven Central](https://central.sonatype.com/artifact/io.runcycles/cycles-spring-ai-starter)
 - [Budget Limits with Spring AI](/quickstart/how-to-add-hard-budget-limits-to-spring-ai-with-cycles) — strategic guidance on where to put the gates
 

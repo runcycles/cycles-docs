@@ -12,7 +12,7 @@ The Cycles MCP Server gives MCP-compatible agents access to Cycles runtime autho
 This is the fastest way to expose Cycles budget tools to an MCP-compatible AI agent. For hard production enforcement, route costly or risky actions through the reserve → execute → commit/release lifecycle, or enforce Cycles in the application/gateway layer.
 
 ::: warning What this does and does not enforce
-The MCP server **exposes Cycles tools** to the agent. It does not automatically proxy or block every other MCP tool, API call, or model request — the agent can still take actions that bypass Cycles unless those actions go through `cycles_reserve` / `cycles_decide` / `cycles_commit`.
+The MCP server **exposes Cycles tools** to the agent. It does not automatically proxy or block every other MCP tool, API call, or model request — the agent can still take actions that bypass Cycles unless the host requires a live `cycles_reserve` before execution and settles the reservation afterward. `cycles_decide` is a non-locking preflight check.
 
 Use this for:
 - budget-aware agents and operator workflows
@@ -24,14 +24,14 @@ For deterministic production enforcement, make the Cycles check part of the tool
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — `cycles_reserve` / `cycles_commit` / `cycles_release` enforce budget before instrumented agent actions
-- **Risky actions** — `cycles_decide` returns `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — `cycles_create_event` and reserve/commit/release calls create structured records for export, compliance, attribution, and incident review
+- **Risky actions** — `cycles_decide` performs a non-locking preflight using caller-assigned `RISK_POINTS` estimates and can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. The application must apply the decision and any returned caps.
+- **Audit** — `cycles_create_event` and reserve-commit lifecycle calls create structured records for export, compliance, attribution, and incident review
 :::
 
 ## Prerequisites
 
 - **A running Cycles stack** with a tenant, API key, and budget. If you don't have one yet, follow [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) first.
-- **Node.js 20+ with `npx` available** — every per-client config below launches `@runcycles/mcp-server` through `npx`.
+- **Node.js 20+ with `npx` available** for Claude Code, Cursor, Windsurf, or a manual Claude Desktop configuration. The recommended Claude Desktop `.mcpb` extension uses Claude Desktop's bundled runtime and does not require a separate Node.js installation.
 
 ::: tip Where do I get my API key?
 API keys are created through the **Cycles Admin Server** (port 7979). Use a runtime API key such as `cyc_live_...`. If your stack is already running with a tenant, create one directly:
@@ -49,7 +49,7 @@ curl -s -X POST http://localhost:7979/v1/admin/api-keys \
 
 The response returns the full key (e.g. `cyc_live_abc123...`). **Save it — the secret is only shown once.**
 
-The permissions above are enough for the **core reserve / commit / release lifecycle**. If you want the agent to use `cycles_decide` (preflight checks) or `cycles_create_event` (telemetry / governance events), add the corresponding decision and event permissions as configured in your Cycles deployment — otherwise those tools will fail with auth errors.
+The permissions above are the valid runtime permissions used by the MCP tool set. The current permission schema does not define separate `decide` or `events:create` values; including either causes API-key creation to fail validation. For a least-privilege key, omit read or lifecycle permissions for tools the agent does not need.
 
 Need the full setup? See [Deploy the Full Stack — Create an API key](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key). For rotation and lifecycle details, see [API Key Management](/how-to/api-key-management-in-cycles).
 :::
@@ -66,7 +66,7 @@ Each client has its own config file path and quirks. Start with the one you use:
 | **Windsurf** | [Add Cycles to Windsurf](/quickstart/mcp-windsurf) |
 | Other MCP-compatible client | Use the STDIO config below as a template |
 
-All of them use the same package — `@runcycles/mcp-server` from npm — launched via `npx`. The differences are config-file paths and a few client-specific gotchas.
+All hosts use the same `@runcycles/mcp-server` implementation. Claude Desktop can install the bundled `.mcpb` desktop extension; the other local setup paths launch the npm package via `npx`. Config-file paths and client-specific behavior still differ.
 
 ### Generic STDIO config (template)
 
@@ -87,7 +87,7 @@ All of them use the same package — `@runcycles/mcp-server` from npm — launch
 
 ### Mock mode (no backend required)
 
-To try the server without a running Cycles stack, set `CYCLES_MOCK: "true"` instead of the API key / base URL. Mock mode returns realistic deterministic responses.
+To try the server without a running Cycles stack, set `CYCLES_MOCK: "true"` instead of the API key / base URL. Mock mode returns realistic synthetic responses; generated IDs and timestamps vary between calls. It performs no live enforcement. In a production Node environment, the server refuses to start in mock mode unless `CYCLES_ALLOW_MOCK_IN_PRODUCTION` is explicitly set to `"true"`.
 
 ```json
 {
@@ -101,7 +101,7 @@ To try the server without a running Cycles stack, set `CYCLES_MOCK: "true"` inst
 }
 ```
 
-### Running the server over HTTP / SSE
+### Running the server over HTTP
 
 For a shared remote MCP gateway (multi-developer team, cloud deploy, sidecar in CI), see [Running the MCP server over HTTP](/how-to/running-the-mcp-server-over-http). STDIO is the right default for a single developer on a local machine.
 
@@ -113,15 +113,15 @@ Once connected, ask your agent to check a budget balance:
 
 The agent will call `cycles_check_balance` with `tenant: "acme-corp"` and return matching balance records — remaining budget, reserved amounts, and total spent. If you need descendant scopes, ask for child scopes explicitly; the tool maps that to `includeChildren: true` where the server supports it.
 
-## The reserve/commit lifecycle
+## The reserve-commit lifecycle
 
-The core pattern is **reserve → execute → commit**, or **release** if the operation fails or is cancelled. Here's how it works through MCP tools:
+The core pattern is **reserve → execute → commit**. Commit the actual usage whenever execution incurred cost, including an operation that started but later failed. Use **release** only when the reservation was unused — for example, the operation was cancelled, skipped, or failed before execution. Here's how it works through MCP tools:
 
 **Step 1 — Reserve** before doing something expensive:
 
 > "Reserve 500,000 USD_MICROCENTS for an OpenAI GPT-4o call"
 
-The agent calls `cycles_reserve` and gets back a `reservation_id` and a `decision`. If the decision is `ALLOW`, the budget is locked and the agent can proceed.
+The agent calls `cycles_reserve` and gets back a `reservationId` and a decision of `ALLOW` or `ALLOW_WITH_CAPS`. The budget is locked and the agent can proceed, applying any returned caps. If a live reservation is rejected, the tool returns an error such as `BUDGET_EXCEEDED`; `decision: "DENY"` is returned only by `cycles_decide` or a reserve call with `dryRun: true`.
 
 **Step 2 — Execute** the operation (the LLM call, API request, etc.)
 
@@ -129,18 +129,18 @@ The agent calls `cycles_reserve` and gets back a `reservation_id` and a `decisio
 
 > "Commit reservation res_abc123 with actual usage 423,100 USD_MICROCENTS"
 
-The agent calls `cycles_commit` with the `reservation_id` and the actual amount. The difference between the reserved estimate and the actual usage is returned to the budget pool.
+The agent calls `cycles_commit` with the `reservationId` and the actual amount. The difference between the reserved estimate and the actual usage is returned to the budget pool.
 
-If the operation fails or is cancelled, the agent calls `cycles_release` instead to return the full reserved amount.
+If no execution or billable work occurred, the agent calls `cycles_release` instead to return the full reserved amount. If the operation incurred partial usage before failing, commit that actual usage rather than releasing the reservation.
 
 ## Handling decisions
 
-When you call `cycles_reserve` or `cycles_decide`, the server returns one of three decisions:
+`cycles_decide` and `cycles_reserve` with `dryRun: true` can return any of the three decisions below. A successful live `cycles_reserve` returns `ALLOW` or `ALLOW_WITH_CAPS`; a live denial is surfaced as an MCP tool error carrying the Cycles error code and HTTP status.
 
 | Decision | Meaning | Agent should… |
 |----------|---------|---------------|
 | `ALLOW` | Budget is available, proceed normally | Execute the operation |
-| `ALLOW_WITH_CAPS` | Budget is tight, proceed with constraints | Reduce scope — use a cheaper model, fewer tokens, or skip optional tools. The `caps` field contains `maxTokens`, `toolAllowlist`, and `cooldownMs` hints |
+| `ALLOW_WITH_CAPS` | The deepest matching budget has configured caps | Apply the returned constraints before execution. The `caps` field can contain `maxTokens`, `maxStepsRemaining`, `toolAllowlist`, `toolDenylist`, and `cooldownMs` |
 | `DENY` | Budget exhausted or insufficient | Stop, inform the user, or switch to a free fallback |
 
 ## Available tools
@@ -157,7 +157,7 @@ The MCP server exposes 9 tools:
 | `cycles_check_balance` | Check current budget balance for a scope |
 | `cycles_list_reservations` | List reservations, filtered by status or subject |
 | `cycles_get_reservation` | Get details of a specific reservation by ID |
-| `cycles_create_event` | Record usage or governance events without a reservation lifecycle. Useful for telemetry; not a substitute for pre-execution enforcement |
+| `cycles_create_event` | Record completed usage directly without a reservation lifecycle. This is post-hoc direct-debit metering, not arbitrary governance-event ingestion or pre-execution enforcement |
 
 ## Built-in prompts
 
@@ -165,7 +165,7 @@ The server includes 3 prompts that agents can invoke for guided workflows:
 
 | Prompt | Description |
 |--------|-------------|
-| `integrate_cycles` | Generate reserve/commit/release patterns for a specific language and use case |
+| `integrate_cycles` | Generate reserve-commit lifecycle patterns for a specific language and use case |
 | `diagnose_overrun` | Analyze budget exhaustion — guides through checking balances and listing reservations |
 | `design_budget_strategy` | Recommend scope hierarchy, limits, units, and degradation strategy for a workflow |
 
@@ -173,10 +173,23 @@ The server includes 3 prompts that agents can invoke for guided workflows:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CYCLES_API_KEY` | *(required)* | API key for authenticating with the Cycles server |
-| `CYCLES_BASE_URL` | *(required)* | Base URL of your Cycles server (e.g., `http://localhost:7878`) |
+| `CYCLES_API_KEY` | *(required in real mode)* | API key for authenticating with the Cycles server |
+| `CYCLES_BASE_URL` | *(required in real mode)* | Base URL of your Cycles server (e.g., `http://localhost:7878`) |
 | `CYCLES_MOCK` | — | Set to `"true"` to use mock mode (no server needed) |
+| `CYCLES_ALLOW_MOCK_IN_PRODUCTION` | `false` | Must be `"true"` to allow mock mode when `NODE_ENV=production`; use only intentionally because mock mode disables enforcement |
+| `CYCLES_DEFAULT_TENANT` | — | Default `subject.tenant` when the caller omits it |
+| `CYCLES_DEFAULT_WORKSPACE` | — | Default `subject.workspace` when the caller omits it |
+| `CYCLES_DEFAULT_APP` | — | Default `subject.app` when the caller omits it |
+| `CYCLES_DEFAULT_WORKFLOW` | — | Default `subject.workflow` when the caller omits it |
+| `CYCLES_DEFAULT_AGENT` | — | Default `subject.agent` when the caller omits it |
+| `CYCLES_DEFAULT_TOOLSET` | — | Default `subject.toolset` when the caller omits it |
 | `PORT` | `3000` | HTTP port when using `--transport http` |
+| `HOST` | all interfaces | HTTP bind address; set `127.0.0.1` for loopback-only access |
+| `MCP_HTTP_AUTH_TOKEN` | — | Shared bearer token required on every `/mcp` request when configured; `/health` remains public |
+
+Explicit subject fields always override `CYCLES_DEFAULT_*` values, and custom `dimensions` are never defaulted. Defaults apply to `cycles_reserve`, `cycles_decide`, `cycles_create_event`, and `cycles_check_balance`; they do not rewrite existing reservations or reservation-list filters. Blank defaults are ignored, while whitespace-only or over-128-character values fail validation.
+
+Every mutating tool still requires a caller-supplied `idempotencyKey`. Reuse the same key when retrying the same logical operation so Cycles can deduplicate the request. Under budget pressure, tool responses may also append plain-text agent hints after the structured JSON for `DENY`, `ALLOW_WITH_CAPS`, or balances below roughly 15% remaining.
 
 ## Next steps
 

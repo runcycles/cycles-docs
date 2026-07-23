@@ -3,9 +3,13 @@ title: "Multi-Agent Budget Control: CrewAI, AutoGen, OpenAI"
 date: 2026-03-21
 author: Cycles Team
 tags: [multi-agent, crewai, autogen, openai, budgets, engineering, best-practices]
-description: "Multi-agent delegation chains create recursive cost exposure. Enforce per-agent budget boundaries in CrewAI, AutoGen, and OpenAI Agents SDK."
+description: "Multi-agent delegation creates recursive cost exposure. Learn how to enforce per-agent budget boundaries in CrewAI, AutoGen, and OpenAI Agents SDK runtimes."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: multi-agent budget control, CrewAI budgets, AutoGen budgets, OpenAI Agents SDK, agent delegation costs, runtime authority
 ---
 
 # Multi-Agent Budget Control: CrewAI, AutoGen, OpenAI

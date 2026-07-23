@@ -1,6 +1,6 @@
 ---
 title: "Add Cycles to Claude Code (MCP)"
-description: "60-second setup for adding Cycles budget enforcement to Claude Code via the MCP server. CLI registration, project-scoped vs global config, common gotchas."
+description: "Add Cycles budget tools to Claude Code via MCP, with CLI registration, project and user scopes, mock mode, and dispatch-path enforcement guidance."
 ---
 
 # Add Cycles to Claude Code
@@ -8,12 +8,13 @@ description: "60-second setup for adding Cycles budget enforcement to Claude Cod
 This page is the exact setup for [Claude Code](https://www.claude.com/claude-code). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
-Registering this MCP server gives Claude Code access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
+Registering this MCP server gives Claude Code access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For dispatch-path enforcement in Claude Code, [Cycles Budget Guard for Claude Code](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools with `PreToolUse` hooks. For other hosts, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
 :::
 
 ## Prerequisites
 
 - **Claude Code installed** ([install guide](https://docs.claude.com/en/docs/claude-code))
+- **Node.js 20+ with `npx` available** — Claude Code launches the MCP server through `npx`.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip this for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.
 
@@ -59,7 +60,7 @@ Commit `.mcp.json`, but **do not commit real secrets**. Each developer sets `CYC
 claude mcp add --transport stdio --env CYCLES_MOCK=true cycles -- npx -y @runcycles/mcp-server
 ```
 
-Returns realistic deterministic responses with no Cycles backend running.
+Returns realistic synthetic responses with no Cycles backend running. Generated IDs and timestamps vary between calls; mock mode performs no live enforcement.
 
 ## Verify
 
@@ -75,7 +76,7 @@ claude mcp list
 
 ## Common gotchas
 
-- **Env vars not captured automatically.** `claude mcp add` records the command but does NOT capture your current shell env. Either pass `--env KEY=VALUE` flags at registration (recommended) or use a project `.mcp.json` with `${VAR}` expansion.
+- **Env vars not captured automatically.** `claude mcp add` records the command but does not persist your current shell env into the config (a stdio server still inherits the environment of the shell that launched `claude`; `--env` makes the values deterministic). Either pass `--env KEY=VALUE` flags at registration (recommended) or use a project `.mcp.json` with `${VAR}` expansion.
 - **CLI option order matters.** `--transport`, `--env`, and `--scope` must come before the server name (`cycles`). Arguments after `--` are passed to `@runcycles/mcp-server`.
 - **Native Windows needs a wrapper.** If Claude Code runs on native Windows rather than WSL, use `-- cmd /c npx -y @runcycles/mcp-server` after the server name so Windows can launch `npx`.
 - **Three scopes, not two.** `local` is the default and applies only to the current project, stored in your user config. `project` writes a shared `.mcp.json` in the project root. `user` applies in every project. If the same server name appears in multiple scopes, Claude Code uses the highest-precedence definition: **local → project → user**.

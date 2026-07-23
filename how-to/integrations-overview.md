@@ -35,6 +35,7 @@ Cycles integrates with LLM providers, agent frameworks, and web servers. Each in
 | [MCP Server](/how-to/integrating-cycles-with-mcp) | TypeScript (Node.js) | — | MCP tools |
 | [OpenAI Agents](/how-to/integrating-cycles-with-openai-agents) | Python | — | RunHooks (lifecycle hooks) |
 | [OpenClaw](/how-to/integrating-cycles-with-openclaw) | TypeScript | Yes | Plugin (lifecycle hooks) |
+| [AP2 (Agent Payments Protocol)](https://pypi.org/project/runcycles-ap2/) | Python | — | Payment-mandate guard ([`runcycles-ap2`](https://pypi.org/project/runcycles-ap2/)) — reserve / commit / release around AP2 mandates; Cycles idempotency deduplicates accounting, while PSP idempotency or an atomic claim is still required for consume-once execution |
 | **Runtime SDKs** | | | |
 | [Rust](/how-to/integrating-cycles-with-rust) | Rust | Yes | Tokio async client + RAII guards |
 | **Web Frameworks** | | | |
@@ -50,9 +51,9 @@ Cycles offers several integration approaches depending on your stack:
 
 ### MCP Server
 
-The zero-code approach. Add the Cycles MCP Server to your AI agent's tool configuration and the agent gets direct access to budget tools via the Model Context Protocol. No SDK integration in the agent's code required — the agent discovers and calls `cycles_reserve`, `cycles_commit`, and other tools through standard MCP tool discovery.
+The zero-code tool-exposure approach. Add the Cycles MCP Server to your AI agent's configuration and it discovers `cycles_reserve`, `cycles_commit`, and other budget tools through MCP. This is cooperative, not automatic enforcement of the host's other actions. Hard limits require **Cycles Budget Guard for Claude Code** or a mandatory handler, gateway, harness, or service boundary.
 
-Best for: Claude Desktop, Claude Code, Cursor, Windsurf, and any MCP-compatible AI host.
+Best for: budget-aware workflows and discovery in Claude Desktop, Claude Code, Cursor, Windsurf, and other MCP-compatible hosts.
 
 ### Decorator / Higher-order function
 
@@ -74,7 +75,7 @@ Best for: multi-agent workflows, tool governance, agent handoff tracking.
 
 ### Agent middleware (LangChain 1.x)
 
-For LangChain agents built with `langchain.agents.create_agent`. The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides `AgentMiddleware` subclasses (`CyclesToolGate`, `CyclesFanOutGate`) that intercept tool calls and model turns *before* execution — denial returns a `ToolMessage` so the agent recovers gracefully, and fan-out can be capped at the model-turn level.
+For LangChain agents built with `langchain.agents.create_agent`. The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides `AgentMiddleware` subclasses (`CyclesModelGate`, `CyclesToolGate`, `CyclesFanOutGate`) that intercept model calls, tool calls, and model turns *before* execution — denial returns a `ToolMessage` so the agent recovers gracefully, and fan-out can be capped at the model-turn level.
 
 Best for: production LangChain agents, anything using `create_agent`, agent-style LangGraph nodes.
 
@@ -134,7 +135,7 @@ See [Webhook Integrations](/how-to/webhook-integrations) for full examples with 
 For the layer-by-layer view of where these integrations sit relative to other agent control approaches — wrappers, provider-client patches, framework hooks, LLM gateways, observability — and why runtime authority complements them rather than replaces them:
 
 - [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers) — six layers walked through, what each covers across cost / risk / audit, and where each stops short.
-- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — why every integration enforces on cost AND action authority, not just dollars.
+- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — how applications combine tool authorization with caller-assigned `RISK_POINTS` at instrumented boundaries.
 - [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — local-first / BYOK category context for OpenClaw, Cline, Aider, Continue, and similar runtimes.
 - [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the structural argument for why agent governance has to span every integration the agent uses.
 

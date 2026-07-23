@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "devDependencies": {
-    "@fontsource/inter": "^5.2.8",
+    "@fontsource/inter": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
     "finalhandler": "^2.1.1",
     "puppeteer": "^25.3.0",
-    "satori": "^0.26.0",
+    "satori": "^0.28.0",
     "serve-static": "^2.2.1",
     "sharp": "^0.35.3",
     "vitepress": "^1.6.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "esbuild": "^0.25.0",
-    "vite": ">=7.1.12"
+    "vite": "~7.3.5"
   },
   "scripts": {
     "convert-spec": "node scripts/convert-spec.js",
@@ -23,17 +23,18 @@
     "build:og:force": "node scripts/generate-og-images.mjs --force",
     "build": "npm run convert-spec && node scripts/generate-llms-full.mjs && npm run build:og && vitepress build && node scripts/generate-pdfs.js",
     "build:fast": "npm run convert-spec && node scripts/generate-llms-full.mjs && npm run build:og && vitepress build",
+    "check:implementation-drift": "node scripts/check-implementation-drift.mjs --git-ref origin/main",
     "pdfs": "node scripts/generate-pdfs.js",
     "dev": "npm run convert-spec && vitepress dev",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "feed": "^5.2.1",
-    "html2canvas-pro": "^2.2.1",
+    "feed": "^6.0.0",
+    "html2canvas-pro": "^2.2.4",
     "medium-zoom": "^1.1.0",
     "shiki": "^4.3.1",
-    "vitepress-openapi": "^0.2.0",
+    "vitepress-openapi": "^0.2.1",
     "yaml": "^2.9.0"
   }
 }

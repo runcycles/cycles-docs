@@ -17,6 +17,14 @@ When a reservation or decide request is evaluated, the server returns one of thr
 
 The middle option — ALLOW_WITH_CAPS — is what makes Cycles more useful than a simple gate.
 
+## Where DENY appears
+
+One wire-level detail matters here: `decision: DENY` only ever appears on responses that do not hold budget — `POST /v1/decide` responses and dry-run (`dry_run: true`) reservation responses.
+
+A live (non-dry-run) reservation never returns `decision: DENY`. When budget is insufficient, the server rejects the request with an HTTP `409` error — `BUDGET_EXCEEDED`, or another 409 code such as `OVERDRAFT_LIMIT_EXCEEDED` or `DEBT_OUTSTANDING` — instead of a 200 response carrying a DENY decision.
+
+Where callers find the denial reason follows the same split. On a DENY decision (decide or dry run), the response's `reason_code` field carries the machine-readable reason — `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, or `DEBT_OUTSTANDING`. On a live denial, the equivalent information is in the 409 error response's `error` field. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+
 ## Why binary decisions are not enough
 
 In practice, many autonomous actions can still produce value in a constrained mode.
@@ -34,7 +42,7 @@ Caps provide a middle ground.
 
 ## What caps are
 
-Caps are server-imposed constraints that the client should respect when the decision is ALLOW_WITH_CAPS.
+Caps are operator-configured constraints that the server returns from the deepest matching budget when the decision is ALLOW_WITH_CAPS.
 
 The protocol defines five cap fields:
 
@@ -83,14 +91,7 @@ The client is responsible for respecting caps. The server does not enforce them 
 
 ## When caps appear
 
-The server may return caps based on:
-
-- budget pressure at one or more scopes
-- policy rules that apply to the action class
-- operator-configured constraints
-- approaching budget limits that do not yet warrant denial
-
-For example, a scope may have enough budget for the reservation, but the server may still want to signal: "budget is getting tight — reduce token usage" or "avoid expensive tools for the rest of this run."
+In the current server, caps come from the deepest matching budget that has an operator-configured `caps` object. Their presence is configuration-driven, not an automatic response to utilization or remaining balance. A deployment that wants progressive narrowing must change which configured policy or scope applies; the base server does not tighten caps as spend rises.
 
 ## Using caps in practice
 
@@ -110,7 +111,7 @@ This creates a bounded wind-down instead of an abrupt stop.
 
 When `tool_allowlist` or `tool_denylist` is returned, the agent should filter its available tools accordingly.
 
-This narrows the action surface under budget pressure without eliminating all capability.
+This narrows the action surface when the configured policy calls for it without eliminating all capability.
 
 ### Pacing
 
@@ -163,9 +164,9 @@ If the client ignores `max_tokens` and generates more output, the commit will st
 But respecting caps is important for two reasons:
 
 1. It keeps budget consumption aligned with server expectations
-2. It prevents the system from escalating into harder denials on subsequent requests
+2. Lower-cost execution can preserve remaining budget and delay a later hard denial
 
-Caps are a signal to self-regulate before enforcement becomes necessary.
+Caps are configuration supplied with an accepted decision. They are only effective when the caller or a mandatory host boundary applies them.
 
 ## Tool list precedence
 
@@ -199,9 +200,7 @@ Caps provide server-driven guidance that lets clients:
 - restrict tool usage
 - pace execution
 
-This creates a smoother degradation curve between full execution and hard denial.
-
-That is how budget pressure becomes a signal for adjustment, not just a gate.
+This supports a configured degradation path between full execution and hard denial.
 
 ## Next steps
 
@@ -212,4 +211,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

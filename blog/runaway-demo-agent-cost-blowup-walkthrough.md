@@ -1,11 +1,15 @@
 ---
-title: "Your AI Agent Just Burned $6 in 30 Seconds — Here's the Three-Line Fix"
+title: "Stop a Runaway AI Agent in Three Lines"
 date: 2026-03-26
 author: Albert Mavashev
 tags: [runaway-agents, demo, agents, runtime-authority, walkthrough, budget-enforcement, cost-control]
-description: "A support bot with a quality-loop bug burns ~$6 in 30 seconds. Cycles stops it at exactly $1.00. Three decorators, one exception — zero code change to the agent logic."
+description: "A support agent with a quality-loop bug burns through budget in seconds. See how Cycles stops the run at a fixed limit with a small integration wrapper."
 blog: true
 sidebar: false
+head:
+  - - meta
+    - name: keywords
+      content: runaway AI agent, agent cost blowup, budget enforcement demo, AI spend limit, Cycles integration, runtime authority
 ---
 
 # Your AI Agent Just Burned $6 in 30 Seconds — Here's the Three-Line Fix

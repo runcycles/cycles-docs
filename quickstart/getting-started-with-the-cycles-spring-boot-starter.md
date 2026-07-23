@@ -26,8 +26,8 @@ The starter wraps any annotated method in a reserve → execute → commit lifec
 
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
-- **Risky actions** — `ALLOW` / `ALLOW_WITH_CAPS` / `DENY` decisions with `RISK_POINTS` budgets and caps for tool allowlists/denylists, max tokens, max steps, and cooldowns
-- **Audit** — reservations, commits, releases, and decisions create structured records for compliance, attribution, and incident review
+- **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
+- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
 :::
 
 All of this happens transparently through Spring AOP.
@@ -94,7 +94,7 @@ The demo app includes working examples for every major feature area:
 - `@Cycles` with SpEL estimate/actual, `CyclesContextHolder` for reading reservation context, `CyclesMetrics` for reporting token counts and latency, and `commitMetadata` for audit data
 
 **Annotation variations (`/api/demo/annotation/*`)**
-- `ALLOW_WITH_CAPS` — reading and respecting server-imposed constraints — `POST /api/demo/annotation/caps`
+- `ALLOW_WITH_CAPS` — reading and respecting operator-configured constraints returned by the server — `POST /api/demo/annotation/caps`
 - `unit=TOKENS` with `actionTags` — `POST /api/demo/annotation/tokens`
 - `unit=CREDITS` with `workflow`, `agent`, and custom `dimensions` — `POST /api/demo/annotation/credits`
 - Per-annotation budget scope targeting (`workspace`/`app` override) — `POST /api/demo/annotation/budget-targeting`
@@ -213,11 +213,11 @@ Add the starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.5</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.0'
+implementation 'io.runcycles:cycles-client-java-spring:0.2.5'
 ```
 :::
 
@@ -340,6 +340,8 @@ public String handleTicketStaging(String text) { ... }
 
 The second method targets the **staging** budget scope instead of production. All other fields (`tenant`, `app`) still come from config. Budget scopes are independent — each has its own allocated budget.
 
+Since 0.2.1, subject fields also accept SpEL: a value whose first non-whitespace character is `#` is evaluated against the method invocation, so `tenant = "#tenantId"` resolves the tenant from a method argument. Literal values are passed through unchanged.
+
 ### Action identity
 
 ```java
@@ -381,13 +383,21 @@ Options: `ALLOW_IF_AVAILABLE` (default), `REJECT`, `ALLOW_WITH_OVERDRAFT`.
 @Cycles(value = "1000", dryRun = true)
 ```
 
-Evaluates the reservation without actually holding budget. The guarded method does **not** execute — the decorator returns `null` immediately after the dry-run reservation check. Useful for shadow-mode rollouts where you want to measure budget impact without affecting production behavior.
+Evaluates the reservation without actually holding budget. The guarded method does **not** execute — instead, the call returns a `DryRunResult` with the full evaluation data: decision, caps, affected scopes, scope path, reserved amount, balances, reason code, and retry hint. A dry-run `DENY` throws `CyclesProtocolException`, just like a real denial. Because the return value is a `DryRunResult` rather than the method's normal result, declare dry-run methods with an `Object` return type. Useful for shadow-mode rollouts where you want to measure budget impact without affecting production behavior.
 
 ### Custom dimensions
 
 ```java
 @Cycles(value = "1000", dimensions = {"cost_center=engineering", "run=run-12345"})
 ```
+
+### Commit metadata
+
+```java
+@Cycles(value = "1000", metadata = "{'app_request_id': #requestId, 'model': #result.model}")
+```
+
+Since 0.2.5. The `metadata` SpEL expression is evaluated after the method returns — `#result` is available — and must yield a `Map<String, Object>`. The result is merged with metadata set programmatically via `CyclesContextHolder`; programmatic metadata wins on key conflicts.
 
 ## Accessing reservation context at runtime
 
@@ -425,7 +435,7 @@ public String process(String input) {
     ctx.setMetrics(metrics);
 
     // Attach metadata for audit
-    ctx.setCommitMetadata(Map.of("request_id", "req-abc-123"));
+    ctx.setCommitMetadata(Map.of("app_request_id", "req-abc-123"));
 
     return chatModel.call(input);
 }
@@ -628,4 +638,4 @@ To explore the Cycles stack:
 - Manage budgets with [Cycles Admin](https://github.com/runcycles/cycles-server-admin)
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
-- Integrate with Spring AI using the [Spring Client](https://github.com/runcycles/cycles-spring-boot-starter)
+- Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)

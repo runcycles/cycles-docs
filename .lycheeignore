@@ -1,0 +1,13 @@
+# Documentation examples and user-supplied deployment placeholders.
+^https?://(?:[^/]+\.)?example\.(?:com|org|net)(?:/|$)
+^https?://your-
+
+# Local services are exercised by integration/build tests, not the external-link job.
+^https?://localhost(?::[0-9]+)?(?:/|$)
+^https?://127\.0\.0\.1(?::[0-9]+)?(?:/|$)
+
+# These publishers reject or reset automated link-check clients. Review them
+# manually during content audits; keeping them in Lychee would make every run fail.
+^https?://(?:www\.)?servicenow\.com/
+^https?://(?:www\.)?mckinsey\.com/
+^https?://(?:www\.)?washingtonpost\.com/
