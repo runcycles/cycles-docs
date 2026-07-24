@@ -26,7 +26,7 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | SDK / plugin | Version | Release date | Runtime | Release notes |
 |---|---|---|---|---|
-| `cycles-client-typescript` | 0.3.3 | 2026-05-22 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
+| `cycles-client-typescript` | 0.3.4 | 2026-07-24 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
 | `cycles-client-rust` | 0.2.7 | 2026-07-17 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
 | `cycles-client-python` | 0.4.3 | 2026-05-22 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
 | `cycles-spring-boot-starter` | 0.2.5 | 2026-06-18 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
