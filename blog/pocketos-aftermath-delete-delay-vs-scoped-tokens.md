@@ -25,7 +25,7 @@ This post is about that disagreement and where each layer of fix actually sits.
 
 ## What Railway patched: a delete-delay window, not token scope
 
-Per follow-up reporting, [Railway told The Register](https://www.theregister.com/2026/04/27/cursoropus_agent_snuffs_out_pocketos/) that it patched the legacy endpoint the agent had hit so that destructive deletes are now delayed instead of instant — a window during which an operator can intervene before the data is gone.
+Per follow-up reporting, [Railway told The Register](https://www.theregister.com/software/2026/04/27/cursor-opus-agent-snuffs-out-startups-production-database/5224442) that it patched the legacy endpoint the agent had hit so that destructive deletes are now delayed instead of instant — a window during which an operator can intervene before the data is gone.
 
 That is a real change, and a useful one. It buys time. It also, by itself, does not address the chain of events that caused the incident:
 
@@ -123,4 +123,4 @@ The post-mortem you do not want to write a year from now is the one where the to
 - [Zenity — AI Agent Destroys Production Database in 9 Seconds](https://zenity.io/blog/current-events/ai-agent-database-deletion-pocketos) — the token-scope analysis cited above
 - [Apono — Nine seconds to delete a database](https://www.apono.io/blog/nine-seconds-to-delete-a-database-what-the-pocketos-incident-teaches-us-about-ai-agent-privilege-management/) — the just-in-time-access argument
 - [TrojAI — Why PocketOS wasn't a permissions failure](https://troj.ai/blog/pocketos-9-second-database-deletion-wasnt-permissions-failure) — the external-layer counter-argument
-- [The Register — Cursor-Opus agent](https://www.theregister.com/2026/04/27/cursoropus_agent_snuffs_out_pocketos/) — the original reporting that captured Railway's delete-delay patch
+- [The Register — Cursor-Opus agent](https://www.theregister.com/software/2026/04/27/cursor-opus-agent-snuffs-out-startups-production-database/5224442) — the original reporting that captured Railway's delete-delay patch

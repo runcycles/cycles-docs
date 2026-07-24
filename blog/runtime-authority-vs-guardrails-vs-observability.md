@@ -29,7 +29,7 @@ Every control worked as designed. None of them prevented the damage.
 
 The problem is not that the team lacked visibility or safety checks. The problem is that neither visibility nor safety checks answer the question that actually matters for autonomous systems: **should this next action proceed, given what the system has already consumed?**
 
-Three approaches. Three different questions. Only one acts before execution.
+Three approaches answer different questions. Guardrails and budget authorities can both act before execution; observability describes what was recorded.
 
 ## Three approaches to agent control
 
@@ -37,9 +37,9 @@ Three approaches. Three different questions. Only one acts before execution.
 |---|---|---|---|
 | **Observability** | What happened? | After execution | Nothing — it reports |
 | **Guardrails** | Is this output or action acceptable? | During or after execution | Content quality, structural validity, per-action policy |
-| **[Runtime authority](/glossary#runtime-authority)** | Should this happen at all? | Before execution | Cumulative spend, bounded [exposure](/glossary#exposure), action permissions |
+| **[Runtime budget authority](/glossary#runtime-authority)** | Does this submitted operation fit the configured budget? | Before execution | Cumulative spend and caller-assigned [exposure](/glossary#exposure) |
 
-A guardrail can say "this tool output looks unsafe." Observability can say "this run sent 200 emails." Runtime authority can say "this run is not allowed to send any more emails without approval."
+A guardrail or application policy can say "this tool is not authorized." Observability can say "this run sent 200 emails." A runtime budget can say "the next submitted email-exposure estimate does not fit the configured allocation." Those controls must be composed; the budget response does not grant tool permission.
 
 These are not competing alternatives. They are distinct layers that solve different problems at different points in the execution lifecycle.
 
@@ -83,7 +83,7 @@ The key properties that distinguish runtime authority from guardrails and observ
 
 - **Pre-execution.** The decision happens before the action, not after.
 - **Enforcement.** The system can block or constrain, not just observe and report.
-- **Scoped.** Decisions apply at the right level — per tenant, per workflow, per agent, per run — not just globally or per-action.
+- **Scoped.** Decisions apply at the right standard level — tenant, workspace, app, workflow, agent, or toolset. Applications can map a run ID to a workflow value when they need a per-run ledger.
 - **Concurrency-safe.** Atomic [reservations](/glossary#reservation) prevent race conditions. Two agents cannot both claim the same remaining budget.
 - **Reconciled.** Budget is reserved before execution, actual cost is committed after. The difference is released.
 
@@ -97,7 +97,7 @@ For the full definition, see [What Is Runtime Authority for AI Agents?](/blog/wh
 
 **Guardrails alone:** They work until concurrency breaks the counter, retries multiply the cost, or fan-out exceeds the aggregate limit that no individual check tracks.
 
-**Runtime authority alone:** You can enforce limits and block unauthorized actions. But without observability, you cannot debug denied requests, understand cost patterns, or set accurate limits. Without guardrails, you have no content-level validation — the system might stay within budget while producing unsafe outputs.
+**Budget authority alone:** You can reject submitted amounts that do not fit configured ledgers. It does not authorize tools or arguments. Without observability, you cannot reconstruct external outcomes or tune estimates well; without content and action guardrails, the system might stay within budget while producing unsafe output or taking an otherwise disallowed action.
 
 No single approach covers the full control surface. They compose — they do not compete.
 
@@ -105,11 +105,11 @@ No single approach covers the full control surface. They compose — they do not
 
 ```
 Agent decides to act
-  → Runtime authority: reserve budget, check policy
+  → Host authorization and guardrails: validate identity, tool, arguments, and content
+  → Budget authority: reserve submitted amount
       → DENY → stop; return fallback or surface limit
-      → ALLOW_WITH_CAPS → proceed with constraints
+      → ALLOW_WITH_CAPS → host applies configured constraints
       → ALLOW → proceed normally
-  → Guardrails: validate inputs, check content policy
   → Execute action (model call, tool invocation, side effect)
   → Guardrails: validate output, check schema and safety
   → Observability: log trace, attribute cost, surface patterns
@@ -122,9 +122,9 @@ Remove any one layer and a gap opens. Remove observability and you enforce blind
 
 ## What Cycles provides
 
-Cycles is the runtime authority layer. It treats agent control as [runtime permissioning](/blog/what-is-runtime-authority-for-ai-agents#how-cycles-approaches-runtime-authority) over spend, risk, and actions — not as an after-the-fact reporting problem.
+Cycles supplies the runtime budget-authority part of a composed control boundary. It enforces scoped spend and caller-assigned exposure limits before protected execution; IAM and application policy handle identity, tools, and arguments.
 
-Before the next action executes, Cycles decides whether it is allowed, under what constraints, or not at all. That decision is made by a [protocol](/protocol/api-reference-for-the-cycles-protocol) — not by a proxy, not by application code, not by a dashboard with alerts.
+Before a protected action executes, an integration submits a budget request. The [protocol](/protocol/api-reference-for-the-cycles-protocol) determines whether configured capacity is available and may return operator-configured caps. Application or harness code must place that call on the execution path, authorize the action separately, and enforce both results.
 
 Because it is protocol-based, Cycles works across frameworks, languages, and providers. It does not replace your observability platform or your content guardrails. It fills the layer between them that most teams are missing.
 

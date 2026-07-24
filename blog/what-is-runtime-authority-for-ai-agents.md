@@ -45,7 +45,7 @@ The key properties of a runtime authority are:
 
 - **Pre-execution.** The decision happens before the action, not after.
 - **Enforcement.** The system can block or constrain, not just observe and report.
-- **Scoped.** Decisions apply at the right level — per [tenant](/glossary#tenant), per workflow, per agent, per run — not just globally.
+- **Scoped.** Decisions apply at the right standard level — [tenant](/glossary#tenant), workspace, app, workflow, agent, or toolset. An application can map a run ID to a workflow value for a per-run ledger.
 - **Concurrency-safe.** Correct even when multiple agents share the same budget and act simultaneously.
 - **Reconciled.** Estimated cost is reserved before execution; actual cost is committed after. The difference is released.
 
@@ -75,13 +75,11 @@ Most teams building on LLMs assemble a stack that addresses three concerns. Each
 |---|---|---|---|
 | **Routing** | *Which* model handles this? | Before execution (model selection) | LiteLLM, Portkey, Manifest |
 | **Visibility** | *What* happened? | After execution (logging, tracing) | Helicone, Langfuse, LangSmith |
-| **Authority** | *Should* this happen at all? | Before execution (permission, limits, and policy check) | Cycles |
+| **Authority** | *May this principal perform this action, and is configured capacity available?* | Before execution | Application/IAM policy plus a budget authority such as Cycles |
 
 Routing is well-understood. Visibility is well-understood.
 
-Authority — the pre-execution enforcement decision — is the layer most teams are missing.
-
-It is also the only layer that can **prevent** overspend and uncontrolled side effects rather than **report** them.
+Authority is a pre-execution decision layer. IAM systems, gateways, policy engines, and application checks can all block classes of action. Cycles adds a cumulative, ledger-backed reserve-commit budget across instrumented spend and caller-assigned exposure.
 
 These three layers compose — they are not alternatives. Remove any one and a gap appears.
 
@@ -105,11 +103,11 @@ A counter incremented after each call is a [checker, not an authority](/blog/vib
 **Runtime authority is not prompt-level safety.**
 Content filters and guardrails govern what a model says. Runtime authority governs what the system around the model is allowed to do — reserve resources, invoke tools, trigger side effects. One shapes output. The other shapes execution.
 
-## The reserve/commit lifecycle
+## The reserve-commit lifecycle
 
-The mechanism behind runtime authority is the [reserve/commit lifecycle](/protocol/how-reserve-commit-works-in-cycles). Instead of tracking spend after the fact, budget is reserved before execution and actual cost is committed after.
+The mechanism behind runtime authority is the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles). Instead of tracking spend after the fact, budget is reserved before execution and actual cost is committed after.
 
-1. **Reserve** — before work starts, the agent declares an estimated cost. The authority checks all applicable scopes (tenant, workflow, run) atomically and either reserves the budget or denies the request.
+1. **Reserve** — before work starts, the agent declares an estimated cost. The authority checks every applicable populated standard scope atomically and either creates the reservation or returns an error.
 2. **Execute** — work proceeds only if the [reservation](/glossary#reservation) succeeded. The reserved amount is held against the budget, visible to all concurrent actors.
 3. **Commit** — after work completes, the agent reports the actual cost. If actual cost was lower than the estimate, the unused remainder is released automatically.
 4. **Release** — if work is canceled before completion, the reservation is explicitly released.
@@ -120,18 +118,18 @@ This lifecycle solves the problems that simple counters cannot:
 
 - **Concurrency.** Two agents cannot both claim the same $20 of remaining budget. The reservation is atomic.
 - **Retries.** A retried operation uses the same reservation, preventing double-spend.
-- **Partial failure.** If work fails halfway, the uncommitted portion is released — not lost.
-- **Uncertainty.** You rarely know the exact cost of a model call before it happens. Reserve/commit handles the gap between estimated and actual cost cleanly.
+- **Partial failure.** If work starts and then fails, the host commits the best-known actual usage and releases only the unused remainder. A full release is appropriate only when the work did not start or consumed nothing.
+- **Uncertainty.** You rarely know the exact cost of a model call before it happens. Reserve-commit handles the gap between estimated and actual cost cleanly.
 
-The lifecycle also enables **hierarchical scopes**. A single reservation checks multiple levels — organization, tenant, workspace, workflow, run — in one atomic operation. If any scope is exhausted, the reservation is denied. Per-tenant limits, per-workflow caps, and per-run budgets compose without custom enforcement logic in the application.
+The lifecycle also enables **hierarchical scopes**. A single reservation checks the applicable levels of the submitted subject — tenant, workspace, app, workflow, agent, and toolset — in one atomic operation. If any matching budget is exhausted, the reservation is rejected. Applications can map their own run identifier into an appropriate subject level or metadata, but `run` is not a protocol subject field.
 
 ## How Cycles approaches runtime authority
 
-Cycles is not a dashboard for agent costs. It is a protocol for runtime permissioning over spend, risk, and actions.
+Cycles is not a dashboard for agent costs. It is a protocol for runtime budget authority over spend and caller-assigned action exposure.
 
-Before an agent takes its next action, Cycles answers whether that action is allowed, under what constraints, and what happens if limits are reached. That decision is made by a [protocol](/protocol/api-reference-for-the-cycles-protocol) — not by a proxy, not by application code, not by a dashboard with alerts. The protocol defines the reserve/commit lifecycle, hierarchical scopes, three-way decisions, and idempotency guarantees that make runtime authority operational.
+Before a protected action, Cycles answers whether the configured budget can cover the submitted amount and scope and can return operator-configured caps with an accepted decision. The host remains responsible for authorizing the tool and arguments and for applying returned caps. The [protocol](/protocol/api-reference-for-the-cycles-protocol) defines the reserve-commit lifecycle, hierarchical scopes, three-way decisions, and idempotency guarantees that make that budget boundary operational.
 
-Because it is protocol-based, Cycles works across frameworks, languages, and providers. It does not care whether the agent is built with LangGraph, CrewAI, a custom loop, or a coding agent like Claude Code. It cares whether the next action is permitted.
+Because it is protocol-based, Cycles works across frameworks, languages, and providers. It does not care whether the agent is built with LangGraph, CrewAI, a custom loop, or a coding agent like Claude Code. It evaluates the budget request the integration submits.
 
 ## Next steps
 

@@ -3,7 +3,7 @@ title: "AI Agent Budget Control: Enforce Hard Spend Limits"
 date: 2026-03-17
 author: Cycles Team
 tags: [budgets, agents, engineering, best-practices]
-description: "Why AI agent cost control must happen before execution — not after — and how atomic reserve-commit settlement securely enforces hard spend limits at runtime."
+description: "Use atomic reserve-commit controls before AI agent calls to bound submitted cost estimates, handle concurrency, and reconcile actual usage after execution."
 blog: true
 sidebar: false
 head:
@@ -16,7 +16,7 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-A development team sets a $50 budget for a coding agent running overnight. The agent hits an ambiguous error, retries with increasingly verbose prompts, fans out across three sub-agents to "research the problem," and loops for four hours. By morning the bill is $2,300.
+Consider a constructed scenario: a development team intends to limit a coding agent to $50 overnight. The agent hits an ambiguous error, retries with increasingly verbose prompts, fans out across three sub-agents, and loops for four hours. Without a mandatory per-run boundary, the eventual bill is $2,300.
 
 The dashboard showed the spike — at 7 AM, when someone checked. The alert fired at $500, forty minutes after the budget was gone. The provider spending cap was set at $5,000 per month for the whole organization. None of these controls stopped the next model call.
 
@@ -53,7 +53,7 @@ Every team has some form of cost visibility. But visibility is not enforcement.
 
 **Alerts** notify you when a threshold is crossed, but they do not block the next action. An alert that fires at $100 does not prevent the $101 call. It tells a human to intervene, and humans are slower than agents.
 
-**Provider spending caps** (OpenAI monthly limits, Anthropic usage tiers) operate at the organization or project level. A $1,000 monthly cap does not help when you need a $50 limit on a single agent run. The granularity is wrong.
+**Provider cost controls** use vendor-defined project, workspace, account, credit, or time-window scopes. Unless one of those identities maps to the application run, it does not express a $50 limit for that run.
 
 **Rate limits** control how fast an agent can spend, not how much it can spend in total. An agent rate-limited to 10 requests per minute can still burn through $500 over a few hours. Rate limits are a velocity control, not a budget control.
 
@@ -63,13 +63,13 @@ The common thread: these controls are either **after the fact** or **at the wron
 
 ## What Hard Budget Control Actually Means
 
-Hard budget control means the runtime makes a **deterministic allow/deny decision before each action**. Not after. Not approximately. Before.
+Hard budget control means every protected path must obtain a **deterministic budget decision on its submitted estimate before execution**.
 
 Three properties define it:
 
-- **Pre-execution**: the decision happens before the model call, tool invocation, or side effect. If the budget is exhausted, the action does not happen.
+- **Pre-execution**: the decision happens before the model call, tool invocation, or side effect. If the reservation is rejected, the mandatory host boundary does not execute that path.
 - **Atomic**: the budget check and the budget deduction are a single operation. No race condition between "check" and "spend."
-- **Total-aware**: the system tracks cumulative exposure across all steps, retries, and concurrent workers — not just the rate of individual requests.
+- **Cumulative**: the system tracks submitted reservations and settlements across all instrumented steps, retries, and concurrent workers — not just request velocity.
 
 This is the difference between a budget as **billing metadata** (something you reconcile later) and a budget as an **execution constraint** (something the runtime enforces in real time). In agentic systems, only the second kind actually limits spend.
 
@@ -87,18 +87,18 @@ This pattern survives the failure modes that break simpler approaches:
 - **Retries**: each retry attempt is a new reservation. The budget tracks cumulative exposure across all attempts, not just the latest one.
 - **Concurrency**: the reservation is atomic. Two workers cannot both claim the last $5 — one gets the reservation, the other is denied with `BUDGET_EXCEEDED`.
 - **Partial failures**: TTL expiry recovers an abandoned hold, but it does not accurately charge work that started before a crash. Reconcile the outcome and commit the best-known actual usage; if the reservation is already gone, record the missing usage idempotently instead of treating expiry as settlement.
-- **[Fan-out](/glossary#fan-out)**: sub-agents share the parent scope's budget. The total is enforced across all branches, not per-branch.
+- **[Fan-out](/glossary#fan-out)**: when every branch submits the same workflow scope, each call consumes the shared workflow ledger. Explicit branch or agent ledgers can add narrower overlapping ceilings; Cycles does not transfer a parent balance to children.
 
 When a reservation is denied, the agent has options beyond hard-stopping. It can degrade — use a cheaper model, skip optional steps, reduce context length, or defer the task. The enforcement point gives the agent a structured moment to make that decision, rather than failing silently when it runs out of API [credits](/glossary#credits).
 
 ## Why Budget Enforcement Prevents Real Failures
 
-These are not hypothetical scenarios. They are patterns that show up in any team running agents at scale:
+These illustrative scenarios show common failure shapes:
 
-- **Runaway loop**: agent retries a failing API call 200 times with expanding context windows — $800 in four minutes. With budget enforcement, the agent is denied after attempt 12 when the reservation exceeds remaining budget.
-- **[Retry storm](/glossary#retry-storm)**: a transient backend error triggers retries across 10 concurrent agent workers — $3,200 in aggregate before the error resolves. With atomic reservations, workers are denied as the shared budget depletes.
-- **Sub-agent fan-out**: an orchestrator spawns 15 research sub-agents, each making 50+ model calls — $1,500 total. With scoped budgets, the orchestrator's budget caps the sum of all sub-agent spend.
-- **Concurrent race**: two workers both check "budget remaining: $10" and both proceed — $20 spent on a $10 budget. Atomic reservations eliminate this: one worker gets the reservation, the other is denied.
+- **Runaway loop**: an agent retries a failing API call with expanding context windows. With a mandatory per-run ledger, the first attempt whose submitted estimate no longer fits is rejected.
+- **[Retry storm](/glossary#retry-storm)**: in an illustrative scenario, a transient backend error triggers retries across 10 concurrent agent workers. A mandatory shared budget can reject later reservations as capacity depletes; the actual savings depend on traffic, estimates, and retry policy.
+- **Sub-agent fan-out**: an orchestrator spawns many research sub-agents. If every branch submits the same explicitly provisioned workflow ledger, their reservations consume that shared ceiling.
+- **Concurrent race**: two workers both see $10 remaining and submit $8 estimates. Atomic reservations prevent both estimates from being held; one succeeds and the other is rejected. Actual settlement still depends on estimate accuracy and overage policy.
 
 For detailed breakdowns with full cost math, see [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent).
 
@@ -131,7 +131,7 @@ For a detailed shadow mode guide, see [Shadow Mode: How to Roll Out Budget Enfor
 
 ## From cost visibility to cost control
 
-Cost overruns are a symptom. The root cause is the absence of a pre-execution enforcement layer — a system that asks "is there budget for this?" before every action, not after. That's what [runtime authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) provides: deterministic budget decisions at the point of execution, not retroactive alerts on a dashboard.
+The practical change is transactional: reserve an estimate before each protected operation, execute only after success, and settle the best-known actual amount. That [reserve-commit boundary](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) turns a forecast into a concurrency-safe limit for the paths that actually use it.
 
 ## Next steps
 

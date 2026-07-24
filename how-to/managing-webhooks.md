@@ -273,7 +273,7 @@ curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
 curl -X PATCH http://localhost:7979/v1/admin/webhooks/whsub_abc123 \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"event_types": ["budget.exhausted", "budget.threshold_crossed", "reservation.denied"]}'
+  -d '{"event_types": ["budget.exhausted", "reservation.commit_overage", "reservation.denied"]}'
 
 # Switch to a category-only subscription: clear event_types, keep categories.
 # Valid on update (unlike create); the server rejects only the empty-both state.
@@ -423,28 +423,33 @@ curl "http://localhost:7979/v1/events?event_type=budget.exhausted" \
 
 ## Webhook URL Security
 
-By default, webhook URLs that resolve to private IP ranges are blocked (SSRF protection). To manage:
+The events service always applies a delivery-time SSRF baseline unless its development-only escape hatch is enabled. It rejects `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `::1/128`, `fe80::/10`, `fc00::/7`, and any-local or unspecified addresses. Admin-configured CIDR blocks are additive; `allowed_url_patterns` only narrows accepted targets and cannot bypass the baseline.
+
+To view and narrow the admin-side policy:
 
 ```bash
 # View current security config
 curl http://localhost:7979/v1/admin/config/webhook-security \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 
-# Allow internal endpoints (production)
+# Restrict production delivery to an approved public endpoint
 curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "allowed_url_patterns": ["https://*.internal.example.com/*"],
+    "allowed_url_patterns": ["https://hooks.example.com/cycles/*"],
     "blocked_cidr_ranges": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
   }'
 
-# Enable HTTP for development/testing
+# Enable HTTP at the admin boundary for development/testing
 curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"allow_http": true, "blocked_cidr_ranges": []}'
 ```
+
+Local or private-network delivery also requires
+`WEBHOOK_URL_GUARD_ALLOW_PRIVATE_NETWORKS=true` on the events service and an events-service restart. Both that environment variable and `allow_http: true` are required for a private HTTP target. Never enable the private-network escape hatch in production.
 
 ## Next Steps
 

@@ -7,24 +7,24 @@ description: "For teams shipping AI agents to customers or internally — blast-
 
 **Start with the problem that matters to you:**
 
-- [Stop agents from burning your API budget overnight](/why-cycles/cost-control) — the $4,200 overnight incident
+- [Stop agents from burning your API budget overnight](/why-cycles/cost-control) — a 240-iteration runaway-loop scenario
 - [Block the 201st email before it sends](/why-cycles/action-authority) — when the damage isn't cost, it's consequence
 - [One customer's runaway shouldn't affect your other 500](/why-cycles/multi-tenant) — per-tenant isolation for SaaS
 - [Prove to an auditor that your agents are under control](/why-cycles/governance) — auditable enforcement for compliance
 
 ---
 
-If you're deploying AI agents — to customers or inside the enterprise — Cycles is the [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) layer that enforces hard limits on spend and actions before every LLM call, tool invocation, and side effect. Per-tenant, per-workflow, per-run. So one runaway agent never blows through another's budget, your feature margin stays predictable, and every action is auditable.
+If you're deploying AI agents — to customers or inside the enterprise — Cycles is a [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) layer for hard limits on spend and caller-assigned action exposure. Put a required reserve-commit boundary before each protected LLM call, tool invocation, or side effect, then use standard scopes such as tenant and workflow; a workflow value can be unique per run. Cycles accounts for the amounts and context the host submits; tool authorization and complete action auditing remain application responsibilities.
 
 ## What Cycles solves
 
 **Protect margin.** Agent costs follow a heavy-tail distribution — the top 10% of users consume [72% of total spend](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin). Without per-user budget caps, a feature priced for 80% gross margin [delivers 23%](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin). Cycles bounds the tail so unit economics stay predictable.
 
-**Contain cross-tenant blast radius.** A single runaway agent can burn [$4,200 in three hours](/blog/ai-agent-failures-budget-controls-prevent). Cycles enforces hierarchical budgets — tenant, workspace, workflow, run — so one customer's bad agent cannot starve the platform or another customer's allocation.
+**Contain cross-tenant budget impact.** In one [illustrative three-hour loop](/blog/ai-agent-failures-budget-controls-prevent), 240 iterations cost $52.80 under the stated token assumptions. Correctly provisioned tenant and workflow budgets can keep one customer's submitted usage from consuming another customer's allocation.
 
-**Audit every action.** Every reservation, commit, and event creates a structured record with full scope context. Queryable via API, 90-day hot retention, exportable to cold storage. No log reconstruction required — the budget ledger is the audit trail. When an auditor asks "which agent did what, when, and who authorized it," the answer is a single API query — not a week of log reconstruction. [Details →](/security)
+**Audit budget decisions and settlement.** Reservation state, audit rows, and implemented emitted events create structured records for the budget lifecycle, including caller-supplied scope and metadata where the relevant schema carries them. The event store has configurable retention (90 days by default), and callers can export records to their own long-term storage. Propagated trace IDs can link Cycles requests to application logs for tool arguments, authorization, and outcomes; successful reservation operations do not each emit a runtime Event. [Details →](/security)
 
-**Gate high-consequence actions.** A support agent [sent 200 collections emails instead of welcome emails](/blog/ai-agent-action-control-hard-limits-side-effects). Total model spend: $1.40. Business impact: $50K+ in lost pipeline. No spending limit would have caught it. Cycles supports [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) — budgets denominated in blast radius, not dollars — so agents can read and reason freely while dangerous capabilities (email, deploy, delete) are gated separately.
+**Bound high-consequence actions.** In an [illustrative scenario](/blog/ai-agent-action-control-hard-limits-side-effects), 200 mistaken emails have about $1.40 in modeled token spend but potentially much larger, unquantified business impact. A monetary limit calibrated to tokens may not catch that. A host can authorize actions, classify them in [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do), and submit those amounts to a separate Cycles budget. The host still authorizes tools and arguments; Cycles meters the exposure it submits.
 
 ## Where Cycles fits
 
@@ -32,21 +32,21 @@ If you're deploying AI agents — to customers or inside the enterprise — Cycl
 
 ## Why now
 
-Regulatory frameworks are converging on a single requirement: if your AI system acts autonomously, you must be able to prove what it did, why it was allowed to do it, and how you would have stopped it. The EU AI Act's Article 50 transparency obligations and GPAI enforcement apply from August 2, 2026; the June 2026 Digital Omnibus moved Annex III high-risk obligations to December 2, 2027 ([what actually happens in August →](/blog/eu-ai-act-what-actually-happens-august-2-2026)). NIST launched its [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February 2026. Organizations can already pursue [ISO 42001 certification](https://www.iso.org/standard/81230.html). The window between "we should govern our agents" and "we must prove we govern our agents" is closing. [Full regulatory mapping →](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement)
+Regulatory and standards programs impose different, scope-dependent obligations; none mandates Cycles or runtime budgets specifically. EU AI Act Article 50 transparency rules and Commission enforcement powers for GPAI are scheduled to apply from August 2, 2026, while the 2026 AI Omnibus moved the Annex III high-risk-system timeline to December 2, 2027 ([what actually happens in August →](/blog/eu-ai-act-what-actually-happens-august-2-2026)). NIST launched its voluntary [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February 2026. Organizations can already pursue [ISO/IEC 42001 certification](https://www.iso.org/standard/42001). Teams should map the rules that apply to their role and use case, then select technical and organizational controls that produce the required evidence. [Full regulatory mapping →](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement)
 
 ## By role
 
-**For engineering:** A single runaway agent burned [$4,200 in three hours](/blog/ai-agent-failures-budget-controls-prevent). With a $15 per-run budget in Cycles, the same agent stops after 8 iterations.
-**For security/compliance:** Every reservation, commit, and event creates a structured, queryable audit record with full scope context.
+**For engineering:** A modeled loop reached [$52.80 over 240 iterations](/blog/ai-agent-failures-budget-controls-prevent). Under its flat-average assumptions, a mandatory $15 run budget rejects a protected call around iteration 68.
+**For security/compliance:** Budget operations and implemented emitted events create structured records; propagated trace context connects them to application authorization and outcome logs.
 **For finance:** Per-user budget caps turned a [23% gross margin into 68%](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin) in one analysis, with only 5% of users hitting the limit.
-**For the AI agent itself:** Visible constraints earn trust — teams that see agents self-regulate respond by increasing budgets and granting access to higher-risk tools.
+**For the AI agent itself:** Visible constraints give operators evidence they can use when deciding whether to increase budgets or reduce manual gates.
 
 <details>
 <summary><strong>Engineering — Contain blast radius, protect margins</strong></summary>
 
-Every agent action passes through a reserve-commit gate. Before an LLM call executes, Cycles atomically checks the budget and locks the estimated cost. If the budget is exhausted, the call is denied and the agent degrades gracefully — cheaper model, shorter response, or explicit stop.
+Every action the host instruments passes through a reserve-commit gate. Before an LLM call executes, Cycles atomically checks the submitted budget scope and locks the estimated cost. If the reservation is rejected, the host must skip the call and can degrade gracefully — cheaper model, shorter response, or explicit stop.
 
-Without this gate, a single runaway agent can burn **$4,200 in three hours** — a coding agent hit an ambiguous error, retried with expanding context windows, and [looped 240 times before anyone noticed](/blog/ai-agent-failures-budget-controls-prevent). With a $15 per-run budget in Cycles, the same agent stops after 8 iterations and surfaces the problem immediately.
+Without this gate, a coding agent in the [illustrative source scenario](/blog/ai-agent-failures-budget-controls-prevent) loops 240 times over three hours and spends $52.80 at the stated flat-average token rates. With mandatory coverage and a $15 run budget, a protected call is rejected around iteration 68 under those same assumptions.
 
 Blast radius is bounded at every level: per-run, per-workflow, per-tenant. One bad agent cannot starve the platform. Budgets are hierarchical — tenant, workspace, app, workflow, agent — so you set ceilings at the level that matches your architecture.
 
@@ -59,11 +59,11 @@ Cost is the first dimension. [Action authority](/concepts/action-authority-contr
 </details>
 
 <details>
-<summary><strong>Security / Compliance — Every action is auditable</strong></summary>
+<summary><strong>Security / Compliance — Budget operations are auditable</strong></summary>
 
-Every reservation, commit, release, and event in Cycles creates a structured, queryable record. Each record includes: full scope hierarchy (tenant, workspace, app, workflow, agent, toolset), amounts reserved and committed, timestamp, status, and arbitrary metadata.
+Cycles stores reservation lifecycle records and exposes emitted runtime events as structured, queryable data. Depending on the record and request, fields can include the submitted scope hierarchy, reserved or committed amounts, timestamps, status, correlation identifiers, and metadata.
 
-This means every budget operation — every reservation, commit, release, and event — is logged with the context needed for audit. You can answer "which agent spent how much, on what, and when" from the event log alone, without reconstructing it from scattered application logs.
+This supports questions such as "which submitted scope spent how much, and when." It is not a complete record of what a tool did or why application policy authorized it. Propagate the same trace context across related Cycles requests, retain reservation IDs, and add application correlation keys to your own logs so you can join authorization, tool-call, and outcome evidence.
 
 The event log is queryable via the REST API. Hot retention defaults to 90 days (configurable via `EVENT_TTL_DAYS`); export events via the API to your own cold storage (e.g. S3, GCS) for long-term compliance — there is no built-in exporter. The admin server records audit logs for all administrative operations — API key creation, tenant changes, budget modifications.
 
@@ -78,11 +78,11 @@ Cycles is self-hosted open source today, so all data stays in your infrastructur
 <details>
 <summary><strong>Finance — From unpredictable spend to bounded unit economics</strong></summary>
 
-In one [real deployment](/blog/how-much-do-ai-agents-cost), a team estimated $800/month for a customer support agent based on prototype traffic. The first production invoice was $4,200. The per-token pricing was exactly right — the call volume was not. Agents averaged 11 LLM calls per conversation instead of the 3 assumed in the estimate. Retries doubled call counts on bad days.
+An [illustrative workload model](/blog/how-much-do-ai-agents-cost) compares an $800/month prototype estimate with a $4,200/month production-shaped scenario driven by 11 calls per conversation, growing context, and retries. It is a calculator scenario, not a verified customer invoice.
 
 This is the norm. In a [unit economics analysis](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin) of an AI copilot feature, the top 10% of users consumed 72% of total spend. One user triggered 340 conversations in a month and cost $310 alone — wiping out the margin from 50+ light users.
 
-Cycles bounds this tail. In the same analysis, a $15/month per-user cap turned a 23% gross margin into 68%, with only 5% of users ever hitting the limit. A $15 per-run cap prevents the [$4,200 tool loop](/blog/ai-agent-failures-budget-controls-prevent) entirely — the agent stops at $15 and surfaces the problem for human review.
+Cycles can bound this tail on mandatory paths. In the unit-economics model, a $15/month per-user cap changes modeled gross margin from 23% to 68%, with 5% of modeled users hitting the limit. In the separate loop scenario, a $15 run budget bounds protected spend near $15 when estimates and settlement are accurate.
 
 Budget enforcement is not a cost center. It is the mechanism that makes AI feature unit economics predictable.
 
@@ -91,7 +91,7 @@ Budget enforcement is not a cost center. It is the mechanism that makes AI featu
 <details>
 <summary><strong>AI Agent — You get a budget, not just a limit</strong></summary>
 
-Your SDK tells you what each call cost — after it happened. You could track that locally. But a local counter breaks when 20 of you run concurrently against the same customer budget — you all read "remaining: $500" and all proceed. If you crash, your local state is gone. And you can't see the tenant's allocation, the workflow's run budget, or the workspace capacity. That context lives outside you. This isn't a gap you close with [more tools](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — it requires a shared authority.
+Your SDK tells you what each call cost — after it happened. You could track that locally. But a local counter breaks when 20 of you run concurrently against the same customer budget — you all read "remaining: $500" and all proceed. If you crash, your local state is gone. And you cannot see the tenant ledger, a workflow ledger keyed to the run, or workspace capacity. That context lives outside you. This isn't a gap you close with [more tools](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — it requires a shared authority.
 
 Cycles is that authority. Call `cycles_check_balance` before you plan. Call `cycles_reserve` before each costly step. You get back:
 
@@ -107,15 +107,15 @@ This is the difference between being killed mid-action and [choosing how to wind
 
 Without visible self-regulation, teams restrict you. They add human-in-the-loop approval steps, limit your tool access, reduce your context window, cap your iterations at 5. They do this because they have no evidence you'll stop on your own.
 
-Cycles gives them that evidence. Every reservation is a record that you checked before acting. Every commit is proof you reported actual usage. Every DENY you handled gracefully — winding down, explaining what's left — is a signal that you can be trusted with more. Teams that see agents self-regulate within bounds respond by increasing budgets, granting access to higher-risk tools, and removing manual gates. Constraint you can demonstrate is the path to autonomy you earn.
+Cycles contributes that evidence. Every reservation records that the integration checked the submitted budget before acting. Every commit records reported usage. A clean response to a rejection — winding down and explaining what remains — can help operators evaluate whether a larger budget or fewer manual gates are appropriate. Those changes remain human policy decisions, not an automatic consequence of using Cycles.
 
 ### What about latency?
 
-A full reserve+commit cycle adds [~15ms](/blog/cycles-server-performance-benchmarks) end-to-end (p50; ~11ms per lifecycle under 32-thread concurrency). A typical LLM call takes 500ms–30s. Budget enforcement adds less time than the variance in your provider's response latency. You won't notice it.
+In the published benchmark environment, a full reserve-commit cycle added [~15ms](/blog/cycles-server-performance-benchmarks) end-to-end at p50 (~11ms per lifecycle under 32-thread concurrency). That is small relative to many LLM calls, but network, datastore, and load characteristics vary. Measure the added latency in your deployment.
 
 ### What if the budget is set too low?
 
-This is real — a budget of $0.50 on a task that needs $5 means you get DENY on step 3. But without Cycles, you'd discover the mismatch after spending $5 (or $50, or $4,200). With Cycles, you discover it at $0.50 and can tell the user: "Budget exhausted after 3 steps. This task needs a larger allocation." That's better for both of you. And teams can [calibrate budgets with shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) — running enforcement in dry-run against real traffic before turning it on.
+This mismatch is possible — a budget of $0.50 on a task that needs $5 can reject a later live reservation. Without a mandatory budget boundary, the host may discover the mismatch only after spending much more. With one, it can stop near the configured allocation and tell the user that the task needs a larger budget. Teams can [calibrate budgets with shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) by collecting and analyzing dry-run responses before turning enforcement on.
 
 ### What if your estimates are wrong?
 

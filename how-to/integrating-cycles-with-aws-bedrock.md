@@ -19,9 +19,9 @@ This guide shows how to add budget governance to AWS Bedrock model invocations u
 npm install runcycles @aws-sdk/client-bedrock-runtime
 ```
 
-## Non-streaming calls with withCycles
+## Non-streaming calls with `withCycles`
 
-For non-streaming `InvokeModel` calls, use the `withCycles` HOF:
+For non-streaming `InvokeModel` calls, use the `withCycles` higher-order function. The example intentionally uses Amazon Bedrock's platform-specific Claude Sonnet 4 model ID, which AWS currently classifies as legacy in some regions with an October 14, 2026 end-of-life date. Confirm availability in your region and replace the ID with a supported Bedrock model before deploying.
 
 ```typescript
 import { InvokeModelCommand, BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";

@@ -52,21 +52,21 @@ The four categories of control most teams reach for first each fall short for th
 
 ### Provider spending caps
 
-OpenAI and Anthropic offer organization or workspace-level spending limits. Google Cloud and AWS provide budget alerts and service quotas that play a similar role, though as alerts and throughput limits rather than hard spend caps. All of them are useful safety nets against catastrophic monthly bills.
+OpenAI exposes spend alerts, optional hard organization/project spend limits, rate limits, and prepaid billing controls. Anthropic uses prepaid credits, usage tiers, and workspace reporting. Google Cloud and AWS add billing alerts and capacity quotas. These are useful vendor-native controls, but their scopes and hard-stop semantics differ.
 
 But a provider cap lives inside that provider's billing system. It can see what your account spent on its product. It cannot see what you spent on any other provider, on any tool, or on behalf of which customer.
 
-A monthly OpenAI cap of $10,000 does not stop a runaway loop that burns $4,000 in three hours, because the cap measures against the calendar month, not against the run. It does not distinguish your fifty tenants from each other, because it does not know what a tenant is. It does not include the search API call, the payment processor charge, or the outbound mailer that happen between the model calls. And it does not see Anthropic at all.
+An OpenAI project alert of $10,000 does not stop a runaway loop that burns $4,000 in three hours, while an optional hard project limit still governs the whole project and is not instantaneous. Neither control creates a per-run boundary. A shared provider project also cannot infer your fifty application tenants, include a separate search API or payment charge, or see Anthropic usage.
 
-The deeper point is not that any of those gaps is a feature request. Provider caps exist to protect the provider from your account. They were never designed to govern your application's cross-provider, cross-tool, cross-customer surface. The full granularity, scope, and timing analysis is in [Cycles vs Provider Spending Caps](/concepts/cycles-vs-provider-spending-caps).
+The deeper point is not that any of those gaps is a feature request. Provider controls govern identities, traffic, credits, or billing inside that provider. They do not automatically model your application's cross-provider, cross-tool, cross-customer hierarchy. The full granularity, scope, and timing analysis is in [Cycles vs Provider Spending Caps](/concepts/cycles-vs-provider-spending-caps).
 
 ### Observability platforms
 
-Langfuse, Helicone, LangSmith, and OpenLLMetry are excellent at what they do. They trace, attribute cost, measure latency, surface anomalies, and give teams the visibility to diagnose what an agent did after it did it.
+Langfuse, Helicone, LangSmith, and OpenLLMetry provide tracing and observability capabilities such as cost attribution, latency analysis, and debugging. Some products also offer gateway-side limits or policy features, so evaluate the enabled deployment rather than assuming every product is passive.
 
-That last phrase is the constraint. Observability platforms read from provider APIs and write to dashboards. They are, by design, retrospective. The trace exists because the action already happened.
+The retrospective part remains a constraint: a trace or alert records usage after the protected action has started. A separately configured gateway limit may block at its own boundary, but a dashboard alone is not a pre-execution control.
 
-An observability tool watching a runaway agent burn $1,900 over a weekend will produce a faithful and beautifully detailed record of the disaster. It will not stop the agent at call number 50, when the damage was still $1.50. Alerts shorten the reaction window but they do not create pre-execution control — autonomous agents do not pause to wait for a human.
+A passive observability deployment can produce a detailed record of a runaway workload without stopping it at a particular call. Alerts shorten the reaction window but do not themselves create a mandatory pre-execution decision.
 
 It is sometimes suggested that observability tools could "just add" enforcement. They could in principle. But it would require them to become a different category of system — a transactional, multi-tenant, atomic decision service in the critical path of every agent action. That is not an extension of an observability product. It is a different product at a different layer. The longer treatment is in [Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools).
 
@@ -92,9 +92,9 @@ Each of these categories was designed to govern itself.
 
 | Tool type | What it was designed to govern | What that means structurally |
 |---|---|---|
-| Provider caps | The provider's billing [exposure](/glossary#exposure) to your account | Single-product, single-org, calendar-grained, embedded in billing |
-| Observability | Its own ingestion pipeline and dashboards | Read-only by design, optimized for trace volume, not transactional decisions |
-| Framework limits | The orchestrator's own loop | Per-process, per-instance, in-memory, no distributed view |
+| Provider controls | The provider's traffic, credits, quotas, or tracked spend | Single-product and vendor-identity scoped |
+| Observability | Traces, metrics, and product-specific gateway features | Tracing alone is retrospective; gateway controls cover only routed traffic |
+| Framework limits | The orchestrator's own loop | Scope and durability depend on the framework and deployment |
 | In-process counters | One worker's view of one budget | Local state, fragile under concurrency, no shared truth across workers |
 
 A provider cap cannot become a cross-provider authority without becoming an external service that the provider's billing system does not control. An observability tool cannot become an enforcement layer without rewriting its data path from "ingest after the fact" to "decide before the fact" — which is a transactional decision system, not an analytics product. A framework limit cannot become a distributed authority without becoming a service the framework calls into rather than a parameter the framework sets. A homegrown counter cannot become a multi-tenant, multi-provider authority without being rebuilt as exactly that — at which point the team is no longer building a counter.
@@ -107,7 +107,7 @@ If the layer has to live outside any one tool, the requirements follow from that
 
 - **External authority.** Lives outside any provider, tool, framework, or worker process, so it can see across all of them.
 - **Atomic, distributed [reservations](/glossary#reservation).** Concurrency-safe by construction. Two agents on two workers cannot both claim the same remaining budget. The race condition that breaks the in-process counter cannot exist by design.
-- **Hierarchical [scope](/glossary#scope).** Tenant → workspace → app → workflow → agent → toolset, with budgets enforced at every level. The same primitive answers "how much can this customer spend?" and "how much can this single run spend?"
+- **Hierarchical [scope](/glossary#scope).** Tenant → workspace → app → workflow → agent → toolset, with every explicitly provisioned matching ledger checked atomically; absent ledgers are skipped.
 - **Reserve, commit, release.** Budget is held before the action runs, finalized with the actual cost after, and any unused estimate is returned. This is what makes pre-execution enforcement accurate over time — estimates can be conservative without permanently locking budget the agent never spent.
 - **A [three-way decision](/glossary#three-way-decision).** `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY` let the caller apply operator-configured degradation such as a cheaper model, smaller context, or skipped optional work. The current server does not tighten caps automatically as balance falls.
 - **Provider-, tool-, and framework-agnostic.** The same primitive applies regardless of which slice the action lives in. A [reservation](/glossary#reservation) against the agent's budget is the same protocol call whether the spend is an OpenAI token, a Stripe charge, or an outbound email.
@@ -118,7 +118,7 @@ These properties are not arbitrary. Each one falls out of "the agent is cross-cu
 
 Provider caps are not going to grow into cross-provider authorities. Observability tools are not going to grow into transactional enforcement layers. Framework limits are not going to grow into distributed governance services. None of those evolutions is impossible. They are just different products at a different layer, and the tools that exist today have their architectural assumptions baked into the wrong layer for this job.
 
-Cycles sits at that outside layer. Keep the provider cap. Keep the observability tool. Keep the framework limit. But add the cross-cutting authority for the question none of those can answer: **may this agent, for this customer, on this worker, take the next action right now?**
+Cycles sits at that outside layer for one narrower question: **does this caller-submitted amount fit the matching ledgers right now?** Keep provider controls, observability, framework limits, and host authorization for the questions they own.
 
 If your agent spans N providers, M tools, K tenants, and W workers, your governance has to span the same N × M × K × W. Anything that lives inside one of those dimensions is a partial view. A partial view is not governance.
 

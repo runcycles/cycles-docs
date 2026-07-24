@@ -216,7 +216,7 @@ echo "=== Customer $CUSTOMER_ID onboarded (plan: $PLAN) ==="
 - 1 API key
 - 1 USD budget (cost control)
 - 1 RISK_POINTS budget (action control — per-run)
-- Per-run RISK_POINTS cap prevents tool abuse within a single agent execution
+- Per-run `RISK_POINTS` cap bounds caller-assigned exposure when every protected tool attempt uses a mandatory reservation boundary
 
 ```bash
 #!/bin/bash
@@ -301,7 +301,7 @@ echo "RISK_POINTS budget: $RISK_BUDGET_PER_RUN points per run (create per run)"
 | USD (cost) | `tenant:my-company` | Monthly via cron | Total API spend across all agents |
 | RISK_POINTS (action) | `tenant:my-company/workflow:run-{uuid}` | Per run (new scope each time) | What tools the agent can use within one execution |
 
-The USD budget prevents cost overruns. The RISK_POINTS budget prevents action abuse. An agent can search freely (0 points) but can only send 6 emails per run (6 × 40 = 240 of 250 points).
+The USD budget bounds submitted spend. The `RISK_POINTS` budget separately bounds caller-assigned exposure. In this example, a mandatory handler could reserve 40 points per authorized email attempt, so six attempts consume 240 of 250 points and a seventh does not fit. Tool and argument authorization remains a host responsibility.
 
 ---
 

@@ -5,7 +5,7 @@ description: "Add Cycles budget tools to Claude Code via MCP, with CLI registrat
 
 # Add Cycles to Claude Code
 
-This page is the exact setup for [Claude Code](https://www.claude.com/claude-code). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
+This page is the exact setup for [Claude Code](https://claude.com/product/claude-code). For the protocol overview and reserve-commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
 Registering this MCP server gives Claude Code access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For dispatch-path enforcement in Claude Code, [Cycles Budget Guard for Claude Code](/how-to/enforcing-budgets-in-claude-code-with-budget-guard) gates non-exempt tools with `PreToolUse` hooks. For other hosts, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
@@ -13,7 +13,7 @@ Registering this MCP server gives Claude Code access to Cycles tools — `cycles
 
 ## Prerequisites
 
-- **Claude Code installed** ([install guide](https://docs.claude.com/en/docs/claude-code))
+- **Claude Code installed** ([install guide](https://code.claude.com/docs))
 - **Node.js 20+ with `npx` available** — Claude Code launches the MCP server through `npx`.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip this for mock mode.
 - **Cycles server running** locally or remote. Skip for mock mode.

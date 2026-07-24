@@ -104,7 +104,7 @@ There is no pivot menu or deliveries side panel — the chip is a filtered navig
 
 ### Terminal-state row toggle (v0.1.25.46)
 
-Default sort on every list view is `created_at desc`, which pins recently-transitioned terminal rows to the top — closed tenants, disabled webhooks, revoked / expired API keys, closed budgets. Before v0.1.25.46 these dominated the first screen and operators had to add an explicit status filter to get them out of the way.
+List defaults are endpoint-specific: Tenants and API Keys use `created_at desc`, Budgets use `utilization desc`, and Webhooks inherit the admin default `consecutive_failures desc`. Terminal rows can still crowd operational views or displace the active rows operators need most, so v0.1.25.46 added an explicit visibility toggle.
 
 Tenants, Budgets, Webhooks, and API Keys now hide terminal rows by default and surface a "Show closed (N)" / "Show disabled (N)" / "Show revoked (N)" toggle with the hidden count. Flipping the toggle partitions the list so active rows stay on top and terminal rows drop to the bottom — column-sort order is preserved within each group. Matches the GitHub / Linear / Gmail convention for done / archived items.
 
@@ -115,7 +115,7 @@ Tenants, Budgets, Webhooks, and API Keys now hide terminal rows by default and s
 | Webhooks | `status=DISABLED` |
 | API Keys | `status IN (REVOKED, EXPIRED)` |
 
-Toggle state mirrors to URL as `?include_terminal=1` on top-level views so deep-links survive across reloads. Picking a terminal status explicitly from the dropdown (e.g. `status=CLOSED`) auto-engages the toggle so the list isn't silently empty. Tenant-detail sub-tabs (Budgets / API Keys / Policies) default off and don't mirror to URL (they share a URL with the parent).
+Toggle state mirrors to URL as `?include_terminal=1` on the top-level Tenants, Budgets, and Webhooks views so deep-links survive across reloads. The top-level API Keys view and tenant-detail sub-tabs do not mirror the toggle to the URL. Picking a terminal status explicitly from the dropdown (for example, `status=CLOSED`) auto-engages the toggle so the list isn't silently empty.
 
 ### WebhookDetailView stats row (v0.1.25.51)
 
@@ -183,7 +183,7 @@ Force-release uses dual authentication — the dashboard's nginx routes `/v1/res
 
 The Events page is correlation-first, not time-first:
 
-- Event rows carry a `correlation_id` when applicable (event-stream cluster — threshold → trip → reset chains, or one admin operation's fan-out) plus `request_id` (the originating HTTP request). Clicking either filters to the related events; audit rows join via `trace_id`/`request_id` rather than `correlation_id`.
+- Event rows carry a `correlation_id` when the emitting service populates one, plus `request_id` for the originating HTTP request. The current reference runtime leaves `correlation_id` absent on its implemented event paths; selected admin lifecycle, bulk, and cascade operations populate server-composed values. Clicking a present identifier filters to related events; audit rows join via `trace_id`/`request_id` rather than `correlation_id`.
 - Expandable detail rows show the full event payload — including `data`, `actor`, `metadata`, and delivery outcome if the event went out over a webhook.
 - Filters: event type, category, tenant, scope, time range, correlation ID.
 

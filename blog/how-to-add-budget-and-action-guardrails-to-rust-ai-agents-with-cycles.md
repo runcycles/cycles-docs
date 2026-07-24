@@ -25,7 +25,7 @@ This is the gap that Cycles fills. It is a **[runtime authority](/glossary#runti
 2. **Constraints:** Did the deepest matching budget return configured caps, and can this host enforce the relevant fields?
 3. **Evidence:** How will the application correlate its tool outcome and any non-persisting preflight result with the reservation and settlement lifecycle?
 
-A preflight evaluation can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error, which the client surfaces before the expensive call happens. Reservations, commits, releases, and direct-usage events create lifecycle records; `decide` and dry-run results are non-persisting, so applications that need a complete audit trail must log those results and external outcomes themselves. Optional [webhooks](/how-to/webhook-integrations) can feed emitted lifecycle events into downstream pipelines.
+A preflight evaluation can return `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns a budget error, which the client surfaces before the expensive call happens. Live operations mutate reservation or balance state and create their applicable audit records, but the current runtime does not emit a success Event for every reserve, commit, release, or direct debit. `decide` and dry-run create no reservation or balance mutation; the current server emits `reservation.denied` for denied evaluations, but applications still need to log allowed results and external outcomes for a complete audit trail. Optional [webhooks](/how-to/webhook-integrations) can feed the event types that have implemented emission hooks into downstream pipelines.
 
 The `runcycles` crate brings this to Rust with an API designed around ownership semantics and compile-time safety. This post shows how to integrate it into existing Rust agent code at three levels of control.
 
@@ -33,9 +33,9 @@ The `runcycles` crate brings this to Rust with an API designed around ownership 
 
 Rust is increasingly the choice for production agent infrastructure: inference servers (vLLM alternatives), tool execution sandboxes, orchestration layers, and edge deployments via WASM. The reasons are familiar — zero-cost abstractions, memory safety without GC pauses, and `Send + Sync` guarantees for concurrent workloads.
 
-But until now, Rust had no budget enforcement library for agent runtimes. Python had the `@cycles` decorator. TypeScript had `withCycles`. Java had the `@Cycles` Spring annotation. Rust agents ran unguarded.
+The Cycles integrations for Python, TypeScript, and Java already expose language-specific lifecycle helpers. The `runcycles` crate adds the corresponding protocol client and lifecycle patterns for Rust; a Rust application remains unguarded unless it places that client on every protected execution path.
 
-The `runcycles` crate closes this gap with an API that leverages Rust's type system to provide guarantees the other languages can't:
+The `runcycles` crate uses Rust's type system to make several lifecycle mistakes harder:
 
 - **`commit(self)` consumes the guard** — double-commit is a compile error, not a runtime check
 - **`#[must_use]`** — the compiler warns if you forget to handle a [reservation](/glossary#reservation)

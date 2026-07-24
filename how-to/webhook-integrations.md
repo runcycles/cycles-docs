@@ -5,7 +5,7 @@ description: Connect Cycles webhook events to PagerDuty, Slack, ServiceNow, and 
 
 # Webhook Integrations
 
-Cycles emits webhook events for every state change — budget exhaustion, reservation denials, API key revocations, tenant lifecycle changes, and more. This guide shows concrete examples of webhook payloads and how to integrate with common services.
+Cycles emits webhook events from implemented budget, reservation, API-key, tenant, and other lifecycle hooks. The schema also registers planned event types that are not emitted yet; check the [Event Payloads Reference](/protocol/event-payloads-reference) for current status. This guide shows concrete payload examples and integrations with common services.
 
 ::: info How webhooks are delivered
 Webhook subscriptions are **configured** via the Admin Server (port 7979). Events are **delivered** by the [Cycles Events Service](/quickstart/deploying-the-events-service) — a separate, optional outbound worker that consumes from Redis and posts to your endpoints with HMAC-SHA256 signatures. The Events Service must be deployed for webhook delivery to work.
@@ -15,7 +15,7 @@ Webhook subscriptions are **configured** via the Admin Server (port 7979). Event
 
 ### reservation.denied
 
-Emitted when a reservation or decide request is denied (budget exceeded, overdraft limit, etc.).
+Emitted when a dry-run reservation or `/v1/decide` evaluation returns `DENY` (budget exceeded, overdraft limit, etc.). The current live reservation error path returns a 4xx response and does not emit this event; monitor the runtime denial counter or application errors for live failures.
 
 ```json
 {
@@ -27,16 +27,13 @@ Emitted when a reservation or decide request is denied (budget exceeded, overdra
   "scope": "tenant:acme-corp/workspace:prod/agent:support-bot",
   "actor": {
     "type": "api_key",
-    "key_id": "key_9f8e7d6c-5b4a-3210",
-    "source_ip": "10.0.1.42"
+    "key_id": "key_9f8e7d6c-5b4a-3210"
   },
   "source": "cycles-server",
   "data": {
     "scope": "tenant:acme-corp/workspace:prod/agent:support-bot",
-    "unit": "USD_MICROCENTS",
     "reason_code": "BUDGET_EXCEEDED",
-    "requested_amount": 5000000,
-    "remaining": 0
+    "requested_amount": 5000000
   },
   "request_id": "req_abc123"
 }
@@ -44,7 +41,7 @@ Emitted when a reservation or decide request is denied (budget exceeded, overdra
 
 ### budget.exhausted
 
-Emitted when remaining budget hits zero.
+Emitted once when remaining budget transitions from above zero to zero.
 
 ```json
 {
@@ -64,41 +61,44 @@ Emitted when remaining budget hits zero.
     "unit": "USD_MICROCENTS",
     "threshold": 1.0,
     "utilization": 1.0,
-    "allocated": 100000000,
+    "allocated": 10000000,
     "remaining": 0,
-    "spent": 85000000,
-    "reserved": 15000000,
+    "spent": 9000000,
+    "reserved": 1000000,
     "direction": "rising"
   }
 }
 ```
 
-### budget.threshold_crossed
+The payload is the balance snapshot that caused the transition; the envelope identifies the tenant, scope, and actor. Query the balance API before remediation because the ledger may have changed since emission.
 
-Emitted when utilization crosses a configured threshold. Default thresholds if not specified on the subscription: **80%, 95%, and 100%** (via `WebhookThresholdConfig.budget_utilization`). The `direction` field is `"rising"` when utilization increases past the threshold and `"falling"` when it drops back below, preventing duplicate alerts.
+### reservation.commit_overage
+
+Emitted when a commit's actual amount exceeds its reservation estimate. The current v0.1.25.46+ runtime populates all eight data fields:
 
 ```json
 {
   "event_id": "evt_1122334455667788",
-  "event_type": "budget.threshold_crossed",
-  "category": "budget",
+  "event_type": "reservation.commit_overage",
+  "category": "reservation",
   "timestamp": "2026-04-01T13:15:00.789Z",
   "tenant_id": "acme-corp",
-  "scope": "tenant:acme-corp/workspace:prod",
+  "scope": "tenant:acme-corp/workflow:support",
   "source": "cycles-server",
   "data": {
-    "scope": "tenant:acme-corp/workspace:prod",
+    "reservation_id": "res_a1b2c3d4",
+    "scope": "tenant:acme-corp/workflow:support",
     "unit": "USD_MICROCENTS",
-    "threshold": 0.80,
-    "utilization": 0.82,
-    "allocated": 100000000,
-    "remaining": 18000000,
-    "spent": 67000000,
-    "reserved": 15000000,
-    "direction": "rising"
+    "estimated_amount": 40000000,
+    "actual_amount": 48000000,
+    "overage": 8000000,
+    "overage_policy": "ALLOW_IF_AVAILABLE",
+    "debt_incurred": 0
   }
 }
 ```
+
+`budget.threshold_crossed` is registered in the governance schema but is not emitted by the current reference runtime. Build pre-exhaustion alerts from balance polling or application metrics.
 
 ### budget.over_limit_entered
 
@@ -326,7 +326,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
     "event_types": [
       "budget.exhausted",
       "budget.over_limit_entered",
-      "budget.threshold_crossed",
+      "reservation.commit_overage",
       "reservation.denied",
       "api_key.auth_failed"
     ],
@@ -348,7 +348,7 @@ PAGERDUTY_ROUTING_KEY = "your-pagerduty-integration-key"
 SEVERITY_MAP = {
     "budget.exhausted": "critical",
     "budget.over_limit_entered": "critical",
-    "budget.threshold_crossed": "warning",
+    "reservation.commit_overage": "warning",
     "reservation.denied": "warning",
     "api_key.auth_failed": "info",
 }
@@ -386,10 +386,10 @@ async def forward_to_pagerduty(request: Request):
 
 | Cycles Event | PagerDuty Severity | When |
 |---|---|---|
-| `budget.exhausted` | Critical | Budget remaining = 0, all reservations denied |
+| `budget.exhausted` | Critical | Remaining reached zero; new positive reservations deriving this scope and unit may be denied |
 | `budget.over_limit_entered` | Critical | Debt exceeded overdraft limit; new reservations blocked until debt repaid |
-| `budget.threshold_crossed` (95%) | Warning | Budget nearly depleted |
-| `reservation.denied` | Warning | Agent couldn't reserve budget |
+| `reservation.commit_overage` | Warning | Actual usage exceeded the reservation estimate |
+| `reservation.denied` | Warning | A dry-run or decide evaluation would deny |
 
 ## Integration: Slack
 
@@ -405,7 +405,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   -d '{
     "url": "https://your-middleware.example.com/cycles-to-slack",
     "event_types": [
-      "budget.threshold_crossed",
+      "reservation.commit_overage",
       "budget.exhausted",
       "budget.over_limit_entered",
       "budget.funded",
@@ -427,7 +427,7 @@ const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/T.../B.../xxx';
 const EMOJI = {
   'budget.exhausted': ':rotating_light:',
   'budget.over_limit_entered': ':no_entry:',
-  'budget.threshold_crossed': ':warning:',
+  'reservation.commit_overage': ':warning:',
   'budget.funded': ':money_with_wings:',
   'reservation.denied': ':no_entry:',
   'tenant.suspended': ':pause_button:',
@@ -465,6 +465,15 @@ app.post('/cycles-to-slack', express.raw({ type: 'application/json' }), async (r
   if (data.reason_code) {
     text += `Reason: ${data.reason_code}\n`;
   }
+  if (data.estimated_amount !== undefined) {
+    text += `Estimated: ${formatAmount(data.estimated_amount, data.unit)}\n`;
+  }
+  if (data.actual_amount !== undefined) {
+    text += `Actual: ${formatAmount(data.actual_amount, data.unit)}\n`;
+  }
+  if (data.overage !== undefined) {
+    text += `Overage: ${formatAmount(data.overage, data.unit)}\n`;
+  }
 
   await fetch(SLACK_WEBHOOK_URL, {
     method: 'POST',
@@ -482,11 +491,12 @@ app.post('/cycles-to-slack', express.raw({ type: 'application/json' }), async (r
 ### Example Slack messages
 
 ```
-:warning: budget.threshold_crossed
+:warning: reservation.commit_overage
 Tenant: `acme-corp`
-Scope: `tenant:acme-corp/workspace:prod`
-Utilization: 82.0%
-Remaining: $18.00
+Scope: `tenant:acme-corp/workflow:support`
+Estimated: $0.40
+Actual: $0.48
+Overage: $0.08
 
 :rotating_light: budget.exhausted
 Tenant: `acme-corp`
@@ -515,7 +525,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
     "event_types": [
       "budget.over_limit_entered",
       "budget.exhausted",
-      "system.store_connection_lost"
+      "api_key.auth_failed"
     ],
     "signing_secret": "snow-secret-123"
   }'
@@ -537,7 +547,7 @@ SIGNING_SECRET = "snow-secret-123"
 PRIORITY_MAP = {
     "budget.over_limit_entered": "2",   # High
     "budget.exhausted": "2",            # High
-    "system.store_connection_lost": "1", # Critical
+    "api_key.auth_failed": "2",           # High
 }
 
 @app.post("/cycles-to-servicenow")
@@ -592,7 +602,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
     "event_types": [
       "budget.exhausted",
       "budget.over_limit_entered",
-      "budget.threshold_crossed",
+      "reservation.commit_overage",
       "reservation.denied"
     ],
     "signing_secret": "dd-webhook-secret"
@@ -613,7 +623,7 @@ SIGNING_SECRET = "dd-webhook-secret"
 ALERT_TYPE_MAP = {
     "budget.exhausted": "error",
     "budget.over_limit_entered": "error",
-    "budget.threshold_crossed": "warning",
+    "reservation.commit_overage": "warning",
     "reservation.denied": "warning",
 }
 
@@ -661,7 +671,7 @@ async def forward_to_datadog(request: Request):
 
 ### Event overlays in Datadog
 
-Budget events posted via the Events API appear in Datadog's [Events Explorer](https://docs.datadoghq.com/service_management/events/explorer/) and can be overlaid on Datadog dashboards. Use `tags` for filtering — e.g., show only `budget.exhausted` events on your cost dashboard.
+Budget events posted via the Events API appear in Datadog's [Events Explorer](https://docs.datadoghq.com/events/explorer/) and can be overlaid on Datadog dashboards. Use `tags` for filtering — e.g., show only `budget.exhausted` events on your cost dashboard.
 
 ## Integration: Microsoft Teams
 
@@ -678,7 +688,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
     "event_types": [
       "budget.exhausted",
       "budget.over_limit_entered",
-      "budget.threshold_crossed",
+      "reservation.commit_overage",
       "reservation.denied",
       "tenant.suspended"
     ],
@@ -705,7 +715,7 @@ SIGNING_SECRET = "teams-webhook-secret"
 CARD_COLOR_MAP = {
     "budget.exhausted": "attention",       # Red
     "budget.over_limit_entered": "attention",
-    "budget.threshold_crossed": "warning",  # Yellow
+    "reservation.commit_overage": "warning", # Yellow
     "reservation.denied": "warning",
     "tenant.suspended": "accent",           # Blue
 }
@@ -742,6 +752,12 @@ async def forward_to_teams(request: Request):
         facts.append({"title": "Remaining", "value": format_amount(data["remaining"], data.get("unit"))})
     if data.get("reason_code"):
         facts.append({"title": "Reason", "value": data["reason_code"]})
+    if data.get("estimated_amount") is not None:
+        facts.append({"title": "Estimated", "value": format_amount(data["estimated_amount"], data.get("unit"))})
+    if data.get("actual_amount") is not None:
+        facts.append({"title": "Actual", "value": format_amount(data["actual_amount"], data.get("unit"))})
+    if data.get("overage") is not None:
+        facts.append({"title": "Overage", "value": format_amount(data["overage"], data.get("unit"))})
 
     card = {
         "type": "message",
@@ -774,18 +790,19 @@ async def forward_to_teams(request: Request):
 
 ### Example Teams card
 
-The card renders as a structured fact table showing: event type (budget.threshold_crossed), tenant (acme-corp), source service, scope path, utilization percentage (82.0%), and remaining budget ($18.00).
+The card renders as a structured fact table showing the event type, tenant, source service, scope path, and the event's populated data fields.
 
 ```
 ┌─────────────────────────────────────┐
-│ ⚠ Cycles: budget.threshold_crossed │
+│ ⚠ Cycles: reservation.commit_overage│
 │                                     │
 │ Tenant:      acme-corp              │
-│ Event:       budget.threshold_crossed│
+│ Event:       reservation.commit_overage│
 │ Source:      cycles-server           │
 │ Scope:       tenant:acme-corp/...   │
-│ Utilization: 82.0%                  │
-│ Remaining:   $18.00                 │
+│ Estimated:   $0.40                  │
+│ Actual:      $0.48                  │
+│ Overage:     $0.08                  │
 └─────────────────────────────────────┘
 ```
 
@@ -805,7 +822,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
       "budget.exhausted",
       "budget.over_limit_entered",
       "reservation.denied",
-      "system.store_connection_lost"
+      "api_key.auth_failed"
     ],
     "signing_secret": "og-webhook-secret"
   }'
@@ -825,7 +842,7 @@ SIGNING_SECRET = "og-webhook-secret"
 PRIORITY_MAP = {
     "budget.exhausted": "P2",
     "budget.over_limit_entered": "P1",
-    "system.store_connection_lost": "P1",
+    "api_key.auth_failed": "P2",
     "reservation.denied": "P3",
 }
 
@@ -907,8 +924,8 @@ def handle():
         handle_budget_exhausted(event)
     elif event_type == "reservation.denied":
         handle_denial(event)
-    elif event_type == "budget.threshold_crossed":
-        handle_threshold(event)
+    elif event_type == "reservation.commit_overage":
+        handle_commit_overage(event)
 
     mark_processed(event_id)
     return "OK", 200
@@ -933,7 +950,7 @@ curl -X POST http://localhost:7979/v1/webhooks \
   -d '{
     "url": "https://acme-corp.example.com/budget-alerts",
     "event_types": [
-      "budget.threshold_crossed",
+      "reservation.commit_overage",
       "budget.exhausted",
       "reservation.denied"
     ]
@@ -948,29 +965,33 @@ curl -X POST http://localhost:7979/v1/webhooks \
 
 ## Webhook URL Security
 
-By default, Cycles blocks webhook URLs that resolve to private IP ranges (SSRF protection):
+The events service applies a delivery-time SSRF baseline even when the admin-configured CIDR list is empty:
 
-- **Blocked by default:** `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1/128`, `fc00::/7`
-- **HTTPS required** in production. HTTP URLs are rejected unless explicitly enabled.
+- **Blocked by default:** `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `::1/128`, `fe80::/10`, and `fc00::/7`. Any-local and unspecified addresses are also rejected.
+- **HTTPS required** unless the admin webhook-security configuration explicitly sets `allow_http: true`.
+- **Admin CIDR blocks are additive.** Clearing `blocked_cidr_ranges` does not remove the events-service baseline.
 
-To test with local endpoints or internal services:
+Local development requires both controls below. Restart the events service after setting its environment variable:
 
 ```bash
-# Enable HTTP and remove CIDR blocks (development only!)
+# Events service only — development/testing escape hatch
+export WEBHOOK_URL_GUARD_ALLOW_PRIVATE_NETWORKS=true
+
+# Admin service — allow an HTTP target
 curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"allow_http": true, "blocked_cidr_ranges": []}'
 ```
 
-For production with internal endpoints, use `allowed_url_patterns` to allowlist specific internal domains:
+Never set `WEBHOOK_URL_GUARD_ALLOW_PRIVATE_NETWORKS=true` in production. `allowed_url_patterns` can narrow delivery to approved public destinations, but it does not bypass private-address blocking:
 
 ```bash
 curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "allowed_url_patterns": ["https://*.internal.example.com/*"],
+    "allowed_url_patterns": ["https://hooks.example.com/cycles/*"],
     "blocked_cidr_ranges": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
   }'
 ```
@@ -979,19 +1000,17 @@ curl -X PUT http://localhost:7979/v1/admin/config/webhook-security \
 
 | Event Type | Produced By | `source` Field | Use Case |
 |---|---|---|---|
-| `budget.threshold_crossed` | Runtime server | `cycles-server` | Warning: budget nearing limit (default thresholds: 80%, 95%, 100%) |
-| `budget.exhausted` | Runtime server | `cycles-server` | Critical: remaining = 0, all reservations denied |
+| `budget.exhausted` | Runtime server | `cycles-server` | Critical: remaining reached zero on the affected ledger |
 | `budget.over_limit_entered` | Runtime server | `cycles-server` | Critical: debt exceeded overdraft limit; new reservations blocked |
-| `budget.over_limit_exited` | Admin server | `cycles-admin` | Recovery: debt repaid below limit |
-| `budget.debt_incurred` | Runtime server | `cycles-server` | Info: commit created debt via ALLOW_WITH_OVERDRAFT |
-| `reservation.denied` | Runtime server | `cycles-server` | Warning: agent couldn't reserve budget |
+| `budget.debt_incurred` | Runtime server | `cycles-server` | Info: a commit or direct debit created debt via ALLOW_WITH_OVERDRAFT |
+| `reservation.denied` | Runtime server | `cycles-server` | Calibration: a dry-run or decide evaluation returned DENY |
 | `reservation.commit_overage` | Runtime server | `cycles-server` | Info: actual spend exceeded estimated amount |
 | `reservation.expired` | Runtime server (expiry sweep) | `cycles-server` | Info: reservation TTL expired without commit/release |
 | `tenant.suspended` | Admin server | `cycles-admin` | Alert: tenant operations paused |
 | `tenant.closed` | Admin server | `cycles-admin` | Alert: tenant permanently closed |
 | `api_key.auth_failed` | Admin server | `cycles-admin` | Security: authentication failure |
 | `api_key.revoked` | Admin server | `cycles-admin` | Security: key access removed |
-| `system.store_connection_lost` | Any service | `cycles-server` | Critical: Redis connection failure |
+| `webhook.disabled` | Admin/events services | `cycles-admin` or `cycles-events` | Alert: a webhook was disabled manually or after delivery failures |
 | `system.webhook_delivery_failed` | Events service | `cycles-events` | Meta: webhook delivery permanently failed after all retries |
 
 ## Next steps

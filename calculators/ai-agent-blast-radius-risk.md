@@ -54,9 +54,9 @@ Each row models one class of action your agent can take. The calculator quantifi
 
 **Monthly blast radius** = `per_incident × calls_per_day × (error_rate / 100) × 30`
 
-**Runaway blast** = `per_incident × runaway_ceiling` — one action looping N times (the [runaway / tool-loop](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) failure mode) before it is stopped. The **runaway ceiling** is an action *count*, and runtime action authority bounds it two ways: a per-run **action-count** cap sets it directly, while a per-run budget or a per-action [`RISK_POINTS`](/how-to/assigning-risk-points-to-agent-tools) quota bounds it *indirectly* — the number of fires permitted before the budget is exhausted (roughly `budget ÷ risk_points_per_fire`, and fewer if other actions draw on the same budget). Uncapped, the ceiling is detection-limited (often hundreds of fires); with a cap it drops to that effective limit. Lower the ceiling to your effective cap to see the bounded blast.
+**Runaway blast** = `per_incident × runaway_ceiling` — one action looping N times (the [runaway / tool-loop](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) failure mode) before it is stopped. The **runaway ceiling** is an action *count*. A host-enforced per-run count cap sets it directly, while a mandatory reservation of caller-assigned [`RISK_POINTS`](/how-to/assigning-risk-points-to-agent-tools) can bound cumulative attempts indirectly—roughly `budget ÷ risk_points_per_attempt`, and fewer if other attempts draw on the same budget. Enter the effective ceiling your actual authorization and budget controls enforce.
 
-**With Cycles** = `monthly_blast × (1 - containment_pct / 100)` — where containment is the share of incidents that runtime [action authority](/concepts/action-authority-controlling-what-agents-do) would prevent before they fire.
+**With configured containment** = `monthly_blast × (1 - containment_pct / 100)` — where containment is your assumed share of incidents prevented by mandatory application authorization plus any enforced count or exposure budget. The slider is a scenario input, not a measured Cycles effectiveness rate.
 
 The table shows **three** numbers per action: **Blast / incident** (a single wrong fire — the discrete, worst-case exposure), **Runaway blast** (that incident × the runaway ceiling — a looping agent before it is stopped), and **Blast / mo** (the expected loss at your error rate). This is deliberate: catastrophic classes fire rarely, so the monthly figure alone under-rates them — the per-incident and runaway radii are what a risk-prediction framing misses.
 
@@ -93,7 +93,7 @@ The two calculators answer two halves of the same question:
 | Persuasion column | "Cheapest model — save 43×" | "Δ — monthly risk reduction from containment" |
 | Maps to Cycles dimension | Cost runtime control | Action runtime authority |
 
-A real production AI workload has both. Cost is bounded by a [budget](/guides/llm-cost-runtime-control). Damage is bounded by [what you do not let the agent do in the first place](/guides/risk-and-blast-radius). Cycles enforces both at the same runtime gate.
+A real production AI workload has both. A mandatory [budget boundary](/guides/llm-cost-runtime-control) can bound submitted spend, subject to estimation, settlement, overage policy, and coverage. Damage is bounded by [what the host does not let the agent do in the first place](/guides/risk-and-blast-radius). The host can compose authorization with a Cycles `RISK_POINTS` reservation at the same dispatch boundary; Cycles does not supply the permission decision.
 
 ## Related
 

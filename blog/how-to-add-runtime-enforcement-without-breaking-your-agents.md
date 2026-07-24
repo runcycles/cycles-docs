@@ -15,13 +15,13 @@ head:
 
 # How to Add Runtime Enforcement Without Breaking Your Agents
 
-The #1 objection to adding runtime enforcement to a running agent system isn't cost. It's fear: *"what if it blocks something legitimate?"*
+A common objection to adding runtime enforcement to a running agent system isn't cost. It's fear: *"what if it blocks something legitimate?"*
 
 It's a fair fear. Enforcement that fires at the wrong time looks identical to a broken system. A customer agent that can't send a confirmation email because the budget ran out is indistinguishable, from the customer's perspective, from a bug.
 
 This post is about the answer to that fear: **shadow mode** (also called dry-run). Run enforcement in observe-only mode against real production traffic, watch what it *would* have done, calibrate, then progressively turn it on. In Cycles, this is enabled by setting `dry_run: true` on reservation requests — the server evaluates the full reservation path (scope derivation, budget checks, decision, caps) and returns the decision it would have made, without creating a reservation or touching balances.
 
-It's not a new idea — it's how every serious piece of enforcement infrastructure gets rolled out, from WAFs to rate limiters to Kubernetes admission controllers. The specifics for AI agents are what's new.
+It's not a new idea. WAFs, rate limiters, and admission controllers all provide observe-before-block rollout patterns; the agent-specific failure modes are what differ here.
 
 <!-- more -->
 
@@ -58,46 +58,46 @@ The durations are illustrative, not product requirements. Adjust them to traffic
 
 ## Phase 1: Instrument
 
-Before enforcement exists in shadow mode or otherwise, the agent needs to call the enforcement API at the right points in its lifecycle. Every LLM call, every tool call, every sub-agent spawn should produce a reservation attempt.
+Before enforcement exists in shadow mode or otherwise, the agent needs to call the enforcement API at the protected points in its lifecycle. Each model or tool path with positive cost or side-effect exposure should produce a reservation attempt. A sub-agent handoff needs its own reservation only when the application assigns positive exposure to the handoff; otherwise record the handoff as application telemetry or a zero-amount Cycles event.
 
 This phase is about catching **missing signals**. If the agent sometimes calls a tool without first reserving, shadow mode will look cleaner than reality — because the dangerous calls aren't being checked. The instrument phase ensures the shape of the data is correct before you start measuring it.
 
-**What you're looking for:** reservation calls matching the agent's actual tool call rate, decisions returning for every attempt, no gaps where the agent acts without reserving. (In dry-run, the response has no `reservation_id` — that appears only once you move to live reservations in Phase 4.)
+**What you're looking for:** dry-run calls matching the protected action paths, decisions returning for every attempt, and no gaps where a path assigned positive exposure acts without evaluation. (In dry-run, the response has no `reservation_id` — that appears only once you move to live reservations in Phase 4.)
 
 ## Phase 2: Shadow Observation
 
 This is the core observation phase. Shadow mode returns what enforcement *would* do—which reservations would return `DENY`, `ALLOW_WITH_CAPS`, or `ALLOW`—without blocking or persisting a reservation.
 
-Every dry-run request returns a decision and the agent proceeds regardless. The server does not create a durable shadow reservation, so the application must log each response with the proposed action, run identifier, and actual outcome if you want a record to analyze later.
+Every dry-run request returns a decision without blocking or executing the proposed action. The application chooses to proceed and must log each response with the proposed action, run identifier, and actual outcome if it wants a record to analyze later; the server does not create a durable shadow reservation.
 
 **What to measure during shadow mode:**
 
 1. **Denial rate** — what percentage of reservations would have been denied?
-2. **Denial location** — which scopes fire most often? (per-run, per-tenant, per-workflow?)
+2. **Denial location** — which scopes fire most often? (tenant, workspace, app, workflow, agent, or toolset?) If you need a ledger per run, map the run ID to `subjects.workflow`; a run ID in `dimensions` is attribution only.
 3. **Estimate accuracy** — how far are estimates from actual usage captured separately by the application? Dry-run produces no commit.
 4. **Workflow distribution** — are denials concentrated in specific agent workflows?
 5. **Runaway indicators** — are there bursts of reservations that look like retry loops?
 
 This data is what distinguishes calibrated enforcement from decorative enforcement.
 
-## Phase 3: Calibrate — The Goldilocks Zone
+## Phase 3: Calibrate Against Your SLOs
 
 After enough representative traffic, your application-side shadow dataset can inform budget sizing.
 
-There's a useful heuristic for denial rates:
+There is no universal acceptable denial percentage. Classify each would-deny outcome against your workload and user-impact objectives:
 
-| Denial rate (shadow mode) | What it means | What to do |
+| Shadow result | Question to answer | Typical response |
 |---|---|---|
-| **> 5%** | Budgets are too tight — enforcement would break legitimate work | Increase limits, review specific denied workflows |
-| **3-5%** | Budgets are catching edge cases but running warm | Investigate specific denials before enforcing |
-| **1-3%** | The goldilocks zone — catching real anomalies without blocking legitimate work | Ready to enforce |
-| **0%** | Budgets are decorative — too loose to catch anything | Tighten limits, they're not doing work |
+| Legitimate paths are denied | Is the estimate, scope mapping, or limit wrong? | Fix the signal or resize the budget |
+| Known runaway cases are allowed | Is the path missing instrumentation or is the limit too loose? | Add coverage or tighten the relevant ledger |
+| Denials cluster in one workflow | Does that workflow need a distinct policy or degradation path? | Tune that workflow instead of broad tenant limits |
+| Normal and failure scenarios behave as intended | Does the observed sample cover representative traffic and edge cases? | Begin progressive enforcement |
 
-The percentages in this table are starting examples, not universal SLOs. A 5% shadow-denial rate would block one in twenty submitted actions if the same traffic were enforced, which deserves investigation before rollout. A zero rate can be valid for stable traffic, but it does not demonstrate that the chosen limits catch the failure scenarios you care about. Exercise known runaway, retry, and fan-out cases as well as normal traffic, then set an acceptable production denial rate from your own workload and user-impact objectives.
+A zero shadow-denial rate can be valid for stable traffic, but it does not prove that the limits catch the failures you care about. Exercise known retry, fan-out, and runaway scenarios as well as normal traffic.
 
 ## Phase 4: Progressive Enforcement
 
-When you flip the switch from shadow to enforce, don't flip all of it at once. Progressive enforcement is the rule for the same reason canary deployments are. Google's SRE Workbook [defines canarying as](https://sre.google/workbook/canarying-releases/) *"a partial and time-limited deployment of a change in a service and its evaluation"* — the same logic applies to enforcement rollout.
+When you change protected paths from `dry_run: true` to live reservations, do not change every path at once. Progressive enforcement follows the same logic as canary deployments. Google's SRE Workbook [describes canarying](https://sre.google/workbook/canarying-releases/) as a partial, time-limited change evaluated before wider rollout.
 
 For agent enforcement, "fractions" means **by risk tier**:
 
@@ -107,17 +107,17 @@ For agent enforcement, "fractions" means **by risk tier**:
 
 This ordering inverts the usual intuition ("enforce the dangerous ones first"). The reason is calibration confidence. By the time you're enforcing on `send_email`, you've already validated your budget sizing on lower-risk paths. A surprise at the email level is much more expensive than a surprise at the search level.
 
-**Keep a kill switch.** A feature flag that can disable enforcement without a redeploy — the [kill switch pattern](https://launchdarkly.com/docs/home/flags/killswitch) — is standard practice for exactly this reason. If enforcement starts firing incorrectly at 2 AM, you want to flip back to shadow mode in seconds, not wait for a deploy cycle.
+**Keep a kill switch.** An application feature flag that restores `dry_run: true` or bypasses the integration without a redeploy — the [kill switch pattern](https://launchdarkly.com/docs/home/flags/killswitch) — lets operators respond promptly if enforcement starts producing incorrect denials.
 
 ## Phase 5: Full Enforcement + Continuous Calibration
 
-Agents evolve. Usage patterns change. A budget that was right at month 1 won't be right at month 6. In practice, shadow mode rollout never really ends — you keep running enforcement continuously, but you also keep watching the metrics shadow mode taught you to watch: denial rate, estimate accuracy, workflow distribution.
+Agents evolve and usage patterns change. Continue watching denial rate, estimate accuracy, and workflow distribution after enforcement begins, and recalibrate when behavior changes.
 
 Most importantly: when you add new agent workflows or tools, **re-enter shadow mode for those paths**. Don't assume your existing calibration covers them.
 
 ## What Shadow Mode Reveals That You Can't See Otherwise
 
-Beyond calibration, shadow mode surfaces three things production monitoring alone misses:
+Before enforcement, application-side shadow records can expose three patterns without intentionally blocking live work:
 
 ### Runaway loop signatures
 
@@ -125,7 +125,7 @@ An application shadow log showing 47 reservation attempts from one run in 90 sec
 
 ### Delegation chain amplification
 
-In multi-agent systems, a single user request can fan out into dozens of sub-agent calls. Shadow mode shows you the [delegation topology](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) — which parents spawn how many children, how deep the chains go, and whether sub-agents are getting over-broad authority. This is the data that justifies adding [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) vs. just capping top-level budgets.
+In multi-agent systems, a single user request can fan out into many sub-agent calls. Cycles dry-run responses show the submitted subjects, estimates, and hypothetical budget decisions; they do not infer the delegation graph, depth, or tool permissions. Join application handoff logs to those responses when evaluating whether explicit child ledgers and narrower host permissions are needed.
 
 ### Where you need degradation paths
 
@@ -133,13 +133,13 @@ Shadow mode doesn't just tell you *whether* to enforce. It tells you *where you 
 
 ## Common Shadow Mode Mistakes
 
-**Treating shadow mode as a checkbox.** Running shadow mode for three days, seeing low denial rates, and declaring victory. Real usage patterns take 1-2 weeks to emerge.
+**Treating shadow mode as a checkbox.** A short sample may miss periodic jobs, traffic spikes, or rare failure paths. Observe enough representative traffic and exercise known edge cases before drawing conclusions.
 
-**Enabling too many scopes at once.** Shadow mode is cheap, but interpreting five simultaneous budget scopes is not. Start with 1-2 scopes (per-run, per-tenant), add more once those are calibrated.
+**Enabling too many scopes at once.** Dry-run evaluation does not consume balances, but interpreting many simultaneous budget scopes is still difficult. Start with one or two standard scopes, such as tenant and workflow, and add more once those are calibrated.
 
-**Staying in shadow mode forever.** The purpose of shadow mode is to enable enforcement, not to replace it. Teams that stay in shadow mode past calibration are paying the cost of enforcement infrastructure without getting the benefit. If your numbers are stable for two weeks, enforce.
+**Staying in shadow mode forever.** The purpose of shadow mode is to prepare for enforcement, not replace it. Move a path to live reservations when its representative outcomes, degradation behavior, and rollback procedure meet your own cutover criteria.
 
-**Looking only at averages.** A 1% average denial rate with 20% denials on one specific workflow means that workflow is broken. Always break metrics down by scope and workflow, not just overall.
+**Looking only at averages.** A low overall denial rate can hide a much higher rate on one workflow. Break metrics down by scope and workflow, then inspect whether the concentrated denials are intended.
 
 **Ignoring estimate accuracy.** If your estimates are consistently 3x higher than actuals, your budgets are effectively 3x tighter than you think. Estimate drift is the silent killer of calibrated enforcement.
 
@@ -147,7 +147,7 @@ Shadow mode doesn't just tell you *whether* to enforce. It tells you *where you 
 
 Shadow mode turns enforcement from an all-or-nothing cutover into a measurable, reversible rollout. The same observe-before-block pattern used in policy and traffic-control systems applies to AI agents, with application logging added because Cycles dry-run responses do not persist reservation state.
 
-If you're considering adding runtime enforcement to your agents and the fear is "what if it blocks something legitimate" — shadow mode is the answer. You don't have to guess. Run it in observe mode for two weeks, look at the denial rate, decide if your budgets are the right size, then enforce progressively from low-risk to high-risk paths.
+If you're considering runtime enforcement and the fear is "what if it blocks something legitimate," dry-run evaluation lets you test the answer. Collect representative application-side results, size the budgets against your own SLOs, and then enforce progressively from lower-impact to higher-impact paths.
 
 For production paths with meaningful user impact, skipping observation increases the chance that an incorrectly sized or mis-scoped budget blocks legitimate work. If an emergency or low-risk rollout cannot support a long shadow period, compensate with narrower scope, explicit degradation behavior, and a tested rollback switch.
 

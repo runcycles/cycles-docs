@@ -51,25 +51,25 @@ But none of these capabilities address the question: should this model call happ
 
 ## What Cycles does
 
-Cycles is a runtime authority for autonomous agents. It enforces cost limits before work begins, using a reserve-then-commit lifecycle.
+Cycles supplies runtime budget authority for autonomous agents through a reserve-then-commit lifecycle.
 
 Its core capabilities include:
 
 ### Pre-execution budget enforcement
 
-Before an agent calls a model, Cycles checks whether sufficient budget remains. If the budget is exhausted, the call does not happen. The decision is made before any cost is incurred.
+Before an instrumented model call, the host asks Cycles whether the submitted estimate fits the matching ledgers. At a mandatory boundary, a rejected reservation prevents that call from starting. Calls that bypass the integration are outside this guarantee.
 
 ### Reserve-then-commit lifecycle
 
-Cycles does not just track spend after the fact. It reserves estimated cost before execution, then commits actual cost afterward. Unused budget is released automatically. This prevents concurrent requests from racing past a budget limit.
+Cycles reserves estimated cost before execution, then commits actual cost afterward. Commit releases any unused portion of the hold. This prevents concurrent submitted estimates from oversubscribing the same matching ledgers; actual usage above an estimate follows the commit-overage policy.
 
 ### Concurrency-safe budget tracking
 
-When multiple agent threads or workflows run in parallel, Cycles uses atomic reservations to prevent overspend. Two threads cannot both claim the last $5 of budget — the reservation is atomic.
+When multiple agent threads or workflows run in parallel, Cycles uses atomic reservations. If $5 remains and two submitted reservations each request $4, at most one can succeed.
 
 ### Hierarchical scope enforcement
 
-Budgets can be enforced at multiple levels simultaneously: tenant, workspace, workflow, run, and action. A single reservation can check all applicable scopes in one operation.
+Budgets can be enforced at multiple standard subject levels simultaneously: tenant, workspace, app, workflow, agent, and toolset. A single reservation checks all applicable populated scopes in one atomic operation. To create a ledger per run, map the run ID to a standard field such as `workflow`; `run` and `action` are not native budget scopes.
 
 ### Three-way decisions
 
@@ -106,7 +106,7 @@ These are independent concerns. Neither subsumes the other.
 | **What it prevents** | Toxic content, schema violations, prompt injection, PII leakage | Budget overruns, unbounded spend, cost race conditions |
 | **Concurrency model** | Per-request validation (stateless) | Atomic reservations across concurrent requests (stateful) |
 | **Budget awareness** | None — does not track cost or spend | Core function — reserves, commits, and tracks budget across scopes |
-| **Protocol** | Python framework with validators and guards | Open protocol with reserve/commit/release lifecycle |
+| **Protocol** | Python framework with validators and guards | Open protocol with reserve-commit-release lifecycle |
 | **Retry behavior** | Re-asks the model with corrected prompts | Idempotent reservations — retries do not double-spend |
 | **Scope** | Per-call input/output validation | Per-tenant, per-workflow, per-agent hierarchical budgets |
 | **Degradation** | Can correct or filter outputs | Can downgrade model choice, reduce scope, or deny execution |

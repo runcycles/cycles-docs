@@ -206,15 +206,17 @@ A team that can answer "yes" to all seven is running computer-use as an action s
 
 ## What Changes When Clicks Are Treated as Actions
 
-The shift is the same one the [memory-writes](/blog/agent-memory-writes-are-actions-too) and [merge](/blog/when-coding-agents-press-merge) extensions made: take the unit the agent actually emits, and apply the action authority lifecycle to it. The lifecycle does not change. What changes is the feature vector the rule body inspects.
+This section describes a host architecture that implements the click classifier, application policy, audit records, and required Cycles budget boundary above. Those click semantics are not built into the current Cycles server.
 
-The agent's session has a finite click-authority budget. The 800th `Edit → Save` cycle does not have the same authority as the first one. By the time the schedule's relative-weighting effects accumulate, the agent's authority for a high-blast click has narrowed without anyone hand-tuning a cap.
+The shift is the same one the [memory-writes](/blog/agent-memory-writes-are-actions-too) and [merge](/blog/when-coding-agents-press-merge) patterns make: take the unit the agent actually emits and apply application authorization plus a reserve-commit exposure budget to it. The host classifier inspects the click feature vector and assigns the amount that Cycles meters.
 
-The audit trail names the click, not just the eventual database row. Every action the agent took to produce the change is recorded with its (target, intent, context) classification — so when the migration completes and a downstream customer asks "what exactly did the agent do to my record?", the answer is in the runtime decisions, not reconstructed from application logs.
+The agent's session has a finite caller-assigned click-exposure budget. Repeated `Edit → Save` cycles consume that budget according to the host's schedule; a later high-exposure click may fail to reserve even though the application still considers the tool permissible.
 
-A/B page changes stop being silent attack surface. A button label that shifts mid-session is exactly the case the freshness cap is for. The agent re-screenshots, the gate re-classifies, the click either re-validates or returns `DENY` with a `reason_code: target_mismatch`.
+The application audit trail can name the click, target, intent, classification, authorization decision, and actual browser event. Cycles contributes the correlated budget hold and settlement; it does not record the browser event or reconstruct the action without those application logs.
 
-And the action authority lens stays unified across the corpus. Outbound side effects, memory writes, merge buttons, and clicks all run through the same reserve-commit lifecycle, with the same audit shape and the same three-way decision model. The substrate is uniform; the feature vector changes per surface.
+An A/B page change becomes a case for the host's freshness rule. The agent re-screenshots, the host re-classifies the target, and application policy either re-authorizes it or rejects it with an application-defined reason such as `target_mismatch`. This is separate from the protocol's budget denial reason.
+
+Outbound side effects, memory writes, merge buttons, and clicks can use the same Cycles reserve-commit lifecycle for caller-assigned exposure. Their feature classifiers, action authorization, reason vocabulary, and outcome audit records remain surface-specific application concerns.
 
 ## Next Steps
 

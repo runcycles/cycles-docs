@@ -55,7 +55,7 @@ Start with the reviewer questions, not with the systems that produced the record
 | What did the authority decide? | Decision response, denial code, `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` summary |
 | Can the bytes be verified? | `evidence_id` recomputation, canonical JSON check, Ed25519 signature result |
 | Who signed it? | `server_id`, `signer_did`, key id, JWK Set reference, signer-authority disposition |
-| Where do operational records join? | `trace_id`, `correlation_id`, event id, audit id, incident ticket, dashboard link |
+| Where do operational records join? | `trace_id`, `request_id`, applicable admin-event `correlation_id`, event id, audit id, incident ticket, dashboard link |
 | How long will it survive? | Evidence retention, audit-log retention, archive restore path, retired-key retention |
 
 The first two questions explain the control outcome. The next two make it independently verifiable. The last two make it operationally useful after the people and systems around the event have changed.
@@ -74,7 +74,7 @@ For a Cycles-controlled agent action, the packet should be small enough to revie
 | Verification output | Hash result, signature result, artifact-type check, verifier version or command | Shows the technical result, not just a conclusion |
 | Signer authority note | `signer_did`, `kid`, JWK Set URL or snapshot, authority disposition | Separates "signed by a key" from "authorized for this server then" |
 | Decision chain | Relevant `decide`, `reserve`, `commit`, `release`, or `error` artifacts | Explains where the control fired |
-| Correlation bundle | `trace_id`, `correlation_id`, audit/event IDs, incident or change ticket links | Connects proof to operations without dumping every log |
+| Correlation bundle | `trace_id`, `request_id`, applicable admin-event `correlation_id`, audit/event IDs, incident or change ticket links | Connects proof to operations without dumping every log |
 | Retention statement | Hot store duration, archive path, restore procedure, retired-key retention | Shows the proof will survive the review window |
 | Findings log | Gaps, owner, due date, follow-up drill date | Turns weak evidence into managed risk |
 

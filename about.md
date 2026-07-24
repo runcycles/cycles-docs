@@ -5,9 +5,9 @@ description: "Cycles is an open-source runtime authority layer for AI agents —
 
 # About Cycles
 
-Cycles is the [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) layer for AI agents. It sits between an agent's decision to act and the action itself, and it answers one question on every tool call, for every agent, in every delegation chain: *is this agent allowed to do this, right now, given what it's already done?*
+Cycles is a [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) layer for AI agents. When an application puts it on a mandatory execution boundary, Cycles answers a narrower, enforceable question before each protected action: *does the configured budget have enough capacity for the amount and scope the caller submitted?*
 
-If the answer is no, the action doesn't happen. Not "gets logged for later review." Not "triggers an alert." **Doesn't happen.**
+If the integration requires a successful reservation before execution, a rejected reservation blocks the action instead of merely logging or alerting after the fact. Application authorization still decides whether the agent may use a specific tool or set of arguments.
 
 ## Who's building this
 
@@ -21,11 +21,11 @@ The full origin story — including the overnight agent loop that burned through
 
 Three convictions shape every design decision in Cycles. They aren't new ideas — they're battle-tested patterns from distributed-systems engineering, applied to autonomous agents.
 
-**Enforcement must be atomic.** A half-applied budget is worse than no budget. Cycles uses a reserve-commit lifecycle: budget is atomically reserved before an agent acts, actual usage is committed after, and unused capacity is released. No race conditions. No [time-of-check-to-time-of-use](https://dev.to/amavashev/your-ai-agent-budget-check-has-a-race-condition-33ei) gaps.
+**Budget enforcement must be atomic.** A half-applied budget is worse than no budget. Cycles uses a reserve-commit lifecycle: budget is atomically reserved before an agent acts, actual usage is committed after, and unused capacity is released. This closes the [time-of-check-to-time-of-use](https://dev.to/amavashev/your-ai-agent-budget-check-has-a-race-condition-33ei) overspend gap at the budget boundary; the host remains responsible for executing only after a successful reservation.
 
-**Authority must attenuate, not propagate.** When an agent spawns a sub-agent, the sub-agent gets a carved-out sub-budget and a restricted action mask. [Authority can only decrease with depth, never increase](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation).
+**Authority should attenuate, not propagate.** When an agent spawns a sub-agent, the orchestrator can provision a smaller Cycles budget and separately restrict the sub-agent's tools, data, and credentials. Cycles enforces the submitted budget dimensions; the application enforces the action policy. Together, those controls can make [authority decrease with depth](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation).
 
-**Control must be structural, not semantic.** You can't rely on an LLM to respect a system prompt that says "don't spend more than $10." That's a suggestion to a probabilistic system. Structural controls operate outside the LLM, at the infrastructure layer, and enforce boundaries deterministically. One is a hope. The other is an engineering guarantee.
+**Control must be structural, not semantic.** You can't rely on an LLM to respect a system prompt that says "don't spend more than $10." A mandatory control outside the model can enforce that configured budget even when the model would continue. The guarantee applies to protected calls that the host routes through the boundary.
 
 ## What Cycles is not
 

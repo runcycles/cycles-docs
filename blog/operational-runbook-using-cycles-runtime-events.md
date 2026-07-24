@@ -17,7 +17,7 @@ head:
 
 Runtime enforcement catches what observability misses — but only if someone is watching. Once you have Cycles enforcing budgets in production, you need a plan for what happens when enforcement fires at 2 AM. That's what runtime events are for.
 
-Cycles emits webhook events on every significant budget state transition: threshold crossings, exhaustion, debt accumulation, denial rate spikes, reservation expirations. These events are the signal layer that connects enforcement to your operational infrastructure — PagerDuty, Slack, auto-remediation scripts, runbooks.
+The current runtime emits events for exhaustion, entry into over-limit state, new debt, reservation expiry, commit overage, and DENY results from dry-run reservation or `/v1/decide` evaluations. These signals connect enforcement and calibration to operational infrastructure such as PagerDuty, Slack, remediation scripts, and runbooks. Configurable threshold crossings, denial-rate spikes, and burn-rate anomalies remain registered-but-planned event types.
 
 This post is the operator's runbook: which events matter, what they mean, and what to do when they fire.
 
@@ -27,11 +27,11 @@ This post is the operator's runbook: which events matter, what they mean, and wh
 
 The alternative to events is polling dashboards. That struggles for the same reason observability-only approaches struggle with enforcement: **detection latency**. By the time a dashboard refresh shows budget exhaustion, the response window is often already closing.
 
-(If you want the architectural background on the event system itself, the [Real-Time Budget Alerts post](/blog/real-time-budget-alerts-for-ai-agents) covers the design. The [operator's guide](/blog/operating-budget-enforcement-in-production) covers diagnostic trees for the `reservation.denied` scenario. This post is the event-by-event response reference for the other critical events.)
+(If you want the architectural background on the event system itself, the [Real-Time Budget Alerts post](/blog/real-time-budget-alerts-for-ai-agents) covers the design. The [operator's guide](/blog/operating-budget-enforcement-in-production) covers live reservation failures using application errors and runtime metrics. This post is the event-by-event response reference.)
 
-The cloud providers figured this out years ago. AWS Budgets pushes threshold alerts through SNS. [GCP Budget Notifications](https://cloud.google.com/billing/docs/how-to/budgets-programmatic-notifications) push to Pub/Sub — their docs explicitly state: *"If you use budgets or cost anomaly detection as a cost control tool, email notifications might not be the best method to use to ensure timely action to control your costs."* Azure uses Action Groups for the same fan-out pattern.
+The cloud providers figured this out years ago. AWS Budgets pushes threshold alerts through SNS. [GCP Budget Notifications](https://docs.cloud.google.com/billing/docs/how-to/budgets-programmatic-notifications) push to Pub/Sub — their docs explicitly state: *"If you use budgets or cost anomaly detection as a cost control tool, email notifications might not be the best method to use to ensure timely action to control your costs."* Azure uses Action Groups for the same fan-out pattern.
 
-Cycles follows the same playbook. Events fire within seconds of the state change, get signed with HMAC-SHA256, and land on your webhook endpoint. Your infrastructure decides what to do with them.
+Cycles follows the same playbook. The runtime enqueues events when implemented state changes occur; a deployed, healthy Events Service signs outbound deliveries with HMAC-SHA256 and posts them to your webhook endpoint. Delivery is asynchronous and does not provide a fixed end-to-end latency SLA, so your infrastructure should monitor queue and delivery health.
 
 ## Event Severity Tiers
 
@@ -41,21 +41,21 @@ Apply that principle to the events Cycles emits today:
 
 | Tier | Route | Events | SLA |
 |---|---|---|---|
-| **Critical — page on-call** | PagerDuty/OpsGenie | `budget.exhausted`, `budget.over_limit_entered` | < 5 min response |
-| **Warning — alert channel** | Slack/Teams | clusters of `reservation.denied`, `reservation.expired` bursts | < 1 hour review |
-| **Info — dashboard + digest** | Grafana/digest email | `budget.debt_incurred`, `reservation.commit_overage` | Next business day |
+| **Critical — page on-call** | PagerDuty/OpsGenie | `budget.exhausted`, `budget.over_limit_entered` | Your workload's page-response SLO |
+| **Warning — alert channel** | Slack/Teams | clusters of dry-run/decide `reservation.denied` events; `reservation.expired` bursts | Your calibration or client-health review SLO |
+| **Info — dashboard + digest** | Grafana/digest email | `budget.debt_incurred`, `reservation.commit_overage` | Your capacity-review cadence |
 
-The split matters. If you page on every commit overage, on-call will learn to ignore the pager. If you only page on exhaustion, you've lost the chance to intervene earlier.
+Treat this routing as an example, then tune it to workload criticality. If you page on every commit overage, on-call will learn to ignore the pager. Because the current runtime has no configurable pre-exhaustion threshold event, earlier intervention requires balance polling or application metrics.
 
 ## Runbook: `budget.exhausted`
 
-**Severity:** Critical — all new reservations for this scope are being DENIED until funded.
+**Severity:** Usually critical — a ledger transitioned to zero remaining. New positive reservations that derive the affected scope and unit cannot be allowed by that ledger until capacity is restored.
 
-**Payload fields:** envelope (event_id, event_type, tenant_id, scope, timestamp) with actor context. Query the budget directly for current balance state.
+**Payload fields:** `scope`, `unit`, `threshold` (`1.0`), `utilization`, `allocated`, `remaining` (`0`), `spent`, `reserved`, and `direction` (`rising`), plus envelope and actor context. Query the balance API before acting because the ledger can change after emission.
 
 **Immediate triage (first 5 minutes):**
 
-1. **Identify blast radius.** What scope exhausted? Per-tenant? Per-workflow? Per-run? The `scope` field tells you.
+1. **Identify blast radius.** Which standard scope exhausted — tenant, workspace, app, workflow, agent, or toolset? The `scope` field tells you. If your application models a run as a workflow ID, join that workflow segment to your run metadata.
 2. **Check the active reservations.** Are agents currently blocked? Query the runtime server with `GET /v1/reservations?tenant={tenant}&status=ACTIVE` (authenticated with `X-Cycles-API-Key`) to see what's in flight.
 3. **Check the spike pattern.** Is this gradual exhaustion (expected — budget was sized correctly and we need more) or a sudden spike (runaway agent)?
 
@@ -75,12 +75,12 @@ Was spend rate normal until recently?
          │
          └── Distributed spike → Traffic surge
               → Fund budget + rate-limit upstream traffic
-              → Review burn_rate_anomaly events
+              → Review application traffic and burn-rate telemetry
 ```
 
 **Don't do this:** Immediately raise the budget permanently. That might be the right answer, but confirm there's no runaway agent first. A 3x budget increase in response to a retry loop just gives the loop 3x more runway.
 
-**Automation opportunity:** A `budget.exhausted` event can trigger automatic budget replenishment from a reserve pool *if* `burn_rate_anomaly` hasn't also fired in the last N minutes. This is the AI agent equivalent of the [circuit breaker pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker): auto-remediate when it looks normal, escalate when it doesn't.
+**Automation opportunity:** Your webhook consumer can trigger a bounded replenishment from a reserve pool after checking application traffic and burn-rate telemetry. Keep the cap and anomaly check in your own automation; `budget.burn_rate_anomaly` is not emitted by the current reference runtime. This is the AI agent equivalent of the [circuit breaker pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker): auto-remediate known-safe cases and escalate ambiguous ones.
 
 ## Runbook: `budget.over_limit_entered`
 
@@ -94,34 +94,34 @@ Was spend rate normal until recently?
 
 1. **Verify the debt amount.** Check `budget.debt_incurred` events over the last 24h to understand how debt accumulated.
 2. **Decide: pay down debt or raise the limit.** If the overrun reflects legitimate growth, raise `overdraft_limit` via admin API. If it reflects estimation drift or a runaway, repay debt via REPAY_DEBT funding operation.
-3. **Watch for `budget.over_limit_exited`.** This confirms recovery.
+3. **Confirm recovery from current state.** Query the balance until `is_over_limit` is false. `budget.over_limit_exited` is registered but not emitted by the current reference runtime.
 
 **Root cause patterns:**
 - **Estimation drift:** Your reserve estimates are too low; actuals consistently exceed them. Fix by re-calibrating estimates (see the [shadow mode rollout guide](/blog/how-to-add-runtime-enforcement-without-breaking-your-agents)).
 - **Concurrent overspend:** Multiple commits landed at once and pushed debt past the limit. Fix by reducing `overdraft_limit` or tightening per-reservation estimates.
 - **Policy mismatch:** Budget was set to `ALLOW_WITH_OVERDRAFT` but the workload needs hard blocking. Change policy to `REJECT` on exhaustion.
 
-## Runbook: `reservation.denied` (individual denials)
+## Runbook: `reservation.denied` (dry-run and decide evaluations)
 
-**Severity:** Warning — a specific reservation was denied. Aggregate these by scope to detect patterns.
+**Severity:** Calibration warning — a dry-run reservation or `/v1/decide` evaluation returned `DENY`. Aggregate these by scope to detect patterns before cutover.
 
-**Expected fields include:** `scope`, `unit`, `reason_code`, plus envelope actor context. Query the event directly for full details.
+**Expected fields include:** `scope`, `unit`, `reason_code`, `requested_amount`, `action`, and `subject`, plus envelope actor context. A denied reservation dry run also includes derived `remaining`; the current `/v1/decide` emitter omits it.
 
-**When it fires:** Every time a reservation is rejected. Individual events are low severity; the signal is in the *aggregate* — query recent events per scope to detect spikes.
+**When it fires:** When a nonpersisting reservation request with `dry_run: true` returns DENY, or `/v1/decide` returns DENY. A live reservation failure returns an HTTP error such as `409 BUDGET_EXCEEDED`; the current controller does not emit `reservation.denied` on that exception path. Use application error handling or `cycles_reservations_reserve_total{decision="DENY"}` for live denial alerting.
 
 **Triage (when you see a cluster):**
 
 1. **Check denial reasons.** Query the admin API: `GET /v1/admin/events?event_type=reservation.denied&scope={scope}` (authenticated with `X-Admin-API-Key`). What `reason_code` values are showing up?
 2. **Common reason codes:**
-   - `BUDGET_EXCEEDED` — per-scope sub-budget is tight while parent has room. Check budget hierarchy.
+   - `BUDGET_EXCEEDED` — at least one applicable ledger lacks available capacity. Check all returned balances; Cycles does not transfer allocation between ledgers.
    - `OVERDRAFT_LIMIT_EXCEEDED` — hitting the debt ceiling, not the allocated ceiling.
    - `BUDGET_FROZEN` — someone froze the budget via `POST /v1/admin/budgets/freeze`. Unfreeze with `POST /v1/admin/budgets/unfreeze` (X-Admin-API-Key) once investigation is complete.
    - `DEBT_OUTSTANDING` — unresolved debt blocking new reservations.
-3. **Look at agent behavior.** Are specific agents being denied repeatedly? That's a retry loop signature — the agent keeps trying the same denied reservation.
+3. **Look at calibration behavior.** Are specific dry-run or decide callers evaluating the same action repeatedly? That may be a loop in the calibration path. For a live retry loop, inspect application errors and the runtime denial metric instead.
 
-**Don't do this:** Raise the budget to make denials go away without understanding why. High denial rates often indicate bad agent behavior (loop, estimation drift, fanout explosion) that raising the budget just hides.
+**Don't do this:** Raise the budget to make DENY evaluations go away without understanding why. A high dry-run DENY rate can reflect an undersized budget, an intentionally tested boundary, or repetitive client behavior; distinguish them before changing capacity.
 
-**Aggregation pattern:** Run a scheduled job that queries recent `reservation.denied` events per scope, counts them per window, and pages if the count crosses a threshold. This is the practical implementation of denial-rate alerting using the event stream.
+**Aggregation pattern:** During shadow calibration, query recent `reservation.denied` events per scope and count them per window. For enforcement incidents, alert on application errors or the live reservation denial counter rather than assuming this event represents the exception path.
 
 ## Runbook: `reservation.commit_overage`
 
@@ -136,7 +136,7 @@ Was spend rate normal until recently?
 **Triage:**
 
 1. **Check for concentration.** Is overage happening at a specific workflow step, or spread evenly? A single workflow with 50% average overage needs targeted estimate fixes.
-2. **Look at the overage distribution.** 5-10% drift is normal. 50%+ is a calibration problem.
+2. **Look at the overage distribution.** Establish a workload-specific baseline and investigate material changes in its tail; there is no universal acceptable percentage.
 3. **Fix the estimate source.** If your estimates come from token-count predictions, add a safety margin. If they come from prior-run averages, widen the window or use p95 instead of mean.
 
 **Automation opportunity:** A commit overage dashboard per workflow lets you spot drifting estimates before they cause incidents. This is a dashboard event, not a paging event.
@@ -171,7 +171,7 @@ The runbooks above assume your webhook handlers are reliable. Industry patterns 
 
 **Deduplicate by event ID.** Cycles delivers events at-least-once. The `event_id` field is unique; track which IDs you've processed and skip duplicates. Stripe's guidance: *"You can guard against duplicated event receipts by logging the event IDs you've processed, and then not processing already-logged events."*
 
-**Set a dead-letter policy.** Cycles retries webhook delivery up to 5 times with exponential backoff (1s, 2s, 4s, 8s, 16s) and auto-disables subscriptions after 10 consecutive failures. But you also need a DLQ for events you received but couldn't process. A malformed payload shouldn't crash your consumer.
+**Set a dead-letter policy.** With default subscription settings, Cycles makes an initial delivery plus up to five retries using exponential backoff and disables a subscription after ten consecutive delivery failures. These settings are configurable. You also need a DLQ for events you received but could not process; a malformed payload should not crash your consumer.
 
 ## PagerDuty and Slack Integration Recipes
 
@@ -185,7 +185,7 @@ Cycles webhook → Your transformer → PagerDuty Events API v2
   custom_details: event payload
 ```
 
-The `dedup_key` is essential. Without it, repeated `budget.exhausted` events for the same scope will create page storms. With it, PagerDuty groups them into one incident that acknowledges/resolves cleanly.
+The `dedup_key` is essential. Without it, at-least-once duplicate deliveries or later independent exhaustion transitions for the same scope can create page storms. With it, PagerDuty can group them into one incident; choose when your transformer sends resolve events so a genuinely new exhaustion can open a new incident.
 
 **Slack (warning events):**
 
@@ -193,7 +193,7 @@ Use a transformer that formats the event into a Slack message with the scope, se
 
 **Auto-remediation (info events):**
 
-Some events are safe to auto-remediate. `reservation.commit_overage` can trigger an estimate recalibration job. `budget.debt_incurred` at low levels can trigger a pre-configured budget top-up from a reserve pool. These don't need human involvement — they need to happen consistently, not emotionally.
+Some events may be suitable for bounded automation after workload-specific review. `reservation.commit_overage` can feed an estimate-recalibration job. `budget.debt_incurred` can trigger a capped top-up only when your own policy and anomaly checks approve it. Keep an audit trail and a hard automation ceiling.
 
 ## On-Call Quick Reference
 
@@ -201,7 +201,8 @@ Some events are safe to auto-remediate. `reservation.commit_overage` can trigger
 |---|---|---|---|
 | `budget.exhausted` | Yes | Burst vs. gradual? | Fund budget (verify no runaway) |
 | `budget.over_limit_entered` | Yes | Debt source? | Repay debt or raise limit |
-| Cluster of `reservation.denied` | No (Slack) | Denial reason codes | Depends on reason code |
+| Cluster of dry-run/decide `reservation.denied` | No (calibration channel) | Denial reason codes | Recalibrate or adjust intentional limits |
+| Live reservation DENY metric/application errors | Workload-dependent | Error reason and retry behavior | Fix caller loop or restore capacity |
 | Burst of `reservation.expired` | No (Slack) | Clustered scopes? | Fix downstream or tune TTL |
 | `budget.debt_incurred` | No (dashboard) | Overdraft policy? | Verify intentional |
 | `reservation.commit_overage` | No (dashboard) | Estimate accuracy | Recalibrate estimates |
@@ -210,7 +211,7 @@ Some events are safe to auto-remediate. `reservation.commit_overage` can trigger
 
 Runtime events are how enforcement becomes operational. Without them, you have a system that blocks actions silently. With them, enforcement integrates with the same infrastructure you already use for billing alerts, quota notifications, and on-call rotations — the same pattern AWS, GCP, and Azure all converged on.
 
-Your job as an operator is to route each event to the right response: page for critical, Slack for warning, dashboard for info, audit log for compliance. When something goes wrong, you want to know in the next five seconds — not the next five hours.
+Your job as an operator is to route each implemented event to the right response: page for critical, Slack for warning, dashboard for info, and audit storage for compliance. Define and monitor delivery latency against your own incident-response SLO instead of assuming a fixed webhook arrival time.
 
 ---
 

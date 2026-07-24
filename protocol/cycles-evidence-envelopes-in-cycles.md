@@ -55,7 +55,7 @@ It is **transport metadata, not attested** — present for the caller's convenie
 
 ### Denials → the `error` artifact
 
-A non-dry `reserve` over budget is **not** a `200` with `decision: DENY` — it is an `HTTP 409` with `error: BUDGET_EXCEEDED`, captured as an `error` envelope (`endpoint: "POST /v1/reservations"`, `http_status: 409`). The other budget/lifecycle denials behave the same — `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `UNIT_MISMATCH`, and the commit/release terminal-state denials `RESERVATION_FINALIZED` (409) and `RESERVATION_EXPIRED` (410). Pre-evaluation failures (validation, auth, malformed body) carry **no** `cycles_evidence` — no decision was reached, so there is nothing to attest. (A dry-run preflight denial, by contrast, is a `200` captured as `reserve` evidence — it is the canonical "would this be allowed?" attestation.)
+A non-dry `reserve` over budget is **not** a `200` with `decision: DENY` — it is an `HTTP 409` with `error: BUDGET_EXCEEDED`, captured as an `error` envelope (`endpoint: "POST /v1/reservations"`, `http_status: 409`). The other post-evaluation budget/lifecycle denials behave the same — `BUDGET_FROZEN`, `BUDGET_CLOSED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `TENANT_CLOSED`, `UNIT_MISMATCH`, and the commit/release terminal-state denials `RESERVATION_FINALIZED` (409) and `RESERVATION_EXPIRED` (410). Pre-evaluation failures (validation, auth, malformed body) carry **no** `cycles_evidence` — no decision was reached, so there is nothing to attest. (A dry-run preflight denial, by contrast, is a `200` captured as `reserve` evidence — it is the canonical "would this be allowed?" attestation.)
 
 ## `evidence_id` — the content-hash recipe (normative)
 

@@ -1,19 +1,23 @@
 ---
 title: "Multi-Agent Shared Workspace Budget Patterns"
-description: "Recommended patterns for multiple agents sharing a workspace budget, including hierarchical scopes, per-agent sub-budgets, and concurrency-safe design."
+description: "Recommended patterns for multiple agents sharing a workspace budget, including overlapping scope ledgers, per-agent ceilings, and atomic reservations."
 ---
 
 # Multi-Agent Shared Workspace Budget Patterns
 
-When multiple agents operate within the same workspace — a team of planners, executors, and reviewers working on a shared task — they need to share a finite budget without overspending. This guide covers recommended patterns for structuring budgets in multi-agent systems.
+When multiple agents operate within the same workspace — a team of planners, executors, and reviewers working on a shared task — they need to share finite reservation capacity without racing each other. This guide covers recommended patterns for structuring budgets in multi-agent systems.
 
 ::: warning Concurrency is the core challenge
 Multiple agents checking and spending against a shared budget creates race conditions. Always use Cycles reservations (not balance reads) for spending decisions. See [Concurrent Agent Overspend](/incidents/concurrent-agent-overspend) for a detailed explanation of the failure mode.
 :::
 
+::: info What “cap” means here
+Atomic reservations cap concurrent submitted estimates on mandatory instrumented paths. Actual external cost is known only after execution and settlement follows the configured commit overage policy. Use conservative estimates and treat the application/provider record as the economic outcome.
+:::
+
 ## Pattern 1: Shared workspace budget with no per-agent limits
 
-The simplest pattern. All agents draw from a single workspace-level budget. The server's atomic reservation prevents overspend.
+The simplest pattern. Every instrumented agent submits the same workspace scope. Atomic reservations prevent their submitted estimates from oversubscribing that explicitly provisioned ledger.
 
 **Scope:** `tenant:acme-corp/workspace:project-alpha`
 
@@ -42,18 +46,18 @@ def planner_call(prompt: str) -> str:
     return call_llm(prompt)
 ```
 
-**When to use:** Small teams of cooperating agents where individual fairness doesn't matter — you just want a hard cap on total spend.
+**When to use:** Small teams of cooperating agents where individual fairness does not matter and one shared estimate-admission ceiling is sufficient.
 
 **Trade-off:** A single expensive agent can exhaust the budget for all others.
 
-## Pattern 2: Per-agent sub-budgets under a shared workspace cap
+## Pattern 2: Per-agent ledgers under a shared workspace cap
 
-Give each agent its own budget, with a workspace-level parent that acts as a hard cap. Even if per-agent budgets sum to more than the workspace budget, the workspace scope prevents collective overspend.
+Give each agent its own explicitly provisioned ledger, with a workspace ledger acting as a shared cap. These balances are not transferred from the workspace ledger. Each protected call submits both scopes, and the server checks matching ledgers atomically.
 
 **Scope hierarchy:**
 
 ```
-tenant:acme-corp/workspace:project-alpha          → $50 (hard cap)
+tenant:acme-corp/workspace:project-alpha          → $50 (shared reservation ceiling)
   tenant:acme-corp/workspace:project-alpha/agent:planner    → $20
   tenant:acme-corp/workspace:project-alpha/agent:executor   → $30
   tenant:acme-corp/workspace:project-alpha/agent:reviewer   → $10
@@ -89,7 +93,7 @@ done
 
 **Why per-agent budgets can exceed the workspace budget:** The workspace scope is checked at reservation time alongside the agent scope. If the workspace is exhausted, the reservation is denied — regardless of the agent's remaining budget. Over-allocating at the agent level provides flexibility: if the planner finishes under budget, the executor can use more of the shared pool.
 
-**When to use:** Multi-agent workflows where you want both individual fairness and a collective hard cap.
+**When to use:** Multi-agent workflows where you want both individual estimate ceilings and a collective reservation ceiling.
 
 ## Pattern 3: Workflow-scoped budgets for task isolation
 
@@ -186,7 +190,7 @@ Set up alerts when any scope drops below 10% remaining with active reservations.
 ## Key principles
 
 1. **Reserve, don't read.** Balance queries are informational. Reservations are authoritative. Never use a balance read to decide whether to proceed.
-2. **Use parent scopes as hard caps.** Per-agent budgets provide fairness; workspace/tenant scopes provide safety.
+2. **Use broader scopes as shared admission ceilings.** Per-agent ledgers provide individual limits; workspace/tenant ledgers constrain combined reservation estimates.
 3. **Design for denial.** Any agent can be denied at any time. Graceful degradation is not optional.
 4. **Set the `agent` field.** Always identify which agent is spending. This enables per-agent monitoring, debugging, and budget allocation.
 

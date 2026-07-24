@@ -26,9 +26,9 @@ Manifest's pitch is straightforward: stop sending every query to the most expens
 
 ## What Cycles does
 
-[Cycles](https://runcycles.io) is a [runtime authority](/glossary#runtime-authority) for [autonomous agents](/glossary#autonomous-agent). Before an action executes, the agent reserves cycles. If no cycles remain, the action does not run. After execution, actual usage is committed and unused cycles are released.
+[Cycles](https://runcycles.io) is a budget-authority component for [autonomous agents](/glossary#autonomous-agent). Before a protected action executes, the host submits a reservation. If the reservation is rejected and the host enforces that result at a mandatory boundary, the action does not run. After execution starts, the caller commits measured usage; it releases the hold only when the action did not start or demonstrably consumed nothing.
 
-Cycles enforces this across hierarchical scopes — [tenant](/glossary#tenant), workspace, app, workflow, agent, toolset — with atomic, concurrency-safe [reservations](/glossary#reservation). It can fully allow, allow with constraints, or deny execution, which makes [graceful degradation](/glossary#graceful-degradation) possible rather than hard failure.
+Cycles checks explicitly provisioned ledgers across hierarchical scopes — [tenant](/glossary#tenant), workspace, app, workflow, agent, toolset — with atomic, concurrency-safe [reservations](/glossary#reservation). It can return `ALLOW`, `ALLOW_WITH_CAPS`, or a rejection; the host authorizes the action, applies returned caps, and chooses any [graceful degradation](/glossary#graceful-degradation).
 
 Cycles is not tied to OpenClaw or any single agent framework. It works across any tool, API, or workflow that needs bounded execution.
 
@@ -38,14 +38,14 @@ If the problem is **OpenClaw model selection and cost optimization**, Manifest i
 
 ## When Cycles is the better fit
 
-If the problem is **bounded autonomous execution** — preventing agents from spending without limits across any combination of tools, APIs, and workflows — Cycles is the direct answer. Its docs focus on reserve/commit semantics, atomic reservation, concurrency-safe shared budgets, idempotent settlement, and hierarchical scopes. That is a runtime control-plane story, not a routing story.
+If the problem is **bounded autonomous execution** — preventing agents from spending without limits across any combination of tools, APIs, and workflows — Cycles is the direct answer. Its docs focus on reserve-commit semantics, atomic reservation, concurrency-safe shared budgets, idempotent settlement, and hierarchical scopes. That is a runtime control-plane story, not a routing story.
 
 ## The short version
 
 - **Manifest optimizes and routes** — which model should handle this request?
-- **Cycles authorizes and enforces** — is this action still allowed to execute?
+- **Cycles reserves and accounts** — does the submitted amount fit the matching budget ledgers?
 
-They are not the same product category. In some stacks they may be complementary: Manifest picks the model, Cycles decides whether the call should happen at all.
+They are not the same product category. In some stacks they may be complementary: Manifest picks the model, while a mandatory Cycles integration checks the submitted estimate before the host makes the call.
 
 ---
 

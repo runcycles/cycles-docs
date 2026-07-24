@@ -70,8 +70,8 @@ The [agent security controls map](/blog/agent-security-controls-map) places thes
 ## Further Reading
 
 - [Agent Security Controls Map](/blog/agent-security-controls-map) — where each control layer sits and what job it owns
-- [Beyond Budget: How Cycles Controls Agent Actions](/blog/beyond-budget-how-cycles-controls-agent-actions) — the action-authority mechanics
+- [How Cycles Meters Caller-Assigned Action Exposure](/blog/beyond-budget-how-cycles-controls-agent-actions) — metering exposure alongside host action authorization
 - [AI Agent Risk Assessment: Score, Classify, Enforce](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) — pricing actions by blast radius
-- [MCP Tool Poisoning: 84% Success Rate](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — why detection alone keeps losing
+- [MCP-ITP: Target-Tool Calls Reached 84.2%](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — what the controlled tool-poisoning benchmark measured
 - [The Moltbook Exposure](/blog/moltbook-exposure-agent-tokens-no-gates) — injection at social scale, and bounding what a hijacked agent can do
 - [When Budget Runs Out: Degradation Patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents) — what agents do at the wall

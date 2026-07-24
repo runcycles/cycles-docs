@@ -163,6 +163,6 @@ To learn more:
 - Read [Coding Agents Need Runtime Authority](/concepts/coding-agents-need-runtime-budget-authority) for the runtime-layer companion to this piece
 - Understand [Why Rate Limits Are Not Enough](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) for how velocity controls differ from runtime authority
 - See [From Observability to Enforcement](/concepts/from-observability-to-enforcement-how-teams-evolve-from-dashboards-to-budget-authority) for how teams evolve from dashboards to budget governance
-- Explore the [reserve/commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) that powers runtime enforcement
+- Explore the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) that powers runtime enforcement
 - Get started with the [Python Client](/quickstart/getting-started-with-the-python-client) or [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
 - [AI Agent Budget Control: Enforce Hard Spend Limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits) — the technical mechanism behind runtime budget enforcement

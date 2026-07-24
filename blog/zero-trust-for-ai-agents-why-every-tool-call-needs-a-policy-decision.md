@@ -89,11 +89,11 @@ This is the difference between a guardrail and an enforcement layer. A guardrail
 
 ### 2. Budget as a First-Class Policy Dimension
 
-Cost authorization is security authorization. An agent that burns $47K over a weekend because it [misinterpreted an API error and ran 2.3 million calls](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/) is a security incident, not just a billing problem. Zero trust for agents must include spend limits as enforceable policy — per-agent, per-[tenant](/glossary#tenant), per-run.
+Cost exposure belongs in the security model. A retry or tool loop can consume substantial resources while each individual call is technically authorized. Zero-trust agent designs should include enforceable spend boundaries at the application scopes they actually use.
 
 ### 3. Scoped, Hierarchical Permissions
 
-Flat allow/deny lists don't scale. Production systems need hierarchical scopes: a tenant has a budget, each workspace within that tenant has a sub-budget, each workflow has a sub-sub-budget, and each agent within the workflow draws from its allocated share. When one agent exhausts its scope, others continue operating. When a sub-agent is spawned, it inherits constraints from its parent — it doesn't start with a blank check.
+Flat allow/deny lists do not express cumulative exposure. Cycles can use explicit ledgers at tenant, workspace, workflow, agent, and toolset scopes. A protected call consumes every matching provisioned ledger atomically. Missing child ledgers are skipped, so the orchestrator must provision intended ceilings and separately restrict a sub-agent's tools, data, credentials, and delegation depth.
 
 ### 4. Concurrency-Safe Authorization
 
@@ -172,7 +172,7 @@ The research for this post draws from discussions and reports published between 
 - [Hacker News: How Are You Enforcing Permissions for AI Agent Tool Calls?](https://news.ycombinator.com/item?id=46740645) — January 24, 2026
 - [Hacker News: Show HN: A Runtime Authorization Layer for AI Agents](https://news.ycombinator.com/item?id=47235484) — March 2026
 - [DEV Community: The Three Things Wrong with AI Agents in 2026](https://dev.to/deiu/the-three-things-wrong-with-ai-agents-in-2026-492m) — 2026
-- [RocketEdge: AI Agent Cost Control — Avoiding Budget Overruns](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/) — March 15, 2026
+- [RocketEdge: AI Agent Cost Control — Avoiding Budget Overruns](https://rocketedge.com/2026/03/15/ai-agent-cost-control/) — March 15, 2026
 
 ## Next Steps
 

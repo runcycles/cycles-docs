@@ -16,7 +16,7 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-Consider a common scenario: an infrastructure team has budget dashboards. Prometheus scrapes every 15 seconds. Grafana panels show utilization curves. Alert rules fire when thresholds cross 90%.
+Consider an illustrative scenario: an infrastructure team has budget dashboards. Prometheus scrapes every 15 seconds. Grafana panels show utilization curves. Application alert rules fire when thresholds cross 90%.
 
 <!-- more -->
 
@@ -26,15 +26,15 @@ The monitoring worked. The problem was latency. Polling-based alerting has a str
 
 ## The detection gap
 
-Representative detection latencies for a budget exhaustion event:
+The delivery paths have different latency characteristics:
 
-| Detection Method | Typical Time to Alert | Typical Time to Human Action |
+| Detection Method | Detection boundary | Main delay |
 |---|---|---|
-| Polling dashboard (60s interval) | 30-60s | 2-5 minutes |
-| Prometheus alert (15s scrape + 1m for-duration) | ~75s | 3-6 minutes |
-| Webhook event (push on state change) | <1s | 1-3 minutes |
+| Polling dashboard | Next query or refresh | Poll interval |
+| Prometheus alert | Next scrape plus alert rule evaluation | Scrape interval and configured `for` duration |
+| Webhook event | Implemented state transition enqueues delivery | Queueing, receiver latency, and retries |
 
-The webhook doesn't make humans faster. It eliminates the detection delay entirely. The event fires the instant the budget state changes — not on the next scrape, not after a for-duration averaging window.
+A webhook can avoid waiting for the next metrics scrape, but it is still asynchronous and has no sub-second end-to-end guarantee. The events service must be running, the event type must have an implemented emission hook, and delivery latency depends on the queue and receiver.
 
 This is why we built a webhook event system into Cycles v0.1.25.
 
@@ -42,7 +42,7 @@ This is why we built a webhook event system into Cycles v0.1.25.
 
 > **As of post date.** The current Admin API `EventType` enum registers **51 event types across 7 categories** (the `webhook` category and the tenant-close cascade types were added later). For the live count and per-category breakdown, see the [Event Payloads Reference](/protocol/event-payloads-reference).
 
-Every observable state change in the system produces an event. We organized them into 6 categories covering the full lifecycle:
+The original v0.1.25 schema organized 41 registered event types into 6 categories. Registration did not mean every type was emitted; the live reference distinguishes implemented hooks from planned types:
 
 | Category | Count | Covers |
 |---|---|---|
@@ -53,18 +53,20 @@ Every observable state change in the system produces an event. We organized them
 | **policy** | 3 | Created, updated, deleted |
 | **system** | 5 | Store connection lost/restored, high latency, [webhook delivery](/glossary#webhook-delivery) failed, webhook test |
 
-The six events that matter most for incident response:
+Examples of currently emitted events useful for incident response:
 
 | Event | When It Fires | Why It Matters |
 |---|---|---|
-| `budget.exhausted` | Remaining = 0 | All reservations for this scope will be denied until funded |
-| `budget.over_limit_entered` | Debt exceeds overdraft limit | New reservations blocked; operator intervention required |
-| `reservation.denied` | Agent can't reserve budget | Agents are failing — check if budget needs funding or if there's a runaway consumer |
-| `budget.threshold_crossed` | Utilization crosses 80%, 95%, or 100% | Early warning before exhaustion |
+| `budget.exhausted` | A matching ledger transitions from positive remaining to zero | New positive reservations that derive that scope and unit may be denied |
+| `budget.over_limit_entered` | A ledger transitions into `is_over_limit` | New reservations matching that ledger are blocked until state is reconciled |
+| `reservation.denied` | A dry-run reserve or decide evaluation resolves to a budget-state denial | Inspect the hypothetical reason and scope; use runtime metrics/application errors for live 4xx denials |
+| `reservation.commit_overage` | Committed actual exceeds the reservation estimate | Recalibrate estimates and inspect the overage policy result |
 | `api_key.auth_failed` | Authentication attempt with invalid key | Security event — possible credential leak or misconfiguration |
-| `system.store_connection_lost` | Redis connection failed | Infrastructure incident — budget enforcement depends on Redis availability |
+| `system.webhook_delivery_failed` | A delivery permanently fails after retries | Inspect the event store or metrics; this loop-safe meta-event is not recursively delivered as another webhook |
 
-Every event includes a standard payload: who caused it (`actor`), what changed (`data`), where it happened (`scope` path like `tenant:acme-corp/workspace:prod/agent:support-bot`), and a millisecond-precision `timestamp`. Events are emitted by both the runtime enforcement server (reserve/commit operations) and the admin control plane (CRUD operations) — a single [webhook subscription](/glossary#webhook-subscription) captures both.
+`budget.threshold_crossed` and `system.store_connection_lost` are registered protocol event types but are not emitted by the current reference services.
+
+Every event includes the common envelope fields defined by the protocol, including its type, category, source, tenant, and timestamp. Optional fields such as `actor`, `data`, and `scope` depend on the event type and producer. The runtime and admin services emit selected registered lifecycle events; registering an event type does not guarantee that every state change produces one. A matching [webhook subscription](/glossary#webhook-subscription) can receive events from both planes.
 
 ## Architecture: why a separate delivery service
 
@@ -86,9 +88,9 @@ Three services, three workloads, three scaling profiles:
 
 | Service | Workload | Latency Target | Scaling Driver |
 |---|---|---|---|
-| Runtime (reserve/commit) | Synchronous, hot path | [Reserve 7.9ms and commit 5.7ms p99 in the published v0.1.25.3 benchmark](/blog/cycles-server-performance-benchmarks) | Agent request volume |
-| Admin (CRUD) | Synchronous, operator-facing | <200ms | Human operator actions |
-| Events (webhook delivery) | Asynchronous, variable latency | Best-effort | Subscription count × event rate |
+| Runtime (reserve-commit) | Synchronous, hot path | [Reserve 7.9ms and commit 5.7ms p99 in the published v0.1.25.3 benchmark](/blog/cycles-server-performance-benchmarks) | Agent request volume |
+| Admin (CRUD) | Synchronous, operator-facing | Deployment-defined | Human and automation requests |
+| Events (webhook delivery) | Asynchronous, variable latency | At-least-once with retries; no fixed latency SLO | Subscription count × event rate |
 
 Why not embed delivery in the runtime server? Webhook endpoints are external HTTP services with unpredictable latency. A slow endpoint or DNS timeout can add hundreds of milliseconds to the reserve-commit path. The published v0.1.25.3 benchmark measured a reserve-plus-commit lifecycle at 18.4ms p99 on its stated hardware, so external delivery latency belongs off that hot path. Even a background executor needs strict isolation and backpressure to avoid resource contention with request processing.
 
@@ -100,7 +102,7 @@ Multiple events service instances can safely share the queue. `BLMOVE` atomicall
 
 ## Delivery guarantees: at-least-once with HMAC signing
 
-We chose at-least-once delivery over exactly-once. In a distributed system where the webhook receiver is an external HTTP service, exactly-once is impossible without two-phase commit — and two-phase commit across the internet is a fiction. The practical choice is: deliver at least once and give receivers the tools to deduplicate.
+The reference service uses at-least-once delivery. Because it cannot atomically commit both the receiver's external side effect and its own acknowledgement, an ambiguous outcome can be redelivered. Receivers therefore need idempotent processing or event-ID deduplication.
 
 Every delivery includes an `X-Cycles-Event-Id` header containing the event's unique ID. Receivers store processed event IDs and skip duplicates, a standard webhook idempotency pattern.
 
@@ -171,7 +173,7 @@ curl -X POST http://localhost:7979/v1/admin/webhooks \
   }'
 ```
 
-The response includes a signing secret (returned once — store it). Your middleware transforms Cycles events into PagerDuty Events API v2 format, mapping `budget.exhausted` to severity `critical` and `reservation.denied` to `warning`. Use the `event_id` as PagerDuty's `dedup_key` to correlate retried deliveries to the same alert.
+The response includes a signing secret (returned once—store it). Your middleware can map `budget.exhausted` to severity `critical` and `reservation.denied` to a nonpaging calibration signal. Use the `event_id` as PagerDuty's `dedup_key` to correlate retried deliveries to the same alert. Live reservation errors require a metric or application alert because the current exception path does not emit `reservation.denied`.
 
 We have full integration guides with code examples for [PagerDuty, Slack, Datadog, Microsoft Teams, Opsgenie, and ServiceNow](/how-to/webhook-integrations), plus a [custom receiver pattern](/how-to/webhook-integrations#integration-custom-receiver-direct) with signature verification in Python, Node.js, and Go.
 
@@ -179,15 +181,9 @@ Tenants can also create their own webhook subscriptions via `/v1/webhooks` using
 
 Webhook URLs are validated at creation time with SSRF protection enabled by default: RFC 1918 private IP ranges, loopback, and link-local addresses are blocked, and HTTPS is required in production. These can be configured via `PUT /v1/admin/config/webhook-security` for environments that need internal endpoint access.
 
-## What's next
+## Registered but not yet emitted alerts
 
-The v0.1.25 event system delivers threshold alerts at the default levels (80%, 95%, 100% utilization). Coming next on the implementation roadmap:
-
-- **Per-subscription threshold customization**: override the default 80%/95%/100% thresholds for specific subscriptions — e.g., a high-priority workspace that should alert at 50%
-- **Burn rate anomaly detection**: alert when spend rate exceeds the rolling average by a configurable multiplier
-- **Rate spike detection**: alert on reservation denial rate spikes and expiry rate spikes across rolling windows
-
-These are defined in the [v0.1.25 spec](https://github.com/runcycles/cycles-protocol/blob/main/cycles-governance-admin-v0.1.25.yaml) as `WebhookThresholdConfig`. The schema is finalized; server-side implementation is on the roadmap.
+The v0.1.25 governance schema registers `WebhookThresholdConfig` and event types for utilization thresholds, burn-rate anomalies, and reservation denial/expiry spikes. The current reference services do not produce those automatic alerts. Use Prometheus or application telemetry for pre-exhaustion thresholds today, and consult the [Event Payloads Reference](/protocol/event-payloads-reference) before subscribing to a registered event type.
 
 ---
 

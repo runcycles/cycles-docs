@@ -82,7 +82,7 @@ tenant:acme-corp                          → $50,000/month total AI budget
    └─ agent:knowledge-bot                 → $5,000/month
 ```
 
-The `tenant:acme-corp` scope acts as a hard cap across all platforms. Even if individual platform budgets sum to more than $50K, the tenant-level budget prevents collective overspend. This is the existing Cycles hierarchical scope model — no protocol changes required.
+The `tenant:acme-corp` ledger acts as a shared reservation ceiling across connectors that submit this tenant scope. Even if individual app allocations sum to more than $50K, atomic reservations cannot collectively claim estimates beyond available tenant capacity. Actual external cost and settlement still depend on integration coverage, estimate quality, and overage policy. This uses the existing Cycles hierarchy; no protocol change is required.
 
 ### Two governance dimensions
 
@@ -180,7 +180,7 @@ The Cycles reservation ledger contains the budget lifecycle for actions routed t
 GET /v1/reservations?tenant=acme-corp&status=COMMITTED
 ```
 
-Each entry in the response includes the full context:
+Each entry includes the budget-lifecycle context submitted to Cycles:
 
 ```json
 {

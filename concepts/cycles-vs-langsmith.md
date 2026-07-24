@@ -1,13 +1,13 @@
 ---
-title: "Cycles vs LangSmith: Enforcement vs Observability"
-description: "LangSmith traces what happened after execution. Cycles decides whether execution should happen at all. See how they complement each other in a production agent stack."
+title: "Cycles vs LangSmith: Budget Layers Compared"
+description: "Compare Cycles application-boundary budgets with LangSmith tracing and its private-beta LLM Gateway spend policies."
 ---
 
-# Cycles vs LangSmith: Enforcement vs Observability
+# Cycles vs LangSmith: Budget Layers Compared
 
 LangSmith is one of the most widely adopted observability platforms for LLM applications. If you're building with LangChain or LangGraph, you're probably already using it — or evaluating it.
 
-Cycles and LangSmith operate at different points in the agent lifecycle. Understanding where each fits prevents both gaps and redundancy in your production stack.
+LangSmith is no longer only an observability comparison. Its private-beta LLM Gateway can proxy supported provider calls and enforce spend policies. Cycles remains an application-boundary budget service with reserve-commit semantics. Understanding the enabled LangSmith surface and the traffic each boundary covers prevents both gaps and redundancy.
 
 > **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) · [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — observability records what happened; the calculators show what *will* happen at your token volume and action profile.
 
@@ -15,40 +15,39 @@ Cycles and LangSmith operate at different points in the agent lifecycle. Underst
 
 | | LangSmith | Cycles |
 |---|---|---|
-| **When it acts** | After execution | Before execution |
-| **What it answers** | "What happened?" | "Should this happen?" |
-| **Core mechanism** | Tracing, logging, evaluation | Reserve → commit → release |
-| **Cost tracking** | Reports actual cost per trace | Enforces cost limits per action |
-| **Action control** | None — records all actions | Denies actions that exceed authority |
-| **Scope** | Per-run, per-chain traces | Per-tenant, per-agent, per-action |
-| **Concurrency** | N/A (read-only) | Atomic reservations (write path) |
-| **Multi-tenant** | Tags and metadata | API-key-scoped tenant isolation |
+| **When it acts** | Observability records execution; LLM Gateway evaluates policy before a proxied model call | Application reserves before protected execution and settles afterward |
+| **What it answers** | "What happened?" and, in Gateway, "Does this provider request fit the spend policy?" | "Can this submitted amount be held against every matching ledger?" |
+| **Core mechanism** | Tracing, evaluation, and private-beta provider proxy policies | Reserve → commit → release |
+| **Cost control** | Hard Gateway caps by organization, workspace, API key, or user over hourly through monthly windows | Atomic budgets across populated tenant → workspace → app → workflow → agent → toolset scopes |
+| **Application actions** | Traces tool runs; Gateway governs supported LLM-provider traffic | Can meter caller-assigned tool exposure; host still authorizes tools and arguments |
+| **Settlement** | Gateway tracks spend against caps | Explicit estimate hold, best-known actual commit, and release |
+| **Deployment** | LangSmith-managed Gateway is in private beta | Self-hosted service and open protocol |
 
 ## The fundamental difference
 
-LangSmith tells you that yesterday's agent spent $47 across 312 runs, with an average latency of 2.3 seconds and a 4% error rate. That information is valuable — it drives optimization, debugging, and capacity planning.
+LangSmith Observability tells you what an agent did across traces and runs. That information drives optimization, debugging, evaluation, and capacity planning.
 
-LangSmith can alert on cost anomalies — but alerting is reactive. By the time the alert fires, the spend has already happened. Cycles operates on the write path, preventing the spend before it occurs.
+When traffic is routed through the private-beta LLM Gateway, LangSmith can also evaluate hard spend policies on each incoming provider request. Its documented scopes are organization, workspace, API key, and user, with hourly, daily, weekly, or monthly windows. A blocked request receives `402`, and the violation is attached to a trace.
 
-Cycles operates on the write path. Before an LLM call executes, the agent must reserve budget. If the budget is exhausted, the call is denied — the model is never invoked, no tokens are consumed, no cost is incurred. This is enforcement, not observation.
+Cycles operates at the boundary the application chooses. Before a protected LLM or tool call executes, the host requests an atomic hold against matching ledgers. If the reservation fails and the host honors that result, the protected operation does not run. If it succeeds, the host commits best-known actual usage or releases an unused hold.
 
-## Where LangSmith stops
+## Where the boundaries differ
 
-### No pre-execution gate
+### Provider gateway versus application boundary
 
-LangSmith traces are recorded during and after execution. There is no mechanism to block an LLM call before it happens based on budget state. By the time LangSmith records that an agent exceeded its budget, the money is already spent.
+LangSmith's Gateway protects LLM calls routed through that proxy and currently documents OpenAI, Anthropic, Bedrock, Baseten, Fireworks, Gemini, and Vertex AI providers. Calls that bypass the Gateway, plus arbitrary application tools such as refunds, emails, database writes, and deployments, need another mandatory control point.
 
-### No tenant-level enforcement
+Cycles is provider-neutral and can sit around any instrumented operation. Coverage is not automatic: bypass paths remain outside its budget boundary, and action authorization remains application logic.
 
-LangSmith supports tags and metadata for filtering traces by customer or environment. But these are labels — they don't enforce boundaries. Customer A's traces can't prevent Customer B's agent from running. There is no per-tenant budget enforcement.
+### Spend policy versus reserve-commit
 
-### No concurrency safety
+LangSmith documents real-time spend tracking and a pre-execution block when a proxied request would cross a Gateway cap. Cycles exposes a different lifecycle: reserve an estimate atomically, hold it while work is in flight, then commit actual usage or release it. That distinction matters when many calls start concurrently or when an application needs to account for work that can fail after admission.
 
-When multiple agent instances run simultaneously, LangSmith records each trace independently. It cannot coordinate across instances to prevent concurrent overspend. Two agents checking the same budget in parallel will both proceed — the classic time-of-check-to-time-of-use (TOCTOU) problem that Cycles solves with atomic reservations.
+Do not infer one product's concurrency or overage semantics from the other. Validate Gateway behavior against the private-beta version you are using; configure Cycles estimation and commit-overage policy for the application boundary you own.
 
-### No action authority
+### Budget exposure is not tool permission
 
-LangSmith records that an agent called `send_email` 200 times. Cycles prevents the 201st call if the action budget is exhausted. The distinction is between logging a side effect and governing whether the side effect should occur.
+LangSmith can trace a `send_email` run. A host can separately require a Cycles `RISK_POINTS` reservation before each authorized attempt. Neither a Gateway spend policy nor a risk-point balance decides whether a recipient, tool, or argument is authorized. Keep identity, credentials, allowlists, and argument validation at the host or gateway that executes the action.
 
 ## Where Cycles stops
 
@@ -67,22 +66,23 @@ These are observability concerns. Cycles is not an observability tool.
 The strongest production setup uses both:
 
 ```
-Request → Cycles (should this execute?) → LLM call → LangSmith (what happened?)
-              ↓                                              ↓
-         DENY → graceful degradation              trace → dashboard
-         ALLOW → proceed with budget cap           cost → attribution
-         ALLOW_WITH_CAPS → proceed with limits     latency → profiling
+Application action
+  → host authorization
+  → Cycles reserve (application-scope budget)
+  → optional LangSmith LLM Gateway (provider spend policy, redaction, credentials)
+  → provider
+  → Cycles commit/release + LangSmith trace
 ```
 
 ### Practical example
 
 A customer support agent built with LangChain:
 
-1. **Cycles** checks budget before each instrumented LLM call and tool invocation. If the deepest matching budget has `max_tokens` configured, an accepted request returns `ALLOW_WITH_CAPS`; if a live reservation lacks budget, it returns an error such as `409 BUDGET_EXCEEDED`. The application applies caps or handles the denial.
+1. **Cycles** checks budget before each instrumented LLM call and tool invocation. If a matching budget has `max_tokens` configured, an accepted request can return `ALLOW_WITH_CAPS`; if a live reservation lacks budget, it returns an error such as `409 BUDGET_EXCEEDED`. The application applies caps or handles the denial.
 
-2. **LangSmith** traces the full execution — every chain step, tool call, and LLM response. The traces show token counts, latency, and error rates. The team uses this data to optimize prompts, evaluate response quality, and debug failures.
+2. **LangSmith Observability** traces the instrumented chain execution. If the team also uses the private-beta Gateway, provider calls pass its spend and data policies before being forwarded.
 
-Neither tool can do the other's job. LangSmith cannot block an LLM call. Cycles cannot visualize a chain execution.
+The overlap is provider spend enforcement; the differences are boundary, scope vocabulary, lifecycle, deployment, and observability depth. Cycles does not visualize a chain execution, while LangSmith's provider Gateway does not automatically govern every application tool.
 
 ### Feeding Cycles data into LangSmith
 
@@ -99,25 +99,29 @@ The commit metrics (`StandardMetrics` — tokens, latency, model version) attach
 - Evaluate response quality across datasets
 - Profile latency across chain steps
 - Track cost attribution across runs and users
+- Enforce supported-provider spend policies through its private-beta LLM Gateway
 
 **Use Cycles when you need to:**
-- Prevent an agent from exceeding its budget before it acts
-- Enforce per-tenant, per-agent, or per-action limits
-- Handle concurrent agents safely (atomic reservations)
-- Control non-LLM actions (tool calls, API requests, emails)
-- Degrade gracefully when budget is low (three-way decisions)
+- Reserve estimated exposure atomically before protected application work
+- Use the protocol's tenant, workspace, app, workflow, agent, and toolset scope hierarchy
+- Settle best-known actual usage after execution
+- Meter non-LLM work and caller-assigned action exposure
+- Return configured caps for the host to apply
 
 **Use both when you need to:**
 - Run agents in production with both visibility and enforcement
-- Attribute cost accurately (LangSmith) while enforcing limits (Cycles)
+- Correlate rich execution traces with reserve-commit budget records
 - Debug why an agent was denied (LangSmith trace + Cycles decision)
+- Layer provider-gateway policies under broader application budgets
 
 ## Key points
 
-- **Different layers, different timing.** LangSmith observes after execution. Cycles enforces before execution. They don't overlap.
-- **Observability doesn't prevent overspend.** Knowing an agent spent $47 doesn't stop the next one from spending $470.
-- **Enforcement doesn't provide visibility.** Cycles tracks budget state, not execution traces. You need both for production operations.
-- **Concurrency is the hidden gap.** LangSmith has no mechanism for coordinating budget across parallel agent instances. Cycles' atomic reservations solve this.
+- **Compare enabled surfaces.** LangSmith Observability is retrospective; its private-beta LLM Gateway adds pre-execution provider spend policies.
+- **Compare boundaries, not slogans.** Gateway policies cover routed provider traffic. Cycles covers instrumented application paths and exposes reserve-commit settlement.
+- **Authorization remains separate.** Neither cost control grants permission to invoke an application tool.
+- **Use correlated records.** LangSmith traces and Cycles reservation IDs can explain both execution and budget treatment.
+
+LangSmith behavior was rechecked on July 24, 2026 against the official [LLM Gateway overview](https://docs.langchain.com/langsmith/llm-gateway) and [spend-policy documentation](https://docs.langchain.com/langsmith/llm-gateway-spend-policies). The Gateway is documented as private beta, so verify availability and semantics for your account.
 
 ## Next steps
 

@@ -27,7 +27,7 @@ Shadow mode has been instrumented on every model call for ten days. Dry-run deci
 
 A calendar-driven cutover — "it's been two weeks, flip the switch" — is the version that gets teams into trouble. The signal-driven version — "the shape of what we're seeing matches what hard enforcement looks like in production" — is the version that ends quietly. The difference between those two decisions is the difference between a clean cutover and a 3 AM rollback, and most teams don't know which version they made until afterwards.
 
-This post is a decision tree for that call. Four signal categories, suggested threshold ranges, and explicit guidance on what to cut over first, when to stop, and how to reverse course if the signals turn against you.
+This post is a decision tree for that call: four signal categories and explicit guidance on what to cut over first, when to stop, and how to reverse course if the signals turn against you.
 
 <!-- more -->
 
@@ -39,7 +39,7 @@ The failure isn't in the duration. The failure is that a calendar has no opinion
 
 Industry patterns learned this years ago. Stripe's rate-limiter post puts it plainly: ["Dark launch each rate limiter to watch the traffic they would block"](https://stripe.com/blog/rate-limiters). Istio ships an `istio.io/dry-run: "true"` annotation (Alpha status) that lets `AuthorizationPolicy` evaluate without blocking so teams can measure. OPA Gatekeeper's [`enforcementAction: dryrun`](https://open-policy-agent.github.io/gatekeeper/website/docs/violations/) does the same for Kubernetes admission, surfacing violations in the constraint's `status` field. Cloudflare's WAF offers a `Log` action before `Block`. Every maturing enforcement tool converges on the same shape — evaluate, measure, calibrate, then flip — and none of them recommend a fixed duration. They recommend a set of signals.
 
-Cycles' shadow mode is `dry_run: true` on a reservation request: the server runs the full scope-derivation, budget-check, and caps-computation logic, returns the decision (`ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`) along with affected scopes and optional balance snapshots, and leaves budget state untouched. No reservation is persisted, no balance is modified, and base `dry_run` does not emit a reservation event — the decision round-trips in the response. (Teams that want emission-driven observation can use the `observe_mode` extension introduced in v0.1.26, which emits `reservation.observed_allowed` / `reservation.observed_denied`; that's a different track from base dry-run.) Your agent proceeds regardless of the result. See [How to Add Runtime Enforcement Without Breaking Your Agents](/blog/how-to-add-runtime-enforcement-without-breaking-your-agents) for the basic instrumentation playbook. This post is about what to read off those dry-run responses before you stop reading and start blocking.
+Cycles' shadow mode is `dry_run: true` on a reservation request: the server runs the scope-derivation, budget-check, and caps-computation logic, returns the decision (`ALLOW`, `ALLOW_WITH_CAPS`, or `DENY`) along with affected scopes and optional balance snapshots, and leaves budget state untouched. No reservation is persisted and no balance is modified. The current server emits `reservation.denied` for denied dry-run evaluations, but not a complete allowed-decision/outcome stream, so the application must log every response and actual outcome. The v0.1.26 governance extension specifies a separate tenant-level `observe_mode` and observed-event types, but current v0.1.25.x reference servers only accept the preview fields for compatibility; they do not apply observe mode or emit those preview events. See [How to Add Runtime Enforcement Without Breaking Your Agents](/blog/how-to-add-runtime-enforcement-without-breaking-your-agents).
 
 ## The four signal categories
 
@@ -58,13 +58,13 @@ Each category is a veto. If any of them is red, cutover is premature regardless 
 
 This is where most teams focus first, and where dry-run data is most directly useful.
 
-**False-positive denial rate.** Not every `DENY` in shadow mode is a denial you actually want in production. Some fraction represent estimate errors, misconfigured budgets, or legitimate overages the team chose to tolerate. A reasonable target is the 3–8% band on the fraction of would-be denials that represent work you'd want to let through. Higher than that, and your first day of enforcement produces a tide of pages. The healthiest teams classify a sample of shadow denials manually for at least a few days before cutover — it's the only way to separate "the policy caught a real problem" from "the estimate was too tight."
+**False-positive denial rate.** Not every `DENY` in shadow mode is a denial you actually want in production. Some represent estimate errors, misconfigured budgets, or overages the team chose to tolerate. Classify a representative sample, set the acceptable rate from the workflow's user-impact SLO, and do not cut over while unintended denials breach that objective.
 
 A note on terminology: *false-positive denial rate* is the percentage of shadow denials that were unintended. *Sustained denial rate*, referenced in the rollback table later, is the absolute frequency of denials after cutover. The two signals are distinct; don't compare them directly.
 
-**Reserve-to-commit ratio.** When reservations commit with the actual usage they reserved, the ratio hovers near 1.0. The band that's safe to enforce on is roughly 0.8–1.2 — held steady for at least a week, not just a single two-day sample. A ratio trending downward (you're over-reserving) means enforcement will reject legitimate work because your estimates are inflated. A ratio trending upward (you're under-reserving) means enforcement will under-protect. See [Estimate Drift: The Silent Killer of Budget Enforcement](/blog/estimate-drift-silent-killer-of-enforcement) for the operator diagnostic on this ratio.
+**Reserve-to-commit ratio.** Define this as total submitted estimates divided by total actual usage for completed reservations. A ratio trending upward means estimates are growing relative to actuals; a ratio trending downward means actuals are growing relative to estimates. Cycles defines no universal safe band or duration, so choose a workload-specific tolerance and validate the distribution as well as the aggregate. See [Estimate Drift: The Silent Killer of Budget Enforcement](/blog/estimate-drift-silent-killer-of-enforcement).
 
-**Commitment overage rate.** The fraction of commits that exceeded their reservations. Under 1% is healthy. 1–5% is an amber signal — tune estimates, don't cut over yet. Over 5% and the estimates themselves are wrong, not the policy.
+**Commitment overage rate.** Track the fraction of commits whose actual usage exceeded the estimate. Compare it with the calibrated workload baseline and investigate changes by model, workflow, and tenant; the acceptable rate depends on variance and the configured commit-overage policy.
 
 **Budget utilization distribution.** If your would-be denial rate is an average across tenants, the average is lying to you. Look at the distribution. One tenant at 95% utilization with the rest at 30% means enforcement will hit that one tenant hard and leave the others untouched — which might be fine, or might be a signal that the budget for that tenant was never right. Outlier tenants should be deliberately scoped in or out of the first cutover, not averaged into the decision.
 
@@ -72,11 +72,11 @@ A note on terminology: *false-positive denial rate* is the percentage of shadow 
 
 A budget policy that only sees 60% of the real work produces misleading dry-run data.
 
-**Instrumentation coverage.** The ratio of code paths that call `reserve()` to code paths that call an LLM or a tool. If 30% of your agent calls bypass Cycles because they're in a legacy code path or a background job, the 4% denial rate on the instrumented path tells you approximately nothing about what enforcement will do to the whole system. Target: at least 90% of model calls and 80% of tool calls instrumented before cutover.
+**Instrumentation coverage.** The ratio of code paths that call `reserve()` to code paths that call an LLM or a tool. If 30% of your agent calls bypass Cycles because they're in a legacy code path or a background job, the denial rate on the instrumented path says little about what enforcement will do to the whole system. Define a coverage threshold from your threat model and inventory; a high-risk deployment may require every protected path to be instrumented before cutover.
 
 **Scope derivation consistency.** The same logical operation should resolve to the same scope path every time. If a run from agent A sometimes reports `tenant:X/workflow:Y/agent:A` and sometimes reports just `tenant:X`, enforcement against the narrower scope will behave inconsistently. Shadow data is the audit surface for this — run a daily diff over scope paths for a known-fixed workflow.
 
-**Policy freshness.** Does every tenant and workflow have a budget policy that was authored this quarter, or are you still running day-one defaults for half your scopes? Outdated policies are more dangerous under enforcement than under shadow, because shadow just logs them and enforcement blocks on them.
+**Policy freshness.** Verify that every ledger and scope included in the cutover still reflects the intended exposure, current workflow behavior, and current pricing. Age alone does not make a policy wrong, but an unreviewed default should not silently become a hard production boundary.
 
 ## Operational readiness signals
 
@@ -86,19 +86,19 @@ Signal category most often underweighted. When the first legitimate denial fires
 
 **Degradation paths.** For every high-traffic workflow, has the team decided what happens when a reservation is denied? The options are well-understood — model downgrade, capability narrowing, queueing, checkpoint-and-resume, inform-and-stop — and the choice depends on the workflow. See [When Budget Runs Out: Graceful Degradation Patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents) for the decision matrix. A workflow without a degradation path should not be part of the first cutover.
 
-**Runbook familiarity.** Whoever is on call needs to recognize a `BUDGET_EXCEEDED` error, a `BUDGET_FROZEN` error, and an `OVERDRAFT_LIMIT_EXCEEDED` error, and know which of the three requires a budget top-up versus a policy review versus paging the tenant. See [Operating Budget Enforcement in Production](/blog/operating-budget-enforcement-in-production) for the reason-code-to-response mapping.
+**Runbook familiarity.** Whoever is on call needs to recognize `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, and `OVERDRAFT_LIMIT_EXCEEDED`, inspect the denying scope, and distinguish a legitimate limit from bad estimates, lifecycle state, or concurrent debt. See [Operating Budget Enforcement in Production](/blog/operating-budget-enforcement-in-production).
 
 ## Reversion readiness
 
 The last category is the one that's often skipped because it feels defeatist. It isn't. It's the category that lets you cut over *aggressively* on the signals above, because you have a clean exit if reality disagrees with the data.
 
-**Kill-switch design.** A feature flag, a config toggle, or a small code path that flips every call back to `dry_run: true` without a deploy. On self-hosted Cycles, this is usually a process environment variable or an admin-API budget setting toggled per scope. Either way, the engineer on call shouldn't have to push code to roll back.
+**Kill-switch design.** Put `dry_run` behind an application or integration feature flag that can be changed without a deploy. `dry_run` is a request property, not an admin budget setting. The current v0.1.25.x server accepts tenant `observe_mode` configuration but does not apply it to runtime decisions, so do not rely on that field as a cutover switch.
 
-The effect you're after is a scope-level freeze via the admin API: once a budget is frozen, subsequent reservations against that scope return `BUDGET_FROZEN` until the scope is unfrozen, and in-flight commits are not affected. The exact admin route shape varies by deployment — check your admin API surface for the freeze/unfreeze endpoints it exposes; the semantics matter more than the literal path.
+An admin budget freeze is a separate emergency stop, not a rollback to shadow mode. Once a budget is frozen, subsequent live reservations and direct events against that scope fail with `BUDGET_FROZEN` until it is unfrozen; existing reservations can still commit or release. Use the documented admin freeze/unfreeze route for that behavior.
 
-The hard freeze isn't always the right first move. The softer version — flipping the scope's policy back to `dry_run: true` without losing the data path — is usually preferable, because it leaves the shadow signal intact while stopping the blocking behavior.
+The softer rollback is to make the integration send dry-run evaluations and continue execution while recording the decision in application telemetry. That keeps the evaluation signal without mutating the Cycles ledger.
 
-**Rollback plan written down.** Two steps minimum: (1) flip the kill switch to restore shadow mode; (2) triage the signals that prompted the rollback before attempting re-enforcement. Teams that write this down in advance spend minutes on rollback, not hours.
+**Rollback plan written down.** At minimum: (1) use the application feature flag to restore dry-run/bypass behavior; (2) triage the signals that prompted the rollback before attempting enforcement again. Test that path against the rollback-time objective for the workflow.
 
 **Canary scopes.** A small subset of tenants or workflows you're willing to cut over first and watch closely. If the signals on the canary set don't match the shadow data, the decision-tree's veto fires *before* you expand enforcement.
 
@@ -107,7 +107,7 @@ The hard freeze isn't always the right first move. The softer version — flippi
 Cutover isn't a single on/off switch across the whole stack. When the four signal categories are green, cut over in an order that minimizes blast radius:
 
 1. **Low-traffic, high-cost workflows first.** An overnight batch job or a rarely-used research agent. Enforcement errors here are loud and easy to diagnose.
-2. **High-estimate-quality paths next.** The workflows where your reserve-to-commit ratio was tightest in shadow. These are the paths where enforcement does exactly what the data predicted.
+2. **High-estimate-quality paths next.** Prefer workflows whose estimate distributions stayed within their chosen tolerance during calibration.
 3. **High-risk tenants last.** The one tenant with 95% utilization isn't where you want to debug the first week of enforcement. Bring them into hard enforcement after the other paths are running clean.
 
 This is the same shape as a canary deploy. You're looking for disagreements between your pre-cutover model of the system and the post-cutover reality, and you want those disagreements to surface in the lowest-blast-radius environment first.
@@ -116,25 +116,25 @@ This is the same shape as a canary deploy. You're looking for disagreements betw
 
 Signals that enforcement is misbehaving post-cutover — and therefore reasons to flip the kill switch back to shadow:
 
-| Signal | Rollback threshold (rough guide) |
+| Signal | Rollback criterion |
 |---|---|
-| Denial rate | Sustained 3× shadow baseline for >10 minutes |
-| Business-critical workflow error rate | Any noticeable spike in a monitored production flow |
+| Denial rate | Breaches the workflow's calibrated user-impact or availability SLO |
+| Business-critical workflow error rate | Reaches the incident threshold declared in the rollout plan |
 | `BUDGET_FROZEN` responses | Any appearance on a scope you didn't explicitly freeze |
-| Commit-overage rate on a single scope | Sustained >2% — usually means a model change invalidated the reserve-to-commit estimate for that scope |
-| Escalation volume from tenants | Any concentrated cluster, especially within the first hour |
+| Commit-overage rate on a single scope | Leaves the workload-specific baseline enough to threaten availability or exposure objectives |
+| Escalation volume from tenants | Breaches the customer-support or incident SLO |
 
 A rollback isn't a failure — it's the plan working. The follow-up is: what category of signal turned out to be under-calibrated, and what needs to change in the shadow data before the next cutover attempt?
 
 ## The scorecard
 
-Put the four categories together as a single cutover readiness check. If every row is green, cut over. If any row is amber, fix that category first. If any row is red, cutover is premature regardless of how the others look.
+Put the four categories together as a single cutover readiness check. Proceed only when every required category is ready.
 
-| Category | Green | Amber | Red |
+| Category | Ready | Needs work | Blocks cutover |
 |---|---|---|---|
-| **Cost calibration** | False-positive denials <5%, R/C ratio 0.8–1.2 steady ≥1 week, overage <1% | Overage 1–5%, ratio drifting | Overage >5%, ratio outside 0.8–1.2 |
-| **Policy coverage** | ≥90% model calls, ≥80% tool calls instrumented; scope derivation stable | 70–90% coverage; occasional scope inconsistency | <70% coverage or day-one policies still in place |
-| **Operational readiness** | Alerts calibrated to shadow baseline; degradation paths defined for high-traffic workflows; runbook familiar | Alerts on templates; some workflows without degradation path | No one on call has responded to a dry-run alert |
+| **Cost calibration** | False denials, estimate ratio, and overage rate meet workload-specific objectives across representative traffic | A metric is still moving or edge cases are under-sampled | A known legitimate path fails or a known runaway path passes |
+| **Policy coverage** | Every protected path in the cutover inventory is instrumented and scope derivation is stable | Some lower-impact paths are explicitly deferred | A required protected path bypasses the boundary or maps inconsistently |
+| **Operational readiness** | Alerts use application-side dry-run baselines; degradation paths and runbooks are tested | A noncritical workflow lacks a tested fallback | Operators cannot recognize, mitigate, or roll back an enforcement failure |
 | **Reversion readiness** | Kill-switch tested; rollback plan written; canary scopes selected | Kill-switch designed but untested | No rollback mechanism |
 
 ## The takeaway

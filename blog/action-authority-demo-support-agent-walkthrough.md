@@ -3,7 +3,7 @@ title: "Block Agent Emails Before Execution"
 date: 2026-03-22
 author: Albert Mavashev
 tags: [action-authority, demo, agents, runtime-authority, walkthrough, action-control, side-effects]
-description: "A support agent can use CRM, notes, and email — but should every run send? Cycles blocks the customer email before execution. Three decorators, one exception."
+description: "See a support-agent demo where a mandatory decorator requests a Cycles reservation and a zero-allocation toolset ledger prevents the attempted email call."
 blog: true
 sidebar: false
 head:

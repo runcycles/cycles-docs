@@ -5,7 +5,7 @@ description: "CyclesEvidence turns each budget decision into a signed, content-a
 
 # CyclesEvidence: Verifiable Audit for Agent Decisions
 
-Cycles enforces budget and action authority in real time. CyclesEvidence is the other half: it makes each decision **provable after the fact** — a signed, content-addressed record that an auditor, a counterparty, or a regulator can verify on their own, without trusting your word or querying your live ledger.
+Cycles enforces configured budgets for instrumented work in real time; the host retains action authorization. CyclesEvidence can make supported budget decisions **verifiable after the fact** through signed, content-addressed envelopes without querying the live ledger.
 
 ## The problem: a 200 OK is not proof
 
@@ -21,7 +21,7 @@ For all of them, "the server said ALLOW" is hearsay. CyclesEvidence replaces hea
 
 For each authorization lifecycle event, Cycles can emit a **CyclesEvidence envelope**: the request and response, wrapped in a JSON object that is
 
-- **canonicalized** with [RFC 8785 JCS](https://www.rfc-editor.org/rfc/rfc8785) (a deterministic byte form),
+- **canonicalized** with [RFC 8785 JCS](https://www.rfc-editor.org/info/rfc8785/) (a deterministic byte form),
 - **content-addressed** by `evidence_id` = the SHA-256 of those canonical bytes, computed with the `evidence_id` and `signature` fields both present and set to the empty string `""` — so the id *is* the integrity check, and
 - **Ed25519-signed** by the Cycles server's key — so the origin is provable.
 
@@ -60,7 +60,7 @@ It is also **off until configured.** A deployment must set a shared signing iden
 
 ## In one line
 
-CyclesEvidence makes a budget decision **portable, verifiable proof** — so an agent's spending and action authority can be audited and trusted by systems that don't depend on your live ledger.
+CyclesEvidence makes a supported budget decision portable and verifiable. A complete action audit still needs correlated host authorization, tool arguments, execution results, and external outcomes.
 
 ## Related
 

@@ -37,6 +37,9 @@ microcents = price_per_million_tokens × token_count × 100
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/token) | Output (microcents/token) |
 |---|---|---|---|---|
+| gpt-5.6-sol | $5.00 | $30.00 | 500 | 3,000 |
+| gpt-5.6-terra | $2.50 | $15.00 | 250 | 1,500 |
+| gpt-5.6-luna | $1.00 | $6.00 | 100 | 600 |
 | gpt-5 | $1.25 | $10.00 | 125 | 1,000 |
 | gpt-5-mini | $0.25 | $2.00 | 25 | 200 |
 | gpt-5-nano | $0.05 | $0.40 | 5 | 40 |
@@ -53,30 +56,30 @@ microcents = price_per_million_tokens × token_count × 100
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/token) | Output (microcents/token) |
 |---|---|---|---|---|
-| Claude Opus 4 | $15.00 | $75.00 | 1,500 | 7,500 |
-| Claude Sonnet 4 | $3.00 | $15.00 | 300 | 1,500 |
-| Claude Haiku 3.5 | $0.80 | $4.00 | 80 | 400 |
+| Claude Opus 4.8 | $5.00 | $25.00 | 500 | 2,500 |
+| Claude Sonnet 4.6 | $3.00 | $15.00 | 300 | 1,500 |
+| Claude Haiku 4.5 | $1.00 | $5.00 | 100 | 500 |
 
 ### Google
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/token) | Output (microcents/token) |
 |---|---|---|---|---|
 | Gemini 2.5 Pro | $1.25 | $10.00 | 125 | 1,000 |
-| Gemini 2.5 Flash | $0.15 | $0.60 | 15 | 60 |
-| Gemini 2.0 Flash | $0.10 | $0.40 | 10 | 40 |
+| Gemini 2.5 Flash | $0.30 | $2.50 | 30 | 250 |
+| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | 10 | 40 |
 
-### Meta (Llama)
+### Groq on-demand
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/token) | Output (microcents/token) |
 |---|---|---|---|---|
-| Llama 4 Maverick | $0.20 | $0.60 | 20 | 60 |
-| Llama 4 Scout | $0.15 | $0.40 | 15 | 40 |
-| Llama 3.3 70B | $0.40 | $0.40 | 40 | 40 |
+| openai/gpt-oss-20b | $0.075 | $0.30 | 7.5 | 30 |
+| openai/gpt-oss-120b | $0.15 | $0.60 | 15 | 60 |
+| qwen/qwen3.6-27b | $0.60 | $3.00 | 60 | 300 |
 
-> Llama model pricing varies by hosting provider. The values above are representative of major inference providers (Together AI, Groq, Fireworks). Self-hosted models have no per-token cost — use `TOKENS` or `RISK_POINTS` units instead. See the [Ollama integration guide](/how-to/integrating-cycles-with-ollama) for self-hosted patterns.
+> Open-model pricing and availability vary by host. The table above is specifically Groq's on-demand pricing, not a universal rate for those model families. Round the final reservation amount up when a per-token conversion is fractional. Self-hosted models have no provider token invoice, but still consume compute; use a unit that matches what you want to bound. See the [Groq integration guide](/how-to/integrating-cycles-with-groq) and [Ollama integration guide](/how-to/integrating-cycles-with-ollama).
 
 ::: info Note
-Prices change. Check your provider's pricing page for current rates. The formulas and approach remain the same regardless of specific prices.
+Provider rates above were checked on July 24, 2026. The OpenAI table includes the current GPT-5.6 family plus selected older models that still appear in examples. GPT-5.6 cache reads are discounted, cache writes cost 1.25 times the uncached input rate, and requests above 272,000 input tokens use higher rates for the full request. Prices, caching rules, long-context tiers, and regional premiums change; check each provider's pricing page before deploying. The formulas remain the same.
 :::
 
 ## Quick estimation formula
@@ -93,16 +96,16 @@ Then add a safety buffer:
 reservation_amount = estimate × 1.2   # 20% buffer
 ```
 
-### Example: GPT-4o call with 2,000 input tokens, 1,000 max output tokens
+### Example: GPT-5.6 Luna call with 2,000 input tokens, 1,000 max output tokens
 
 ```
-input_cost  = 2,000 × 250   = 500,000 microcents
-output_cost = 1,000 × 1,000 = 1,000,000 microcents
-total       = 1,500,000 microcents ($0.015)
-with buffer = 1,800,000 microcents
+input_cost  = 2,000 × 100 = 200,000 microcents
+output_cost = 1,000 × 600 = 600,000 microcents
+total       = 800,000 microcents ($0.008)
+with buffer = 960,000 microcents
 ```
 
-### Example: Claude Sonnet 4 call with 4,000 input tokens, 2,000 max output tokens
+### Example: Claude Sonnet 4.6 call with 4,000 input tokens, 2,000 max output tokens
 
 ```
 input_cost  = 4,000 × 300   = 1,200,000 microcents
@@ -115,32 +118,39 @@ with buffer = 5,040,000 microcents
 
 ::: code-group
 ```python [Python]
+import math
+
 # Simple cost estimator
 def estimate_cost(input_tokens: int, max_output_tokens: int, model: str) -> int:
     """Return estimated cost in USD_MICROCENTS with 20% buffer."""
     rates = {
+        "gpt-5.6-sol":     (500, 3000),
+        "gpt-5.6-terra":   (250, 1500),
+        "gpt-5.6-luna":    (100, 600),
         "gpt-4o":          (250, 1000),
         "gpt-4o-mini":     (15, 60),
         "gpt-4.1":         (200, 800),
         "gpt-4.1-mini":    (40, 160),
         "gpt-4.1-nano":    (10, 40),
         "claude-sonnet":   (300, 1500),
-        "claude-haiku":    (80, 400),
+        "claude-haiku":    (100, 500),
         "gemini-2.5-pro":  (125, 1000),
-        "gemini-2.5-flash":(15, 60),
-        "llama-4-maverick":(20, 60),
+        "gemini-2.5-flash":(30, 250),
+        "groq:gpt-oss-20b":(7.5, 30),
+        "groq:gpt-oss-120b":(15, 60),
+        "groq:qwen3.6-27b": (60, 300),
     }
-    input_rate, output_rate = rates.get(model, (250, 1000))
+    input_rate, output_rate = rates.get(model, (100, 600))
     estimate = (input_tokens * input_rate) + (max_output_tokens * output_rate)
-    return int(estimate * 1.2)
+    return math.ceil(estimate * 1.2)
 
 # Usage with the @cycles decorator
 @cycles(
     estimate=lambda prompt, max_tokens=1000: estimate_cost(
-        len(prompt) // 4, max_tokens, "gpt-4o"
+        len(prompt) // 4, max_tokens, "gpt-5.6-luna"
     ),
     action_kind="llm.completion",
-    action_name="openai:gpt-4o",
+    action_name="openai:gpt-5.6-luna",
 )
 def ask(prompt: str, max_tokens: int = 1000) -> str:
     ...
@@ -148,27 +158,32 @@ def ask(prompt: str, max_tokens: int = 1000) -> str:
 ```typescript [TypeScript]
 function estimateCost(inputTokens: number, maxOutputTokens: number, model: string): number {
   const rates: Record<string, [number, number]> = {
+    "gpt-5.6-sol":     [500, 3000],
+    "gpt-5.6-terra":   [250, 1500],
+    "gpt-5.6-luna":    [100, 600],
     "gpt-4o":          [250, 1000],
     "gpt-4o-mini":     [15, 60],
     "gpt-4.1":         [200, 800],
     "gpt-4.1-mini":    [40, 160],
     "gpt-4.1-nano":    [10, 40],
     "claude-sonnet":   [300, 1500],
-    "claude-haiku":    [80, 400],
+    "claude-haiku":    [100, 500],
     "gemini-2.5-pro":  [125, 1000],
-    "gemini-2.5-flash":[15, 60],
-    "llama-4-maverick":[20, 60],
+    "gemini-2.5-flash":[30, 250],
+    "groq:gpt-oss-20b":[7.5, 30],
+    "groq:gpt-oss-120b":[15, 60],
+    "groq:qwen3.6-27b": [60, 300],
   };
-  const [inputRate, outputRate] = rates[model] ?? [250, 1000];
+  const [inputRate, outputRate] = rates[model] ?? [100, 600];
   const estimate = inputTokens * inputRate + maxOutputTokens * outputRate;
   return Math.ceil(estimate * 1.2);
 }
 
 const ask = withCycles(
   {
-    estimate: (prompt: string) => estimateCost(Math.ceil(prompt.length / 4), 1000, "gpt-4o"),
+    estimate: (prompt: string) => estimateCost(Math.ceil(prompt.length / 4), 1000, "gpt-5.6-luna"),
     actionKind: "llm.completion",
-    actionName: "openai:gpt-4o",
+    actionName: "openai:gpt-5.6-luna",
   },
   async (prompt: string) => { ... },
 );
@@ -181,9 +196,9 @@ Quick reference for typical operations (including 20% buffer):
 
 | Operation | Model | Typical Estimate (microcents) | Approx USD |
 |---|---|---|---|
-| Short chat reply (500 in / 200 out) | gpt-4o | 390,000 | $0.004 |
-| Long chat reply (2,000 in / 1,000 out) | gpt-4o | 1,800,000 | $0.018 |
-| Document summary (8,000 in / 2,000 out) | gpt-4o | 4,800,000 | $0.048 |
+| Short chat reply (500 in / 200 out) | gpt-5.6-luna | 204,000 | $0.002 |
+| Long chat reply (2,000 in / 1,000 out) | gpt-5.6-luna | 960,000 | $0.010 |
+| Document summary (8,000 in / 2,000 out) | gpt-5.6-luna | 2,400,000 | $0.024 |
 | Short chat reply (500 in / 200 out) | gpt-4o-mini | 23,400 | $0.0002 |
 | Long chat reply (2,000 in / 1,000 out) | claude-sonnet | 2,520,000 | $0.025 |
 | Code generation (4,000 in / 4,000 out) | claude-sonnet | 8,640,000 | $0.086 |
@@ -202,7 +217,7 @@ Use these rules of thumb:
 If you prefer to budget in tokens rather than dollars:
 
 ```python
-@cycles(estimate=2000, unit="TOKENS", action_kind="llm.completion", action_name="gpt-4o")
+@cycles(estimate=2000, unit="TOKENS", action_kind="llm.completion", action_name="gpt-5.6-luna")
 def ask(prompt: str) -> str:
     ...
 ```

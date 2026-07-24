@@ -38,14 +38,14 @@ const ask = withCycles(
   {
     client: cycles,
     actionKind: "llm.completion",
-    actionName: "claude-sonnet-4",
+    actionName: "claude-sonnet-4-6",
     estimate: () => 2_000_000,
     actual: (r: Anthropic.Message) =>
       r.usage.input_tokens * 300 + r.usage.output_tokens * 1_500,
   },
   async (prompt: string) => {
     return anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }],
     });
@@ -74,7 +74,7 @@ setDefaultClient(cyclesClient);
 
 const anthropic = new Anthropic();
 
-// Claude Sonnet 4 pricing (microcents per token)
+// Claude Sonnet 4.6 pricing (microcents per token; verified 2026-07-24)
 const INPUT_PRICE = 300;     // $3.00 / 1M tokens
 const OUTPUT_PRICE = 1_500;  // $15.00 / 1M tokens
 const DEFAULT_MAX_TOKENS = 1024;
@@ -83,7 +83,7 @@ const sendMessage = withCycles(
   {
     client: cyclesClient,
     actionKind: "llm.completion",
-    actionName: "claude-sonnet-4-20250514",
+    actionName: "claude-sonnet-4-6",
     estimate: (prompt: string) => {
       const inputTokens = Math.ceil(prompt.length / 4);
       return inputTokens * INPUT_PRICE + DEFAULT_MAX_TOKENS * OUTPUT_PRICE;
@@ -103,7 +103,7 @@ const sendMessage = withCycles(
     }
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
@@ -159,7 +159,7 @@ async function streamWithBudget(prompt: string) {
     estimate,
     unit: "USD_MICROCENTS",
     actionKind: "llm.completion",
-    actionName: "claude-sonnet-4-20250514",
+    actionName: "claude-sonnet-4-6",
   });
 
   try {
@@ -171,7 +171,7 @@ async function streamWithBudget(prompt: string) {
 
     // 2. Stream the response
     const stream = anthropic.messages.stream({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
@@ -233,7 +233,7 @@ async function chatWithTools(prompt: string): Promise<string> {
         estimate: 2_000_000,
         unit: "USD_MICROCENTS",
         actionKind: "llm.completion",
-        actionName: "claude-sonnet-4-20250514",
+        actionName: "claude-sonnet-4-6",
       });
     } catch (err) {
       if (err instanceof BudgetExceededError) {
@@ -244,7 +244,7 @@ async function chatWithTools(prompt: string): Promise<string> {
 
     try {
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         tools: TOOLS,
         messages,
@@ -300,9 +300,11 @@ Adjust these constants for the model you use:
 
 | Model | Input (microcents/token) | Output (microcents/token) |
 |-------|--------------------------|---------------------------|
-| Claude Haiku 3.5 | 80 | 400 |
-| Claude Sonnet 4 | 300 | 1,500 |
-| Claude Opus 4 | 1,500 | 7,500 |
+| Claude Haiku 4.5 | 100 | 500 |
+| Claude Sonnet 4.6 | 300 | 1,500 |
+| Claude Opus 4.8 | 500 | 2,500 |
+
+Rates verified against Anthropic's pricing page on July 24, 2026. Recheck pricing before deploying, especially if you switch models, use prompt caching, or select regional inference.
 
 ## Key points
 

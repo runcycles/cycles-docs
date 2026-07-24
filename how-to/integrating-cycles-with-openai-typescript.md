@@ -38,14 +38,14 @@ const ask = withCycles(
   {
     client: cycles,
     actionKind: "llm.completion",
-    actionName: "gpt-4o",
-    estimate: () => 1_500_000,
+    actionName: "gpt-5.6-luna",
+    estimate: () => 1_000_000,
     actual: (r: OpenAI.ChatCompletion) =>
-      (r.usage?.prompt_tokens ?? 0) * 250 + (r.usage?.completion_tokens ?? 0) * 1_000,
+      (r.usage?.prompt_tokens ?? 0) * 100 + (r.usage?.completion_tokens ?? 0) * 600,
   },
   async (prompt: string) => {
     return openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.6-luna",
       messages: [{ role: "user", content: prompt }],
     });
   },
@@ -73,16 +73,17 @@ setDefaultClient(cyclesClient);
 
 const openai = new OpenAI();
 
-// GPT-4o pricing (microcents per token)
-const INPUT_PRICE = 250;     // $2.50 / 1M tokens
-const OUTPUT_PRICE = 1_000;  // $10.00 / 1M tokens
+// GPT-5.6 Luna standard pricing (microcents per token)
+const MODEL = "gpt-5.6-luna";
+const INPUT_PRICE = 100;   // $1.00 / 1M uncached input tokens
+const OUTPUT_PRICE = 600;  // $6.00 / 1M output tokens
 const DEFAULT_MAX_TOKENS = 1024;
 
 const chatCompletion = withCycles(
   {
     client: cyclesClient,
     actionKind: "llm.completion",
-    actionName: "gpt-4o",
+    actionName: MODEL,
     estimate: (prompt: string) => {
       const inputTokens = Math.ceil(prompt.length / 4);
       return inputTokens * INPUT_PRICE + DEFAULT_MAX_TOKENS * OUTPUT_PRICE;
@@ -102,7 +103,7 @@ const chatCompletion = withCycles(
     }
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: MODEL,
       max_completion_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
@@ -145,8 +146,9 @@ import {
 const cyclesClient = new CyclesClient(CyclesConfig.fromEnv());
 const openai = new OpenAI();
 
-const INPUT_PRICE = 250;
-const OUTPUT_PRICE = 1_000;
+const MODEL = "gpt-5.6-luna";
+const INPUT_PRICE = 100;
+const OUTPUT_PRICE = 600;
 
 async function streamWithBudget(prompt: string) {
   const estimatedInputTokens = Math.ceil(prompt.length / 4);
@@ -158,7 +160,7 @@ async function streamWithBudget(prompt: string) {
     estimate,
     unit: "USD_MICROCENTS",
     actionKind: "llm.completion",
-    actionName: "gpt-4o",
+    actionName: MODEL,
   });
 
   try {
@@ -170,7 +172,7 @@ async function streamWithBudget(prompt: string) {
 
     // 2. Stream the response
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: MODEL,
       max_completion_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
       stream: true,
@@ -195,7 +197,7 @@ async function streamWithBudget(prompt: string) {
     await handle.commit(actualCost, {
       tokensInput: promptTokens,
       tokensOutput: completionTokens,
-      modelVersion: "gpt-4o",
+      modelVersion: MODEL,
     });
   } catch (err) {
     await handle.release("stream_error");
@@ -214,6 +216,9 @@ Adjust these constants for the model you use:
 
 | Model | Input (microcents/token) | Output (microcents/token) |
 |-------|--------------------------|---------------------------|
+| gpt-5.6-sol | 500 | 3,000 |
+| gpt-5.6-terra | 250 | 1,500 |
+| gpt-5.6-luna | 100 | 600 |
 | gpt-4o | 250 | 1,000 |
 | gpt-4o-mini | 15 | 60 |
 | gpt-4.1 | 200 | 800 |
@@ -221,6 +226,8 @@ Adjust these constants for the model you use:
 | gpt-4.1-nano | 10 | 40 |
 | o3 | 200 | 800 |
 | o4-mini | 110 | 440 |
+
+The snippets use standard uncached GPT-5.6 Luna pricing for requests with at most 272,000 input tokens. GPT-5.6 cache reads are cheaper, explicit cache writes cost 1.25 times the uncached input rate, and longer requests use higher rates for the full request. If you use those features, compute actual cost from the provider's detailed usage fields. OpenAI recommends the Responses API for reasoning, tool-calling, and multi-turn workflows; Chat Completions remains supported for these single-turn examples. See the [GPT-5.6 model guide](https://developers.openai.com/api/docs/guides/latest-model) and [GPT-5.6 Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
 
 See [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) for the full pricing reference.
 

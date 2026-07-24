@@ -160,7 +160,7 @@ That separation is what makes skills usable in production.
 - [OWASP Agentic Skills Security Assessment Checklist](https://owasp.org/www-project-agentic-skills-top-10/checklist.html) - script and natural-language instruction review guidance
 - [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) - broader agentic risk framework
 - [Microsoft Security Blog: Addressing OWASP Top 10 Risks in Agentic AI](https://www.microsoft.com/en-us/security/blog/2026/03/30/addressing-the-owasp-top-10-risks-in-agentic-ai-with-microsoft-copilot-studio/) - lifecycle governance and deployed-agent controls
-- [MCP Tool Poisoning Has an 84% Success Rate](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) - tool metadata and supply-chain attack context
+- [MCP-ITP: Target-Tool Calls Reached 84.2%](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) - what the MCPTox tool-poisoning benchmark measured
 - [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) - scoring tool risk before production
 - [Shadow Mode to Hard Enforcement](/blog/shadow-to-enforcement-cutover-decision-tree) - signal-driven cutover from observe-only to blocking
 - [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol) - event delivery reliability for governance signals

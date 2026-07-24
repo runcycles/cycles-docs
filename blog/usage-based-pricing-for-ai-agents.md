@@ -87,7 +87,7 @@ For most agent products, start with three budgets.
 | Budget | What it protects | Example |
 |---|---|---|
 | [Tenant](/glossary#tenant) budget | Customer-level allowance and isolation | Acme gets $500 of AI usage this month |
-| Run budget | Single-task blast radius | One research run can consume at most $3 |
+| Run-mapped workflow budget | Submitted estimate for one task | A mandatory path rejects the first estimate that exceeds the configured $3 headroom |
 | Toolset budget | Expensive or risky actions | Web search, code execution, or refunds get separate limits |
 
 Tenant budgets align with pricing. Run budgets protect margin inside a tenant. Toolset budgets stop a cheap-looking plan from accidentally permitting expensive side effects.

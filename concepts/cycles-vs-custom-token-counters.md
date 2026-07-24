@@ -5,7 +5,7 @@ description: "In-app token counters break under concurrency, multi-service deplo
 
 # Cycles vs Custom Token Counters: Build vs Buy for Agent Budget Control
 
-Every team that runs AI agents in production eventually builds a token counter.
+Many teams that run AI agents in production begin with a token counter.
 
 It starts the same way every time.
 
@@ -59,7 +59,7 @@ When two agent threads run concurrently:
 4. Thread A's call uses 200 tokens. Thread B's call uses 200 tokens.
 5. Actual total: 1,300 tokens. Budget exceeded by 30%.
 
-This is not a theoretical concern. It is the most common bug in custom counter implementations.
+This is not a theoretical concern; it is a common failure mode in counters that separate the check from the update.
 
 Solving it correctly requires atomic compare-and-swap operations, database-level locking, or serialized access. Most ad hoc counters do not implement any of these. Even when they do, the implementation is often subtly wrong — it works under light load and breaks under production concurrency.
 
@@ -71,7 +71,7 @@ When the system scales to multiple instances, each instance has its own counter.
 
 Moving the counter to a shared store (Redis, PostgreSQL) solves the locality problem but introduces the concurrency problem. Now every read-check-increment must be atomic across a network boundary. Latency, retries, and connection failures add complexity.
 
-Moving to a shared store also means every service that makes LLM calls needs to know about the counter, use the same key scheme, and handle failures consistently. That coordination cost grows with each new service.
+Moving to a shared store also means every protected service that makes LLM calls needs to know about the counter, use the same key scheme, and handle failures consistently. That coordination cost grows with each new service.
 
 ### No reservation model: cannot hold budget for in-flight work
 
@@ -163,7 +163,7 @@ Once budget enforcement must span more than one service, a local counter is no l
 
 ### Multi-tenant deployment
 
-When different tenants share the same infrastructure and need independent budget limits, the counter must become tenant-aware. Multiplied by hierarchical scopes (tenant, workspace, run), the counter logic becomes a budget system whether you intended to build one or not.
+When different tenants share the same infrastructure and need independent budget limits, the counter must become tenant-aware. Multiplied by hierarchical scopes such as tenant, workspace, and workflow, the counter logic becomes a budget system whether you intended to build one or not.
 
 ### Production concurrency
 
@@ -187,19 +187,19 @@ Moving from custom counters to Cycles does not require a big-bang migration.
 
 ### Step 1: Deploy in shadow mode
 
-Start Cycles in shadow mode alongside your existing counters. Cycles evaluates budget decisions but does not enforce them. Both systems run in parallel.
+Send Cycles reservation requests with `dry_run: true` alongside your existing counter path. The server returns hypothetical decisions without creating reservations or mutating balances. Log those responses in the application so the two systems can be compared.
 
-Compare the decisions. Does Cycles agree with your counter? Where do they diverge? Divergences usually reveal bugs in the custom counter — race conditions, missing scope checks, or inconsistent state.
+Compare the decisions. Does Cycles agree with your counter? Where do they diverge? A divergence may reveal a counter bug, different scope mapping, stale state, or a difference in estimate policy, so investigate it rather than assuming which system is wrong.
 
 See [Shadow Mode Rollout](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) for a detailed guide.
 
 ### Step 2: Validate scope configuration
 
-Configure Cycles with the same budget limits your counters enforce. Map your counter keys to Cycles scopes. Verify that the hierarchical scopes (tenant, workspace, workflow, run) match your application's budget structure.
+Configure Cycles with the same budget limits your counters enforce. Map your counter keys to the standard Cycles scopes: tenant, workspace, app, workflow, agent, and toolset. If one counter is keyed per run, map that run ID to `subjects.workflow`; a run ID in `dimensions` is attribution only.
 
 ### Step 3: Enable enforcement on one service
 
-Pick the lowest-risk service — the one with the simplest counter logic and the least concurrency. Switch it from the custom counter to Cycles. Monitor for a week.
+Pick a lower-impact service with simple counter logic and limited concurrency. Switch its protected paths from the custom counter to live Cycles reservations, then monitor long enough to cover representative traffic and failure cases.
 
 ### Step 4: Roll out to remaining services
 
@@ -209,7 +209,7 @@ Move each service from its custom counter to Cycles. With each migration, the cu
 
 Once all services use Cycles, the custom counter code can be deleted. No more duplicated logic, no more inconsistent enforcement, no more race conditions in hand-rolled concurrency handling.
 
-The result is a system where runtime authority is centralized, concurrency-safe, and consistent across every service that makes LLM calls.
+The result is a system where budget authority is centralized, concurrency-safe, and consistent across every protected service that makes LLM calls.
 
 ## The build vs buy calculation
 

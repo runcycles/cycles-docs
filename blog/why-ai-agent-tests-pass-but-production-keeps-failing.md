@@ -52,7 +52,7 @@ Evals only see the final output. They cannot inspect whether intermediate steps 
 
 ### Blind Spot 2: Evals don't run at production scale
 
-Running evals is expensive. [One data team reported](https://www.montecarlodata.com/blog-ai-agent-evaluation/) that their evaluation costs reached **10x the cost of running the agent itself**. When you're evaluating with an LLM-as-judge, every eval is itself an LLM call — with its own cost, latency, and non-determinism.
+Running evals is expensive. [One data team reported](https://montecarlo.ai/blog-ai-agent-evaluation) that their evaluation costs reached **10x the cost of running the agent itself**. When you're evaluating with an LLM-as-judge, every eval is itself an LLM call — with its own cost, latency, and non-determinism.
 
 The math doesn't work at scale. The following estimates are illustrative, based on typical per-call LLM pricing:
 
@@ -70,7 +70,7 @@ In traditional software, when you fix a bug, you add a regression test. The test
 
 The industry is scrambling to solve this. [Docker launched Cagent](https://www.infoq.com/news/2026/01/cagent-testing/) in January 2026, using record-and-replay to make agent tests deterministic. [TestMu AI launched an agent-to-agent testing platform](https://www.globenewswire.com/news-release/2026/03/24/3261494/0/en/TestMu-AI-Unveils-Major-Enhancements-to-AI-Agent-to-Agent-Testing-Platform-Empowering-Organizations-to-Validate-AI-Agents-Across-Real-World-Scenarios.html) in March 2026 with adversarial evaluators. [Anthropic published guidance](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) emphasizing that "teams without evals get bogged down in reactive loops — fixing one failure, creating another."
 
-But every solution adds complexity, cost, and another non-deterministic layer to test. The eval-for-the-eval problem is real: one team [reported having to test their tests](https://www.montecarlodata.com/blog-ai-agent-evaluation/) — running each eval multiple times and discarding results when the delta was too large.
+But every solution adds complexity, cost, and another non-deterministic layer to test. The eval-for-the-eval problem is real: one team [reported having to test their tests](https://montecarlo.ai/blog-ai-agent-evaluation) — running each eval multiple times and discarding results when the delta was too large.
 
 ## The Gap Evals Can't Close
 
@@ -82,9 +82,9 @@ Your eval suite tests step 1 in isolation and it passes. Tests step 2 in isolati
 
 ## Enforcement: The Deterministic Layer for Non-Deterministic Systems
 
-The fix isn't better evals. It's a different architectural layer — one that is deterministic by design and can run on every request rather than a sampled subset.
+Better evals are still necessary, but they do not replace deterministic controls on the execution path.
 
-Instead of evaluating outputs after the fact, you enforce constraints *before every action*. Every tool call, every LLM invocation, every side effect passes through a checkpoint that verifies the action is authorized, within budget, and structurally valid before it executes.
+For each protected tool call, LLM invocation, or side effect, the host can require application authorization and argument validation plus a successful Cycles budget reservation before execution. These are complementary checks: Cycles evaluates the submitted unit, amount, and scope; it does not decide whether a tool or its arguments are permitted.
 
 This is [runtime authority](/blog/what-is-runtime-authority-for-ai-agents). Here's why it addresses problems that evals can't:
 
@@ -92,33 +92,34 @@ This is [runtime authority](/blog/what-is-runtime-authority-for-ai-agents). Here
 
 | | Evaluation (evals) | Enforcement ([runtime authority](/glossary#runtime-authority)) |
 |---|---|---|
-| **When** | After execution, on sampled traffic | Before every action, on all traffic |
-| **What it checks** | Output quality (semantic) | Behavioral correctness (structural) |
-| **Cost per check** | ~$0.01-$0.10 (est. LLM-as-judge call) | Fraction of a cent (est. policy lookup) |
-| **Deterministic** | No (LLM judge varies run-to-run) | Yes (policy rules produce same result) |
-| **Catches loops** | No (agent never reaches the eval) | Yes (budget cap stops iteration N+1) |
-| **Catches fabrication** | Sometimes (if the judge notices) | Flags anomalies (near-zero cost on a step that should have external API cost is a strong signal, though not proof — caching or free-tier tools can also produce low-cost commits) |
-| **Catches scope violations** | No (eval sees output, not action) | Yes (unauthorized action kind blocked at reserve) |
+| **When** | Often after execution or on sampled traffic | Before each action placed behind the control |
+| **What it checks** | Output quality (semantic) | Configured structural rules; Cycles checks submitted budget dimensions |
+| **Cost per check** | Often an additional model or evaluator call | A runtime service call whose latency and infrastructure cost depend on deployment |
+| **Deterministic** | An LLM judge can vary run-to-run | Deterministic for the same rule, budget state, and request |
+| **Catches loops** | May detect them in traces or offline evaluation | A cumulative budget can reject the first protected iteration that exceeds its limit |
+| **Catches fabrication** | Sometimes, if the evaluator detects it | Not by itself; settlement anomalies can be an investigation signal when joined to application telemetry |
+| **Catches scope violations** | Only if the evaluation covers them | Cycles contains submitted spend by budget scope; application authorization must block disallowed actions |
 
 Enforcement doesn't replace evals. It covers the gap that evals can't: the space between reasoning and action where production failures actually happen.
 
 ## How Reserve-Commit Turns Agent Runs into Testable Sequences
 
-The [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) creates something no eval framework provides: a **deterministic, inspectable record of every action an agent attempted and what actually happened**.
+The [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) creates a **deterministic, inspectable record of persisted budget holds and settlement** for actions the host instruments.
 
 ```
-1. Reserve  → Agent requests permission + budget before acting
+1. Reserve  → Host requests a budget hold before acting
 2. Execute  → Agent performs the action
-3. Commit   → Agent reports actual outcome; unused budget released
+3. Commit   → Host reports the actual charge; unused budget released
 ```
 
-Each cycle produces structured data: what was requested, what was allowed, what was executed, and what it cost. This creates three capabilities that agent testing currently lacks:
+Each persisted cycle records the submitted scope and action context, what amount was reserved, and how the hold settled. It does not prove that the action executed, capture its arguments or result, or replace application telemetry. When the host propagates the same trace context across related Cycles calls and retains the reservation ID in its own logs, the combined data enables useful structural checks:
 
 ### 1. Structural anomaly detection without LLM judges
 
-Every reserve-commit pair produces a cost and latency signature. Deviations from expected patterns flag problems automatically — no expensive LLM judge required:
+Every reserve-commit pair produces a budget-usage signature. Application telemetry can add latency and outcome data. Deviations from expected patterns can flag cases for investigation without first requiring an LLM judge:
 
 ```jsonc
+// Illustrative application-derived summaries, not Cycles API response shapes.
 // Expected: research agent calls 3 APIs, ~$0.45 total
 // Actual: 3 reserves, 3 commits, costs match estimates
 { "run_summary": { "steps": 3, "total_cost": "$0.47", "status": "normal" } }
@@ -133,15 +134,15 @@ Every reserve-commit pair produces a cost and latency signature. Deviations from
 { "run_summary": { "steps": 200, "status": "budget_exhausted" } }
 ```
 
-These signals are deterministic, generated automatically, and catch structural failures that semantic evals miss entirely. For the full taxonomy of cost-anomaly signals, see [the cost-as-reliability-signal pattern](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response#the-broader-pattern-budget-as-a-reliability-signal).
+These summaries can be computed deterministically from correlated budget and application records. Cycles does not generate the illustrated run summaries or determine that a low settlement means fabrication. For a broader taxonomy of cost-anomaly signals, see [the cost-as-reliability-signal pattern](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response#the-broader-pattern-budget-as-a-reliability-signal).
 
 ### 2. Scope-based behavioral boundaries
 
-Where evals ask "was the output good?", enforcement asks "was the agent allowed to do this?" — a fundamentally different and complementary question.
+Where evals ask "was the output good?", an application authorization layer asks "may this principal use this tool with these arguments?" Cycles adds "does the configured budget cover the submitted amount and scope?" These are different and complementary questions.
 
-A coding agent authorized to read test files and write source files is blocked at the [reservation](/glossary#reservation) step if it tries to modify tests. A support agent scoped to read customer records is blocked before it can issue a refund above its authority tier. A research agent limited to 10 API calls per run is stopped at call 11.
+A coding agent can be blocked by application policy if it tries to modify tests. A support agent can be blocked by an authorization rule before issuing a refund above its tier. Separately, a research agent whose host reserves one `CREDIT` for every API call against a 10-credit budget has its 11th reservation rejected. Cycles does not inspect file paths, refund arguments, or tool permissions.
 
-These aren't heuristics. They're deterministic rules evaluated before execution. The agent's non-deterministic reasoning produces a deterministic allow/deny decision at the enforcement layer. For concrete [action authority](/glossary#action-authority) patterns, see [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects).
+These can be deterministic rules evaluated before execution, provided the host routes every protected call through them and enforces each result. For concrete [action authority](/glossary#action-authority) patterns and the boundary between authorization and exposure budgets, see [AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects).
 
 ### 3. Integration testing via budget topology
 
@@ -161,19 +162,19 @@ Enforcement isn't a replacement for evals. It's the layer that covers the traffi
 
 The practical stack:
 
-- **Enforcement** catches structural failures on all traffic: loops, scope violations, budget overruns, anomalous cost patterns. Cost per check is estimated at a fraction of a cent.
+- **Enforcement** can bound loops and cumulative usage on the protected traffic routed through it. Application policy handles permissions and argument-level scope; correlated telemetry can surface cost anomalies. Measure runtime cost and latency in your deployment.
 - **Evals** catch semantic failures on sampled traffic: wrong answers, poor tone, factual errors. Cost: high but necessary for quality signal.
 - **Observability** provides forensic data for debugging. Cost: moderate. Essential for tuning both other layers.
 
-Most teams have observability. About half have evals. Far fewer teams have enforcement than either observability or evals. That's why tests pass and production fails.
+Teams need all three layers in proportions that match their risks; passing semantic tests alone does not prove that production execution is bounded.
 
 ## What To Do This Week
 
-1. **Start with [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)** — Run enforcement alongside your existing agents without blocking anything. Collect per-step cost data. Shadow mode often surfaces structural failures quickly that evals never caught — and it covers all traffic at a fraction of eval cost.
+1. **Start with [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production)** — Send dry-run reservations alongside your existing agents without blocking on the returned decision. Dry run creates no reservation or balance mutation. The current server emits `reservation.denied` for denied evaluations, but retain all responses in your application and join them to actual usage data.
 
 2. **Set per-run budgets on your riskiest workflow** — Pick the agent where a failure has real consequences. Add a [budget ceiling](/blog/ai-agent-budget-control-enforce-hard-spend-limits). Review which runs would have been blocked. If the answer is "the ones that looped" — you've found the gap.
 
-3. **Add action scoping to one sensitive operation** — Any agent that writes data, sends communications, or modifies infrastructure should require explicit [action authority](/blog/ai-agent-action-control-hard-limits-side-effects). The enforcement gates the action; the eval validates the output. Both layers, working together.
+3. **Add action scoping to one sensitive operation** — Any agent that writes data, sends communications, or modifies infrastructure should require explicit application [action authority](/blog/ai-agent-action-control-hard-limits-side-effects). The authorization layer gates the tool and arguments; Cycles can separately bound caller-assigned cumulative exposure; an eval can assess output quality.
 
 4. **[Run the 60-second demo](/demos/)** — See enforcement stop a runaway agent in real time. Then compare that to your eval pipeline catching the same failure — hours later, on a sampled subset, if at all.
 

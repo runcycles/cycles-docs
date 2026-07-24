@@ -159,22 +159,32 @@ Signing secrets are encrypted at rest with AES-256-GCM using `WEBHOOK_SECRET_ENC
 
 ## Prometheus metrics
 
-The events service publishes webhook delivery metrics under the `cycles_webhook_*` namespace on `/actuator/prometheus`, served on the management port (9980 by default as of v0.1.25.9; was 7980 on pre-.9 builds). Update Prometheus scrape targets accordingly — the metric names and labels are unchanged.
+The events service publishes 17 delivery, evidence, dispatcher, and security counters plus one latency timer on `/actuator/prometheus`, served on the management port (9980 by default as of v0.1.25.9; was 7980 on pre-.9 builds).
 
 | Metric | Tags | Description |
 |--------|------|-------------|
 | `cycles_webhook_delivery_attempts_total` | `tenant`, `event_type` | Every outbound HTTP attempt (including retries) |
-| `cycles_webhook_delivery_success_total` | `tenant`, `event_type`, `status_code_family` (`2xx`/`3xx`/`4xx`/`5xx`) | Attempts that received HTTP 2xx |
+| `cycles_webhook_delivery_success_total` | `tenant`, `event_type`, `status_code_family` (`2xx`) | Attempts that received HTTP 2xx |
 | `cycles_webhook_delivery_failed_total` | `tenant`, `event_type`, `reason` | Failed attempts, bucketed by failure reason |
 | `cycles_webhook_delivery_retried_total` | `tenant`, `event_type` | Retry attempts scheduled on the `dispatch:retry` ZSET |
 | `cycles_webhook_delivery_stale_total` | `tenant` | Deliveries auto-failed by the `MAX_DELIVERY_AGE_MS` gate |
+| `cycles_webhook_delivery_dead_lettered_total` | `reason` | Delivery jobs moved to dead letter |
+| `cycles_webhook_delivery_boundary_skipped_total` | `tenant`, `event_type`, `category` | Deliveries intentionally skipped at a configured boundary |
 | `cycles_webhook_subscription_auto_disabled_total` | `tenant`, `reason` | Subscriptions transitioned to `DISABLED` after `disable_after_failures` |
 | `cycles_webhook_delivery_latency_seconds` | `tenant`, `event_type`, `outcome` | Timer — HTTP RTT per delivery attempt |
 | `cycles_webhook_events_payload_invalid_total` | `type`, `rule` | Event payload validation discrepancies (no tenant tag — shape issue, not traffic) |
+| `cycles_evidence_claimed_total` | `artifact_type` | Evidence source records claimed |
+| `cycles_evidence_stored_total` | `artifact_type` | Signed evidence envelopes stored |
+| `cycles_evidence_dead_lettered_total` | `artifact_type`, `reason` | Evidence source records moved to dead letter |
+| `cycles_evidence_retry_deferred_total` | `artifact_type`, `reason` | Evidence work deferred for retry |
+| `cycles_webhook_dispatcher_event_published_total` | `event_type` | Dispatcher lifecycle events published |
+| `cycles_webhook_dispatcher_event_deferred_total` | `event_type`, `reason` | Dispatcher lifecycle events deferred |
+| `cycles_webhook_dispatcher_event_dead_lettered_total` | `event_type`, `reason` | Dispatcher lifecycle events moved to dead letter |
+| `cycles_webhook_security_config_indeterminate_total` | — | Delivery blocked because security configuration could not be determined safely |
 
 The `tenant` tag on all counters is gated by `cycles.metrics.tenant-tag.enabled` (default `false` to bound Prometheus cardinality) — set `CYCLES_METRICS_TENANT_TAG_ENABLED=true` to break metrics out per tenant in smaller deployments.
 
-Alert on `cycles_webhook_subscription_auto_disabled_total` (any increase is a receiver health issue) and on a sustained rise in `cycles_webhook_delivery_failed_total{reason=!~"client_4xx"}` (non-client-error failures indicate dispatch issues).
+Alert on `cycles_webhook_subscription_auto_disabled_total` (any increase is a receiver health issue) and on a sustained rise in `cycles_webhook_delivery_failed_total{reason!="http_4xx"}` (non-client-error failures indicate dispatch issues). See the [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference) for label values and cardinality guidance.
 
 ## Scaling
 

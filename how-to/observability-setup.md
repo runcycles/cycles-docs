@@ -141,18 +141,27 @@ The runtime server (`cycles-server` ≥ `0.1.25.10`) emits custom Micrometer cou
 | `cycles_reservations_release_total` | `tenant`, `actor_type`, `decision`, `reason` | Every successful release. `actor_type` distinguishes tenant-driven from admin-on-behalf-of releases. |
 | `cycles_reservations_extend_total` | `tenant`, `decision`, `reason` | Every extend attempt. |
 | `cycles_reservations_expired_total` | `tenant` | Per reservation actually marked EXPIRED by the sweep (not per candidate). |
+| `cycles_reservations_quarantined_total` | `tenant`, `reason` | Malformed reservation records quarantined by maintenance. |
+| `cycles_reservations_created_at_index_reads_total` | `outcome` | Created-at index reads and completeness-gated fallback outcomes. |
+| `cycles_maintenance_runs_total` | `job`, `outcome` | Scheduled maintenance run outcomes. |
+| `cycles_maintenance_duration_seconds` | `job`, `outcome` | Scheduled maintenance duration timer. |
 | `cycles_events_total` | `tenant`, `decision`, `reason`, `overage_policy` | Outcome of every `POST /v1/events` one-shot debit. |
 | `cycles_overdraft_incurred_total` | `tenant` | Count of commits/events that actually accrued non-zero debt (unit-free — amount is in the balance store, not leaked to metrics). |
 | `cycles_evidence_emit_failed_total` | `artifact_type` | Evidence-source enqueue failures (fail-open) — the rare loss window where a lifecycle op committed but its evidence record could not be queued. |
 
-The admin server additionally exposes (`cycles_admin_events_emitted_total` and `cycles_admin_webhook_dispatched_total` since `0.1.25.9`; `cycles_admin_events_payload_invalid_total` since `0.1.25.12`; `cycles_admin_audit_writes_total` since `0.1.25.20`):
+The admin server currently exposes seven custom counters:
 
 | Metric | Description |
 |---|---|
-| `cycles_admin_webhook_dispatched_total` | Webhook-delivery enqueue attempts (`result=queued`/`failure`). |
+| `cycles_admin_webhook_dispatched_total` | Webhook-delivery enqueue outcomes (`result=queued`/`failure`/`boundary_skipped`). |
 | `cycles_admin_events_emitted_total` | Events produced by admin controllers (budget/tenant/policy/api_key/system). |
 | `cycles_admin_events_payload_invalid_total` | Payload contract violations caught at emit time. |
 | `cycles_admin_audit_writes_total` | Audit-write attempts by `path_class` and `outcome` (`written`/`error`/`sampled-out`). Alert on any `outcome="error"`. |
+| `cycles_admin_tenant_close_outbox_dead_letter_total` | Tenant-close outbox dead letters by `resource_type`. |
+| `cycles_admin_tenant_close_reconcile_incomplete_total` | Reconciliation runs that ended with incomplete tenant-close work. |
+| `cycles_admin_tenant_close_reconcile_errors_total` | Tenant-close reconciliation errors. |
+
+The events service adds 17 delivery, evidence, dispatcher, and security counters plus one delivery-latency timer. Use the [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference) for the complete names, labels, and enum values rather than copying a partial inventory into dashboards.
 
 The high-cardinality `tenant` tag is controlled per service by `cycles.metrics.tenant-tag.enabled`: the runtime server defaults it to **`true`**, the events service defaults it to **`false`**, and the admin `cycles_admin_*` counters carry no tenant tag at all. Disable it on the runtime server in deployments with many thousands of tenants. Empty/null tag values are normalised to the sentinel `UNKNOWN` so series names stay stable.
 

@@ -7,7 +7,7 @@ description: "W3C Trace Context correlation in Cycles — the three-tier model (
 
 Cycles produces data on four planes — runtime responses, webhook deliveries, audit-log entries, and emitted events. Correlation identifiers stitch those planes into a single causal picture.
 
-As of the 2026-04-18 spec revision (`cycles-protocol-v0.yaml`), Cycles implements a W3C Trace Context-compatible correlation contract across every server in the suite. This page is the authoritative reference.
+The current YAML specifications define a W3C Trace Context-compatible correlation contract across the server suite. The reference services implement request and trace propagation; server-composed admin `correlation_id` values are also implemented. One current gap is called out below: the reference runtime does not yet populate the protocol's deterministic event-cluster `correlation_id`.
 
 ## The three-tier model
 
@@ -17,14 +17,18 @@ Cycles carries three correlation identifiers, each with a different grain.
 |---|---|---|
 | `request_id` | One HTTP request | Per-request |
 | `trace_id` | One logical operation (may span many requests) | Per-operation |
-| `correlation_id` | An event-stream cluster (groups related events) | Server-set: deterministic hash (protocol clusters) or operation ID (admin operations) |
+| `correlation_id` | An event-stream cluster or admin operation fan-out | Server-set: deterministic hash required by the runtime protocol, or an implemented operation ID for selected admin operations |
 
 - **`request_id`** is server-generated for every inbound HTTP request. It appears in every error response, audit-log entry, and event that is causally downstream of that request. Use it to correlate the side effects of one specific HTTP call.
-- **`trace_id`** identifies a logical operation that may cross several HTTP boundaries (for example: a client's reserve → multiple provider retries → commit). It is a 32-hex-character W3C Trace Context-compatible identifier. Use it to reconstruct the full operation across planes.
-- **`correlation_id`** is set by the server, in one of two shapes depending on the emitting plane. **Protocol event-stream clusters** use a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` — every event for the same cluster carries the same value, which is what lets you JOIN threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs. **Governance/admin operations** (lifecycle, bulk actions, webhook management, tenant-close cascades) use explicit server-composed operation IDs such as `webhook_create:<id>` or `webhook_bulk_action:<action>:<request_id>` — see the [event payload reference](/protocol/event-payloads-reference) for the shapes. Either way it is scoped to the event stream only — it does not appear on responses or audit rows.
+- **`trace_id`** identifies a logical operation that may cross several HTTP boundaries (for example: a client's reserve → provider call → commit) when the caller propagates it. It is a 32-hex-character W3C Trace Context-compatible identifier. Use it to join the Cycles records that carry the field and application telemetry for the rest.
+- **`correlation_id`** is server-managed and scoped to event rows; callers do not set it through runtime request bodies or tracing headers. The runtime YAML requires a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for event-stream clusters, but the current reference runtime passes `null` on its implemented emit paths, so consumers must not depend on that join yet. The current admin server does populate explicit operation IDs for selected lifecycle, bulk, webhook, and tenant-close operations, such as `webhook_create:<id>` and `webhook_bulk_action:<action>:<request_id>`. See the [Event Payloads Reference](/protocol/event-payloads-reference) for implemented shapes.
 
 ::: warning Don't confuse with `metadata.trace_id`
 [Standard Metrics and Metadata](/protocol/standard-metrics-and-metadata-in-cycles) documents application-level correlation keys that callers can put in the `metadata` map on commits and events — free-form strings the server stores but does not interpret. Name them distinctly (e.g. `external_trace_id`, `app_request_id`) rather than reusing `trace_id`/`request_id`, which are the server-managed identifiers described on this page (32-hex W3C, flowing on response headers, error bodies, events, audit rows, and webhook deliveries). The two coexist: your `metadata.external_trace_id` joins Cycles data with your own distributed tracing, while the server `trace_id` joins across Cycles planes.
+:::
+
+::: warning Propagation does not add fields to reservation records
+The caller must send the same trace context on each related HTTP request; independently server-generated trace IDs are per request. The current `Reservation` model does not persist `trace_id`, and successful reserve, commit, release, and extend calls do not each emit lifecycle events. Keep the reservation ID and trace ID together in application logs when you need an end-to-end reserve/provider/settlement reconstruction.
 :::
 
 ## Inbound header precedence
@@ -84,7 +88,7 @@ Standard event payloads carry:
 |---|---|
 | `request_id` | Populated on every event causally downstream of an HTTP request — including async and queued work that spans thread / process boundaries. Pre-v0.1.25 events may lack it. |
 | `trace_id` | OPTIONAL on the schema; populated by conformant v0.1.25.14+ runtime servers. |
-| `correlation_id` | Server-set, two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (`webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, cascade IDs) for governance/admin operations. Groups related events in the stream. |
+| `correlation_id` | Server-managed. The runtime YAML requires deterministic event clusters, but the current reference runtime leaves this field absent on implemented runtime emits. Selected admin operations populate explicit IDs such as `webhook_create:<id>`, bulk-action IDs, and cascade IDs. |
 
 ### Inside audit-log entries
 
@@ -105,10 +109,10 @@ The `WebhookDelivery` schema carries three OPTIONAL fields as of governance-admi
 `trace_id` travels:
 
 - **Inbound request → response header** — echoed in `X-Cycles-Trace-Id` on every HTTP response.
-- **Request → audit-log entry** — written into the audit row for the request's operation.
+- **Request → audit-log entry** — written for admin operations and the runtime's admin-on-behalf-of release path that create an audit row. Ordinary tenant reserve/commit/release calls do not each create an `AuditLogEntry`.
 - **Request → emitted events** — attached to every event that is a side effect of the request, including events emitted from async workers (`ReservationExpiryService` for example mints a fresh `trace_id` per sweep batch so all `reservation.expired` events in that batch correlate to each other).
 - **Events → webhook deliveries** — carried through to each outbound HTTP POST as `X-Cycles-Trace-Id` and embedded in `traceparent`.
-- **Across thread / queue / process boundaries** — REQUIRED. Async workers MUST propagate the originating `trace_id` when they emit events, write audit rows, or dispatch webhooks.
+- **Across thread / queue / process boundaries** — REQUIRED when work is causally downstream of a request. Internally originated sweepers may mint their own context; the reference reservation-expiry sweeper creates one trace ID per batch.
 
 ## Querying by correlation identifiers
 
@@ -118,6 +122,7 @@ The admin plane supports exact-match filters on correlation identifiers:
 
 | Query parameter | Effect |
 |---|---|
+| `correlation_id=<id>` | Narrows to events carrying one implemented server-composed correlation ID. Most useful for admin bulk actions, webhook lifecycle operations, and tenant-close cascades; current runtime events generally lack it. |
 | `trace_id=<32-hex>` | Narrows to events emitted during one logical operation. May span multiple requests. |
 | `request_id=<id>` | Narrows to events that are side effects of one specific HTTP request. |
 
@@ -128,7 +133,7 @@ The admin plane supports exact-match filters on correlation identifiers:
 | `trace_id=<32-hex>` | Narrows to audit rows for one logical operation. |
 | `request_id=<id>` | Narrows to audit rows for one specific HTTP request. |
 
-These are the only two admin endpoints with server-side correlation filters. The webhook-delivery list endpoints (`GET /v1/admin/webhooks/{subscription_id}/deliveries` and the tenant-scoped variant) accept only `status` / `from` / `to` / pagination parameters — there is no `trace_id` query parameter. To join deliveries into a trace, filter client-side on the `trace_id` field of each `WebhookDelivery` record.
+These are the only two admin endpoints with server-side request/trace filters; only the events endpoint also accepts `correlation_id`. The webhook-delivery list endpoints (`GET /v1/admin/webhooks/{subscription_id}/deliveries` and the tenant-scoped variant) accept only `status` / `from` / `to` / pagination parameters — there is no `trace_id` query parameter. To join deliveries into a trace, filter client-side on the `trace_id` field of each `WebhookDelivery` record.
 
 Both filters are post-hydration predicates applied null-safely — entries with null field values (historical writes, off-request emissions, internal sweeper work) cannot satisfy a supplied filter value. Pre-v0.1.25.14 runtime entries and pre-v0.1.25.31 admin entries may lack `trace_id` and silently drop out of these joins; use `request_id` for those (the `request_id` contract predates `trace_id`).
 
@@ -171,7 +176,7 @@ curl -s "http://localhost:7979/v1/admin/webhooks/<subscription-id>/deliveries" \
   | jq --arg tid "$TID" '.deliveries[] | select(.trace_id == $tid) | {status, response_status, trace_flags}'
 ```
 
-Three calls, one ID — two server-side filters plus one client-side filter — full causal picture across runtime response → audit row → emitted events → webhook fan-out.
+Three calls, one trace ID — two server-side filters plus one client-side filter — return the records that each plane retained for that trace. Application authorization and external execution outcomes still come from your own trace-linked logs.
 
 ## Logging `trace_id` in client code
 

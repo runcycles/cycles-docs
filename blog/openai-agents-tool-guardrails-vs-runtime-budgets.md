@@ -89,7 +89,7 @@ In OpenAI Agents SDK workflows, the budget boundary usually appears in four plac
 
 **Agent handoffs.** Handoffs change who is acting, but they should not create unbounded authority. If a parent agent delegates work to a specialist, the delegated agent should receive bounded budget and bounded action authority, not a blank check.
 
-Cycles uses the OpenAI Agents SDK `RunHooks` integration point to apply a reserve-commit lifecycle across model calls, tool invocations, and handoffs. The [OpenAI Agents integration guide](/how-to/integrating-cycles-with-openai-agents) covers the implementation details; this post is about the architecture decision.
+The Cycles integration uses the OpenAI Agents SDK `RunHooks` interface to reserve and settle configured model calls and tool invocations. Handoffs are not reservations: the plugin attempts to record them as zero-amount direct-debit events, and an event failure does not block the handoff. The [OpenAI Agents integration guide](/how-to/integrating-cycles-with-openai-agents) covers the implementation details; this post is about the architecture decision.
 
 ## A practical rollout sequence
 

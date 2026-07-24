@@ -1,6 +1,6 @@
 ---
 title: "How to Model Tenant, Workflow, and Run Budgets in Cycles"
-description: "Design budget policies using tenant, workflow, and run scopes to bound autonomous execution across multiple levels in Cycles."
+description: "Design tenant and workflow budget policies, including workflow ledgers keyed per run, to bound instrumented autonomous execution across multiple levels."
 ---
 
 # How to Model Tenant, Workflow, and Run Budgets in Cycles
@@ -24,13 +24,13 @@ Instead, it combines multiple scopes such as:
 - agent
 - toolset
 
-This article focuses on three of the most important ones:
+This article focuses on three useful budgeting patterns:
 
 - **tenant budgets**
 - **workflow budgets**
 - **run budgets**
 
-These three scopes are often enough to build a strong first production model.
+Tenant and workflow are native scopes. “Run budget” is an application pattern: use a unique run ID as the `workflow` subject value when each execution needs its own ledger. All protected calls in the run must use that same value.
 
 ## Why multiple scopes matter
 
@@ -55,7 +55,7 @@ Think of the scopes like this:
 
 - **Tenant budget** protects the customer or account boundary
 - **Workflow budget** protects the logical process boundary
-- **Run budget** protects the single execution boundary
+- **Run budget pattern** uses a workflow ledger to protect a single execution boundary
 
 Each one solves a different problem.
 
@@ -84,7 +84,7 @@ It is your product and feature-level control.
 This answers:
 
 ::: info
-How much exposure is this individual execution allowed to consume before it stops?
+How much submitted exposure can this individual execution consume before the host must stop or degrade protected work?
 :::
 
 It is your execution safety control.
@@ -102,7 +102,7 @@ They are especially important for:
 - internal business units
 - account-level usage governance
 
-A tenant budget prevents one customer or account from consuming unbounded resources.
+A tenant budget bounds the instrumented exposure submitted against that tenant ledger. It does not cover paths that bypass the integration.
 
 ### What tenant budgets are good for
 
@@ -192,16 +192,16 @@ It is where teams begin translating product intent into execution boundaries.
 
 ## Run budgets
 
-Run budgets are the most local and execution-specific scope.
+Run budgets are an execution-specific mapping onto a standard scope.
 
-In the Cycles protocol, "run" is not a built-in subject field like tenant or workflow. Instead, run-level budgets are modeled by passing a unique run identifier through one of the standard subject fields — for example, setting `workflow="run-12345"` derives the scope `workflow:run-12345`, or the `agent` field can carry the run identifier. This gives each execution its own scope in the budget hierarchy.
+In the Cycles protocol, `run` is not a built-in subject field. Model a run-level budget by setting a unique value such as `workflow="run-12345"`, which derives the scope `workflow:run-12345`. Keep the business workflow name and other attribution in application telemetry or metadata when you use the workflow field for the execution ID.
 
 Do not use the `dimensions` field for run budgets. Scopes are derived only from the six standard subject fields (tenant, workspace, app, workflow, agent, toolset). The `dimensions` map never derives scopes, and servers MAY ignore `dimensions` entirely for budgeting decisions — a run identifier placed there would not be enforced.
 
 A run budget answers:
 
 ::: info
-How much exposure can this single execution consume before it must stop?
+How much submitted exposure can this single execution consume before the host must stop or degrade protected work?
 :::
 
 This scope is especially important for:
@@ -214,7 +214,7 @@ This scope is especially important for:
 
 ### Why run budgets matter
 
-Run budgets are your best defense against runaway execution.
+When every costly step crosses a mandatory boundary, a per-run workflow ledger is a strong defense against runaway execution.
 
 Even if the tenant has plenty of remaining budget, one individual run may still need a hard ceiling.
 
@@ -231,12 +231,12 @@ That protects against:
 A workflow run might be allowed:
 
 - up to 500 units total
-- downgrade behavior after 400 units
-- hard stop at exhaustion
+- application-selected downgrade behavior when a reservation is denied or configured caps require it
+- host-side stop at exhaustion
 
 This gives each run a bounded envelope.
 
-Step limits (for example, "no more than 10 model/tool steps") are not something budgets enforce. They come from **Caps** — soft-landing constraints such as `max_steps_remaining` that the server can return from `/decide` or alongside an `ALLOW_WITH_CAPS` reservation decision. Combine a run budget (spend ceiling) with Caps (step and tool constraints) for full run-level control.
+Step limits (for example, "no more than 10 model/tool steps") are not inferred from budget consumption. An operator can configure standard caps such as `max_steps_remaining` or `max_tool_calls_remaining`, and the server can return them from `/decide` or with `ALLOW_WITH_CAPS`; the application must apply them. Combine a per-run workflow ledger with host-applied caps and separate authorization for layered run control.
 
 ### Why run budgets should usually be strict
 

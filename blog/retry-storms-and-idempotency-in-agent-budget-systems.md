@@ -125,7 +125,7 @@ Idempotency keys aren't just a dedup mechanism — they're a monitoring signal. 
 
 **High attempt counts.** If your key format encodes attempt number, alert when attempt counts exceed expected retry depth. `run-*-attempt-10` appearing in logs means something is wrong.
 
-**Key reuse rate.** Track the ratio of unique keys to total reservation requests. A healthy system sees 1:1 — every reservation has a unique key. A ratio climbing toward 2:1 or 3:1 indicates clients retrying rapidly. Climbing beyond 5:1 means a loop.
+**Attempts per unique key.** Track total reservation attempts divided by unique idempotency keys. A healthy no-retry path is near 1:1. A ratio climbing toward 2 or 3 attempts per key indicates retries; sustained values above the retry policy's intended ceiling indicate a loop or recovery bug. A high ratio is expected only when the same logical operation is deliberately replayed.
 
 **Duplicate match rate on reserves.** Track duplicate-match rate on reserves in your implementation. A spike means retries are being deduplicated at the budget layer, which is often the clearest signal that a retry storm is underway.
 

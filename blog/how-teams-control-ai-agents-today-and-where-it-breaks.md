@@ -67,7 +67,7 @@ Here's how each approach holds up against cost and risk:
 
 Each approach has a specific failure mode when it comes to controlling spend:
 
-**System prompts** are suggestions, not constraints. An LLM can and does ignore them — especially under complex reasoning chains, tool-use loops, or adversarial inputs. You cannot enforce a budget by asking a probabilistic system to count. A [$12,400 weekend batch run](/blog/true-cost-of-uncontrolled-agents) doesn't happen because the agent decided to ignore its instructions. It happens because the agent was doing exactly what it was told — just more times than anyone anticipated.
+**System prompts** are suggestions, not transactional budget controls. A model can fail to follow them under complex reasoning, tool loops, or adversarial input. In one [$12,400 illustrative weekend workload model](/blog/true-cost-of-uncontrolled-agents), the agent does exactly what the workflow permits — simply more times than planned.
 
 **Proxy rate limits** manage request and spend controls well at the LLM layer — but they don't unify into a general action-governance layer for the entire agent runtime. If your agent calls OpenAI for reasoning, Stable Diffusion for images, and a paid data API for stock quotes, no single proxy sees the aggregate cost across all of them. Rate limits also throttle everything equally — they can't distinguish between a $0.03 lookup and a $7.20 multi-step research chain. And they typically operate per-key, not per-agent, per-[tenant](/glossary#tenant), or per-workflow.
 
@@ -77,7 +77,7 @@ Each approach has a specific failure mode when it comes to controlling spend:
 
 **Custom rate limiters** get closest to solving the cost problem — but they're an endless game of whack-a-mole. We built ours at scalerX to track spend across LLMs, image generation, video generation, stock data APIs, web search, and more. Every provider required custom integration code and manual maintenance whenever pricing or APIs changed. It was brittle, it only covered cost — no concept of action-level risk — and it could only throttle, not make context-aware decisions like "allow this call at a lower tier" or "deny this tool but permit that one."
 
-These are real limitations, but they're recoverable. Overspend hurts, but it's bounded — you can set hard caps at the provider level, rotate API keys, or kill a process. The money is gone, but the blast radius is financial. (For a deeper look at the full cost picture, see our [AI agent cost management guide](/blog/ai-agent-cost-management-guide).)
+These are real limitations. Provider controls, key revocation, and process termination can help, but their cutoff semantics and scopes vary. Financial loss can also trigger service disruption, margin erosion, or customer impact. (For a deeper look, see our [AI agent cost management guide](/blog/ai-agent-cost-management-guide).)
 
 Risk is different.
 
@@ -87,7 +87,7 @@ Risk is different.
 
 Cost measures how much an agent spends. Risk measures what an agent does — and the security implications of those actions. The gap in agent risk management is wider than the cost gap, because most teams haven't built any risk controls at all.
 
-Consider an agent with tool access to send emails. It enters a loop and sends 200 messages to customers. The token cost is $1.40. The business damage — customer trust, support escalation, potential regulatory [exposure](/glossary#exposure) — could be $50,000 or more. No cost cap in the world prevents that, because the cost was trivial. The harm was in the action.
+Consider an illustrative agent with permission to send emails. It enters a loop and sends 200 messages to customers. The modeled token cost is $1.40, while customer trust, support load, and regulatory [exposure](/glossary#exposure) remain unquantified and can be much larger. A monetary cap calibrated to model spend may not catch that; the harm is in the action.
 
 This is where every approach listed above fails simultaneously:
 
@@ -138,7 +138,7 @@ The shift isn't conceptual — it's architectural. Instead of hoping guardrails 
 | Framework max-iteration count | [Caller-assigned RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk): the application scores and meters tool exposure, not just iterations |
 | Spend dashboard + alert | Live reservation rejection before the instrumented call |
 | Custom rate limiter across providers | [Reserve-commit](/blog/what-is-runtime-authority-for-ai-agents) for both monetary and caller-assigned exposure budgets; each provider path still needs integration |
-| Inherited permissions in delegation | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation): explicitly provision a child sub-budget and restrict its tool set in the orchestrator |
+| Inherited permissions in delegation | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation): explicitly provision a narrower child ledger and restrict its tool set in the orchestrator |
 
 The pattern is the same in every row: move the decision upstream, from after execution to before it. From semantic to structural. From observation to enforcement.
 

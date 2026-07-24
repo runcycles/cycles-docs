@@ -3,7 +3,7 @@ title: "How Much Do AI Agents Actually Cost?"
 date: 2026-03-13
 author: Cycles Team
 tags: [costs, agents, guide]
-description: "AI agent cost breakdown across OpenAI, Anthropic, Google, and AWS Bedrock — with real-world scenarios for support bots, coding agents, and data pipelines."
+description: "AI agent cost breakdown across OpenAI, Anthropic, and Google, with current token rates and illustrative support, coding, and data-pipeline scenarios today."
 blog: true
 sidebar: false
 head:
@@ -16,46 +16,46 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-A team we talked to recently launched their first production agent — a customer support bot running on GPT-4o. They estimated $800/month based on their prototype traffic. The first invoice came in at $4,200. The model pricing was exactly what they expected. The number of calls was not. Their agent averaged 11 LLM calls per conversation, not the 3 they'd assumed. Context windows grew with each turn. Retries on tool failures doubled the call count on bad days. The per-token price was never the problem. The per-agent price was.
+Consider an illustrative customer-support agent running on GPT-4o. A prototype-based estimate puts it at $800 per month; production-shaped assumptions put it at $4,200. The model rate is unchanged. The scenario reaches the higher total because it assumes 11 LLM calls per conversation instead of three, growing contexts, and additional retries on tool failures. The per-token price is not the only variable; the execution pattern is.
 
 > **Recreate the "estimated $800, actual $4,200" scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJDdXN0b21lciBzdXBwb3J0IGJvdCIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiIxMSBMTE0gY2FsbHMgcGVyIGNvbnZlcnNhdGlvbi4gQ29udGV4dCB3aW5kb3dzIGdyb3cgd2l0aCBlYWNoIHR1cm4uIEVzdGltYXRlZCAkODAwL21vLCBhY3R1YWwgJDQsMjAwLiIsImlucHV0VG9rZW5zIjo1MDAwLCJvdXRwdXRUb2tlbnMiOjEyMDAsImNhbGxzUGVyRGF5IjozMzAwfQ)
 
 <!-- more -->
 
-This post is a reference guide. We break down current per-token pricing across the major providers, then show what those prices actually mean when you multiply by the call patterns of real agent workloads. If you're planning a budget for an agent deployment — or trying to understand why your current one costs more than expected — this is the data you need.
+This post is a reference guide. We break down representative per-token pricing across major providers, then show what those prices mean under illustrative agent workload assumptions. Pricing was verified against provider documentation on **July 24, 2026**; recheck the linked provider pages before making a purchasing decision.
 
 ## Per-Token Pricing by Provider
 
 All prices below are per 1 million [tokens](/glossary#tokens). Every provider charges separately for input tokens (what you send) and output tokens (what the model generates). Agents are output-heavy relative to simple completions, because they generate tool calls, reasoning chains, and structured responses.
 
-### OpenAI
+### [OpenAI](https://developers.openai.com/api/docs/models/gpt-4o)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
 |---|---|---|---|
 | gpt-4o | $2.50 | $10.00 | Flagship multimodal model |
 | gpt-4o-mini | $0.15 | $0.60 | Cost-optimized for high-volume |
-| gpt-4.1 | $2.00 | $8.00 | Latest generation |
+| gpt-4.1 | $2.00 | $8.00 | General-purpose model with long context |
 | gpt-4.1-mini | $0.40 | $1.60 | Balanced cost/capability |
 | o3 | $2.00 | $8.00 | Reasoning model |
 | o4-mini | $1.10 | $4.40 | Compact reasoning model |
 
-### Anthropic
+### [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
 |---|---|---|---|
-| Claude Opus 4 | $15.00 | $75.00 | Highest capability |
-| Claude Sonnet 4 | $3.00 | $15.00 | Strong general-purpose |
-| Claude Haiku 3.5 | $0.80 | $4.00 | Fast and cost-efficient |
+| Claude Opus 4.8 | $5.00 | $25.00 | Premium Opus tier |
+| Claude Sonnet 5 | $2.00 | $10.00 | Introductory rate through August 31, 2026; $3/$15 afterward |
+| Claude Haiku 4.5 | $1.00 | $5.00 | Fast, lower-cost tier |
 
-### Google
+### [Google](https://ai.google.dev/gemini-api/docs/pricing)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
 |---|---|---|---|
 | Gemini 2.5 Pro | $1.25 | $10.00 | Advanced reasoning |
-| Gemini 2.5 Flash | $0.15 | $0.60 | Optimized for throughput |
-| Gemini 2.0 Flash | $0.10 | $0.40 | Lowest cost option |
+| Gemini 2.5 Flash | $0.30 | $2.50 | Hybrid reasoning and throughput |
+| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | Lower-cost high-volume option |
 
-A quick observation: the spread between cheapest and most expensive is enormous. Gemini 2.0 Flash output costs $0.40 per million tokens. Claude Opus 4 output costs $75.00 per million tokens. That's a 187x difference. Model selection is the single biggest lever you have on agent costs — but only if your agent architecture actually lets you swap models without breaking functionality.
+A quick observation: even within this small representative set, output pricing ranges from $0.40 per million tokens for Gemini 2.5 Flash-Lite to $25 for Claude Opus 4.8—a 62.5x spread. Model selection is a major cost lever, but only if the cheaper model still meets the workload's quality, latency, and tool-use requirements.
 
 ## Why Agents Cost More Than You Think
 
@@ -87,7 +87,7 @@ Multi-agent architectures multiply everything. A coordinator dispatching to 5 su
 
 ## Real-World Cost Scenarios
 
-Here's what agents actually cost in four common deployments. All estimates use a blended rate of 3,000 input tokens and 1,500 output tokens per call, which is conservative for production agent workloads.
+Here is what four common deployment shapes cost under explicit assumptions. These are planning examples, not measured customer bills; your token mix, caching, tools, retries, and negotiated pricing will change the result.
 
 ### Scenario 1: Customer support bot
 
@@ -105,12 +105,12 @@ A support bot handling customer questions — looking up orders, checking polici
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
 | gpt-4o | $0.018 | $21.60 | $648 |
-| gpt-4o-mini | $0.001 | $1.20 | $36 |
-| Claude Sonnet 4 | $0.035 | $42.00 | $1,260 |
-| Claude Haiku 3.5 | $0.009 | $10.80 | $324 |
-| Gemini 2.5 Flash | $0.002 | $2.40 | $72 |
+| gpt-4o-mini | $0.00108 | $1.30 | $38.88 |
+| Claude Sonnet 5 | $0.016 | $19.20 | $576 |
+| Claude Haiku 4.5 | $0.008 | $9.60 | $288 |
+| Gemini 2.5 Flash | $0.0032 | $3.84 | $115.20 |
 
-The spread is dramatic. The same support bot costs $36/month on gpt-4o-mini or $1,260/month on Claude Sonnet 4. The capability difference matters — but so does a 35x cost difference.
+Under these assumptions, the same support bot costs about $39 per month on gpt-4o-mini or $576 on Claude Sonnet 5 at its introductory rate. That spread is material, but it is not a quality-adjusted comparison.
 
 ### Scenario 2: Coding agent
 
@@ -128,11 +128,11 @@ An agent that reads codebases, generates changes, runs tests, and iterates on fa
 |---|---|---|---|
 | gpt-4o | $0.035 | $43.75 | $1,313 |
 | gpt-4.1 | $0.028 | $35.00 | $1,050 |
-| Claude Sonnet 4 | $0.048 | $60.00 | $1,800 |
-| Claude Opus 4 | $0.240 | $300.00 | $9,000 |
+| Claude Sonnet 5 | $0.032 | $40.00 | $1,200 |
+| Claude Opus 4.8 | $0.080 | $100.00 | $3,000 |
 | o3 | $0.028 | $35.00 | $1,050 |
 
-Coding agents on Claude Opus 4 cost $9,000/month at this volume. That's not a bug in the pricing — it's a reflection of running a premium model at agent-scale call volumes. Most teams use Opus for the hardest subtasks and a cheaper model for routine steps.
+At this volume, the illustrative Claude Opus 4.8 workload costs $3,000 per month. That reflects the combination of a premium model and agent-scale call volume. Routing only the hardest subtasks to a premium model can reduce the blended rate.
 
 ### Scenario 3: Data pipeline agent
 
@@ -148,13 +148,13 @@ An agent that processes documents — extracting data, classifying content, gene
 
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
-| gpt-4o-mini | $0.001 | $2.10 | $63 |
+| gpt-4o-mini | $0.00075 | $2.25 | $67.50 |
 | gpt-4.1-mini | $0.002 | $6.00 | $180 |
-| Gemini 2.0 Flash | $0.001 | $1.50 | $45 |
-| Gemini 2.5 Flash | $0.001 | $1.95 | $59 |
-| Claude Haiku 3.5 | $0.004 | $12.00 | $360 |
+| Gemini 2.5 Flash-Lite | $0.0005 | $1.50 | $45 |
+| Gemini 2.5 Flash | $0.00215 | $6.45 | $193.50 |
+| Claude Haiku 4.5 | $0.0055 | $16.50 | $495 |
 
-High-volume, low-complexity pipelines are where the mini and flash models shine. Gemini 2.0 Flash processes 1,000 documents per day for $45/month. The same pipeline on a frontier model would cost 20-100x more with marginal quality improvement for structured extraction tasks.
+High-volume, repeatable pipelines are where lower-cost models can materially change unit economics. Under this example, Gemini 2.5 Flash-Lite processes 1,000 documents per day for $45 per month. Measure extraction quality on your own data before routing solely on price.
 
 ### Scenario 4: Multi-agent workflow
 
@@ -173,10 +173,10 @@ A coordinator agent dispatches work to specialized sub-agents — a planner, a r
 |---|---|---|---|
 | gpt-4o | $0.028 | $44.00 | $1,320 |
 | gpt-4.1 | $0.022 | $35.20 | $1,056 |
-| Claude Sonnet 4 | $0.038 | $60.00 | $1,800 |
-| Mixed (Sonnet coordinator + Haiku workers) | $0.015 avg | $24.00 | $720 |
+| Claude Sonnet 5 | $0.025 | $40.00 | $1,200 |
+| Mixed (Sonnet 5 coordinator + Haiku 4.5 workers) | $0.015 avg | $24.00 | $720 |
 
-The "mixed" row is important. Most production multi-agent systems don't run every agent on the same model. The coordinator and reviewer might use Sonnet 4, while the workers use Haiku 3.5. This cuts costs by 40-60% compared to running everything on the same frontier model.
+The "mixed" row assumes one Sonnet 5 coordinator call for every four Haiku 4.5 worker calls. It is 40% cheaper than the all-Sonnet example under this exact mix; different orchestration ratios produce different savings.
 
 ## The Hidden Cost Multipliers
 
@@ -204,11 +204,11 @@ Knowing your costs is the first step. Controlling them is the next.
 
 Agent costs are a function of call patterns, not just token prices. A 10% change in model pricing matters far less than a runaway loop that makes 500 calls instead of 50. We wrote about [why monitoring alone isn't sufficient](/blog/true-cost-of-uncontrolled-agents#the-observability-gap) and how [pre-execution runtime authority](/blog/true-cost-of-uncontrolled-agents#runtime-authority-as-infrastructure) closes the gap.
 
-[Cycles](/) provides this layer. Every LLM call checks against a budget before executing. When the budget is exhausted, the call is denied and the agent degrades gracefully.
+[Cycles](/) can provide this layer at the operations your application instruments. The application reserves an estimate before protected work and commits actual usage afterward. A live reservation that cannot fit returns an error; the application decides how to stop or degrade.
 
 ## From cost visibility to cost control
 
-Cost overruns are a symptom. The root cause is the absence of a pre-execution enforcement layer — a system that asks "is there budget for this?" before every action, not after. That's what [runtime authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) provides: deterministic budget decisions at the point of execution, not retroactive alerts on a dashboard.
+Token rates help choose a model; call-shape measurements help size the workload. Neither guarantees that concurrent agents stay within a shared allocation. A [runtime budget boundary](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) adds that third concern: reserve capacity before each instrumented operation, then reconcile the actual amount.
 
 ## Next steps
 

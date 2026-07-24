@@ -103,7 +103,7 @@ config = CyclesConfig(
 ```
 
 ::: warning
-Never set the read timeout below the server's expected p99 latency. At default load, the server's p99 for reserve+commit is ~20ms. Under heavy load it can reach 50ms+. A read timeout of 100ms will cause spurious failures.
+Never set the read timeout below the server's expected p99 latency. At default load, the server's p99 for a reserve-commit cycle is ~20ms. Under heavy load it can reach 50ms+. A read timeout of 100ms will cause spurious failures.
 :::
 
 ## Connection pooling
@@ -268,7 +268,7 @@ For server-side performance:
 
 - **Redis connection pool** — default 128 connections. See [Production Operations Guide](/how-to/production-operations-guide).
 - **Expiry sweep interval** — default 5000ms. See [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles).
-- **Benchmarks** — Reserve 5.3ms p50, 2,632 reserve+commit lifecycles/sec at 32 threads. See [Performance Benchmarks](/blog/cycles-server-performance-benchmarks).
+- **Benchmarks** — Reserve 5.3ms p50, 2,632 reserve-commit lifecycles/sec at 32 threads. See [Performance Benchmarks](/blog/cycles-server-performance-benchmarks).
 
 ## Next steps
 

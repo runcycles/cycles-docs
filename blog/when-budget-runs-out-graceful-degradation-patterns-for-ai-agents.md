@@ -21,7 +21,7 @@ Runtime enforcement solves one problem and creates another. Once your guardrails
 
 A hard stop — "budget exceeded, goodbye" — is better than a runaway agent. But it's not a good user experience. The agent was in the middle of something. The user was waiting for a result. A bare error message doesn't help either of them.
 
-And budget isn't the only reason an agent gets blocked. [Runtime authority](/blog/what-is-runtime-authority-for-ai-agents) enforces both **cost limits** (you've spent your $10) and **risk limits** (you've used your 3 allowed `send_email()` calls, or your [RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) budget is exhausted). The DENY is the same signal. The recovery path is different.
+And budget isn't the only reason an agent gets blocked. [Runtime authority](/blog/what-is-runtime-authority-for-ai-agents) can combine **cost limits** (you've spent your $10) with caller-assigned [RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) exposure budgets. Per-tool quotas such as "three `send_email()` calls" still belong in the application or agent harness; Cycles does not count tool calls natively. The recovery path depends on which boundary fired.
 
 This post covers five patterns for handling enforcement decisions gracefully — whether the trigger is cost, risk, or both, and whether the response is a full **DENY**, a constrained **ALLOW_WITH_CAPS**, or a soft signal that limits are approaching. The goal is the same in every case: **the agent completes as much useful work as possible within the boundaries it's given.**
 
@@ -49,7 +49,7 @@ Every pattern below depends on the three [enforcement decisions](/blog/ai-agent-
 |---|---|---|---|
 | **ALLOW** | — | Proceed normally | Execute the planned action |
 | **ALLOW_WITH_CAPS** | Cost, risk, or both | Proceed, but with constraints | Adapt — cheaper model (cost), narrower tools (risk), or both |
-| **DENY** | Cost, risk, or both | Action not permitted | Stop, degrade, queue, or inform the user |
+| **DENY** | Cost, risk, or both | A decision request was rejected | Stop, degrade, queue, or inform the user |
 
 The binary allow/deny model forces hard stops. The three-way model gives agents room to adapt. Most of the patterns below depend on **ALLOW_WITH_CAPS** — the middle ground where enforcement narrows what the agent can do without killing the session entirely.
 
@@ -107,14 +107,14 @@ This is the [progressive capability narrowing](/blog/ai-agent-action-control-har
 - **Full access:** Normal operation
 - **High-risk tools denied:** Agent continues but skips actions that send external messages, mutate data, or trigger deployments. It can still research, draft, and prepare outputs for human review.
 - **Read-only mode:** Agent can answer questions, retrieve information, and summarize — but can't take any action with side effects.
-- **DENY:** Graceful stop (see Pattern 5).
+- **Rejected request:** Graceful stop (see Pattern 5).
 
 **Trade-offs:**
 - The agent degrades gracefully instead of hard-stopping
 - It can still complete useful work — reading files, running searches, generating summaries — while dangerous capabilities are removed
 - Requires defining risk tiers for your tools (see [risk assessment guide](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk))
 - Users may not realize the agent is operating in a constrained mode unless you tell them
-- **Critical: the agent must know why a tool was denied.** If the enforcement layer returns a generic "tool execution failed" error, a persistent agent will retry the tool in an expensive loop or hallucinate alternatives. The DENY or ALLOW_WITH_CAPS response should include context the LLM can reason about — e.g., *"send_email capability revoked due to risk limits. Proceed with read-only operations."* — so the agent changes strategy instead of retrying blindly
+- **Critical: the agent must know why the application withheld a tool.** If the harness returns a generic "tool execution failed" error, a persistent agent may retry the tool in an expensive loop or hallucinate alternatives. Translate the Cycles decision or reservation error into application-level context the model can reason about — for example, *"`send_email` is unavailable under the current exposure policy. Proceed with read-only operations."* — so the agent changes strategy instead of retrying blindly
 
 ---
 
@@ -245,7 +245,7 @@ Patterns 2 and 3 add sophistication for agents with complex tool access or batch
 
 The trigger matters because the recovery options are different:
 
-| | Cost-driven DENY | Risk-driven DENY |
+| | Cost-driven rejection | Exposure-driven rejection |
 |---|---|---|
 | **Why it fired** | Dollar or token budget exhausted | RISK_POINTS budget exhausted or specific tool denied |
 | **Can a cheaper model help?** | Yes — Pattern 1 | No — the model isn't the problem, the action is |
@@ -253,7 +253,7 @@ The trigger matters because the recovery options are different:
 | **Can it be deferred?** | Yes — wait for next budget window | Depends — some actions are time-sensitive |
 | **Typical recovery path** | Downgrade model → partial completion → stop | Narrow capabilities → read-only mode → stop |
 
-The key insight: **a cost DENY means the agent can't afford to act. A risk DENY means the agent isn't allowed to act.** Agents that handle both need to inspect the DENY reason and choose the right degradation path.
+The key insight: **a cost rejection means the protected operation does not fit the remaining cost budget. An exposure rejection means the caller-assigned risk estimate does not fit the configured exposure budget.** Application authorization remains a separate control. Agents that handle both need to inspect the reason and choose the right degradation path.
 
 In practice, enforcement decisions often involve both simultaneously — an agent running low on dollar budget *and* approaching its RISK_POINTS ceiling. The patterns compose: downgrade the model (cost) while narrowing tool access (risk), complete what you can (partial completion), and queue the rest (defer).
 

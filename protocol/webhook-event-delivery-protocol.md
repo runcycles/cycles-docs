@@ -60,11 +60,13 @@ The body is a JSON-serialized Event object:
 
 Fields `scope`, `actor`, `data`, `correlation_id`, `request_id`, `trace_id`, and `metadata` are optional (omitted when null).
 
-**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) narrows to one logical operation (may span many requests); `correlation_id` groups a family of related events — it is server-set in one of two shapes: a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` for protocol event-stream clusters, or an explicit operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`) for governance/admin operations. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
+**Correlation fields.** `request_id` narrows to one HTTP request; `trace_id` (32-hex W3C) joins related requests when the caller propagates the same context. `correlation_id` is server-managed: the runtime YAML requires deterministic event-cluster hashes, but the current reference runtime leaves the field absent on its implemented emits; selected admin operations populate explicit IDs such as `webhook_create:<id>` and `webhook_bulk_action:<action>:<request_id>`. See [Correlation and Tracing](/protocol/correlation-and-tracing-in-cycles).
 
 ## Event types (51)
 
 The current v0.1.25 Admin API `EventType` enum registers 51 event types across seven categories: budget (17), reservation (6), tenant (6), api_key (7), policy (3), webhook (7), and system (5). Implementations may add future event types, and consumers should ignore unrecognized values gracefully. The per-category tables below list the 47 non-cascade types; the four `*_via_tenant_cascade` types (one each in the budget, reservation, api_key, and webhook categories, added to the enum in governance revision v0.1.25.35) are covered in [Tenant-close cascade fan-out](#tenant-close-cascade-fan-out).
+
+Registration does not guarantee emission. The trigger tables describe each registered type's contract; consult the [Event Payloads Reference](/protocol/event-payloads-reference) for the current reference-service emission matrix before subscribing.
 
 ::: info Count note
 The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's webhook-event guidance section in `cycles-protocol-v0.yaml` lists 35 event types across 6 categories — it predates the `webhook` lifecycle category and some later enum additions.
@@ -76,7 +78,7 @@ The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's
 |------------|---------|
 | `budget.created` | Budget ledger created |
 | `budget.updated` | Budget ledger configuration changed |
-| `budget.funded` | CREDIT, DEBIT, RESET, REPAY_DEBT, or RESET_SPENT funding operation |
+| `budget.funded` | CREDIT funding operation |
 | `budget.debited` | Budget debited (funds removed) |
 | `budget.reset` | Budget resized (`allocated` changed; `spent`/`reserved`/`debt` preserved) |
 | `budget.reset_spent` | New billing period started (`allocated` set; `spent` cleared or explicitly set; `reserved`/`debt` preserved) |
@@ -88,16 +90,16 @@ The 51-type / 7-category count tracks the admin OpenAPI enum. The runtime spec's
 | `budget.exhausted` | Remaining budget reached zero |
 | `budget.over_limit_entered` | Debt exceeded overdraft limit |
 | `budget.over_limit_exited` | Debt dropped below overdraft limit |
-| `budget.debt_incurred` | New debt created via ALLOW_WITH_OVERDRAFT commit |
+| `budget.debt_incurred` | New debt created by an ALLOW_WITH_OVERDRAFT commit or direct debit |
 | `budget.burn_rate_anomaly` | Spend rate exceeds baseline multiplier within the configured window |
 
 ### Reservation events (5)
 
 | Event Type | Trigger |
 |------------|---------|
-| `reservation.denied` | Reservation rejected (budget exceeded, frozen, closed, debt outstanding) |
+| `reservation.denied` | A dry-run reservation or `/v1/decide` evaluation returned `DENY`; current live 4xx reservation errors do not emit this event |
 | `reservation.denial_rate_spike` | Denial rate exceeded threshold within window |
-| `reservation.expired` | Reservation TTL expired without commit |
+| `reservation.expired` | Reservation TTL expired without commit or release |
 | `reservation.expiry_rate_spike` | Expiry rate exceeded threshold within window |
 | `reservation.commit_overage` | Commit actual exceeded reserved estimate |
 
@@ -160,7 +162,7 @@ This is **governance WEBHOOK SUBSCRIPTION INVARIANT 2** (normative, cross-plane,
 
 ::: warning Enforced at three layers (issue #209)
 The guarantee is defense-in-depth across the two services — verify your fleet is fully upgraded:
-- **Write** — both provisioning planes reject an admin-only type or category on a concrete-tenant subscription with `400 INVALID_REQUEST`. The tenant self-service plane (`POST`/`PATCH /v1/webhooks`) since **cycles-server-admin 0.1.25.50** (governance v0.1.25.38); the admin plane (`POST /v1/admin/webhooks?tenant_id=X`, `PATCH /v1/admin/webhooks/{id}`) since **0.1.25.51** (governance v0.1.25.40) — update validates the *effective resulting* selectors (each array as it stands after the update — the request's value where provided, the stored value where omitted; `PATCH` replaces a supplied array, it does not merge), so a status-only reactivation validates the still-stored selectors and can't re-enable a disabled offender that holds admin-only ones. `__system__`-owned subscriptions are exempt (system-wide monitoring is legitimate).
+- **Write** — both provisioning planes reject an admin-only type or category on a concrete-tenant subscription with `400 INVALID_REQUEST`. The tenant self-service plane (`POST /v1/webhooks`, `PATCH /v1/webhooks/{subscription_id}`) since **cycles-server-admin 0.1.25.50** (governance v0.1.25.38); the admin plane (`POST /v1/admin/webhooks?tenant_id=X`, `PATCH /v1/admin/webhooks/{id}`) since **0.1.25.51** (governance v0.1.25.40) — update validates the *effective resulting* selectors (each array as it stands after the update — the request's value where provided, the stored value where omitted; `PATCH` replaces a supplied array, it does not merge), so a status-only reactivation validates the still-stored selectors and can't re-enable a disabled offender that holds admin-only ones. `__system__`-owned subscriptions are exempt (system-wide monitoring is legitimate).
 - **Dispatch** — since **0.1.25.51**, live dispatch and replay skip any admin-only event per-event for a concrete-tenant subscription, fail-closed and independent of stored-selector correctness (a default-on startup reconciler additionally strips legacy admin-only selectors from stored non-`DISABLED` rows — best-effort hygiene, see below).
 - **Last-mile delivery** — since **cycles-server-events 0.1.25.23**, the delivery worker re-checks the boundary immediately before every outbound POST (initial, retry, and recovered redeliveries), catching deliveries queued before the upgrade and every retry. **Rolling-deploy caveat:** this is a per-worker guarantee — airtight only once *all* delivery workers are on 0.1.25.23.
 

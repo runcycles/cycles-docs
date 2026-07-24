@@ -3,7 +3,7 @@ title: "We Gave Our OpenClaw Agent a $5 Budget"
 date: 2026-03-28
 author: Albert Mavashev
 tags: [openclaw, budgets, agents, graceful-degradation, model-downgrade, production, cost-control, ai-agent-cost, llm-cost-management]
-description: "A $12 OpenClaw research session constrained to a $5 Cycles budget. The agent downgrades models, disables expensive tools, self-regulates, finishes at $4.85."
+description: "A constructed OpenClaw walkthrough showing how a $5 Cycles budget can downgrade models, disable expensive tools, and stop new work safely before the cap."
 blog: true
 sidebar: false
 head:
@@ -26,38 +26,38 @@ When the session crossed the $1.50 low-budget threshold, the plugin downgraded f
 
 That's the difference between a kill switch and [runtime authority](/blog/what-is-runtime-authority-for-ai-agents).
 
-> **TL;DR:** Install the plugin, set a budget, and your OpenClaw agent automatically downgrades models, disables expensive tools, and self-regulates when budget gets tight — instead of crashing.
+> **TL;DR:** Configure the plugin with a budget, model fallbacks, and tool-cost estimates, and it can downgrade models or block expensive tools before the cap is exhausted.
 
-*Note: The session described below is a representative walkthrough based on real plugin behavior with realistic cost estimates. The numbers, logs, and config are all producible with the plugin — we've simplified the narrative for clarity, but nothing is fabricated.*
+*Note: This is a constructed walkthrough using real plugin fields and control paths. The costs and session behavior are illustrative, not provider billing data or a measured production incident.*
 
 <!-- more -->
 
 ## What the logs looked like
 
-Here's the plugin output from that session, at info level — no debug mode needed:
+Here is representative plugin output for the walkthrough, at info level:
 
 ```
 Cycles Budget Guard for OpenClaw v0.7.5
   tenant: research-team
-  defaultModelName: anthropic/claude-opus-4-20250514
+  defaultModelName: anthropic/claude-opus-4-8
   failClosed: true
   lowBudgetThreshold: 150000000
 
-Model reserved: anthropic/claude-opus-4-20250514 (estimate=15000000, remaining=500000000)
-Model committed: anthropic/claude-opus-4-20250514 (cost=15000000 USD_MICROCENTS)
-Tool reserved: web_search (estimate=5000000, remaining=485000000)
+Model reserved: anthropic/claude-opus-4-8 (estimate=5000000, remaining=500000000)
+Model committed: anthropic/claude-opus-4-8 (cost=5000000 USD_MICROCENTS)
+Tool reserved: web_search (estimate=5000000, remaining=495000000)
 Tool committed: web_search (cost=5000000 USD_MICROCENTS)
-Model reserved: anthropic/claude-opus-4-20250514 (estimate=15000000, remaining=480000000)
-Model committed: anthropic/claude-opus-4-20250514 (cost=15000000 USD_MICROCENTS)
+Model reserved: anthropic/claude-opus-4-8 (estimate=5000000, remaining=490000000)
+Model committed: anthropic/claude-opus-4-8 (cost=5000000 USD_MICROCENTS)
 ...
 Budget level changed: healthy → low (remaining=150000000)
-Budget low — downgrading model anthropic/claude-opus-4-20250514 → anthropic/claude-sonnet-4-20250514
-Model reserved: anthropic/claude-sonnet-4-20250514 (estimate=3000000, remaining=147000000)
+Budget low — downgrading model anthropic/claude-opus-4-8 → anthropic/claude-sonnet-4-6
+Model reserved: anthropic/claude-sonnet-4-6 (estimate=3000000, remaining=147000000)
 ...
 Tool "code_execution" blocked: cost 10000000 exceeds expensive threshold 5000000
 ...
-Model committed: anthropic/claude-sonnet-4-20250514 (cost=3000000 USD_MICROCENTS)
-Agent session budget summary: remaining=15000000 spent=485000000 reservations=34
+Model committed: anthropic/claude-sonnet-4-6 (cost=3000000 USD_MICROCENTS)
+Agent session budget summary: remaining=15000000 spent=485000000 reservations=72
 ```
 
 Every [reservation](/glossary#reservation), commit, downgrade, and block is visible. No digging through provider dashboards. This is what AI agent cost management looks like when it's built into the execution lifecycle — not bolted on after the fact.
@@ -72,19 +72,21 @@ and avoid expensive tools. 7% of budget remaining. Est. ~11 tool calls and
 ~3 model calls remaining at current rate. Limit responses to 1024 tokens.
 ```
 
-The model responded to this signal by reducing optional web searches, writing tighter prose, and skipping the summary paragraph it usually generates. We did not hardcode any task-specific fallback behavior — the model adapted to the budget constraint on its own, like it adapts to other system prompt instructions.
+In this walkthrough, the model responds to this signal by reducing optional web searches, writing tighter prose, and skipping an optional summary. That response is illustrative: prompt hints can influence model behavior, but they are not an enforcement guarantee.
 
-This is the part that surprises most teams: **budget-aware agents tend to be more disciplined and less wasteful.** When the model knows resources are limited, it focuses. Fewer tangents, less padding, more direct answers. The prompt hint turns a blunt cost limit into a soft constraint the model can reason about.
+The hard control remains the reservation and tool policy. The prompt hint is only a soft signal that may help a model wind down gracefully.
 
-## What the session summary told us
+## What the session summary can tell you
+
+The excerpt below shows selected fields; additional component entries are omitted, so the visible subtotals do not add up to the full `spent` value.
 
 ```json
 {
   "remaining": 15000000,
   "spent": 485000000,
   "costBreakdown": {
-    "model:anthropic/claude-opus-4-20250514": { "count": 8, "totalCost": 120000000 },
-    "model:anthropic/claude-sonnet-4-20250514": { "count": 14, "totalCost": 42000000 },
+    "model:anthropic/claude-opus-4-8": { "count": 8, "totalCost": 40000000 },
+    "model:anthropic/claude-sonnet-4-6": { "count": 14, "totalCost": 42000000 },
     "tool:web_search": { "count": 9, "totalCost": 45000000 },
     "tool:code_execution": { "count": 3, "totalCost": 30000000 }
   },
@@ -96,7 +98,7 @@ This is the part that surprises most teams: **budget-aware agents tend to be mor
 
 Three things jumped out:
 
-1. **Opus cost $1.20 for 8 calls. Sonnet cost $0.42 for 14 calls.** Sonnet handled nearly twice as many calls for a third of the cost. In our testing, output quality was comparable for this type of task.
+1. **The configured Opus estimate was $0.05 per call; Sonnet was $0.03.** The summary exposes the actual call mix and the estimates the plugin committed. It does not establish equivalent model quality or reproduce the provider bill.
 
 2. **Code execution was blocked after 3 calls.** Each call cost $0.10. The `disable_expensive_tools` strategy kicked in at low budget. The agent compensated by describing the analysis in text instead of generating charts.
 
@@ -104,13 +106,13 @@ Three things jumped out:
 
 ## Three patterns we observed
 
-Running this config across multiple test sessions, three patterns emerged that changed how we think about LLM cost management.
+The walkthrough highlights three operating patterns worth testing on your own workload.
 
-### Model downgrade is usually invisible
+### Model downgrade is a controlled tradeoff, not a quality guarantee
 
-Sonnet's output quality for research and analysis tasks is comparable to Opus in most cases. In our test sessions, the downgraded outputs were difficult to distinguish from the Opus-generated ones. The 5x cost reduction was measurable; the quality difference was hard to detect.
+In this configuration, the fixed Sonnet estimate is 40% lower than the Opus estimate. Whether the quality tradeoff is acceptable depends on the task and must be evaluated with your own outputs.
 
-The key is configuring the fallback chain correctly. `"anthropic/claude-opus-4-20250514": ["anthropic/claude-sonnet-4-20250514", "anthropic/claude-haiku-4-5-20251001"]` gives the plugin two steps to try. It picks the cheapest model that fits within the remaining budget.
+The key is configuring the fallback chain correctly. `"anthropic/claude-opus-4-8": ["anthropic/claude-sonnet-4-6", "anthropic/claude-haiku-4-5-20251001"]` gives the plugin two steps to try. It picks the lowest configured estimate that fits within the remaining budget.
 
 ### Tool limits catch more bugs than budget limits
 
@@ -124,9 +126,9 @@ Every session produces a cost breakdown. After a few days, patterns are obvious:
 
 Three things we learned the hard way:
 
-**Enable `enableEventLog` from day one.** When a session behaves unexpectedly, the event log tells you exactly what happened — which tools were blocked, when models were downgraded, why a reservation was denied. Without it, you're reading tea leaves from the session summary.
+**Enable `enableEventLog` from day one.** When a session behaves unexpectedly, the event log records the plugin's budget sequence—which tools it blocked, when it selected a fallback, and why a reservation was denied. It does not replace OpenClaw or provider logs for tool arguments, model output, or external outcomes.
 
-**Model costs are estimates.** The plugin reserves a fixed amount per Opus call regardless of how many [tokens](/glossary#tokens) are actually used. A short response costs the same as a long one. The `modelCostEstimator` callback can improve this if you have a proxy that tracks token usage, but out of the box, expect ±20% variance.
+**Model costs are estimates.** The plugin reserves a fixed amount per model call regardless of how many [tokens](/glossary#tokens) are actually used. A short response costs the same as a long one. The `modelCostEstimator` callback can improve this if you have a proxy that tracks token usage; otherwise, compare estimates with provider telemetry and tune them for your workload.
 
 **OpenClaw doesn't pass the model name in hook events.** We had to add `defaultModelName` to the config because the `before_model_resolve` event only contains `{ prompt }`. We've filed a [feature request](https://github.com/openclaw/openclaw/issues/55771) — until it's resolved, set `defaultModelName` to your agent's model.
 
@@ -141,13 +143,13 @@ Three things we learned the hard way:
           "cyclesBaseUrl": "${CYCLES_BASE_URL}",
           "cyclesApiKey": "${CYCLES_API_KEY}",
           "tenant": "research-team",
-          "defaultModelName": "anthropic/claude-opus-4-20250514",
+          "defaultModelName": "anthropic/claude-opus-4-8",
           "modelFallbacks": {
-            "anthropic/claude-opus-4-20250514": ["anthropic/claude-sonnet-4-20250514", "anthropic/claude-haiku-4-5-20251001"]
+            "anthropic/claude-opus-4-8": ["anthropic/claude-sonnet-4-6", "anthropic/claude-haiku-4-5-20251001"]
           },
           "modelBaseCosts": {
-            "anthropic/claude-opus-4-20250514": 15000000,
-            "anthropic/claude-sonnet-4-20250514": 3000000,
+            "anthropic/claude-opus-4-8": 5000000,
+            "anthropic/claude-sonnet-4-6": 3000000,
             "anthropic/claude-haiku-4-5-20251001": 1000000
           },
           "toolBaseCosts": {

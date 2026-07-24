@@ -40,10 +40,10 @@ The full 2026 incident catalog is documented in detail in [The State of AI Agent
 
 | Category | Example | What's Missing |
 |---|---|---|
-| **Cost explosions** | $847K POC-to-production runaway; $47K enrichment loop (2.3M calls); $4,200 coding agent loop | Pre-execution budget enforcement |
-| **Action failures** | [Replit production DB deletion](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/) ($2 token cost); 200 wrong customer emails ($1.40 token cost, $50K+ damage); [OpenAI Operator unauthorized $31 purchase](https://incidentdatabase.ai/cite/1028/) | Action-level authority (RISK_POINTS) |
-| **Security incidents** | 84.2% MCP tool poisoning success rate; [postmark-mcp supply chain attack](https://cyberpress.org/malicious-mcp-server/) (~300 orgs); 1,862 exposed MCP servers without auth | Tool governance + scoped identity |
-| **Multi-agent cascades** | [MAST failure rates of 41-86.7%](https://arxiv.org/abs/2503.13657) across 7 frameworks; DeepMind 17x error amplification | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) at delegation boundaries |
+| **Cost explosions** | Self-published $847K/month and $47K anecdotes; checked $52.80 constructed loop model | Mandatory pre-execution budget enforcement on covered paths |
+| **Action failures** | [Replit production DB deletion](https://fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure/); constructed 200-email scenario with low token spend; [OpenAI Operator unauthorized $31 purchase](https://incidentdatabase.ai/cite/1028/) | Application authorization plus optional caller-assigned exposure budgets |
+| **Security evidence** | MCP-ITP induced selected target-tool calls in up to 84.2% of evaluated MCPTox prompts; [postmark-mcp supply-chain attack](https://cyberpress.org/malicious-mcp-server/) (~300 orgs); 1,862 exposed MCP servers without auth | Tool governance + scoped identity |
+| **Multi-agent cascades** | [MAST configuration-level failure rates of 41–86.7%](https://arxiv.org/abs/2503.13657) across seven selected frameworks; independent-agent error amplification up to 17.2x in Google's controlled benchmark | Coordination and validation; scoped budgets can separately bound resource exposure |
 
 The common thread is that each category has controls that could have reduced likelihood or blast radius. The mapping is not one-to-one, and no single runtime control can prove that a historical incident would have been prevented.
 
@@ -151,19 +151,19 @@ The alternative — observability, dashboards, post-hoc alerts — catches failu
 
 The atomic enforcement primitive. The agent reserves capacity before acting, executes if approved, commits actual usage after. Atomic across concurrent operations. This is how payment processors, capacity planners, and database transactions have handled resource accounting for decades.
 
-The reserve-commit pattern solves three failure modes agents run into constantly: TOCTOU races (two concurrent agents reading the same balance and both proceeding), retry storms (the same logical operation charged multiple times), and crashed clients leaving orphaned state. Every write needs an idempotency key, every reservation has a TTL, every commit reconciles estimate vs. actual. Agents need the same discipline payment systems have had for decades — the math is the same, the stakes are comparable, the pattern is proven.
+The reserve-commit pattern addresses three failure modes agents run into constantly: TOCTOU races (two concurrent agents reading the same balance and both proceeding), duplicate accounting when retries reuse a stable idempotency key, and crashed clients leaving holds that eventually expire. Every write needs an idempotency key, every reservation has a TTL, and every successful commit reconciles estimate versus actual. Agents benefit from the same lifecycle discipline used in payment and capacity systems, while downstream side effects still need their own idempotency controls.
 
 ### 3. RISK_POINTS: Action Control Beyond Cost
 
-Dollar budgets don't capture [the risk of an action](/blog/ai-agent-action-control-hard-limits-side-effects). Sending 200 emails costs $1.40 in tokens but can do $50K in damage. Running a database `DELETE` costs $0.02 in compute but can destroy 1,200 customer records.
+Dollar budgets don't capture [the risk of an action](/blog/ai-agent-action-control-hard-limits-side-effects). In constructed examples, sending 200 emails can have low token cost but substantial external impact, and a cheap database `DELETE` can destroy many records. The business-impact figures depend on the actual system and are not inferred from token spend.
 
 `RISK_POINTS` is a budget unit an application can assign by blast radius — for example, one point for a read, 20 for a mutation, or 50 for a deploy. A mandatory handler can reserve those points to distinguish cheap harmful actions from expensive harmless ones. The current server does not infer tiers, count action kinds automatically, or maintain the action registry described by the not-yet-implemented governance extension.
 
 ### 4. Authority Attenuation for Delegation
 
-In [multi-agent systems](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation), a useful application policy is to narrow authority with delegation depth. A parent can carve out a sub-budget and the orchestrator can apply a restricted action mask. This can bound delegated resource exposure, but it does not by itself prevent downstream agents from propagating incorrect information.
+In [multi-agent systems](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation), a useful application policy is to narrow authority with delegation depth. Before enabling a child, the orchestrator can restrict its tool inventory and require its calls to match a smaller, explicitly provisioned agent ledger under the shared workflow scope. Cycles does not transfer balances at handoff.
 
-The principle is borrowed from capability-based security: a correctly implemented orchestrator propagates authority downward and allows each hop only to narrow what the child inherits. A parent agent with a $100 budget and permission to send emails could delegate a $30 budget with email disabled; the application must prevent it from delegating authority it does not hold. This limits the resource and permission blast radius covered by those controls, though it does not bound every failure mode or prevent bad information from propagating. Recent research on [scaling agent systems](https://arxiv.org/abs/2512.08296) quantifies the stakes: in the study's settings, independent agents amplified errors 17.2x while centralized coordination limited amplification to 4.4x.
+The principle is borrowed from capability-based security: a correctly implemented orchestrator should only narrow the child's capabilities. A $100 parent workflow might use a $30 child agent ledger while the host disables email for that child. Budget and permission controls remain separate, and neither prevents bad information from propagating. Recent research on [scaling agent systems](https://arxiv.org/abs/2512.08296) quantifies the stakes: in the study's settings, independent agents amplified errors up to 17.2x while centralized coordination reached up to 4.4x.
 
 ### 5. Three-Way Decision Model
 
@@ -234,7 +234,7 @@ Five things are visible on the 2026 horizon:
 
 The state of AI agent governance in 2026 is a race condition. Agents are already in production. Regulations are catching up. The primitives for governing them exist, but adoption is uneven and framework support is partial.
 
-The organizations that do this well in 2026-2027 will share a common pattern: **pre-execution enforcement as the foundational layer, hierarchical scopes from tenant to run, action-level risk controls beyond cost, and authority attenuation for delegation chains**. They'll be able to show auditors the logs, show executives the saved incidents, and show developers the graceful degradation that kept the agent useful when budgets got tight.
+The organizations that do this well in 2026-2027 will share a common pattern: **pre-execution enforcement as the foundational layer, hierarchical scopes from tenant through toolset, application mappings for run-level limits, action-level risk controls beyond cost, and authority attenuation in the host's delegation design**. They'll be able to show auditors the logs, show executives the saved incidents, and show developers the graceful degradation that kept the agent useful when budgets got tight.
 
 The organizations that don't will show up in next year's incident catalog.
 

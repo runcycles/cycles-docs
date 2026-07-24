@@ -121,7 +121,7 @@ Budget ledgers carry declarative period metadata — `rollover_policy` (`NONE`, 
 
 - **External cron.** A scheduled job that reads a list of active tenants from your own tenancy database and calls `RESET_SPENT` for each on the first of the month.
 - **Stripe webhook-driven.** A handler for Stripe's `invoice.finalized` event that rolls over the corresponding tenant as part of invoice reconciliation.
-- **Event-driven.** Subscribe to `budget.threshold_crossed` at 100% utilization and roll over automatically if your plan logic calls for it.
+- **Balance-driven.** Poll balances and apply your own plan rules when utilization changes. Do not use exhaustion alone as a billing-period boundary: it can happen before the calendar or invoice period ends, and the current runtime does not emit configurable pre-exhaustion threshold events.
 
 In every case, make the idempotency key include the target period, so a retry or duplicate trigger does not double-rollover.
 

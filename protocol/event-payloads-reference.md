@@ -13,7 +13,7 @@ The v0.1.25 Admin API `EventType` enum registers **51 event types** total across
 **Registered enum values currently emitted** (count toward the 51 total):
 
 - **Reservation:** `reservation.denied`, `reservation.expired`, `reservation.commit_overage` (runtime).
-- **Budget:** `budget.exhausted`, `budget.over_limit_entered`, `budget.debt_incurred`, `budget.reset_spent` (runtime + admin v0.1.25.18+); `budget.funded`, `budget.debited`, `budget.reset`, `budget.debt_repaid` (admin v0.1.25.38+).
+- **Budget:** runtime emits `budget.exhausted`, `budget.over_limit_entered`, and `budget.debt_incurred`; admin emits `budget.created`, `budget.updated`, `budget.frozen`, `budget.unfrozen`, `budget.funded`, `budget.debited`, `budget.reset`, `budget.reset_spent`, and `budget.debt_repaid`; tenant close emits `budget.closed_via_tenant_cascade`.
 - **Tenant:** `tenant.created`, `tenant.updated` (current admin implementation); `tenant.suspended`, `tenant.reactivated`, `tenant.closed` (admin v0.1.25.38+, single-op + bulk-action paths).
 - **API key:** `api_key.created`, `api_key.revoked`, and `api_key.auth_failed` (admin v0.1.25+); `api_key.permissions_changed` (admin v0.1.25.7+).
 - **Policy:** `policy.created` and `policy.updated` (admin v0.1.25+).
@@ -23,7 +23,7 @@ The v0.1.25 Admin API `EventType` enum registers **51 event types** total across
 
 Registered values not named above remain planned unless a later section says otherwise.
 
-**Additive reference-server payloads** (observable in the reference implementation but not part of the published admin-openapi enum — consumers must ignore unrecognized event types gracefully):
+**Historical additive runtime payloads** (documented in the v0.1.25.3 release history, but not present in the current runtime `EventType` model or emitted by current controller paths):
 
 - Reservation lifecycle samples: `reservation.reserved`, `reservation.committed`, `reservation.released`, `reservation.extended`.
 - Runtime ledger application: `event.applied`.
@@ -70,7 +70,7 @@ Every event shares this envelope structure. The `data` field varies by event typ
 | `source` | string | Yes | Emitting service: `cycles-server` (runtime events), `cycles-admin` (admin-plane events including bulk-action emits and webhook lifecycle events since v0.1.25.38/.39), or `cycles-events` (dispatcher-emitted `webhook.disabled` on auto-disable, v0.1.25.11). |
 | `actor` | object | When applicable | Who triggered: `type` (`api_key`, `admin`, `system`, `scheduler`), `key_id`, `source_ip` |
 | `data` | object | Varies | Event-specific payload (see below). Some events emit `null`. |
-| `correlation_id` | string | When applicable | Server-set family key — deterministic hash for event-stream clusters, explicit operation IDs (`webhook_create:<id>` etc.) for admin operations |
+| `correlation_id` | string | When applicable | Server-managed family key. The YAML requires deterministic runtime event clusters, but the current reference runtime leaves this absent on implemented runtime emits. Selected admin operations populate explicit IDs such as `webhook_create:<id>`, bulk-action IDs, and cascade IDs. |
 | `request_id` | string | When provided | From `X-Request-Id` header on originating request |
 | `trace_id` | string | When provided | W3C Trace Context-compatible correlation identifier (32 lowercase hex characters). Links the event to the originating request, its audit entry, and sibling events within the same logical operation. |
 | `metadata` | object | When provided | Operator-defined key-value pairs |
@@ -79,61 +79,68 @@ Every event shares this envelope structure. The `data` field varies by event typ
 
 ## Reservation Events
 
-### `reservation.reserved` — Additive Reference-Server Payload (v0.1.25.3)
+### `reservation.reserved` — Historical Additive Payload (v0.1.25.3)
 
-**Trigger:** A reservation is created successfully.
+**Historical trigger:** A reservation was created successfully.
 
-**Emitted from:** `POST /v1/reservations` (ALLOW or ALLOW_WITH_CAPS response).
-
-The envelope's `scope`, `tenant_id`, and `actor` fields identify the reservation context. The `data` payload carries the reservation identifier and the amount held.
+The current reference runtime does not emit this event. Query reservation state and keep application telemetry for successful reserve operations.
 
 ---
 
-### `reservation.committed` — Additive Reference-Server Payload (v0.1.25.3)
+### `reservation.committed` — Historical Additive Payload (v0.1.25.3)
 
-**Trigger:** A reservation is committed with actual spend recorded.
+**Historical trigger:** A reservation was committed with actual spend recorded.
 
-**Emitted from:** `POST /v1/reservations/{id}/commit`.
-
-If `actual > estimated`, a companion `reservation.commit_overage` event is also emitted (see below).
+The current reference runtime does not emit this event. A commit that requests more than the estimate can emit `reservation.commit_overage`, and budget-state changes can emit the implemented budget events.
 
 ---
 
-### `reservation.released` — Additive Reference-Server Payload (v0.1.25.3)
+### `reservation.released` — Historical Additive Payload (v0.1.25.3)
 
-**Trigger:** A reservation is cancelled.
+**Historical trigger:** A reservation was cancelled.
 
-**Emitted from:** `POST /v1/reservations/{id}/release`. If the release was performed by an admin operator (dual-auth path introduced in v0.1.25.8), the envelope's `actor.type` will be `admin` and the audit log records `metadata.actor_type=admin_on_behalf_of`.
+The current reference runtime does not emit this event. An admin-on-behalf-of release does write its required audit entry; ordinary release state remains queryable through the reservation API.
 
 ---
 
-### `reservation.extended` — Additive Reference-Server Payload (v0.1.25.3)
+### `reservation.extended` — Historical Additive Payload (v0.1.25.3)
 
-**Trigger:** A reservation TTL is extended via heartbeat.
+**Historical trigger:** A reservation TTL was extended via heartbeat.
 
-**Emitted from:** `POST /v1/reservations/{id}/extend`.
+The current reference runtime does not emit this event. Query the reservation for current expiry state and log successful extensions in the application when needed.
 
 ---
 
 ### `reservation.denied` — Currently Emitted
 
-**Trigger:** A reservation or decide request returns DENY.
+**Trigger:** `POST /v1/decide` or a reservation request with `dry_run: true` returns `decision: DENY`.
 
-**Emitted from:** `POST /v1/reservations` (DENY response), `POST /v1/decide` (DENY response)
+**Emitted from:** `POST /v1/reservations` when the nonpersisting dry-run response is DENY, and `POST /v1/decide` when its response is DENY. A live reservation denial is an HTTP error such as `409 BUDGET_EXCEEDED`; the current controller does not emit `reservation.denied` for that exception path. Monitor `cycles_reservations_reserve_total{decision="DENY"}` or application errors for live denial rate.
 
 ```json
 {
   "event_type": "reservation.denied",
   "data": {
     "scope": "tenant:acme-corp/workspace:prod/workflow:support",
+    "unit": "USD_MICROCENTS",
     "reason_code": "BUDGET_EXCEEDED",
-    "requested_amount": 500000
+    "requested_amount": 500000,
+    "remaining": 100000,
+    "action": {
+      "kind": "llm.chat",
+      "name": "support-reply"
+    },
+    "subject": {
+      "tenant": "acme-corp",
+      "workspace": "prod",
+      "workflow": "support"
+    }
   }
 }
 ```
 
 ::: tip Fields populated at emission time
-The `reservation.denied` event model defines 9 fields, but the current server emission populates `scope`, `reason_code`, and `requested_amount`. The remaining fields (`unit`, `remaining`, `action`, `subject`, `policy_id`, `deny_detail`) are defined in the model and may be populated in future releases.
+The governance schema defines 9 fields. The current server emitter populates `scope`, `unit`, `reason_code`, `requested_amount`, `action`, and `subject`; a denied reservation dry run also derives `remaining` from returned balances, while `/decide` currently omits `remaining`. `policy_id` and `deny_detail` remain unpopulated.
 :::
 
 | Field | Type | Populated | Description |
@@ -141,10 +148,10 @@ The `reservation.denied` event model defines 9 fields, but the current server em
 | `scope` | string | Yes | Scope path that denied the reservation |
 | `reason_code` | string | Yes | Why denied. Known values: `BUDGET_EXCEEDED`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, and — from cycles-server 0.1.25.47 (spec v0.1.25.13) — `TENANT_CLOSED` on fresh dry-run/decide DENYs for a closed owning tenant. Open string — extensions (v0.1.26+) may emit additional values such as `ACTION_QUOTA_EXCEEDED`, `ACTION_KIND_DENIED`, `ACTION_KIND_NOT_ALLOWED`. |
 | `requested_amount` | number | Yes | Amount the reservation requested |
-| `unit` | string | Not yet | Budget unit (`USD_MICROCENTS`, `TOKENS`, `CREDITS`, `RISK_POINTS`) |
-| `remaining` | number | Not yet | Budget remaining at the scope that denied |
-| `action` | object | Not yet | Action metadata from the reservation request |
-| `subject` | object | Not yet | Subject metadata from the reservation request |
+| `unit` | string | Yes | Budget unit (`USD_MICROCENTS`, `TOKENS`, `CREDITS`, `RISK_POINTS`) |
+| `remaining` | number | Dry-run reserve only | Minimum remaining amount derived from returned balances; omitted by the current `/decide` emitter |
+| `action` | object | Yes | Action metadata from the evaluation request |
+| `subject` | object | Yes | Subject metadata from the evaluation request |
 | `policy_id` | string | Not yet | Policy ID that caused the denial, when applicable (added v0.1.25.8) |
 | `deny_detail` | object | Not yet | Operator-grade structured context (added v0.1.25.8). Populated by extensions; may include `quota_violation`, `blocked_by_policy`, `blocked_by_scope`, `suggested_fix`, `budget_remaining`. |
 
@@ -247,29 +254,9 @@ This event type is defined in the protocol but not yet emitted by the Cycles ser
 
 ## Budget Events
 
-### `budget.approaching_limit` — Additive Reference-Server Payload (v0.1.25.3, dedup fixed v0.1.25.5)
+### Historical threshold aliases
 
-**Trigger:** A scope's utilization crosses the configured "approaching" threshold (default **80%**).
-
-**Emitted from:** `EventEmitterService.emitBalanceEvents()` on reservation / commit / event.
-
-The envelope identifies the scope; the `data` payload reports `utilization`, `remaining`, and the threshold crossed. Subscriptions that want pager-ready escalation should filter on `event_type=budget.approaching_limit OR budget.at_limit OR budget.over_limit`.
-
----
-
-### `budget.at_limit` — Additive Reference-Server Payload (v0.1.25.3, dedup fixed v0.1.25.5)
-
-**Trigger:** Utilization crosses the "at-limit" threshold (default **95%**).
-
-**Emitted from:** Same emission path as `approaching_limit`. Dedup logic prevents re-emission while the scope remains in the same state band on subsequent mutations.
-
----
-
-### `budget.over_limit` — Additive Reference-Server Payload (v0.1.25.3, dedup fixed v0.1.25.5)
-
-**Trigger:** Utilization reaches or exceeds **100%**.
-
-**Emitted from:** Same emission path. Distinct from `budget.over_limit_entered`, which fires when debt first exceeds `overdraft_limit` under `ALLOW_WITH_OVERDRAFT`.
+Earlier v0.1.25.x builds documented additive `budget.approaching_limit`, `budget.at_limit`, and `budget.over_limit` aliases. They are not in the current runtime `EventType` model and the current `EventEmitterService` does not emit them. Use `budget.exhausted` for the implemented zero-remaining transition and calculate earlier utilization alerts from balances or metrics. The registered `budget.threshold_crossed` type remains unimplemented.
 
 ---
 
@@ -285,30 +272,50 @@ See [Rolling over billing periods with RESET_SPENT](/how-to/rolling-over-billing
 
 ---
 
-### `event.applied` — Additive Reference-Server Payload (v0.1.25.3)
+### `event.applied` — Historical Additive Payload (v0.1.25.3)
 
-**Trigger:** A direct debit via `POST /v1/events` is applied successfully (no pre-reservation path).
+**Historical trigger:** A direct debit via `POST /v1/events` was applied successfully.
 
-**Emitted from:** Runtime events controller. The envelope's `scope` and `actor` identify the debit; the `data` payload reports the amount charged.
+The current reference runtime does not emit `event.applied`. It returns the applied direct-debit response and can emit implemented budget-state events when that debit changes a ledger.
 
 ---
 
 ### `budget.exhausted` — Currently Emitted
 
-**Trigger:** A budget's remaining amount reaches zero after a reservation or commit.
+**Trigger:** A budget's remaining amount transitions from above zero to zero after a reservation, commit, or direct debit.
 
-**Emitted from:** `EventEmitterService.emitBalanceEvents()` (when `remaining.amount == 0`)
+**Emitted from:** `EventEmitterService.emitBalanceEvents()` (when pre-operation remaining is above zero and post-operation remaining is zero)
 
 ```json
 {
   "event_type": "budget.exhausted",
-  "data": null
+  "data": {
+    "scope": "tenant:acme-corp/workspace:prod",
+    "unit": "USD_MICROCENTS",
+    "threshold": 1.0,
+    "utilization": 1.0,
+    "allocated": 10000000,
+    "remaining": 0,
+    "spent": 9000000,
+    "reserved": 1000000,
+    "direction": "rising"
+  }
 }
 ```
 
-::: tip Envelope contains context
-While the `data` field is `null` for this event, the envelope's `scope`, `tenant_id`, and `actor` fields identify which budget exhausted and what triggered it. Query the budget's current state via the admin API for balance details.
-:::
+| Field | Type | Description |
+|---|---|---|
+| `scope` | string | Affected scope path |
+| `unit` | string | Budget unit |
+| `threshold` | number | `1.0` for the implemented exhaustion transition |
+| `utilization` | number | `(spent + reserved) / allocated` when allocated is positive |
+| `allocated` | number | Current allocated amount |
+| `remaining` | number | `0` for this event |
+| `spent` | number | Current spent amount |
+| `reserved` | number | Current reserved amount |
+| `direction` | string | `rising` |
+
+The envelope also identifies the tenant, actor, and request context. Query the balance API before remediation because later operations can change the ledger after the event is emitted.
 
 ---
 
@@ -345,7 +352,7 @@ While the `data` field is `null` for this event, the envelope's `scope`, `tenant
 
 ### `budget.debt_incurred` — Currently Emitted
 
-**Trigger:** A commit creates new debt via `ALLOW_WITH_OVERDRAFT` policy (actual cost exceeds available budget).
+**Trigger:** A reservation commit or direct debit creates new debt via `ALLOW_WITH_OVERDRAFT`.
 
 **Emitted from:** `EventEmitterService.emitBalanceEvents()` (when new debt is created)
 
@@ -355,42 +362,33 @@ While the `data` field is `null` for this event, the envelope's `scope`, `tenant
   "data": {
     "scope": "tenant:acme-corp/workspace:prod",
     "unit": "USD_MICROCENTS",
+    "reservation_id": "res_a1b2c3d4",
+    "debt_incurred": 250000,
     "total_debt": 750000,
-    "overdraft_limit": 1000000
+    "overdraft_limit": 1000000,
+    "overage_policy": "ALLOW_WITH_OVERDRAFT"
   }
 }
 ```
 
-::: tip Fields populated at emission time
-The `budget.debt_incurred` event model defines 7 fields, but the current server emission populates `scope`, `unit`, `total_debt`, and `overdraft_limit`. The remaining fields (`reservation_id`, `debt_incurred`, `overage_policy`) are defined in the model and may be populated in future releases.
-:::
-
-| Field | Type | Populated | Description |
-|---|---|---|---|
-| `scope` | string | Yes | Affected scope path |
-| `unit` | string | Yes | Budget unit |
-| `total_debt` | number | Yes | Total accumulated debt on this scope |
-| `overdraft_limit` | number | Yes | Configured overdraft ceiling |
-| `reservation_id` | string | Not yet | Reservation whose commit caused the debt |
-| `debt_incurred` | number | Not yet | New debt from this commit |
-| `overage_policy` | string | Not yet | Policy applied (`ALLOW_WITH_OVERDRAFT`) |
+| Field | Type | Description |
+|---|---|---|
+| `scope` | string | Affected scope path |
+| `unit` | string | Budget unit |
+| `reservation_id` | string | Reservation whose commit caused the debt; omitted for a direct debit |
+| `debt_incurred` | number | New debt created on this scope by the operation |
+| `total_debt` | number | Total accumulated debt on this scope |
+| `overdraft_limit` | number | Configured overdraft ceiling |
+| `overage_policy` | string | Policy applied (`ALLOW_WITH_OVERDRAFT`) |
 
 ---
 
 ### Planned Budget Events
 
-The following budget events are defined in the protocol but not yet emitted. They will be implemented as admin service and budget lifecycle operations gain event hooks.
+The following registered budget events are not emitted by the current reference services:
 
 | Event Type | Trigger |
 |---|---|
-| `budget.created` | Budget ledger created via admin API |
-| `budget.updated` | Budget configuration changed |
-| `budget.funded` | CREDIT, DEBIT, RESET, or REPAY_DEBT funding operation |
-| `budget.debited` | Funds removed from budget |
-| `budget.reset` | Budget reset to new allocated amount |
-| `budget.debt_repaid` | Outstanding debt repaid via REPAY_DEBT |
-| `budget.frozen` | Budget status set to FROZEN |
-| `budget.unfrozen` | Budget restored from FROZEN |
 | `budget.closed` | Budget permanently closed |
 | `budget.threshold_crossed` | Utilization crossed configured threshold (e.g., 80%, 95%) |
 | `budget.over_limit_exited` | Debt dropped below overdraft limit after repayment |
@@ -665,7 +663,7 @@ Current services emit part of every category below. The tables distinguish direc
 | Category | Total Defined | Currently Emitted | Notes |
 |---|---|---|---|
 | Reservation | 6 | `reservation.denied`, `reservation.expired`, and `reservation.commit_overage` emitted by runtime paths; the cascade aggregate (`reservation.released_via_tenant_cascade`, spec-declared since governance v0.1.25.35) emitted by the admin server on tenant close | Spike events still planned |
-| Budget | 17 | `budget.exhausted`, `over_limit_entered`, `debt_incurred`, `reset_spent`, and admin funding events emitted by current services; `budget.closed_via_tenant_cascade` (spec-declared since v0.1.25.35) emitted on tenant close; legacy threshold aliases are additive reference-server payloads | Remaining lifecycle/threshold types still planned |
+| Budget | 17 | Runtime exhaustion/over-limit/debt events; admin create/update/freeze/unfreeze/funding events; `budget.closed_via_tenant_cascade` on tenant close | `budget.closed`, `budget.threshold_crossed`, `budget.over_limit_exited`, and `budget.burn_rate_anomaly` are not emitted |
 | Tenant | 6 | `tenant.created`, `tenant.updated`, `tenant.suspended`, `tenant.reactivated`, and `tenant.closed` emitted by the current admin service | `tenant.settings_changed` still planned |
 | API Key | 7 | `api_key.created`, `.revoked`, `.permissions_changed`, `.auth_failed`, plus `.revoked_via_tenant_cascade` | Expiry and rate-spike events still planned |
 | Policy | 3 | `policy.created`, `policy.updated` | `policy.deleted` still planned |

@@ -128,7 +128,7 @@ async function agentTask(agentId: string, task: string): Promise<string> {
   }
 }
 
-// Run 5 agents concurrently — Cycles guarantees budget safety
+// Run 5 agents concurrently — reservations serialize estimate admission
 const results = await Promise.all(
   agents.map((agent) => agentTask(agent.id, agent.task))
 );
@@ -349,7 +349,7 @@ For more testing patterns, see [Testing with Cycles](/how-to/testing-with-cycles
 ## Key points
 
 - **Balance reads are informational, not authoritative.** Querying `/v1/balances` tells you the current state, but it does not reserve anything. Two agents can read the same balance and both decide to spend.
-- **Reservations are authoritative.** A successful reservation guarantees the budget is locked for that agent. Other agents see the reduced remaining balance.
+- **Reservations are authoritative for estimate admission.** A successful reservation holds the submitted estimate. Other agents see the reduced remaining balance; later settlement still follows the commit overage policy.
 - **The `remaining` field accounts for reservations.** It equals `allocated - spent - reserved - debt`. Active reservations reduce `remaining` even before they commit.
 
 ## Real-world scenarios
@@ -363,7 +363,7 @@ This pattern appears in:
 
 ## Prevention
 
-1. **Always reserve before spending.** Never rely on balance reads for authorization. The `reserve` call is the only concurrency-safe way to claim budget. A successful reservation is a guarantee; a balance read is a suggestion.
+1. **Always reserve before protected spending.** Never rely on balance reads for admission. The `reserve` call is the concurrency-safe way to hold the submitted estimate; a balance read is only a snapshot.
 
 2. **Use hierarchical scopes.** Even if agents have individual budgets, a shared parent scope acts as a hard cap. If 5 agents each have a $5 budget but the team scope is $10, the team scope prevents collective overspend:
 

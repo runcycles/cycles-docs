@@ -1,6 +1,6 @@
 ---
 title: "Cycles vs LiteLLM: Budget Authority vs Proxy Budgets"
-description: "LiteLLM routes and rate-limits. Cycles enforces budget authority and action control. See where each fits, where they overlap, and how they work together."
+description: "LiteLLM routes model traffic and supports gateway budgets. Cycles meters caller-submitted work across application scopes. See how the layers fit together."
 ---
 
 # Cycles vs LiteLLM: Budget Authority vs Proxy Budgets
@@ -16,13 +16,13 @@ The answer depends on what failure modes you're trying to prevent.
 | | LiteLLM | Cycles |
 |---|---|---|
 | **Primary role** | LLM proxy — routing, fallback, cost tracking | Runtime authority — pre-execution enforcement |
-| **When it acts** | At the model-call layer | At the agent-action layer |
-| **Budget model** | Per-key, per-team, per-user, per-customer, per-model spend limits | Per-tenant, per-workflow, per-run, per-action hierarchical scope derivation |
+| **When it acts** | At the model-call layer | At any application boundary the caller instruments |
+| **Budget model** | Per-key, per-team, per-user, per-customer, per-model spend limits | Standard tenant → workspace → app → workflow → agent → toolset ledgers; a workflow value can be unique per run |
 | **Enforcement** | Block when `max_budget` exceeded | Atomic reserve-commit — budget locked before action |
-| **Rate limiting** | RPM, TPM per key/team/user | Not a rate limiter — enforces per-action authority |
-| **Action control** | Model access lists (which models a key can call) | [RISK_POINTS](/glossary#risk-points) — per-tool risk scoring and limits |
+| **Rate limiting** | RPM, TPM per key/team/user | Not a rate limiter — enforces configured cumulative budgets |
+| **Action control** | Model access lists (which models a key can call) | Caller-assigned [RISK_POINTS](/glossary#risk-points) budget; host authorizes tools |
 | **Multi-tenant** | Team/user isolation via `team_id` | Tenant-scoped API keys with hierarchical budget derivation |
-| **Concurrency safety** | Eventually consistent (~10 request drift at high traffic) | Atomic Lua-scripted reservations (zero TOCTOU drift) |
+| **Concurrency model** | Gateway spend counters and budget checks | Atomic estimate reservation before protected work |
 
 ## Where LiteLLM's budgets work well
 
@@ -38,31 +38,29 @@ For teams that need basic cost control at the LLM proxy layer, this covers the c
 
 ## Where the gaps appear
 
-### 1. Concurrency safety
+### 1. Different accounting boundaries
 
-LiteLLM tracks spend via an in-memory cache synced to Redis every ~10ms. Under high concurrency, budget enforcement is eventually consistent — their docs note approximately 10 requests of drift at 100 RPS across 3 instances.
+LiteLLM can block inference requests against configured key, team, user, customer, and project budgets. Those are gateway spend controls and should be used when they match the workload.
 
-For a single-agent prototype, this is fine. For concurrent agents sharing a budget, 10 requests of drift means 10 unaccounted charges — the overrun depends on per-request cost ($0.50-$5 at the high end for expensive models). On a small budget, this can be significant. This is the [TOCTOU race condition](/blog/we-built-a-custom-agent-rate-limiter-heres-why-we-stopped) that atomic reservation systems are designed to prevent.
-
-Cycles uses atomic Lua-scripted reservations: the budget check and the decrement happen in a single Redis operation. Zero TOCTOU drift, regardless of concurrency. (Overages can still occur when actual cost exceeds the estimate — these are tracked as debt and surfaced immediately, not silently absorbed.)
+Cycles uses a different accounting primitive: it atomically reserves a caller estimate before protected work begins, then commits the actual amount. This prevents concurrent requests from all relying on the same unreserved capacity. Actual usage can still exceed the estimate; the configured commit-overage policy determines whether the overage is rejected, charged from remaining capacity, or recorded as debt.
 
 ### 2. Action-level control
 
 LiteLLM controls which **models** a key can access. It cannot control what **actions** an agent takes with those models.
 
-An agent that sends 200 emails costs $1.40 in tokens. LiteLLM's budget wouldn't fire — the cost is trivial. But the action is catastrophic. Cycles' [RISK_POINTS](/how-to/assigning-risk-points-to-agent-tools) budget scores tools by blast radius (email = 40 points, deploy = 150 points, search = 0), limiting *what* the agent does, not just *how much it spends*.
+An application can assign higher [RISK_POINTS](/how-to/assigning-risk-points-to-agent-tools) estimates to higher-blast-radius tool attempts and require a Cycles reservation before invoking them. That bounds submitted cumulative exposure. Cycles does not decide whether the tool or its arguments are authorized; the host must enforce that separately.
 
 ### 3. Scope hierarchy and delegation
 
 LiteLLM supports budgets across multiple proxy-layer scopes: keys, teams, internal users, end users/customers, and model/provider/tag dimensions. This is meaningful coverage for proxy-level cost governance.
 
-However, these are proxy-layer spend-tracking scopes, not runtime authority scopes. Cycles supports hierarchical scope derivation (tenant → workspace → app → workflow → agent → toolset) where each level can have its own persistent cumulative budget, making [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) a pattern you can build: carve a narrower sub-budget for each delegation hop, so a sub-agent draws from a smaller allocation than its parent. Action masks and delegation-depth limits are orchestration logic on top of those scopes — not protocol primitives.
+However, these are proxy-layer spend-tracking scopes, not the same application hierarchy. Cycles derives tenant → workspace → app → workflow → agent → toolset scopes, where explicitly provisioned ledgers can impose overlapping ceilings. A child call can consume both a shared ancestor ledger and a narrower agent ledger. Cycles does not transfer a parent allocation to the child; action masks and delegation-depth limits remain orchestration logic.
 
-The difference matters in multi-agent systems where a single user request fans out into dozens of sub-agent calls. LiteLLM sees each call as an independent model request at the proxy layer. Cycles sees the delegation chain and enforces aggregate limits across the full scope hierarchy.
+The difference matters in multi-agent systems where a single user request fans out into dozens of sub-agent calls. LiteLLM sees the gateway identity and metadata on each inference request. Cycles evaluates the tenant and subject scopes the host submits; it does not discover a delegation chain automatically.
 
 ### 4. Reserve-commit lifecycle
 
-LiteLLM tracks spend after the fact — the cost is recorded when the model response arrives. If the response is expensive (long output, many tokens), the budget is already spent before LiteLLM knows the cost.
+LiteLLM checks configured gateway budgets before routing and records actual inference cost. Cycles adds an explicit caller-estimated hold before work, including for non-LLM operations.
 
 Cycles [reserves budget before the action](/blog/what-is-runtime-authority-for-ai-agents) based on an estimate, executes only if approved, and commits the actual cost after. The unused difference is released. The budget cannot be silently drained by concurrent requests. If actual cost exceeds the estimate, the overage is tracked as debt and surfaced via webhook events — not silently absorbed.
 
@@ -91,7 +89,7 @@ Request flow:
 | Team-level cost visibility | LiteLLM |
 | Atomic per-action budget enforcement | Cycles |
 | Model access restrictions (which models) | LiteLLM |
-| Tool access restrictions (which actions) | Cycles |
+| Tool access restrictions (which actions) | Application/harness; Cycles can return configured allow/deny cap fields |
 | Delegation attenuation for sub-agents | Cycles (pattern via hierarchical scopes) |
 | Provider failover and retry | LiteLLM |
 
@@ -106,10 +104,9 @@ Cycles is not a proxy, router, or model-access layer. It doesn't handle provider
 ## When LiteLLM alone is enough
 
 - Single-tenant, single-agent prototype
-- No concurrent agents sharing budgets
 - No action-level risk (agent only reads, never writes/sends/deploys)
-- Budget overruns of ~10 requests are acceptable
-- No delegation chains or multi-agent systems
+- Proxy identities and spend limits match the required budget boundaries
+- All governed cost flows through the LiteLLM gateway
 
 ## When you need Cycles
 
@@ -117,11 +114,11 @@ Cycles is not a proxy, router, or model-access layer. It doesn't handle provider
 - Agent tools with side effects (email, deploy, database mutation)
 - Multi-tenant SaaS with per-customer budget isolation
 - Multi-agent delegation chains requiring authority attenuation
-- Zero-tolerance for budget overruns (financial, compliance)
+- You need an explicit atomic estimate hold before concurrent work starts
 
 ## Sources
 
-Feature claims verified against [docs.litellm.ai](https://docs.litellm.ai/docs/proxy/users) as of April 2026. Cycles claims based on v0.1.25. These tools evolve quickly — check the linked docs for the latest.
+Feature claims verified against [LiteLLM's current gateway documentation](https://docs.litellm.ai/) on July 24, 2026. Cycles claims are based on v0.1.25. These tools evolve quickly—check the linked docs for the latest.
 
 ## Related
 

@@ -142,7 +142,7 @@ Session starts → cycles_check_balance (remaining: $10.00)
 
 For a live, non-dry-run reservation, insufficient budget is an error such as HTTP `409 BUDGET_EXCEEDED`, not a successful response with `DENY`. `DENY` is part of the `decide` and dry-run decision model. The host must handle either form before it invokes the costly tool.
 
-For the six MCP integration patterns (simple reserve/commit, preflight, [graceful degradation](/glossary#graceful-degradation), long-running, fire-and-forget, multi-step), see [Integrating Cycles with MCP](/how-to/integrating-cycles-with-mcp). For per-run and per-conversation budget recipes, see [Common Budget Patterns](/how-to/common-budget-patterns).
+For the six MCP integration patterns (simple reserve-commit, preflight, [graceful degradation](/glossary#graceful-degradation), long-running, fire-and-forget, multi-step), see [Integrating Cycles with MCP](/how-to/integrating-cycles-with-mcp). For per-run and per-conversation budget recipes, see [Common Budget Patterns](/how-to/common-budget-patterns).
 
 ## Applying Configured Caps
 

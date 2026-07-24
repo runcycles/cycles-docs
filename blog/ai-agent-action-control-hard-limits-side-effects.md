@@ -16,7 +16,7 @@ head:
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-A customer-onboarding agent is tasked with sending personalized welcome emails to 200 trial accounts. A bug in the template-selection logic causes it to fall back to a collections template — "Your payment is overdue. Immediate action required." The agent sends all 200 emails in under three minutes. Total model spend: $1.40. Total business impact: 34 support tickets, 12 public complaints on social media, and a customer-churn spike that the sales team estimates at over $50,000 in lost pipeline. No spending limit would have caught this. The agent was under budget the entire time.
+Consider an illustrative customer-onboarding agent tasked with sending welcome emails to 200 trial accounts. A template-selection bug falls back to a collections notice, and the host sends all 200. If the associated model calls cost about $1.40, customer and business harm can still dwarf token spend. The scenario has no sourced ticket, complaint, or pipeline-loss measurements; it demonstrates the mismatch between monetary cost and action exposure.
 
 The problem was not spend. The problem was that the agent _acted_ — and nobody checked what it was about to do.
 
@@ -30,12 +30,12 @@ Side effects are the actions an agent takes in the world. Sending emails. Creati
 
 The critical property of side effects is **irreversibility**. A sent email cannot be unsent. A triggered deploy is live. A deleted record may not be recoverable. A Slack message to a customer channel cannot be retracted without notice. These are consequences that persist after the agent stops — and no amount of post-hoc cost reconciliation changes what already happened.
 
-This is why [Cycles](/) is positioned as **[runtime authority](/glossary#runtime-authority)**, not just [budget authority](/glossary#budget-authority). Runtime authority is the umbrella: it covers both how much the agent spends (budget authority) and what the agent does ([action authority](/glossary#action-authority)). Both are enforced through a shared protocol, a common lifecycle, and the same infrastructure. Budget authority is the subset most teams implement first. Action authority is the subset where the costliest incidents live.
+This is why a complete **[runtime authority](/glossary#runtime-authority)** design needs both budget authority and application [action authority](/glossary#action-authority). Current Cycles enforces budgets over submitted spend or caller-assigned exposure; it does not infer action risk, inspect tool arguments, or replace the host's permission policy.
 
 | Dimension | What it limits | Example controls | What happens if missing |
 |-----------|---------------|------------------|------------------------|
-| **Budget authority** | How much the agent spends | Per-run dollar cap, per-[tenant](/glossary#tenant) quota | Runaway cost — [$4,200 tool loops, $12,400 weekend batches](/blog/ai-agent-failures-budget-controls-prevent) |
-| **Action authority** | What the agent does | Tool allowlist/denylist, risk-point caps, per-action [reservation](/glossary#reservation) | Wrong emails sent, accidental deploys, unauthorized file writes, data deletion |
+| **Budget authority** | How much the agent spends | Per-run dollar cap, per-[tenant](/glossary#tenant) quota | Runaway cost — [$52.80 loop and $2,300 weekend-batch models](/blog/ai-agent-failures-budget-controls-prevent) |
+| **Action authority** | What the agent may do | Application tool/argument policy plus optional risk-point caps and per-action [reservation](/glossary#reservation) | Wrong emails sent, accidental deploys, unauthorized file writes, data deletion |
 
 For a deep dive on the budget authority side specifically, see [AI Agent Budget Control: Enforce Hard Spend Limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits).
 
@@ -57,7 +57,7 @@ The tiers are a starting point. Every team's risk map is different — a file wr
 
 Cycles provides two mechanisms for tracking agent actions, and choosing the right one is a risk judgment.
 
-**Reserve-commit** is pre-execution authorization. Before the agent sends the email, writes the file, or triggers the deploy, it calls the [Cycles server](/glossary#cycles-server) to request permission. The server checks the available budget (whether that budget is denominated in dollars, [tokens](/glossary#tokens), or risk points), makes an allow/deny decision, and returns the result. Only if the decision is ALLOW does the agent proceed. After execution, the agent commits the actual cost or risk consumed.
+**Reserve-commit** is pre-execution budget enforcement. Before the host sends an email, writes a file, or triggers a deploy, it can request a hold from the [Cycles server](/glossary#cycles-server). The server checks the applicable budget in dollars, [tokens](/glossary#tokens), credits, or caller-assigned risk points. A live reservation succeeds with `ALLOW` or configured `ALLOW_WITH_CAPS`, or returns an error when budget is unavailable. The host must separately authorize the action, require both checks before execution, apply returned caps, and commit the best-known actual amount afterward.
 
 **Events** are post-hoc accounting. The agent takes the action first, then records what it did. There is no pre-execution check — the action already happened. Events are useful for low-risk actions where the overhead of a pre-execution round-trip is not justified, or for situations where the action completed outside of Cycles entirely and you need to record it for accounting purposes.
 
@@ -66,13 +66,13 @@ Cycles provides two mechanisms for tracking agent actions, and choosing the righ
 | **Reserve before execution** | `POST /v1/reservations` → execute → `POST /v1/reservations/{id}/commit` | Consequential actions: emails, deploys, deletes, external API calls | Adds one round-trip of latency, but provides pre-execution veto |
 | **Record after execution** | `POST /v1/events` | Low-risk actions: reads, searches, internal logging, known-cost operations | No latency cost, but no pre-execution control |
 
-The key insight is that **the choice between these two patterns is not about technical capability — it is about risk tolerance**. If the action is reversible and low-impact, record it after the fact. If the action creates consequences that persist beyond the agent's runtime, authorize it before execution.
+The key insight is that **the choice between these two accounting patterns depends on risk tolerance**. If an action is reversible and low-impact, a direct-usage event may be sufficient for budget accounting. If it creates persistent consequences, use application authorization and a required reservation before execution.
 
 For the full reserve-commit lifecycle, see [How Reserve-Commit Works in Cycles](/protocol/how-reserve-commit-works-in-cycles). For the event pattern, see [How Events Work in Cycles](/protocol/how-events-work-in-cycles-direct-debit-without-reservation).
 
 ## RISK_POINTS — Budgeting What Money Cannot Measure
 
-Dollar budgets are the wrong unit for action authority. The opening scenario makes this clear: 200 emails cost $1.40 in model spend. A per-run budget of $100, $50, even $5 would not have stopped a single email. The risk was not monetary. It was reputational, operational, and ultimately commercial — $50,000 in lost pipeline from a $1.40 agent run.
+Dollar budgets are the wrong unit for action authority. In the illustrative opening scenario, 200 mistaken emails can have low token cost and high external impact. A monetary budget calibrated for model spend may not reject any email because the submitted dollar amount remains small.
 
 Cycles supports a **[RISK_POINTS](/glossary#risk-points)** unit specifically for this problem. Instead of denominating budgets in dollars or tokens, teams assign point values to each action class based on blast radius. A workflow gets a fixed risk-point budget, and every consequential action deducts from it.
 
@@ -96,7 +96,7 @@ For per-tool point assignment, see [Assigning RISK_POINTS to agent tools](/how-t
 
 ## Tool Allowlists and Denylists — Capability Control Under Pressure
 
-Risk points cap the _volume_ of consequential actions. But sometimes you need to control _which_ actions are available at all. Cycles provides this through **tool allowlists and denylists**, returned as part of the ALLOW_WITH_CAPS decision.
+Risk points cap caller-assigned cumulative action exposure. But sometimes you need to control _which_ actions are available at all. A Cycles budget can return configured **tool allowlists and denylists** as part of an `ALLOW_WITH_CAPS` decision; the host or integration must enforce those cap fields before invoking a tool.
 
 When an agent requests a reservation and the server determines that the action is allowed but should be constrained, it returns `decision: ALLOW_WITH_CAPS` along with a `caps` object. That object can include:
 
@@ -123,39 +123,39 @@ With a 100-point risk budget per run, an application could select this policy pr
 | Read-only | ALLOW_WITH_CAPS | `tool_allowlist: ["read_file", "search"]` | Read-only mode |
 | Insufficient budget | Live reservation error | — | No further metered actions |
 
-The agent degrades gracefully instead of hard-stopping. It can still complete useful work — reading files, running searches, generating summaries — while the most dangerous capabilities are removed from its reach. This is the "disable" degradation strategy applied to action authority rather than cost control.
+If the host enforces the returned caps, the agent can degrade instead of hard-stopping. It can still complete useful work — reading files, running searches, generating summaries — while the host removes higher-risk capabilities. This is the "disable" degradation strategy applied to action authority rather than cost control.
 
 For the [three-way decision](/glossary#three-way-decision) model (ALLOW, ALLOW_WITH_CAPS, DENY) and how caps flow through the system, see [Caps and the Three-Way Decision Model](/protocol/caps-and-the-three-way-decision-model-in-cycles). For the full set of degradation strategies, see [Degradation Paths in Cycles](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer).
 
 ## Containment Is the Goal, Not Just Billing
 
-Return to the opening scenario. An onboarding agent sends 200 wrong emails. Total model spend: $1.40.
+Return to the illustrative opening scenario: an onboarding agent sends 200 wrong emails while model spend remains low.
 
 A per-run dollar budget of any reasonable amount would not have helped. The agent was cheap. It was also catastrophic.
 
-A risk-point budget of 100, with 20 points per email, would have stopped the agent after 5 emails. Five wrong emails is a bad day. Two hundred wrong emails is a public incident. The difference is containment.
+A risk-point budget of 100, with 20 caller-assigned points per email, permits five successful reservations. If the host requires a reservation before every send, the sixth fails. That bounds the number of budgeted attempts; application authorization and delivery controls still determine whether any email may be sent.
 
-A tool denylist that removed `send_email` after the first anomalous batch — or an allowlist that restricted the agent to `draft_email` instead of `send_email` until a human approved — would have caught the template bug before a single email reached a customer.
+An application policy could remove `send_email` after anomaly detection or expose only `draft_email` until human approval. A Cycles budget may return a configured tool-list cap, but the host must select and enforce it; the current server does not detect the template anomaly or tighten caps automatically.
 
 Budget control asks: _how much can the agent spend?_ Action control asks: _what can the agent do, and how many times?_ Both questions are necessary. For many teams, the second question is the one that matters more.
 
-The analogy is containment in the security sense. A firewall does not care how much traffic costs. It cares what the traffic _does_ — which ports it targets, which payloads it carries, which systems it reaches. Runtime authority for agents is the same principle applied to a different domain. The question is not "how much did this cost?" but "should this action be allowed to happen at all?"
+The analogy is containment in the security sense. A firewall evaluates network policy; an application authorization layer evaluates tools, arguments, principals, and context. Cycles contributes a separate cumulative budget decision for the amount and scope the host submits.
 
-This is what distinguishes runtime authority from cost monitoring. Monitoring tells you what happened. Alerting tells you that something happened. Runtime authority decides, before the action executes, whether it _should_ happen. That pre-execution decision point is the difference between a $50,000 incident and a contained anomaly that surfaces in a log.
+This is what distinguishes a composed runtime-authority boundary from cost monitoring. Monitoring and alerting remain valuable, but the host can require authorization plus an accepted budget reservation before execution. The guarantee applies only to paths routed through and bound by that boundary.
 
 ## Putting It Together — A Dual-Authority Checklist
 
 For every agent workflow your team builds, ask two questions:
 
 1. **What is the dollar budget?** How much can this agent spend on model calls, tool invocations, and API fees?
-2. **What is the action budget?** How many consequential actions can this agent take, and which actions should be available at all?
+2. **What are the action policy and exposure budget?** Which tools and arguments are authorized, and how much caller-assigned cumulative exposure may the agent consume?
 
 | Question | Budget authority | Action authority |
 |----------|-----------------|-----------------|
 | **What unit?** | USD_MICROCENTS or TOKENS | RISK_POINTS |
 | **What scope?** | Per-run, per-tenant, per-workflow | Per-run, per-tenant, per-workflow (same scopes) |
-| **What enforcement?** | Reserve-commit on model calls | Reserve-commit on consequential tool calls |
-| **What degradation?** | Downgrade model, reduce tokens, skip optional steps | Disable tools, deny high-risk actions, switch to read-only |
+| **What enforcement?** | Reserve-commit on protected model calls | Application authorization plus reserve-commit on protected tool calls |
+| **What degradation?** | Host downgrades model, reduces tokens, or skips optional steps | Host disables tools, denies high-risk actions, or switches to read-only |
 | **What accounting?** | Events for known-cost calls | Events for low-risk reads |
 | **What to monitor?** | Rejection rate, spend-by-scope, budget exhaustion | Risk-point consumption, tool-deny frequency, action-by-tier |
 

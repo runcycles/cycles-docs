@@ -5,7 +5,7 @@ description: "Add budget governance to a Next.js app using the Vercel AI SDK wit
 
 # Integrating Cycles with the Vercel AI SDK
 
-This guide shows how to add budget governance to a Next.js application using the [Vercel AI SDK](https://sdk.vercel.ai/) and the `runcycles` TypeScript client.
+This guide shows how to add budget governance to a Next.js application using the [Vercel AI SDK](https://ai-sdk.dev/) and the `runcycles` TypeScript client.
 
 The Vercel AI SDK uses streaming by default, so this guide uses the `reserveForStream` pattern — reserving budget before the stream starts, keeping the reservation alive during streaming, and committing actual usage when the stream finishes.
 

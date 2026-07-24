@@ -15,7 +15,7 @@ head:
 
 # EU AI Act: What Actually Happens on August 2, 2026
 
-If your compliance roadmap says "EU AI Act high-risk obligations apply August 2, 2026," it is out of date as of two weeks ago — and if your reaction is to shelve the whole workstream until 2027, that is a misread in the other direction.
+If your compliance roadmap says "EU AI Act high-risk obligations apply August 2, 2026," the Council's June 29, 2026 approval of the Digital Omnibus changed that timeline—and shelving the whole workstream until 2027 would be a misread in the other direction.
 
 On June 29, 2026, the Council of the EU gave final approval to the Digital Omnibus on AI, following the European Parliament's endorsement on June 16. The package rewrites the AI Act's application timeline: the high-risk obligations that were scheduled for this August moved to late 2027 and 2028. But two things still take effect on August 2, 2026 — Article 50 transparency obligations, which the Commission's own draft guidance says apply to AI agents, and the Commission's enforcement powers over general-purpose AI (GPAI) providers, including fines of up to 3% of worldwide turnover.
 

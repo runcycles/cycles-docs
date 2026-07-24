@@ -9,28 +9,28 @@ Cycles is infrastructure that sits in the execution path of autonomous agents. S
 
 ## Data residency
 
-All Cycles state lives in Redis. Cycles is currently self-hosted only: Redis runs in your infrastructure, no data leaves your network, and you control the region, the instance type, and the retention policy.
+All Cycles state lives in Redis. Cycles is currently self-hosted only: Redis runs in your infrastructure, and you control the region, instance type, and retention policy. Cycles state does not leave your network unless you configure an outbound path such as webhook delivery or your own export pipeline.
 
-Cycles stores budget state — reservation amounts, balances, event records, and tenant configuration. It does not store LLM prompts, responses, or any content from agent interactions.
+Cycles stores budget state — reservation amounts, balances, event records, and tenant configuration. It does not require or automatically capture LLM prompts and responses. Callers can still place sensitive content in action names, tags, metadata, or identifiers, so integrations should submit only the context their audit policy permits.
 
 A managed cloud offering (runcycles.ai) is planned. It is not yet available.
 
 ## Event audit trail
 
-Every budget operation — reservation, commit, release, event — creates a structured record:
+Persisted reservations and direct-usage events create structured budget lifecycle data. Commit, release, extend, and expiry update reservation state. Non-persisting `decide` and dry-run evaluations do not create a reservation record, and not every registered event type is emitted.
 
 | Field | Description |
 |---|---|
 | `reservation_id` / `event_id` | Unique identifier for the operation |
-| `subject` | Full scope hierarchy (tenant, workspace, app, workflow, agent, toolset) |
-| `action` | What happened (kind, name, tags) |
+| `subject` | Caller-supplied scope levels that are present (tenant, workspace, app, workflow, agent, toolset) |
+| `action` | Caller-supplied action kind, name, and tags when provided |
 | `estimate` | Budget locked before execution (reservations) |
 | `actual` | Usage recorded after execution (commits and events) |
 | `status` | ACTIVE, COMMITTED, RELEASED, EXPIRED (reservations); APPLIED (events) |
-| `metrics` | Operational metadata (tokens, latency, model version) |
-| `metadata` | Arbitrary key-value pairs for audit context |
+| `metrics` | Caller-supplied operational metadata when provided |
+| `metadata` | Caller-supplied key-value context when provided |
 
-Every reservation, commit, release, and event is logged with the scope context needed for audit. The trail answers "which agent spent how much, on what, and when" from the budget ledger alone.
+These records can answer which submitted budget scope reserved or settled an amount and when. They do not prove identity-policy authorization, tool arguments, business rationale, or external outcomes. Preserve correlation identifiers and join Cycles lifecycle data to application authorization and execution logs for a complete action record. When configured, CyclesEvidence adds signed, content-addressed receipts for supported protocol decisions.
 
 ### Querying the audit trail
 
@@ -104,12 +104,12 @@ See [Webhook Integrations](/how-to/webhook-integrations#signature-verification) 
 Webhook URLs are validated on creation and update to prevent Server-Side Request Forgery:
 
 - **HTTPS required** — HTTP URLs are rejected by default (`allow_http: false`)
-- **Private IP blocking** — Resolved IPs are checked against private/reserved ranges (loopback, RFC 1918, link-local, IPv6 private). This check is enforced by default.
-- **URL pattern allowlisting** — Optional `allowed_url_patterns` restrict accepted URLs to specific domains
+- **Private and reserved IP blocking** — the events-service delivery guard always applies a baseline denylist unless its development-only private-network escape hatch is enabled.
+- **URL pattern allowlisting** — optional `allowed_url_patterns` narrows accepted URLs; it does not override the delivery-time IP denylist.
 
-Default blocked CIDRs: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1/128`, `fc00::/7`
+Delivery-time baseline CIDRs: `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `::1/128`, `fe80::/10`, and `fc00::/7`. Any-local and unspecified addresses are also rejected.
 
-The blocked-CIDR list is admin-configurable via `GET/PUT /v1/admin/config/webhook-security`. The spec warns that removing blocked CIDR ranges may expose the server to SSRF attacks — treat the default list as a floor, not a suggestion. See the [Admin API Guide](/admin-api/guide#pillar-4-events-webhooks-v0-1-25) for examples.
+Admin-configured blocked CIDRs are additive at delivery time. Clearing them does not remove the events service's baseline. Local development requires both admin `allow_http: true` and `WEBHOOK_URL_GUARD_ALLOW_PRIVATE_NETWORKS=true` on the events service; never enable that escape hatch in production. See the [Admin API Guide](/admin-api/guide#pillar-4-events-webhooks-v0-1-25) for examples.
 
 ### Signing secret encryption at rest
 

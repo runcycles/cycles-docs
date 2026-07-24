@@ -5,7 +5,7 @@ description: "Overview of all supported Cycles integrations — LLM providers, f
 
 # Integrations Overview
 
-Cycles integrates with LLM providers, agent frameworks, and web servers. Each integration wraps model calls with the reserve → commit → release lifecycle so that every call is budget-checked before execution.
+Cycles has integration patterns for LLM providers, agent frameworks, and web servers. The guides show where to place reserve → execute → commit/release around protected paths. Coverage depends on the hooks and calls each integration actually instruments; uninstrumented traffic is unaffected.
 
 ## Supported integrations
 
@@ -135,7 +135,7 @@ See [Webhook Integrations](/how-to/webhook-integrations) for full examples with 
 For the layer-by-layer view of where these integrations sit relative to other agent control approaches — wrappers, provider-client patches, framework hooks, LLM gateways, observability — and why runtime authority complements them rather than replaces them:
 
 - [Python AI Agent Control: Cost, Risk, and Audit by Layer](/blog/python-ai-agent-control-cost-risk-audit-layers) — six layers walked through, what each covers across cost / risk / audit, and where each stops short.
-- [Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend](/blog/beyond-budget-how-cycles-controls-agent-actions) — how applications combine tool authorization with caller-assigned `RISK_POINTS` at instrumented boundaries.
+- [How Cycles Meters Caller-Assigned Action Exposure](/blog/beyond-budget-how-cycles-controls-agent-actions) — how applications combine tool authorization with caller-assigned `RISK_POINTS` at instrumented boundaries.
 - [Why Local-First Agent Runtimes Need Runtime Authority](/blog/every-local-first-agent-runtime-needs-budget-authority) — local-first / BYOK category context for OpenClaw, Cline, Aider, Continue, and similar runtimes.
 - [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent) — the structural argument for why agent governance has to span every integration the agent uses.
 

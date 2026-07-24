@@ -126,15 +126,15 @@ The $15/user/month cap turns a 23% margin feature into a 68% margin feature — 
 
 Token pricing is an engineering metric. Cost per conversation is a business KPI. Three patterns for using it:
 
-**Chargeback.** Enterprise customers pay for actual AI usage. Cycles' per-tenant tracking provides the billing data — every reservation and commit is scoped to a tenant, so cost attribution is automatic. The usage report is the invoice. See [Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation) for the full chargeback model.
+**Chargeback.** Enterprise customers may pay for actual AI usage. A tenant-scoped Cycles integration provides allocation and settlement records for the amounts the application submits, but billing still needs provider usage reconciliation, complete path coverage, and invoice rules. Treat Cycles records as one chargeback input, not automatically as the invoice. See [Multi-Tenant AI Cost Control](/blog/multi-tenant-ai-cost-control-per-tenant-budgets-quotas-isolation) for the full model.
 
 **Feature-level P&L.** Treat the AI copilot as its own cost center. Track cost per conversation as COGS. Monitor margin weekly. Set alerts when margin drops below threshold. This is [Tier 3 of the cost management maturity model](/blog/ai-agent-cost-management-guide) — alerting on business metrics, not just raw spend.
 
-**Model routing by economics.** Route simple conversations to GPT-4o-mini ($0.15/1M input [tokens](/glossary#tokens)) and complex conversations to GPT-4o ($2.50/1M input tokens). The routing decision is economic, not just capability-based. A simple "what's my order status?" query does not need a $2.50/1M-token model. A complex debugging session does. [Routing and enforcement complement each other](/blog/manifest-vs-cycles-routing-vs-runtime-authority) — the router picks the model, the [runtime authority](/glossary#runtime-authority) bounds the cost.
+**Model routing by economics.** Route simple conversations to a lower-cost model and complex conversations to a more capable model after measuring quality on both paths. Provider prices and model catalogs change, so calculate with current or contracted rates rather than embedding an old list price in routing logic. [Routing and enforcement complement each other](/blog/manifest-vs-cycles-routing-vs-runtime-authority) — the router picks the model, while the [runtime authority](/glossary#runtime-authority) checks the submitted estimate.
 
 ## From cost visibility to cost control
 
-Cost overruns are a symptom. The root cause is the absence of a pre-execution enforcement layer — a system that asks "is there budget for this?" before every action, not after. That's what [runtime authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) provides: deterministic budget decisions at the point of execution, not retroactive alerts on a dashboard.
+Unit economics become actionable when the per-conversation target is also an enforceable run allocation. A [runtime budget boundary](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) lets the application reserve against that allocation before covered work, keeping one heavy conversation from silently consuming the margin assigned to many light ones.
 
 ## Next steps
 

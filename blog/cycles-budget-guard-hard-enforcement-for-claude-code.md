@@ -1,5 +1,5 @@
 ---
-title: "Cycles Budget Guard for Claude Code"
+title: "Announcing Cycles Budget Guard for Claude Code"
 date: 2026-07-22
 author: Albert Mavashev
 tags: [announcement, claude-code, budgets, budget-enforcement, runtime-authority, MCP, security]
@@ -13,7 +13,7 @@ head:
       content: "Claude Code budget enforcement, Cycles Budget Guard, Claude Code hooks, AI agent budgets, runtime authority, MCP budget tools"
 ---
 
-# Cycles Budget Guard for Claude Code
+# Announcing Cycles Budget Guard for Claude Code
 
 A prompt injection or hallucinated argument turns a routine Claude Code task into a request for an operation its budget should forbid. The control question is concrete: what stops the tool before execution?
 

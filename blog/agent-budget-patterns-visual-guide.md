@@ -24,9 +24,9 @@ These patterns aren't mutually exclusive — most production systems combine two
 
 ## Pattern 1: Tenant Isolation Budgets
 
-**When to use:** Multi-[tenant](/glossary#tenant) platforms where each customer or team gets their own AI agent access and you need hard spend isolation between them.
+**When to use:** Multi-[tenant](/glossary#tenant) platforms where each customer or team gets their own AI agent access and you need separate runtime budget ceilings.
 
-The simplest and most common starting point. Each tenant gets an independent budget that cannot be exceeded, regardless of what other tenants are doing.
+The simplest and most common starting point. Each tenant gets an independent budget, so one tenant's submitted reservations do not consume another tenant's allocation. The ceiling applies to operations routed through the mandatory integration boundary and to the estimates the caller submits.
 
 ```python
 # Tenant isolation: each tenant has a completely independent budget
@@ -48,7 +48,7 @@ async def run_agent_for_tenant(tenant_id, task):
 ```
 
 **Trade-offs:**
-- Provides complete blast-radius isolation — one tenant's runaway agent cannot affect others
+- Provides separate ledgers, so one tenant's protected calls cannot consume another tenant's allocation
 - Simple to reason about and explain to customers
 - Can lead to underutilization: if Tenant A uses 10% of their budget and Tenant B hits 100%, there's no sharing
 - Requires careful initial sizing — set too low and legitimate workloads get blocked
@@ -103,12 +103,12 @@ async def research_with_degradation(query, budget_dollars=10.00):
     remaining = budget.remaining()
     if remaining > 5.00:
         result = await budget.execute(
-            agent.run(query, model="claude-opus-4-20250514")
+            agent.run(query, model="claude-opus-4-8")
         )
     # Phase 2: Fall back to a cheaper model
     elif remaining > 1.00:
         result = await budget.execute(
-            agent.run(query, model="claude-sonnet-4-20250514")
+            agent.run(query, model="claude-sonnet-4-6")
         )
     # Phase 3: Return cached/partial results
     else:
@@ -128,9 +128,9 @@ We cover degradation strategies in detail in [How to Think About Degradation Pat
 
 ## Pattern 4: Shared Pool with Priority Tiers
 
-**When to use:** When you want to maximize utilization of a fixed budget across multiple agents or users, with guarantees for high-priority work.
+**When to use:** When you want to maximize utilization of a fixed budget across multiple agents or users while preferring high-priority work.
 
-Instead of giving each consumer a fixed allocation, you share a pool but enforce priority ordering when the pool runs low.
+Instead of giving each consumer a fixed allocation, you share a pool and have the application defer lower-priority work when the pool runs low. Cycles does not natively order reservations by priority. A read-then-act threshold is advisory and can race under concurrency; if capacity for critical work must be guaranteed, provision a separate protected ledger for that work.
 
 ```python
 # Shared pool with priority tiers
@@ -140,7 +140,8 @@ pool = cycles.create_budget(
     period="monthly"
 )
 
-# Priority tiers determine who gets denied first
+# Application policy decides which work to submit as the pool gets low.
+# This pre-check is a scheduling hint, not an atomic priority guarantee.
 PRIORITY_THRESHOLDS = {
     "critical":  0.0,   # Only denied at $0 remaining
     "high":      0.10,  # Denied below 10% remaining
@@ -164,7 +165,7 @@ async def execute_with_priority(task, priority="normal"):
 
 **Trade-offs:**
 - Higher overall utilization — no budget sits idle while another is exhausted
-- Critical work is protected even under heavy load
+- Application scheduling can preserve more headroom for critical work
 - Harder to predict per-team or per-user costs for billing purposes
 - Requires agreement on what constitutes "critical" vs. "low" priority
 - Risk of low-priority work getting permanently starved in busy periods
@@ -176,33 +177,31 @@ async def execute_with_priority(task, priority="normal"):
 This is less a budget _structure_ and more a deployment pattern, but it's essential for any team that isn't starting from scratch. Shadow mode tracks what _would_ have been denied without actually denying anything.
 
 ```python
-# Shadow mode: log but don't enforce
-budget = cycles.create_budget(
-    scope=f"tenant:{tenant_id}",
-    limit_dollars=100.00,
-    period="daily",
-    mode="shadow"  # Track but don't enforce
+# Evaluate the same request without creating a reservation.
+decision = await cycles.reserve(
+    subject={"tenant": tenant_id, "workflow": workflow_id},
+    estimate=estimated_microcents,
+    unit="USD_MICROCENTS",
+    dry_run=True,
 )
 
-# In shadow mode, execute() always succeeds but logs violations
-result = await budget.execute(agent.run(task))
-
-# After a validation period, check the shadow logs
-shadow_report = cycles.get_shadow_report(
-    scope=f"tenant:{tenant_id}",
-    period="last_7_days"
-)
-# Output: "23 calls would have been denied. Peak overage: $47.30."
-# Now you can tune the limit before switching to enforce mode.
+# Dry run creates no reservation or balance mutation. The application records
+# every decision and actual outcome; denied evaluations may also emit
+# reservation.denied from the current reference server.
+app_log.write({
+    "decision": decision,
+    "estimate": estimated_microcents,
+    "actual": await run_and_measure(task),
+})
 ```
 
 **Trade-offs:**
-- Zero risk of breaking production workflows during rollout
+- The budget result does not block the workflow; the application still owns logging, execution, and other failure handling
 - Generates real data for sizing budgets accurately
 - Adds latency (the budget check still happens, just without enforcement)
 - Teams sometimes stay in shadow mode too long, delaying the value of enforcement
 
-Our [shadow mode rollout guide](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) walks through the full process, including how to analyze shadow logs and choose enforcement cutover criteria.
+Our [shadow mode rollout guide](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) walks through the full process, including how to retain and analyze dry-run responses and choose enforcement cutover criteria.
 
 ## Pattern 6: Hybrid Model (Tokens + Dollars)
 
@@ -211,29 +210,23 @@ Our [shadow mode rollout guide](/how-to/shadow-mode-in-cycles-how-to-roll-out-bu
 Token counts and dollar costs diverge when you use multiple models, when pricing changes, or when non-LLM tools (web search, code execution) are part of the agent's toolkit.
 
 ```python
-# Hybrid budget: track both dimensions
-budget = cycles.create_budget(
-    scope=f"run:{run_id}",
-    limits={
-        "tokens": 500_000,       # Hard cap on token consumption
-        "dollars": 15.00,        # Hard cap on dollar spend
-    },
-    on_exhausted="reject"
-)
-
-async def execute_hybrid(task):
-    # Both limits are checked atomically
-    result = await budget.execute(
-        agent.run(task),
-        estimated={
-            "tokens": estimate_tokens(task),
-            "dollars": estimate_cost(task),
-        }
+# Cycles budgets and reservation amounts each use one unit. Provision separate
+# ledgers for TOKENS and USD_MICROCENTS, then have the application acquire both
+# reservations before execution. If the second reserve fails, release the first.
+token_hold = await reserve(unit="TOKENS", estimate=estimate_tokens(task))
+try:
+    cost_hold = await reserve(
+        unit="USD_MICROCENTS",
+        estimate=estimate_cost_microcents(task),
     )
-    return result
+except Exception:
+    await token_hold.release("cost_budget_not_available")
+    raise
 
-# Useful for cases where a cheap model uses many tokens
-# or an expensive model uses few
+# Execute only after both holds succeed, then settle each measured amount.
+result, actual_tokens, actual_microcents = await run_and_measure(task)
+await token_hold.commit(actual_tokens)
+await cost_hold.commit(actual_microcents)
 ```
 
 **Trade-offs:**
@@ -241,6 +234,7 @@ async def execute_hybrid(task):
 - Useful for capacity planning beyond just cost
 - More complex to configure and explain to users
 - Requires accurate estimation for both dimensions
+- The two unit-specific reservations are coordinated by the application; Cycles does not make them one cross-unit atomic transaction
 
 ## Combining Patterns
 
@@ -251,7 +245,7 @@ Most production systems layer two or three of these patterns. A common combinati
 3. **[Graceful degradation](/glossary#graceful-degradation)** (Pattern 3) within each workflow run
 4. **Shadow mode** (Pattern 5) for rollout
 
-This gives you hard isolation between customers, right-sized limits per use case, user-friendly behavior at the limits, and a safe path to enforcement.
+For instrumented paths, this gives you separate customer ceilings, right-sized limits per use case, user-friendly behavior at the limits, and a measured path to enforcement.
 
 ```
 Tenant Budget ($500/mo)

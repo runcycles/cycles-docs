@@ -171,7 +171,7 @@ If retries are idempotent and tied to the same reservation lifecycle, the system
 
 Many systems can estimate cost before execution but only know the true cost afterward.
 
-Reserve/commit handles both.
+Reserve-commit handles both.
 
 ### Hierarchical control
 

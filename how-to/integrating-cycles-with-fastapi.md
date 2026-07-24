@@ -177,4 +177,4 @@ See [`examples/fastapi_integration.py`](https://github.com/runcycles/cycles-clie
 - [Handling Streaming Responses](/how-to/handling-streaming-responses-with-cycles) — budget-managed streaming
 - [Testing with Cycles](/how-to/testing-with-cycles) — testing budget-guarded code
 - [Production Operations Guide](/how-to/production-operations-guide) — running Cycles in production
-- [FastAPI example (Python)](https://github.com/runcycles/cycles-client-python/tree/main/examples/fastapi_integration.py) — runnable FastAPI integration
+- [FastAPI example (Python)](https://github.com/runcycles/cycles-client-python/blob/main/examples/fastapi_integration.py) — runnable FastAPI integration

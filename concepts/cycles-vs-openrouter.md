@@ -1,13 +1,13 @@
 ---
 title: "Cycles vs OpenRouter: Runtime Authority vs Routing with Guardrails"
-description: "OpenRouter routes to the best model with per-key caps. Cycles enforces budget authority and action control. See where each fits and how they complement each other."
+description: "Compare OpenRouter routing, workspace budgets, and guardrails with Cycles reserve-commit budgets across arbitrary instrumented agent operations."
 ---
 
 # Cycles vs OpenRouter: Runtime Authority vs Routing with Guardrails
 
-OpenRouter is an LLM routing gateway that provides unified access to hundreds of models with automatic provider selection. As of 2025-2026, it has added a guardrails system with per-key spending caps, model restrictions, and data privacy policies.
+OpenRouter is an LLM routing gateway that provides unified access to many models and providers. Its current controls include workspace budgets, guardrails assignable across workspace/member/key boundaries, model and provider restrictions, zero-data-retention policies, prompt-injection filters, and sensitive-data controls.
 
-If you're already routing through OpenRouter, you have some cost control built in. The question is whether per-key caps are enough — or whether you need the deeper enforcement primitives that agent systems require.
+If all protected spend flows through OpenRouter, those controls provide real preflight enforcement. The architectural question is whether gateway-level inference controls cover the same boundary as your agent workload.
 
 > **Run the numbers for your workload:** [Cost Calculator →](/calculators/claude-vs-gpt-cost-standalone) — OpenRouter routes; the calculator shows what *cheaper-model routing* alone saves vs hard per-tenant budget enforcement.
 
@@ -16,44 +16,42 @@ If you're already routing through OpenRouter, you have some cost control built i
 | | OpenRouter | Cycles |
 |---|---|---|
 | **Primary role** | LLM router — model selection, provider aggregation | Runtime authority — pre-execution enforcement |
-| **Budget model** | Per-key spending cap with daily/weekly/monthly reset | Per-tenant, per-workflow, per-run, per-action scope hierarchy |
-| **Enforcement** | Reject requests when key limit reached | Atomic reserve-commit — budget locked before action |
-| **Rate limiting** | Global per-account (not configurable per-key) | Not a rate limiter — enforces per-action authority |
-| **Model control** | Model allowlist and provider allowlist per guardrail | Model-agnostic — controls the action, not the model |
-| **Action control** | None — controls which models, not what actions | [RISK_POINTS](/glossary#risk-points) — per-tool risk scoring and limits |
-| **Multi-tenant** | Per-user and per-key enforcement | Tenant-scoped API keys with hierarchical budgets |
-| **Budget hierarchy** | Multiple guardrails checked independently; lowest limit wins | Hierarchical scopes — tenant, workspace, workflow, agent, toolset |
+| **Budget model** | Workspace spend limits for daily, weekly, monthly, and lifetime intervals; member/key guardrails | Tenant and subject scopes such as workspace, app, workflow, agent, and toolset |
+| **Enforcement** | Preflight gateway check; already-dispatched requests can cause slight overage | Atomic estimate reservation before protected work, followed by actual-cost commit |
+| **Coverage** | Requests routed through the OpenRouter inference gateway | Any application operation explicitly instrumented by the host |
+| **Model control** | Model/provider allowlists and routing policies | Returns configured cap fields; the host maps and enforces them |
+| **Action control** | No native authorization for downstream application tools | Caller-assigned [RISK_POINTS](/glossary#risk-points) budget; application authorization remains separate |
+| **Multi-tenant** | Organization, workspace, member, and key controls | Tenant-scoped keys plus subject-scoped budgets |
+| **Budget hierarchy** | Workspace interval budgets and inherited/assigned guardrails | Deepest matching configured subject scope |
 | **Alerts** | Usage dashboard + key credit/usage introspection | Webhook events on budget state transitions (programmatic, PagerDuty/Slack) |
-| **Concurrency safety** | Not documented | Atomic Lua-scripted reservations (zero TOCTOU drift) |
+| **Concurrency behavior** | Preflight enforcement; in-flight inference may slightly exceed a limit | Reservation atomically consumes available budget before work starts |
 
 ## Where OpenRouter's guardrails work well
 
 OpenRouter's guardrails system provides:
 
-- **Per-key spending caps** that reset on configurable intervals (daily, weekly, monthly)
-- **Model restrictions** — allowlist which models and providers a key can access
-- **Data privacy controls** — restrict data handling per guardrail
+- **Workspace budgets** for daily, weekly, monthly, and lifetime spend
+- **Guardrail assignment and inheritance** across workspaces, members, and keys
+- **Model and provider restrictions**
+- **Data controls** including zero-data-retention and sensitive-information policies
+- **Prompt filters** including regex-based prompt-injection controls
 - **Hard enforcement** — requests are rejected when the limit is reached
-- **Hierarchy** — multiple guardrails stack; the lowest limit wins
-- **Programmatic key management** — create, update, disable keys via API
 
-For teams routing all LLM calls through OpenRouter, this provides meaningful cost guardrails at the gateway level.
+For teams routing all inference through OpenRouter, this provides meaningful cost and data-policy enforcement at the gateway.
 
 ## Where the gaps appear
 
-### 1. Organization/key caps vs. hierarchical runtime budgets
+### 1. Inference workspaces vs. application execution scopes
 
-OpenRouter provides budget controls at the organization, member, and API key level — with guardrails that stack (strictest wins). This is meaningful governance for teams managing API access centrally.
+OpenRouter workspace budgets are shared across requests and can enforce daily, weekly, monthly, and lifetime limits. Member and key guardrails add finer access controls. This is meaningful governance for centrally managed inference.
 
-However, these are gateway-layer caps, not runtime authority scopes. In a multi-agent system, you might have 10 agents sharing a $100 workspace budget. With OpenRouter, you'd need to pre-allocate per key and hope usage is evenly distributed. If agent A uses $2 and agent B needs $15, B is blocked even though the overall allocation has capacity remaining.
-
-Cycles' hierarchical scopes handle this differently: a workspace budget is shared across all agents in the workspace, with per-agent sub-budgets optionally carved out. The scope hierarchy (tenant → workspace → workflow → agent) derives enforcement atomically at every reservation.
+The boundary is still OpenRouter inference. An agent workflow may also pay for search, browsers, sandboxes, SaaS APIs, or database operations, and may need separate limits per workflow or run even when calls share one gateway workspace. Cycles can apply budgets to those application-defined scopes and operations, provided the host instruments them.
 
 ### 2. No action-level control
 
-OpenRouter controls which **models** a key can access. It cannot control what **tools** an agent invokes or what **side effects** those tools produce.
+OpenRouter controls inference requests, models, providers, prompts, and data policies. It does not authorize downstream application tools or their side effects.
 
-An agent routed through OpenRouter that sends 200 customer emails costs pennies in tokens. OpenRouter's spending cap wouldn't trigger. Cycles' [RISK_POINTS](/how-to/assigning-risk-points-to-agent-tools) budget would — because each `send_email` costs 40 risk points regardless of token cost.
+For example, a host can assign a `RISK_POINTS` estimate to each email attempt and require a Cycles reservation before invoking the email provider. Cycles bounds the submitted cumulative exposure; the host still decides whether the email is authorized and enforces the tool call.
 
 ### 3. No graduated enforcement or programmatic alerts
 
@@ -61,23 +59,21 @@ OpenRouter offers dashboard-level usage alerts and per-key activity logs. But en
 
 Cycles provides [three-way decisions](/glossary#three-way-decision): ALLOW, ALLOW_WITH_CAPS (proceed with constraints like model downgrade or tool restrictions), and DENY. Plus webhook events on budget state transitions (`budget.exhausted`, `budget.over_limit_entered`) that integrate with PagerDuty, Slack, and automated remediation pipelines.
 
-### 4. No reserve-commit lifecycle
+### 4. Preflight spend checks vs. reserve-commit
 
-OpenRouter tracks spend based on completed requests. The cost is known after the response arrives, not before. If a long response exceeds the remaining budget, the spend has already happened.
+OpenRouter checks workspace spend before routing, but requests already in flight complete. Its documentation notes that actual workspace spend can therefore slightly exceed a limit before the next request is blocked.
 
-Cycles [reserves budget before the action](/blog/what-is-runtime-authority-for-ai-agents) based on an estimate, executes only if approved, and commits the actual cost after. The budget cannot be silently drained by concurrent requests. If actual cost exceeds the estimate, the overage is tracked as debt and surfaced immediately.
+Cycles [reserves an estimate before the action](/blog/what-is-runtime-authority-for-ai-agents) and commits the actual amount afterward. Concurrent reservations atomically consume available capacity. Commit overages follow the configured overage policy and may be rejected, charged from remaining capacity, or recorded as debt.
 
-### 5. Rate limits are global, not configurable
+### 5. Gateway-only coverage
 
-OpenRouter rate limits are global per-account — creating additional API keys doesn't increase rate capacity. This means you can't allocate different rate limits to different agents or use cases.
-
-Cycles doesn't rate-limit at all — it enforces budget authority. But this means you control the throughput profile through budget allocation rather than being constrained by a global rate limit you can't configure.
+OpenRouter can only evaluate traffic that reaches its gateway. Cycles is provider-independent and unit-independent, so the same budget protocol can cover model calls from multiple gateways alongside explicitly instrumented non-LLM operations. Cycles is not a rate limiter and does not discover uninstrumented work.
 
 ### 6. No delegation attenuation
 
 When agent A spawns sub-agent B via an LLM call, OpenRouter sees both as independent requests from the same key. There's no way to enforce that B has a smaller budget than A, or that B can only access a subset of A's tools.
 
-Cycles supports [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) as a pattern: hierarchical scopes let you carve a narrower sub-budget for each delegation hop, so a sub-agent draws from a smaller allocation than its parent. Action masks and delegation-depth limits are orchestration logic you build on top of those scopes — not protocol primitives.
+Cycles supports [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) as an application pattern: provision a narrower child agent ledger and submit both the shared ancestor and child scopes on every protected call. Cycles does not transfer balances at handoff; action masks and delegation-depth limits remain orchestration logic.
 
 ## Better together: OpenRouter + Cycles
 
@@ -87,9 +83,9 @@ OpenRouter and Cycles operate at different layers. Running both gives you capabi
 Request flow:
   Agent decides to act
     → Cycles: "Should this action happen?" (budget authority, RISK_POINTS)
-    → OpenRouter: "Which model handles this?" (routing, provider selection)
+    → OpenRouter: check workspace/guardrail policy, then route the model call
     → Provider: Execute the call
-    → OpenRouter: Track cost, check key cap
+    → OpenRouter: Track inference usage
     → Cycles: Commit actual cost, release unused reservation
 ```
 
@@ -100,19 +96,19 @@ Request flow:
 | Unified access to hundreds of models | OpenRouter |
 | Automatic provider selection and pricing | OpenRouter |
 | Pre-execution budget authority | Cycles |
-| Action-level RISK_POINTS control | Cycles |
-| Per-key spending caps with reset | OpenRouter |
+| Caller-assigned action-exposure budgets | Cycles; host authorizes the action |
+| Workspace interval budgets and key/member guardrails | OpenRouter |
 | Hierarchical tenant/workflow/agent budgets | Cycles |
 | Model and provider allowlists | OpenRouter |
-| Tool allowlists and denylists | Cycles |
+| Tool allowlists and denylists | Cycles returns configured cap fields; the host enforces them |
 | Credit management | OpenRouter |
 | Delegation attenuation for sub-agents | Cycles (pattern via hierarchical scopes) |
 
 **Concrete integration scenario:** OpenRouter provides access to many models through a single API. Cycles decides whether an instrumented action can reserve against the configured budget. If the deepest matching budget supplies `ALLOW_WITH_CAPS`, your application can map a returned cap to a cheaper OpenRouter model. OpenRouter handles routing; Cycles handles the budget reservation. The current Cycles server neither infers a risk profile nor adds caps automatically as the balance falls.
 
-**Another scenario:** OpenRouter guardrails restrict a key to only GPT-4o-mini and Claude Haiku (cheaper models). Cycles' RISK_POINTS budget independently restricts the same agent to 2 emails and 0 deploys per run. Model access (OpenRouter) and action access (Cycles) are enforced independently — both constraints must pass.
+**Another scenario:** OpenRouter guardrails restrict a key to lower-cost models. The application authorizes email but not deploy, assigns each email a caller-defined `RISK_POINTS` amount, and requires a Cycles reservation before sending. OpenRouter enforces model access, the application enforces tool access, and Cycles bounds the submitted email exposure.
 
-OpenRouter selects the model and provider. Cycles decides whether the action should happen at all. They're complementary, not competing.
+OpenRouter selects the model and provider. Cycles decides whether the configured budget can cover the submitted action estimate. The host makes and enforces the broader authorization decision. The layers are complementary, not competing.
 
 ## What Cycles does not do
 
@@ -121,8 +117,8 @@ Cycles is not a router or model aggregator. It doesn't provide access to hundred
 ## When OpenRouter alone is enough
 
 - All your agents do is make LLM calls (no side-effecting tools)
-- Per-key spending caps with daily/monthly resets are sufficient
-- You don't have concurrent agents sharing budgets
+- Workspace budgets and assigned guardrails match the required organizational boundaries
+- Slight overage from already-dispatched inference requests is acceptable
 - You don't need graduated enforcement (just hard allow/deny)
 - Single-team deployment without multi-tenant isolation needs
 
@@ -137,7 +133,7 @@ Cycles is not a router or model aggregator. It doesn't provide access to hundred
 
 ## Sources
 
-Feature claims verified against [openrouter.ai/docs](https://openrouter.ai/docs/guides/features/guardrails) as of April 2026. Cycles claims based on v0.1.25. These tools evolve quickly — check the linked docs for the latest.
+Feature claims verified against OpenRouter's [guardrails](https://openrouter.ai/docs/guides/features/guardrails) and [workspace budgets](https://openrouter.ai/docs/guides/features/workspaces/workspace-budgets) documentation on July 24, 2026. Cycles claims are based on v0.1.25. These tools evolve quickly—check the linked docs for the latest.
 
 ## Related
 

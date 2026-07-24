@@ -122,7 +122,7 @@ A successful file copy is not a successful recovery test.
 2. Keep the isolated instance unreachable from all Cycles services and clients.
 3. Confirm Redis starts without persistence-load errors.
 4. Compare `INFO persistence`, `DBSIZE`, and representative key types with the backup manifest.
-5. Point isolated runtime and admin instances at a disposable copy of the restored Redis and perform the read-only checks in [Validate Cycles state](#validate-cycles-state). Test the events worker only with outbound network access blocked: it is an active queue consumer, not a read-only service.
+5. Point isolated runtime and admin instances at a disposable copy of the restored Redis and perform the read-only checks in [Validate Cycles state](#_4-validate-cycles-state). Test the events worker only with outbound network access blocked: it is an active queue consumer, not a read-only service.
 6. Record restore duration, data checks, and any manual steps. The measured duration—not the archive copy time—is your practical RTO.
 
 Run this drill on a schedule and after changes to Redis version, persistence mode, encryption keys, or Cycles storage behavior.

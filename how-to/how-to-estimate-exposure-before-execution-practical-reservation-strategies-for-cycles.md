@@ -409,7 +409,7 @@ A team refining reservation quality should track:
 - unused remainder by action class
 - actions that regularly exceed estimate
 - workflows with high variance
-- pressure at tenant, workflow, and run scopes
+- pressure at tenant and workflow scopes, including workflow ledgers keyed per run
 - degradation frequency when premium reservations fail
 
 These signals tell you where the estimate strategy is helping and where it needs refinement.

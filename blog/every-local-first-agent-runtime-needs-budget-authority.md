@@ -51,24 +51,24 @@ Take the four controls a CTO would reach for first, and walk through why each on
 
 ### Provider-side spending caps
 
-Provider controls are improving. Anthropic supports organization- and workspace-level limits — its Tier 4 ceiling is [$200,000/month](https://docs.anthropic.com/en/api/rate-limits), with finer-grained limits configurable per workspace, and the API blocks further calls once the monthly cap is hit until the next billing period. OpenAI supports organization- and project-level [spending limits](https://help.openai.com/en/articles/9186755-managing-your-work-in-the-api-platform-with-projects) in the dashboard. Both are useful safety nets against catastrophic monthly bills.
+Provider controls are improving, but their semantics differ. Anthropic uses prepaid usage credits, usage tiers, workspace attribution, and rate limits; exhausted credits stop API access unless the balance is reloaded. OpenAI offers soft spend alerts and optional hard monthly limits at organization and project scope; it documents that hard-limit enforcement is not instantaneous and tracked spend can slightly exceed the amount. Prepaid-credit exhaustion is a separate control. These controls are useful, but none should be described as a universal per-session boundary.
 
 But four structural mismatches keep them blind to the local-first failure mode:
 
-- **The cap measures against the calendar, not against the run.** A monthly cap of $500 doesn't stop a single-session research loop that burns $187 in eight hours. The cap is checked against accumulated month-to-date spend, not against a per-session or per-task budget.
+- **Provider windows and balances are not application runs.** A monthly threshold, prepaid balance, or throughput interval does not automatically express a per-session or per-task budget.
 - **BYOK distributes the spend across accounts.** When developers use truly personal accounts (signing up with personal email, paying on a personal card), each engineer's key sits on their own billing boundary and the provider's cap sees one engineer's monthly spend — never the team's. Anthropic and OpenAI [do support shared organization workspaces](https://support.claude.com/en/articles/9796807-creating-and-managing-workspaces-in-the-claude-console) where billing admins can see spend across keys, which closes the cross-account aggregation gap *inside the org*. The cross-session, cross-runtime, and per-action governance gaps below still apply either way.
-- **The granularity is account- or workspace-wide, not session-wide.** The cap can't say "let this user burn $187 on background research but block deploy-related tools." It can only say "stop everything when the month's spend hits X."
+- **The granularity is provider-defined, not automatically session-defined.** Projects, workspaces, keys, and cloud projects can isolate some traffic, but shared credentials do not infer a local editor session or distinguish background research from a deploy tool.
 - **They don't see action risk at all.** A provider cap is a *cost* protector. It has no concept of "this tool deletes data" vs "this tool reads files" — it can't deny a `deploy` call while allowing twenty `read_file` calls. The deploy that took down staging in the opening vignette was perfectly happy from the provider's point of view; the provider doesn't know what the tool *does*, only what the model call *costs*. The risk-tier framing is in [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk).
 
 Provider controls primarily protect usage within the provider's account model. They aren't designed to govern an organization's cross-user, cross-runtime, cross-session, cross-provider surface, and they don't make per-action decisions on either spend or risk. A longer treatment of the granularity / scope / delay analysis is in [Cycles vs Provider Spending Caps](/concepts/cycles-vs-provider-spending-caps).
 
 ### Framework-internal limits
 
-Each runtime ships its own internal ceilings. Aider has token budgets per request and chat-mode session settings. Cline has a max-requests-per-task setting. Continue offers per-assistant configuration. These are useful for the simplest runaway shape — an agent stuck calling the same tool forever.
+Some runtimes expose local request, context, approval, or configuration controls. Those can help with the simplest runaway shape, such as one process repeatedly calling a tool.
 
-The structural problem: each ceiling is **per process, on one machine**. A user can spawn three Cline windows. A user can run two Aider terminals at once. A user can switch from Continue to Cline mid-day and reset every counter. A worker crash drops the counter. A user reboots and starts fresh. There is no shared truth about how much this *user* — let alone this *team* — has spent today.
+The structural problem appears when such a ceiling is stored only in one local process. Multiple editor windows, terminals, runtimes, or restarted workers then do not share one durable accounting state. Cloud-managed runtime features may close part of that gap for their own product, but they still do not automatically aggregate every local agent and provider.
 
-The limits also speak in step counts, not in money or risk. They don't know what an iteration costs. A `max_requests=50` runs $0.50 on Haiku and $50 on Opus. They don't distinguish "read a file" from "deploy a service" — every step is one step, regardless of blast radius. They are local circuit breakers, not [budget authority](/glossary#budget-authority) and not [action authority](/glossary#action-authority). The same shortcoming was named — for hosted-orchestrator frameworks — in [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent#framework-limits) The local-first version of the failure is the same failure with the additional twist that *the orchestrator runs in the user's process*, so even the per-process counter is split across however many editor windows the user opens.
+Step or request limits also do not necessarily represent money or caller-assigned action exposure: two model calls can have different prices, and a file read has a different consequence from a deploy. Local circuit breakers remain useful, but a deployment needs shared state if it wants a cross-process [budget authority](/glossary#budget-authority), plus host authorization if it wants [action authority](/glossary#action-authority). The same boundary issue appears in hosted orchestrators, as described in [Agents Are Cross-Cutting. Your Controls Aren't.](/blog/agents-are-cross-cutting-your-controls-arent#framework-limits).
 
 ### Observability and cost-attribution tools
 
@@ -93,7 +93,7 @@ Each control above fails for a different reason. The reasons share a shape:
 
 | Control | What it can see | What it can't see |
 |---|---|---|
-| Provider cap | Account/workspace-month spend | Per-session, per-tool, per-team, per-action-risk decisions |
+| Provider controls | Vendor account/project/workspace usage | Cross-provider sessions, application tools, and action-risk decisions |
 | Framework limit | One process | Other processes, other users, other runtimes |
 | Observability | Past traces (if proxied) | Pre-execution decisions |
 | Marketplace | Published skills | Per-runtime per-skill blast radius |

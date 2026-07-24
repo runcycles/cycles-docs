@@ -4,7 +4,7 @@ date: 2026-07-03
 author: Albert Mavashev
 tags:
   - cost-control
-  - rate-limiting
+  - rate-limits
   - agents
   - runtime-authority
   - architecture

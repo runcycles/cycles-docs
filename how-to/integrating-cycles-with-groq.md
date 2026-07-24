@@ -5,7 +5,7 @@ description: "Add budget governance to Groq API calls using the OpenAI SDK with 
 
 # Integrating Cycles with Groq
 
-This guide shows how to add budget governance to [Groq](https://groq.com/) API calls. Groq provides an OpenAI-compatible API, so you use the standard OpenAI SDK with a different `base_url`. All Cycles patterns from the [OpenAI integration](/how-to/integrating-cycles-with-openai) apply directly.
+This guide shows how to add budget governance to [Groq](https://groq.com/) API calls. Groq provides an OpenAI-compatible Chat Completions API, so the examples use the OpenAI SDK with a different `base_url`. Confirm Groq support before copying provider-specific OpenAI features beyond that shared surface.
 
 ## Prerequisites
 
@@ -30,16 +30,16 @@ from runcycles import CyclesClient, CyclesConfig, cycles, set_default_client
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 groq = OpenAI(base_url="https://api.groq.com/openai/v1", api_key="gsk_...")
 
-@cycles(estimate=50_000, action_kind="llm.completion", action_name="llama-4-scout")
+@cycles(estimate=100_000, action_kind="llm.completion", action_name="openai/gpt-oss-120b")
 def ask(prompt: str) -> str:
     return groq.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="openai/gpt-oss-120b",
         messages=[{"role": "user", "content": prompt}],
     ).choices[0].message.content
 
 print(ask("What is budget authority?"))
 ```
-Same OpenAI SDK, same `@cycles` decorator — just a different `base_url`. Notice the estimate is much lower than GPT-4o because Groq's pricing is 10-50x cheaper.
+Same SDK shape, same `@cycles` decorator, different `base_url`. Size the estimate from the selected Groq model's current price and a conservative token ceiling.
 :::
 
 ## Basic pattern
@@ -59,9 +59,10 @@ groq = OpenAI(
     api_key=os.environ["GROQ_API_KEY"],
 )
 
-# Llama 4 Scout on Groq
-PRICE_PER_INPUT_TOKEN = 11     # $0.11 / 1M tokens
-PRICE_PER_OUTPUT_TOKEN = 34    # $0.34 / 1M tokens
+# GPT-OSS 120B on Groq, checked 2026-07-24:
+# $0.15 / 1M input tokens and $0.60 / 1M output tokens.
+PRICE_PER_INPUT_TOKEN = 15
+PRICE_PER_OUTPUT_TOKEN = 60
 
 @cycles(
     estimate=lambda prompt, **kw: len(prompt.split()) * 2 * PRICE_PER_INPUT_TOKEN
@@ -71,7 +72,7 @@ PRICE_PER_OUTPUT_TOKEN = 34    # $0.34 / 1M tokens
         + result["usage"]["completion_tokens"] * PRICE_PER_OUTPUT_TOKEN
     ),
     action_kind="llm.completion",
-    action_name="meta-llama/llama-4-scout-17b-16e-instruct",
+    action_name="openai/gpt-oss-120b",
     unit="USD_MICROCENTS",
 )
 def chat(prompt: str, max_tokens: int = 1024) -> dict:
@@ -80,7 +81,7 @@ def chat(prompt: str, max_tokens: int = 1024) -> dict:
         max_tokens = min(max_tokens, ctx.caps.max_tokens)
 
     response = groq.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="openai/gpt-oss-120b",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
     )
@@ -113,14 +114,14 @@ const groq = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const INPUT_PRICE = 11;
-const OUTPUT_PRICE = 34;
+const INPUT_PRICE = 15;
+const OUTPUT_PRICE = 60;
 
 const chat = withCycles(
   {
     client: cycles,
     actionKind: "llm.completion",
-    actionName: "meta-llama/llama-4-scout-17b-16e-instruct",
+    actionName: "openai/gpt-oss-120b",
     estimate: (prompt: string) => {
       const inputTokens = Math.ceil(prompt.length / 4);
       return inputTokens * INPUT_PRICE + 1024 * OUTPUT_PRICE;
@@ -137,7 +138,7 @@ const chat = withCycles(
     }
 
     return groq.chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "openai/gpt-oss-120b",
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
@@ -147,31 +148,30 @@ const chat = withCycles(
 
 ## Groq pricing reference
 
-Groq hosts open-source models on custom LPU hardware. Pricing is significantly lower than proprietary models:
+Groq's on-demand list prices were rechecked on July 24, 2026:
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/token) | Output (microcents/token) |
+| Model | Input (per 1M tokens) | Output (per 1M tokens) | Input (microcents/1K tokens) | Output (microcents/1K tokens) |
 |---|---|---|---|---|
-| Llama 4 Scout 17B | $0.11 | $0.34 | 11 | 34 |
-| Llama 3.3 70B | $0.59 | $0.79 | 59 | 79 |
-| Llama 3.1 8B | $0.05 | $0.08 | 5 | 8 |
-
-For comparison, GPT-4o is 250/1,000 microcents per token — **23x more expensive** than Llama 4 Scout on Groq for input, **29x more** for output.
+| `openai/gpt-oss-20b` | $0.075 | $0.30 | 7,500 | 30,000 |
+| `openai/gpt-oss-120b` | $0.15 | $0.60 | 15,000 | 60,000 |
+| `qwen/qwen3.6-27b` | $0.60 | $3.00 | 60,000 | 300,000 |
 
 ::: info Note
-Groq pricing changes. Check [groq.com/pricing](https://groq.com/pricing) for current rates.
+Groq pricing and model availability change. Check [Groq pricing](https://groq.com/pricing) and [model deprecations](https://console.groq.com/docs/deprecations) before deploying. Llama 4 Scout shut down for free and developer tiers on July 17, 2026; Llama 3.1 8B and Llama 3.3 70B are scheduled to shut down for those tiers on August 16, 2026.
 :::
 
 ## Model-downgrade degradation pattern
 
-The most powerful Cycles + Groq pattern: when your primary model's budget runs low, automatically downgrade to a cheaper Groq model instead of denying the request entirely.
+An application can try a lower-estimate Groq route after the primary route's reservation is rejected. Cycles does not choose the fallback or detect a “low budget” threshold automatically; the application owns that policy.
 
 ```python
 from runcycles import BudgetExceededError
 
-# Primary: GPT-4o (expensive, high quality)
+# Primary provider route
 primary_client = OpenAI()
+PRIMARY_MODEL = os.environ["PRIMARY_MODEL"]
 
-# Fallback: Llama 4 Scout on Groq (cheap, good quality)
+# Lower-estimate Groq route
 fallback_client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
     api_key=os.environ["GROQ_API_KEY"],
@@ -180,29 +180,29 @@ fallback_client = OpenAI(
 @cycles(
     estimate=1_500_000,
     action_kind="llm.completion",
-    action_name="gpt-4o",
+    action_name="primary-model-route",
 )
 def primary_chat(prompt: str) -> dict:
     response = primary_client.chat.completions.create(
-        model="gpt-4o",
+        model=PRIMARY_MODEL,
         messages=[{"role": "user", "content": prompt}],
     )
-    return {"content": response.choices[0].message.content, "model": "gpt-4o"}
+    return {"content": response.choices[0].message.content, "model": PRIMARY_MODEL}
 
 @cycles(
-    estimate=50_000,
+    estimate=100_000,
     action_kind="llm.completion",
-    action_name="llama-4-scout",
+    action_name="openai/gpt-oss-120b",
 )
 def fallback_chat(prompt: str) -> dict:
     response = fallback_client.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="openai/gpt-oss-120b",
         messages=[{"role": "user", "content": prompt}],
     )
-    return {"content": response.choices[0].message.content, "model": "llama-4-scout"}
+    return {"content": response.choices[0].message.content, "model": "openai/gpt-oss-120b"}
 
 def chat_with_downgrade(prompt: str) -> dict:
-    """Try GPT-4o first; fall back to Groq if budget is exhausted."""
+    """Try the primary route, then a lower-estimate Groq route."""
     try:
         return primary_chat(prompt)
     except BudgetExceededError:
@@ -210,22 +210,22 @@ def chat_with_downgrade(prompt: str) -> dict:
 ```
 
 This pattern gives you:
-- **Full quality** when budget allows (GPT-4o at $2.50/$10 per 1M tokens)
-- **Continued service** when budget is low (Llama 4 Scout at $0.11/$0.34 per 1M tokens)
-- **Per-model observability** — Cycles tracks spend separately for each `action_name`
+- **An application-owned fallback** after the primary reservation is rejected
+- **A separately estimated Groq route** that may still fit the remaining ledger
+- **Per-model attribution** in reservation records through distinct `action_name` values
 
 See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for more strategies.
 
 ## Key points
 
 - **Same SDK, different `base_url`.** Groq uses the OpenAI-compatible API — no new SDK to learn.
-- **Much lower estimates.** Groq models are 10-50x cheaper than GPT-4o. Adjust your `estimate` values accordingly.
-- **Model downgrade is the killer pattern.** Use Groq as a budget-aware fallback when your primary model's budget runs low.
-- **All OpenAI patterns apply.** Everything from the [OpenAI integration guide](/how-to/integrating-cycles-with-openai) works with Groq — decorators, streaming, caps, metrics.
+- **Model-specific estimates.** Calculate from current Groq list or contracted rates; do not copy an estimate from a different model.
+- **Fallback is application policy.** A rejected primary reservation can trigger a separately budgeted Groq route.
+- **Compatibility has limits.** The OpenAI-compatible Chat Completions shape enables shared client code, but verify streaming, tool, and response-field behavior for the selected Groq model.
 
 ## Next steps
 
-- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai) — full OpenAI patterns (all apply to Groq)
+- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai) — related OpenAI SDK lifecycle patterns
 - [Integrating with OpenAI (TypeScript)](/how-to/integrating-cycles-with-openai-typescript) — TypeScript streaming patterns
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — model downgrade and other strategies
 - [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — pricing reference for all providers

@@ -31,7 +31,7 @@ A month on, the conclusion is firmer than I expected. The lifecycle generalized.
 
 ## The Primitive That Held
 
-[Reserve-commit](/glossary#reservation) is propose → ALLOW / ALLOW_WITH_CAPS / DENY → act → commit. It was originally written for one shape of action: a tool call with structured arguments, with a discrete moment between intent and execution where the gate could sit.
+[Reserve-commit](/glossary#reservation) is propose → accepted hold (`ALLOW` or configured `ALLOW_WITH_CAPS`) / rejection → act → commit. `DENY` is the response used by `decide` and dry-run evaluation. The lifecycle fits work with a discrete moment between intent and execution where a mandatory gate can sit.
 
 Across four surfaces, that abstract description held. What changed:
 
@@ -46,7 +46,7 @@ Voice is the load-bearing case. The other three sites preserve the per-action ga
 
 Four things varied. None broke the primitive.
 
-**The feature vector.** Outbound tool calls had a tool name and structured arguments to gate on. Memory writes had an operation + a scope. Merges had a branch + an author + an approver. Clicks had a URL pattern + a DOM target + an action verb + (for pixel agents) a screenshot crop. Voice had a tier + a duration + a wall-clock budget. The rule body looked at different things; the rule shape stayed.
+**The feature vector.** Outbound tool calls had a tool name and structured arguments to gate on. Memory writes had an operation + a scope. Merges had a branch + an author + an approver. Clicks had a URL pattern + a DOM target + an action verb + (for pixel agents) a screenshot crop. Voice had a tier + an application-measured duration converted to a supported cost unit. The rule body looked at different things; the rule shape stayed.
 
 **The blast radius shape.** Outbound side effects radiate outward — an email reaches one recipient. Memory writes radiate forward in time — one bad fact reaches every future retrieval. Merges fan out through CI/CD — one merge triggers a deploy matrix. Clicks land at exactly one DOM element but the wrong DOM element changes the entire blast radius. Voice frames don't have a discrete radius at all; they accumulate cost continuously. The rule body absorbed each, but the *risk scoring* had to be surface-aware.
 

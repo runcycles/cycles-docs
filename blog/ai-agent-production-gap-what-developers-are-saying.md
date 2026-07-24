@@ -26,9 +26,9 @@ Across recent Reddit discussions, Hacker News threads, Stack Overflow posts, and
 
 Cost growth is one of the most frequently discussed pain points.
 
-A [widely-shared analysis](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) on Medium — "Token Cost Trap: Why Your AI Agent's ROI Breaks at Scale" — walks through how a POC costing $500 in one month rocketed to $847K/month when deployed broadly. In February 2026, a data enrichment agent [misinterpreted an API error and ran 2.3 million API calls over a weekend, costing $47K](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/). The [LangChain 2026 State of AI Agents report](https://www.langchain.com/state-of-agent-engineering) confirms this: agents make 3–10x more LLM calls than simple chatbots. A single request can trigger planning, tool selection, execution, verification, and response generation — each a separate billable API call.
+A [Medium analysis](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) models a proof of concept growing from $500 to an $847,000 monthly projection under broad deployment assumptions. Separately, a vendor-authored article [reported a $47,000 data-enrichment loop](https://rocketedge.com/2026/03/15/ai-agent-cost-control/). These are planning and self-published examples, not independently verified population data. The architectural mechanism is still useful: one request can trigger planning, tool selection, execution, verification, and response generation, each with its own calls and retries.
 
-The numbers developers are reporting:
+Illustrative monthly ranges synthesized from those discussions—not industry benchmarks:
 
 | Deployment stage | Typical monthly cost |
 |---|---|
@@ -45,17 +45,15 @@ On Hacker News, a [thread analyzing ICLR 2026 papers on multi-agent failures](ht
 
 A related but distinct frustration: teams have _excellent_ visibility into what their agents are doing and still can't prevent overspend or dangerous actions.
 
-The [LangChain report](https://www.langchain.com/state-of-agent-engineering) found that 89% of organizations have implemented some form of observability for their agent systems. Platforms like Langfuse, LangSmith, Arize, and Helicone are widely adopted. And yet 32% of organizations still cite quality as their top barrier, and cost overruns remain the most common production incident.
+The [LangChain report](https://www.langchain.com/state-of-agent-engineering) found that 89% of respondents had implemented some form of observability for agent systems, while 32% cited quality as their top production barrier. Those findings show broad use of telemetry without establishing that observability alone solves execution control.
 
 Why? Because observability tools are designed to _record_ what happened, not _control_ what happens next. They answer "what did the agent do?" but not "should the agent be allowed to do this?"
 
-On Hacker News, this gap has spawned its own category of discussion. One commenter put it plainly: "We have three dashboards showing us our agent burned through $8K last weekend. None of them could have stopped it."
-
-**The missing layer:** Between the orchestration framework (LangGraph, CrewAI, OpenAI Agents SDK) and the observability platform (Langfuse, LangSmith) sits a layer that most architectures don't have — [an enforcement point that evaluates every action against budgets and policies before execution](/blog/cycles-vs-llm-proxies-and-observability-tools). Cycles operates in this layer: after the agent decides what to do, but before it does it.
+**The missing layer:** A stack needs a mandatory boundary wherever it expects a limit to hold. Current LLM gateways can enforce inference budgets; [Cycles can add reserve-commit budgets](/blog/cycles-vs-llm-proxies-and-observability-tools) across other explicitly instrumented operations. Application authorization remains responsible for deciding whether a tool and its arguments are permitted.
 
 ### 3. Multi-Agent Error Cascades
 
-Google DeepMind research shared widely on Hacker News found that multi-agent networks amplify errors by 17x. This finding resonated deeply with practitioners who are building multi-agent systems and discovering firsthand that reliability doesn't compose linearly.
+In a controlled evaluation of 180 agent configurations, [Google Research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found architecture-dependent behavior: independent agents amplified errors by up to 17.2x, while centralized coordination limited amplification to 4.4x. The result applies to the evaluated tasks and architectures, not every multi-agent deployment.
 
 The math is simple and devastating: if each agent step has 95% reliability, a 20-step chain has 36% overall reliability. With multiple agents running in parallel, sharing context, and making decisions based on each other's outputs, failure modes multiply rather than add.
 
@@ -91,7 +89,7 @@ Google's A2A (Agent-to-Agent) protocol and the new Linux Foundation Agentic AI F
 
 ### 5. The "Demo to Production" Gap
 
-TechCrunch declared 2026 the year AI moves [from hype to pragmatism](https://techcrunch.com/2026/01/02/in-2026-ai-will-move-from-hype-to-pragmatism/). An NBER study from February 2026 found that 89% of firms reported zero measurable change in productivity from AI. A RAND Corporation study found over 80% of AI projects fail to reach production; MIT reports 95% fail due to lack of architectural robustness. Gartner projects 40% of agentic AI projects will be scrapped by 2027 for failing to link to measurable business value. Meanwhile, NIST announced the AI Agent Standards Initiative in February 2026, signaling that governance is now a first-class concern at the regulatory level.
+TechCrunch described 2026 as a move [from hype to pragmatism](https://techcrunch.com/2026/01/02/in-2026-ai-will-move-from-hype-to-pragmatism/). An [NBER survey of nearly 6,000 executives](https://www.nber.org/papers/w34836) reported that 89% saw no AI-related productivity impact over the prior three years; that is a self-reported retrospective measure, not proof that AI produced zero measurable change everywhere. A [RAND report](https://www.rand.org/content/dam/rand/pubs/research_reports/RRA2600/RRA2680-1/RAND_RRA2680-1.pdf) noted that, by some outside estimates, more than 80% of AI projects fail, then used interviews with 65 experienced practitioners to study failure causes. RAND did not itself measure an 80% production-failure rate. Meanwhile, [NIST announced its AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February 2026.
 
 On r/LocalLLaMA, a trending post titled "Agent this, coding that, but all I want is a KNOWLEDGEABLE Model!" captures the community fatigue. CNN summarized the sentiment: "AI is either your most helpful coworker, a glorified search engine or vastly overrated depending on who you ask."
 

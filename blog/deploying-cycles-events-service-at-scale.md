@@ -280,7 +280,7 @@ The management-port split isn't a Cycles quirk. It's the same pattern Envoy, mat
 
 - [Webhook Idempotency Patterns for AI Agent Budget Events](/blog/webhook-idempotency-patterns-for-ai-agent-budget-events) — receiver-side dedup patterns that complement the sender-side reliability described here
 - [Operational Runbook: Using Cycles Runtime Events](/blog/operational-runbook-using-cycles-runtime-events) — severity tiers and on-call triage patterns for the events this service delivers
-- [Real-Time Budget Alerts for AI Agents](/blog/real-time-budget-alerts-for-ai-agents) — the event-system architecture motivation and the 45 event types flowing through it
+- [Real-Time Budget Alerts for AI Agents](/blog/real-time-budget-alerts-for-ai-agents) — the event-system architecture motivation and the historical event vocabulary behind it
 - [Monitoring and Alerting](/how-to/monitoring-and-alerting) — additional Prometheus alert rules across Cycles services (Redis, reservation denial-rate, overdraft)
 - [Production Operations Guide](/how-to/production-operations-guide) — Redis HA, multi-instance Cycles server, capacity planning
 - [Security — Webhook security](/security#webhook-security) — HMAC signing, signing-secret encryption at rest, SSRF protection

@@ -24,9 +24,9 @@ This report separates **documented incidents** sourced to public reporting or re
 ## Key findings
 
 - **20+ documented incidents and recurring patterns** across cost, action, security, and multi-agent categories
-- **Costs in this report range from $1.40 to $12,400 per incident** in direct model spend (documented incidents and constructed scenarios), with business impact reaching $50,000+ from a single $1.40 agent run
-- **Some of the most damaging incidents cost very little in [tokens](/glossary#tokens).** A $1.40 model run caused [$50K+ in pipeline damage](/blog/ai-agent-action-control-hard-limits-side-effects). A $0.80 run triggered an [unauthorized purchase](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/). A $2.00 run [deleted a production database](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/). Dollar budgets alone cannot prevent the worst failures.
-- **Up to 84.2% attack success rate** for tool poisoning in benchmark settings under auto-approval ([MCP-ITP](https://arxiv.org/abs/2601.07395))
+- **Constructed cost scenarios range from $32.40 to $2,300** under their stated token assumptions; self-published anecdotal reports below describe larger figures but are not independently verified here.
+- **Some damaging documented incidents can have little model spend relative to business impact.** A reported $0.80 run triggered an [unauthorized purchase](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/). Replit's coding-agent database incident shows why dollar budgets alone cannot prevent action failures, although the public reporting does not establish a precise model-cost figure for that event.
+- **Up to 84.2% selected target-tool-call rate** across evaluated MCPTox prompts and 12 model/agent settings ([MCP-ITP](https://arxiv.org/abs/2601.07395)); the benchmark did not test live production execution
 - **41–87% failure rates** in multi-agent coordination ([UC Berkeley MAST study](https://arxiv.org/abs/2503.13657))
 - **64% of surveyed organizations** experienced more than $1M in losses from AI-related risks broadly ([2025 EY survey](https://www.ey.com/en_uk/insights/ai/how-can-responsible-ai-bridge-the-gap-between-investment-and-impact))
 
@@ -48,46 +48,46 @@ Incidents are categorized as:
 
 Agents that spend more than expected — through loops, retries, [fan-out](/glossary#fan-out), or scope creep. These are constructed scenarios based on recurring failure modes; see Categories B and C for externally documented incidents from named companies and security researchers.
 
-### A1. Coding agent retry loop — $4,200 (constructed)
+### A1. Coding agent retry loop — $52.80 (constructed)
 
-A coding agent hit an ambiguous error, retried with expanding context windows, and [looped 240 times over three hours](/blog/ai-agent-failures-budget-controls-prevent). Total cost: $4,200. Three dashboards showed the spend in real time. None could stop it.
+A coding agent hit an ambiguous error and [looped 240 times over three hours](/blog/ai-agent-failures-budget-controls-prevent). At the source scenario's stated flat average of 12,000 input and 2,500 output tokens per call, total cost is $52.80.
 
 | | Detail |
 |---|---|
-| Model cost | $4,200 |
-| Business impact | Budget exhausted, all agents blocked by provider cap |
-| Root cause | Provider cap is monthly/org-wide — doesn't enforce per-run |
+| Model cost | $52.80 |
+| Business impact | Unattended spend and delayed failure detection |
+| Root cause | No mandatory per-run boundary; provider controls use a broader vendor scope |
 | Mitigation | **Budget gate** — a mandatory $15 per-run reservation boundary rejects later iterations once configured exposure is exhausted |
 
-### A2. Weekend backlog processing — $12,400 (constructed)
+### A2. Weekend backlog processing — $2,300 (constructed)
 
 A coding agent [deployed Friday afternoon processed a 2,300-item backlog over the weekend](/blog/ai-agent-failures-budget-controls-prevent) without budget enforcement. Context windows grew per item, retries compounded, and nobody checked until Monday.
 
 | | Detail |
 |---|---|
-| Model cost | $12,400 |
+| Model cost | $2,300 |
 | Business impact | Weekend budget consumed, Monday recovery |
 | Root cause | No per-batch or per-task budget limit |
-| Mitigation | **Budget gate** — a mandatory per-task cap of $5 bounds reserved exposure to roughly $2,500 |
+| Mitigation | **Budget gate** — a mandatory $500 batch budget bounds the unattended run; per-task budgets can contain outliers |
 
-### A3. Concurrent agent burst — 6.4x overrun (constructed)
+### A3. Concurrent agent burst — 6.5x overrun (constructed)
 
-Twenty concurrent agents [processing 200 documents simultaneously](/blog/ai-agent-failures-budget-controls-prevent) hit a TOCTOU race condition. All read "budget remaining: $500" and all proceeded. Actual spend: $3,200.
+Twenty concurrent agents [processing 200 documents simultaneously](/blog/ai-agent-failures-budget-controls-prevent) hit a TOCTOU race condition. All read "budget remaining: $5" before delayed counter updates converged. Modeled spend: $32.40.
 
 | | Detail |
 |---|---|
-| Model cost | $3,200 (budget was $500) |
-| Business impact | 6.4x budget overrun |
+| Model cost | $32.40 (remaining budget was $5) |
+| Business impact | About 6.5x the remaining budget |
 | Root cause | Application-level counter lacks atomicity |
 | Mitigation | **Atomic [reservation](/glossary#reservation)** — budget locked before execution, concurrent requests see accurate remaining |
 
-### A4. Retry storm during CRM outage — $1,800 (constructed)
+### A4. Retry storm during CRM outage — $33.86 (constructed)
 
-A CRM returns 500 errors for 12 minutes. [Retry logic at tool, step, and orchestration layers compound](/blog/ai-agent-failures-budget-controls-prevent) — 27x multiplication across 45 active conversations. Cost: $1,800 in 12 minutes.
+A CRM returns 500 errors for 12 minutes. [Retry logic at tool, step, and orchestration layers compounds](/blog/ai-agent-failures-budget-controls-prevent) — up to 27 calls for each of 38 affected conversations. At the stated token volumes, cost is $33.86.
 
 | | Detail |
 |---|---|
-| Model cost | $1,800 |
+| Model cost | $33.86 |
 | Business impact | All [tenant](/glossary#tenant) budgets affected during the storm |
 | Root cause | Retry multiplier at each layer; no cumulative check |
 | Mitigation | **Budget gate** — mandatory per-conversation reservations bound configured exposure |
@@ -96,7 +96,7 @@ A CRM returns 500 errors for 12 minutes. [Retry logic at tool, step, and orchest
 Two widely cited cost incidents come from self-published sources and should be treated as pattern-confirming rather than independently verified:
 
 - **POC-to-production scaling — $847K/month.** A proof-of-concept agent costing $500/month [scaled to $847,000/month](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) in production due to call volume assumptions that didn't account for context window growth, retries, and fan-out. (Source: Medium, Klaus Hofenbitzer)
-- **Data enrichment API loop — $47,000.** A data enrichment agent [misinterpreted an API error and ran 2.3 million calls over a weekend](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/). The API returned 200 OK with an error body; the agent treated it as success and retried the entire batch. (Source: RocketEdge)
+- **Data enrichment API loop — $47,000.** A data enrichment agent [misinterpreted an API error and ran 2.3 million calls over a weekend](https://rocketedge.com/2026/03/15/ai-agent-cost-control/). The API returned 200 OK with an error body; the agent treated it as success and retried the entire batch. (Source: RocketEdge)
 
 Both illustrate the same failure mode as A1–A4: no cumulative spend enforcement.
 :::
@@ -105,14 +105,14 @@ Both illustrate the same failure mode as A1–A4: no cumulative spend enforcemen
 
 Agents that take wrong, excessive, or unauthorized actions — where the damage is in the consequence, not the tokens.
 
-### B1. 200 wrong emails — $1.40 in tokens, $50K+ in damage (constructed)
+### B1. 200 wrong emails — low token spend, high potential impact (constructed)
 
-A support agent [sent 200 collections emails instead of welcome emails](/blog/ai-agent-action-control-hard-limits-side-effects). A prompt regression changed the template selection. Total model spend: $1.40. Business impact: 34 support tickets, 12 social media complaints, $50K+ in lost pipeline.
+In this [illustrative scenario](/blog/ai-agent-action-control-hard-limits-side-effects), a support agent sends 200 collections emails instead of welcome emails after a prompt regression changes template selection. If the model calls cost about $1.40, the customer and business impact can still be much larger; the original scenario has no sourced ticket, complaint, or pipeline-loss measurements.
 
 | | Detail |
 |---|---|
 | Model cost | $1.40 |
-| Business impact | $50,000+ in lost pipeline |
+| Business impact | Illustrative and unquantified; potentially much larger than token spend |
 | Root cause | No action-level enforcement — dollar budget was nowhere near exhausted |
 | Mitigation | **Handler authorization + risk budget** — an application can require approval and reserve caller-assigned [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) before each email |
 
@@ -214,22 +214,22 @@ Researchers [found 341 malicious ClawHub skills](https://thehackernews.com/2026/
 
 ### C4. Exposed MCP servers — zero authentication
 
-Trend Micro [found 492 internet-exposed MCP servers](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) with no client authentication or traffic encryption. Separately, Knostic [reported 1,862 exposed MCP servers](https://www.knostic.ai/blog/mapping-mcp-servers-study), sampled 119, and found all 119 exposed internal tool listings without authentication.
+Trend Micro [found 492 internet-exposed MCP servers](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) with no client authentication or traffic encryption. Separately, Knostic [reported 1,862 exposed MCP servers](https://www.knostic.ai/blog/mapping-mcp-servers-study), sampled 119, and found all 119 exposed internal tool listings without authentication.
 
 | | Detail |
 |---|---|
-| Scale | 492 exposed ([Trend Micro](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data)) + 1,862 exposed ([Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study)) |
-| Source | [Trend Micro](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data), [Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study), 2026 |
+| Scale | 492 exposed ([Trend Micro](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data)) + 1,862 exposed ([Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study)) |
+| Source | [Trend Micro](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data), [Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study), 2026 |
 | Root cause | Deployments exposed MCP servers without authentication, authorization, or transport protection |
 | Mitigation | **MCP authorization where supported, application authentication and authorization, TLS, Origin validation, and network restriction**; budgets are defense in depth, not a substitute |
 
-### C5. Tool poisoning — 84% success rate
+### C5. Tool poisoning — 84.2% target-tool-call rate
 
-The [MCP-ITP benchmark](https://arxiv.org/abs/2601.07395) achieved up to 84.2% attack success rate (ASR) in benchmark settings under auto-approval. Attacks include rug pulls (tool changes behavior post-install), schema poisoning (hidden instructions in descriptions), and tool shadowing (malicious tool overrides legitimate one).
+On MCPTox, the [MCP-ITP benchmark](https://arxiv.org/abs/2601.07395) induced the selected legitimate target-tool call in up to 84.2% of evaluated prompts across 12 model/agent settings. It measured tool selection, not production auto-approval prevalence or confirmed live execution. Related MCP threats include rug pulls, schema poisoning, and tool shadowing, but those categories should not all be attributed to this one benchmark.
 
 | | Detail |
 |---|---|
-| Success rate | 84.2% with auto-approval |
+| Measured result | Up to 84.2% selected target-tool calls on evaluated MCPTox prompts |
 | Source | MCP-ITP framework (Ruiqi Li et al., 2026) |
 | Root cause | Agent trusts tool descriptions and auto-approves calls |
 | Mitigation | **Tool scanning and pinning, restricted tool inventory, approval or external authorization, argument validation, sandboxing, and egress controls** |
@@ -258,7 +258,7 @@ A vulnerability in GitHub Copilot [enabled prompt injection to execute arbitrary
 
 ### C8. Rogue agent collaboration
 
-Researchers [demonstrated](https://www.theregister.com/2026/03/12/rogue_ai_agents_worked_together/) that compromised agents in multi-agent architectures can coordinate to escalate privileges and compromise downstream systems.
+Researchers [demonstrated](https://www.theregister.com/security/2026/03/12/rogue-ai-agents-can-work-together-to-hack-systems/5228926) that compromised agents in multi-agent architectures can coordinate to escalate privileges and compromise downstream systems.
 
 | | Detail |
 |---|---|
@@ -273,22 +273,22 @@ Failures that emerge from agent interactions, coordination, and systemic propert
 
 ### D1. UC Berkeley MAST — 41–87% failure rates
 
-UC Berkeley's [MAST study](https://arxiv.org/abs/2503.13657) analyzed 1,600+ execution traces across 7 multi-agent frameworks and found 14 distinct failure modes with 41–87% failure rates. Failure categories: system design issues (44.2%), inter-agent misalignment (32.3%), task verification failures (23.5%).
+UC Berkeley's [MAST study](https://arxiv.org/abs/2503.13657) analyzed 1,600+ execution traces across seven selected multi-agent frameworks and identified 14 failure modes. Configuration-level failure rates in the evaluated model/task settings ranged from 41% to 86.7%; they are not a universal production failure rate.
 
 | | Detail |
 |---|---|
-| Failure rate | 41–87% across frameworks |
+| Failure rate | 41–86.7% across evaluated framework/model/task configurations |
 | Source | [UC Berkeley MAST](https://arxiv.org/abs/2503.13657), NeurIPS 2025 Spotlight |
 | Root cause | System design, inter-agent misalignment, and task-verification failures |
 | Mitigation | **Architecture-specific coordination, validation, and evaluation**; hierarchical budgets can separately bound resource exposure |
 
-### D2. Google DeepMind — 17x error amplification
+### D2. Google Research — architecture-dependent error amplification
 
-[Google DeepMind research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found that multi-agent networks amplify errors by 17x. A 95% per-agent reliability rate yields only 36% overall reliability in a 20-step chain.
+In a controlled evaluation of 180 configurations, [Google Research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found that independent agents amplified errors by up to 17.2x, while centralized coordination limited amplification to 4.4x. Separately, a simple independent-step model with 95% reliability per step yields about 36% probability that all 20 steps succeed; that calculation is illustrative and was not the paper's measured result.
 
 | | Detail |
 |---|---|
-| Amplification | 17x error multiplication |
+| Amplification | Up to 17.2x independent; 4.4x centralized in the evaluated settings |
 | Source | Google Research, January 2026 |
 | Root cause | Errors propagate and compound across agent boundaries |
 | Mitigation | **Validation and centralized coordination where appropriate**; per-agent budgets can keep an error cascade from also exhausting shared spend |

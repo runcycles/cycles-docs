@@ -16,7 +16,7 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-A development team ships a coding agent on Friday afternoon. It works beautifully in staging — summarizing PRs, generating tests, refactoring modules. By Monday morning, the agent has made 14,000 API calls, consumed 380 million [tokens](/glossary#tokens), and run up a $12,400 bill against a model provider. No one noticed because the dashboard updates hourly and the alerts were configured for _daily_ spend thresholds. The agent wasn't malicious. It wasn't buggy in the traditional sense. It simply did what agents do: it kept working.
+Consider an illustrative development team that ships a coding agent on Friday afternoon to summarize PRs, generate tests, and refactor modules. By Monday morning, the modeled workload has made 14,000 API calls and consumed 380 million [tokens](/glossary#tokens). At an assumed blended rate of about $32.63 per million tokens, that is a $12,400 bill. The figure is a scenario input, not a reported customer invoice.
 
 > **Open the uncontrolled-agent scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJVbmNvbnRyb2xsZWQgcHJvZHVjdGlvbiBhZ2VudCIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiJBZ2VudCBpbiBwcm9kdWN0aW9uIHdpdGggbm8gcGVyLWNhbGwsIHBlci10ZW5hbnQsIG9yIHBlci1ydW4gYnVkZ2V0LiBDb3N0cyBzY2FsZSB3aXRoIHdoYXRldmVyIHRoZSBtb2RlbCBlbWl0cy4iLCJpbnB1dFRva2VucyI6ODAwMCwib3V0cHV0VG9rZW5zIjoxNTAwLCJjYWxsc1BlckRheSI6NTAwMH0)
 
@@ -94,7 +94,7 @@ The fundamental gap looks like this:
 
 - **Dashboards** show spend _after_ it occurs (minutes to hours of delay)
 - **Rate limits** cap throughput but don't understand _cost_ — a rate limit of 100 RPM doesn't distinguish between a $0.01 call and a $5.00 call
-- **Provider caps** are monthly or daily, far too coarse for per-run control
+- **Provider controls** use vendor-defined scopes and semantics that may not map to an application run
 - **In-app counters** are single-process and collapse under concurrency
 
 We wrote extensively about this progression in [From Observability to Enforcement](/concepts/from-observability-to-enforcement-how-teams-evolve-from-dashboards-to-budget-authority) and [Why Rate Limits Are Not Enough for Autonomous Systems](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems).
@@ -119,7 +119,7 @@ The cost of building budget controls is small. The cost of not having them compo
 
 ## From cost visibility to cost control
 
-Cost overruns are a symptom. The root cause is the absence of a pre-execution enforcement layer — a system that asks "is there budget for this?" before every action, not after. That's what [runtime authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) provides: deterministic budget decisions at the point of execution, not retroactive alerts on a dashboard.
+The key risk is variance: retries, fan-out, and context growth can make two nominally identical runs cost very different amounts. A [runtime budget boundary](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) does not remove that variance, but it can cap submitted spend for each instrumented run before the next costly operation starts.
 
 ## Next steps
 

@@ -21,9 +21,9 @@ The middle option — ALLOW_WITH_CAPS — is what makes Cycles more useful than 
 
 One wire-level detail matters here: `decision: DENY` only ever appears on responses that do not hold budget — `POST /v1/decide` responses and dry-run (`dry_run: true`) reservation responses.
 
-A live (non-dry-run) reservation never returns `decision: DENY`. When budget is insufficient, the server rejects the request with an HTTP `409` error — `BUDGET_EXCEEDED`, or another 409 code such as `OVERDRAFT_LIMIT_EXCEEDED` or `DEBT_OUTSTANDING` — instead of a 200 response carrying a DENY decision.
+A live (non-dry-run) reservation never returns `decision: DENY`. When budget is unavailable, the server rejects the request with an HTTP `409` error — `BUDGET_EXCEEDED`, or another 409 code such as `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, or `TENANT_CLOSED` — instead of a 200 response carrying a DENY decision.
 
-Where callers find the denial reason follows the same split. On a DENY decision (decide or dry run), the response's `reason_code` field carries the machine-readable reason — `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, or `DEBT_OUTSTANDING`. On a live denial, the equivalent information is in the 409 error response's `error` field. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
+Where callers find the denial reason follows the same split. On a DENY decision (decide or dry run), the response's `reason_code` field carries the machine-readable reason — `BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `BUDGET_NOT_FOUND`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, or `TENANT_CLOSED`. On a live denial, the equivalent information is in the 409 error response's `error` field. See [Decision reason codes](/protocol/error-codes-and-error-handling-in-cycles#decision-reason-codes).
 
 ## Why binary decisions are not enough
 

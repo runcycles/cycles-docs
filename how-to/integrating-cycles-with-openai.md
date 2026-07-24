@@ -50,10 +50,10 @@ from runcycles import CyclesClient, CyclesConfig, cycles, set_default_client
 
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 
-@cycles(estimate=1_500_000, action_kind="llm.completion", action_name="gpt-4o")
+@cycles(estimate=1_000_000, action_kind="llm.completion", action_name="gpt-5.6-luna")
 def ask(prompt: str) -> str:
     return OpenAI().chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.6-luna",
         messages=[{"role": "user", "content": prompt}],
     ).choices[0].message.content
 
@@ -80,9 +80,11 @@ config = CyclesConfig.from_env()
 set_default_client(CyclesClient(config))
 openai_client = OpenAI()
 
-# Per-token pricing in USD microcents (1 USD = 100_000_000 microcents)
-PRICE_PER_INPUT_TOKEN = 250       # $2.50 / 1M tokens
-PRICE_PER_OUTPUT_TOKEN = 1_000    # $10.00 / 1M tokens
+# GPT-5.6 Luna standard pricing in USD microcents
+# (1 USD = 100_000_000 microcents)
+MODEL = "gpt-5.6-luna"
+PRICE_PER_INPUT_TOKEN = 100      # $1.00 / 1M uncached input tokens
+PRICE_PER_OUTPUT_TOKEN = 600     # $6.00 / 1M output tokens
 
 @cycles(
     estimate=lambda prompt, **kw: len(prompt.split()) * 2 * PRICE_PER_INPUT_TOKEN
@@ -92,7 +94,7 @@ PRICE_PER_OUTPUT_TOKEN = 1_000    # $10.00 / 1M tokens
         + result["usage"]["completion_tokens"] * PRICE_PER_OUTPUT_TOKEN
     ),
     action_kind="llm.completion",
-    action_name="gpt-4o",
+    action_name=MODEL,
     unit="USD_MICROCENTS",
     ttl_ms=60_000,
 )
@@ -104,9 +106,9 @@ def chat_completion(prompt: str, max_tokens: int = 1024) -> dict:
         max_tokens = min(max_tokens, ctx.caps.max_tokens)
 
     response = openai_client.chat.completions.create(
-        model="gpt-4o",
+        model=MODEL,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
     )
 
     # Report metrics
@@ -141,7 +143,11 @@ For production use, consider using `tiktoken` for accurate input token counts:
 ```python
 import tiktoken
 
-enc = tiktoken.encoding_for_model("gpt-4o")
+try:
+    enc = tiktoken.encoding_for_model(MODEL)
+except KeyError:
+    # Keep this fallback aligned with the model's documented tokenizer.
+    enc = tiktoken.get_encoding("o200k_base")
 
 def estimate_cost(prompt: str, max_tokens: int = 1024) -> int:
     input_tokens = len(enc.encode(prompt))
@@ -150,6 +156,8 @@ def estimate_cost(prompt: str, max_tokens: int = 1024) -> int:
         + max_tokens * PRICE_PER_OUTPUT_TOKEN
     )
 ```
+
+The constants above use standard uncached pricing for requests with at most 272,000 input tokens. GPT-5.6 cache reads are cheaper, explicit cache writes cost 1.25 times the uncached input rate, and longer requests use higher rates for the full request. If you use those features, calculate `actual` from the provider's detailed usage fields rather than the simplified formula above. OpenAI recommends the Responses API for reasoning, tool-calling, and multi-turn workflows; Chat Completions remains supported for this single-turn example. See the [GPT-5.6 model guide](https://developers.openai.com/api/docs/guides/latest-model) and [GPT-5.6 Luna model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
 
 ## Handling budget exhaustion
 

@@ -37,20 +37,20 @@ Consider a customer support orchestrator that delegates to a refund agent:
 
 | Property | Orchestrator | Refund Agent (current) | Refund Agent (attenuated) |
 |----------|-------------|----------------------|--------------------------|
-| Budget | $50.00 | $50.00 (inherited) | $5.00 (sub-budget) |
+| Budget path | $50 workflow ledger | Shared workflow ledger only | Shared workflow + explicit $5 agent ledger |
 | Actions | CRM read, CRM write, email, refund | CRM read, CRM write, email, refund (inherited) | CRM read, refund ≤ $100 |
 | Data scope | All customers | All customers (inherited) | Current ticket customer only |
 | Delegation depth | Unlimited | Unlimited (inherited) | 0 (terminal — cannot delegate further) |
 
 The left column is what ships today. The right column is what should ship. The difference is not trust — the refund agent is the same code either way. The difference is authority boundaries enforced at the delegation point.
 
-## The attenuation pattern: sub-budgets, action masks, and depth limits
+## The attenuation pattern: child ledgers, action masks, and depth limits
 
 Authority attenuation requires three enforcement mechanisms at every delegation boundary.
 
-### 1. Sub-budget carving
+### 1. Explicit child ledger
 
-When Agent A delegates to Agent B, it reserves a portion of its own budget as Agent B's ceiling. Agent B cannot spend more than that sub-budget, regardless of what the parent has available.
+Before Agent A enables Agent B, the operator provisions a smaller ledger at the child agent scope. Cycles does not transfer or reserve a portion of the parent balance at delegation time. Each protected child call submits the workflow and agent subjects, so it must fit both matching ledgers.
 
 ```python
 import uuid
@@ -61,33 +61,25 @@ from runcycles import (
 
 client = CyclesClient(CyclesConfig.from_env())
 
-# Orchestrator reserves against the workflow scope — $50 budget allocated there
-orchestrator_res = client.create_reservation(ReservationCreateRequest(
-    idempotency_key=str(uuid.uuid4()),
-    subject=Subject(tenant="acme-corp", workflow="support"),
-    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=5_000_000_000),  # $50.00
-))
-
-# Delegate to refund agent — a SEPARATE reservation on a narrower scope.
+# A protected refund-agent model/tool call uses the narrower scope.
 # The "agent" field adds a deeper scope: tenant:acme-corp/workflow:support/agent:refund
 # A budget of $5 must be explicitly allocated at that scope via the Admin API.
-refund_res = client.create_reservation(ReservationCreateRequest(
+refund_call_res = client.create_reservation(ReservationCreateRequest(
     idempotency_key=str(uuid.uuid4()),
     subject=Subject(
         tenant="acme-corp",
         workflow="support",
         agent="refund",
-        dimensions={"run": "ticket-4821"},
+        dimensions={"run_id": "ticket-4821"},
     ),
-    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=500_000_000),  # $5.00
+    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=25_000_000),  # $0.25
 ))
 
-# The refund agent's world is bounded by BOTH its agent-level budget ($5)
-# AND the parent workflow budget ($50). If either is exhausted, the live reservation
-# is rejected. A prompt-injected loop burns at most the agent-level allocation.
+# This call must fit BOTH the agent-level ledger ($5)
+# AND the workflow ledger ($50). If either lacks capacity, the reservation fails.
 ```
 
-The key concept: Cycles budgets are **independent at each scope level** — they do not automatically propagate from parent to child. You must explicitly allocate a budget at the child scope (e.g. `tenant:acme-corp/workflow:support/agent:refund`) via the Admin API. A [reservation](/glossary#reservation) then checks **every derived scope atomically** — the child scope's allocation and the parent scope's allocation must both have room. This is what makes attenuation enforceable: the child's ceiling is set by its own allocation, not inherited from the parent.
+The key concept: Cycles budgets are **independent at each scope level** — they do not automatically propagate from parent to child. You must explicitly allocate a budget at the child scope (e.g. `tenant:acme-corp/workflow:support/agent:refund`) via the Admin API. A [reservation](/glossary#reservation) checks every explicitly provisioned ledger among the derived scopes atomically; derived scopes without ledgers are skipped. The child and broader workflow ceilings both apply only when both ledgers exist.
 
 ### 2. Toolset-scoped exposure budgets
 
@@ -153,8 +145,8 @@ flowchart TD
     U[User Request] --> O[Orchestrator Agent]
     O -->|"reserve $50, depth=3"| CB[Cycles Budget]
 
-    O -->|"sub-budget: $5<br/>toolsets: crm, refund<br/>depth=1"| RA[Refund Agent]
-    O -->|"sub-budget: $2<br/>toolsets: crm<br/>depth=0"| LA[Lookup Agent]
+    O -->|"agent ceiling: $5<br/>toolsets: crm, refund<br/>depth=1"| RA[Refund Agent]
+    O -->|"agent ceiling: $2<br/>toolsets: crm<br/>depth=0"| LA[Lookup Agent]
 
     RA -->|"reserve $5 on child scope"| CB
     LA -->|"reserve $2 on child scope"| CB
@@ -170,7 +162,7 @@ flowchart TD
     style CB fill:#2d5a27,color:#fff
 ```
 
-The orchestrator holds the total budget. Each delegated agent gets an explicitly provisioned sub-budget, an orchestrator-restricted tool set, and a decremented depth counter. Cycles enforces the submitted spend and exposure budgets at the protocol level before execution. Tool inventory, parameter authorization, and depth limiting remain orchestration logic. Together, those mechanisms bound a compromised or misbehaving sub-agent at the mandatory execution boundary.
+The workflow ledger supplies the shared ceiling. Each delegated agent uses an explicitly provisioned child ledger, an orchestrator-restricted tool set, and a decremented depth counter. Cycles enforces submitted spend and exposure budgets before instrumented execution; it does not create or transfer child balances. Tool inventory, parameter authorization, and depth limiting remain orchestration logic.
 
 ## Why the industry keeps getting this wrong
 

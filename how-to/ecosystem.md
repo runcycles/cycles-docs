@@ -11,7 +11,7 @@ Cycles integrates with the tools, frameworks, and AI providers you already use. 
 
 ### OpenAI
 
-Integrate Cycles runtime authority with ChatGPT, GPT-4, GPT-4o, and other OpenAI models. Control per-request and per-session spending when your agents call OpenAI APIs.
+Integrate Cycles with GPT-5.6 and other models available through the OpenAI API. Reserve budget per protected request and use standard subject fields for enforceable workflow or agent scopes.
 
 - [OpenAI integration guide (Python)](/how-to/integrating-cycles-with-openai)
 - [OpenAI integration guide (TypeScript)](/how-to/integrating-cycles-with-openai-typescript)
@@ -48,7 +48,7 @@ Budget control for local model runners — track GPU time and compute costs for 
 
 ### Groq
 
-Budget governance for Groq's LPU-accelerated inference. Uses the OpenAI-compatible API with Groq-specific pricing. Includes a model-downgrade degradation pattern — fall back from GPT-4o to Groq when budget runs low.
+Budget governance for Groq's LPU-accelerated inference. Uses the OpenAI-compatible API with current Groq model IDs and pricing, plus an application-owned fallback pattern after a primary route's budget reservation is rejected.
 
 - [Groq integration guide](/how-to/integrating-cycles-with-groq)
 - [groq.com](https://groq.com)
@@ -64,14 +64,14 @@ Build budget-aware LangChain agents in Python. The `langchain-runcycles` package
 - [langchain-runcycles on PyPI](https://pypi.org/project/langchain-runcycles/)
 - [LangChain integration guide](/how-to/integrating-cycles-with-langchain)
 - [Source on GitHub](https://github.com/runcycles/langchain-runcycles)
-- [python.langchain.com](https://python.langchain.com)
+- [Python LangChain documentation](https://docs.langchain.com/oss/python/langchain/overview)
 
 ### LangChain.js
 
 The same LangChain integration, purpose-built for JavaScript and TypeScript environments.
 
 - [LangChain.js integration guide](/how-to/integrating-cycles-with-langchain-js)
-- [js.langchain.com](https://js.langchain.com)
+- [JavaScript LangChain documentation](https://docs.langchain.com/oss/javascript/langchain/overview)
 
 ### LangGraph
 
@@ -85,7 +85,7 @@ Budget control for LangGraph stateful agent workflows. Use LangChain's callback 
 Add Cycles runtime authority to applications built with the Vercel AI SDK for seamless spending control in Next.js and other Vercel-deployed projects.
 
 - [Vercel AI SDK integration guide](/how-to/integrating-cycles-with-vercel-ai-sdk)
-- [sdk.vercel.ai](https://sdk.vercel.ai)
+- [ai-sdk.dev](https://ai-sdk.dev/)
 
 ### Spring AI
 
@@ -119,7 +119,7 @@ Budget control for CrewAI multi-agent workflows. Scope budgets per agent and per
 Guard Pydantic AI agent runs and tool calls with the `@cycles` decorator. Works with structured output and tool scoping.
 
 - [Pydantic AI integration guide](/how-to/integrating-cycles-with-pydantic-ai)
-- [ai.pydantic.dev](https://ai.pydantic.dev)
+- [Pydantic AI documentation](https://pydantic.dev/docs/ai/overview/)
 
 ### AnyAgent
 

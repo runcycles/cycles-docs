@@ -23,7 +23,7 @@ The **middleware path is dramatically better for `create_agent` users**: model c
 The [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) package provides three `AgentMiddleware` subclasses that plug into `langchain.agents.create_agent`:
 
 - **`CyclesModelGate`** (v0.1.5+) — runs before every LLM call (`wrap_model_call`). Authorizes via `client.decide()` and/or reserves budget. Returns a `ModelResponse` carrying the denial reason on deny so the agent terminates naturally.
-- **`CyclesToolGate`** — intercepts every tool call (`wrap_tool_call`). Authorizes via `client.decide()` and/or reserves budget. Returns a `ToolMessage` on denial so the model can recover gracefully.
+- **`CyclesToolGate`** — intercepts tool calls routed through `wrap_tool_call`, performs a budget preflight with `client.decide()` and/or reserves budget, and returns a `ToolMessage` when the budget check rejects. Host tool authorization remains separate.
 - **`CyclesFanOutGate`** — runs before every model turn (`before_model`). Halts the agent (with `jump_to: "end"`) when a turn cap is reached or an external policy says stop.
 
 Compose them in a single `middleware=[...]` list. The natural ordering is **fan-out → model → tool**: runaway loops halt before model spend, model spend reserves before tool side effects.

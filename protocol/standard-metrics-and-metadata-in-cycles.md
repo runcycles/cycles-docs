@@ -259,7 +259,7 @@ Standard metrics and metadata enrich budget operations with execution context:
 - **latency_ms** — operation duration
 - **model_version** — actual model used
 - **custom** — extensible metrics map
-- **metadata** — correlation IDs, audit context, and debugging data
+- **metadata** — application correlation keys, audit context, and debugging data
 
 These fields are optional but recommended. They turn budget accounting from raw cost numbers into actionable operational data.
 
@@ -269,19 +269,23 @@ The metrics above describe the **execution-context fields** a client attaches to
 
 Cycles also exposes **Prometheus metrics** on each service's `/actuator/prometheus` endpoint for operational monitoring. These are aggregate counters and histograms — they do not replace per-request metrics, they complement them.
 
-The runtime server (`cycles-server` v0.1.25.10+) publishes seven domain counters under the `cycles_*` namespace:
+The runtime server (`cycles-server` v0.1.25.10+) currently publishes 11 domain counters and one maintenance timer. The core lifecycle counters are:
 
 - `cycles_reservations_reserve_total{tenant, decision, reason, overage_policy}`
 - `cycles_reservations_commit_total{tenant, decision, reason, overage_policy}`
 - `cycles_reservations_release_total{tenant, actor_type, decision, reason}`
 - `cycles_reservations_extend_total{tenant, decision, reason}`
 - `cycles_reservations_expired_total{tenant}`
+- `cycles_reservations_quarantined_total{tenant, reason}`
+- `cycles_reservations_created_at_index_reads_total{outcome}`
 - `cycles_events_total{tenant, decision, reason, overage_policy}`
 - `cycles_overdraft_incurred_total{tenant}`
 
-The admin server (`cycles-server-admin` v0.1.25.20+) adds `cycles_admin_audit_writes_total{path_class, outcome}` — **alert on `outcome=error` nonzero** to catch silent audit-coverage loss.
+Maintenance adds `cycles_maintenance_runs_total{job, outcome}` and `cycles_maintenance_duration_seconds{job, outcome}`; evidence enqueue failures use `cycles_evidence_emit_failed_total{artifact_type}`.
 
-The events service (`cycles-server-events` v0.1.25.6+) publishes webhook delivery, evidence-worker, and dispatcher metrics under `cycles_webhook_*` and `cycles_evidence_*` — see [Server Configuration Reference → Events service metrics](/configuration/server-configuration-reference-for-cycles#events-service-metrics) for the current inventory.
+The admin server currently exposes seven custom counters, including `cycles_admin_audit_writes_total{path_class, outcome}`—**alert on `outcome=error` nonzero** to catch silent audit-coverage loss—and tenant-close reconciliation/outbox signals.
+
+The events service (`cycles-server-events` v0.1.25.6+) currently publishes 17 webhook-delivery, evidence-worker, dispatcher, and security counters plus one delivery-latency timer. See the [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference) for the authoritative inventory and labels.
 
 The runtime and events services gate their optional `tenant` label with `cycles.metrics.tenant-tag.enabled`. The runtime defaults it to `true`; the events service defaults it to `false`. Admin `cycles_admin_*` counters do not carry a tenant label, so this toggle does not apply there.
 

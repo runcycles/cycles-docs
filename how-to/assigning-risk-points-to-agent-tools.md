@@ -5,7 +5,7 @@ description: "Step-by-step risk scoring guide: classify your AI agent's tools in
 
 # How to Assign RISK_POINTS to AI Agent Tools
 
-This guide walks you through risk scoring for your AI agent's tools with [RISK_POINTS](/glossary#risk-points) — the unit Cycles uses for [action authority](/concepts/action-authority-controlling-what-agents-do) enforcement. By the end, you'll have a scored tool list and a per-run budget you can configure directly.
+This guide walks you through an illustrative method for assigning [RISK_POINTS](/glossary#risk-points) to tool attempts. Cycles treats those caller-assigned points as a budget unit; the host still authenticates the principal, authorizes the tool and arguments, and makes the reservation boundary mandatory.
 
 For the full risk assessment framework and regulatory context, see [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk). This page is the implementation-focused quick reference.
 
@@ -59,7 +59,7 @@ Does this tool modify any state?
 
 The third question — **"Does it affect someone who did not request it?"** — is the key differentiator between Tier 2 (external but contained) and Tier 3 (customer-facing impact). An API call to a third-party service you control is Tier 2. An email landing in a customer's inbox is Tier 3 — even though both are external.
 
-Each tier has a **base RISK_POINTS score**:
+This guide proposes the following **starting scores**. They are not built into the server and are not a compliance standard:
 
 | Tier | Type | Base Points | Rationale |
 |:---:|---|:---:|---|
@@ -132,12 +132,12 @@ For `send_customer_email`:
 
 ## Step 4: Set your per-run budget
 
-Sum the expected tool calls for a **typical** run, then add buffer:
+Sum the expected tool calls for representative runs, then choose a buffer from the variation you are prepared to allow:
 
 1. Count how many times each tool is called in a normal agent run
 2. Multiply each by its RISK_POINTS score
 3. Sum the results
-4. Add 20-30% buffer for variance
+4. Choose a buffer from observed percentiles and the maximum tolerated exposure
 
 **Example: Customer support agent**
 
@@ -159,18 +159,19 @@ Set per-run budget to **250 RISK_POINTS**:
 - Single refund + email: 150 + 40 = 190 points (fits)
 - Two refunds: 300 points (does **not** fit — requires escalation)
 
-This budget lets the agent handle any normal support interaction while preventing it from issuing multiple refunds or sending dozens of emails in a single run.
+At a mandatory boundary, this illustrative budget would reject an attempt whose submitted points no longer fit. It does not itself determine whether a refund or email is authorized.
+
+To enforce this per run, create the ledger at a unique workflow scope such as `workflow:run-12345` and send that run ID as `subjects.workflow` on every protected tool attempt. `run` is not a native scope, and `dimensions.run_id` is attribution only.
 
 ## Step 5: Validate with shadow mode
 
-Before enforcing, run with [`dry_run: true`](/protocol/dry-run-shadow-mode-evaluation-in-cycles) for 1-2 weeks:
+Before enforcing, run with [`dry_run: true`](/protocol/dry-run-shadow-mode-evaluation-in-cycles) long enough to cover representative traffic:
 
 1. Create the RISK_POINTS budget via admin API
 2. Set reservations to dry-run mode
-3. Monitor the shadow-mode denial rate:
-   - **> 5%** — scores or budget too tight, agents can't do normal work
-   - **1-3%** — catching real anomalies without blocking legitimate work
-   - **0%** — budget is too loose, won't catch incidents
+3. Have the application log every dry-run result and actual outcome, then review the hypothetical denial rate by workflow and action class. The current server emits `reservation.denied` for denied evaluations, but that is not a complete shadow dataset.
+   - A high rate can indicate scores or budgets are too tight, incomplete scoping, or genuinely abnormal traffic.
+   - A low rate does not prove that the policy is effective; exercise known denial cases separately.
 4. Adjust individual tool scores or the run budget based on the data
 5. When denial patterns are no longer surprising, enable enforcement
 
@@ -251,7 +252,7 @@ A data analysis agent with these tools:
 
 Typical run: 10 queries (0) + 3 searches (0) + 2 charts (10) + 1 email (40) + 1 dashboard update (1) + 1 export (8) = **59 points**
 
-Set run budget: **100 RISK_POINTS** — allows a normal run with room for a second email or extra charts, but prevents sending 3+ reports in a loop.
+Set run budget: **100 RISK_POINTS** — at a mandatory boundary, the third 40-point report attempt would not fit after two such attempts, assuming no other point consumption.
 
 ## When to recalibrate risk scores
 
@@ -260,7 +261,7 @@ Review your scores when:
 - **A new tool is added.** Classify and score it before deployment.
 - **An incident occurs.** If a tool caused damage, re-evaluate its tier and multiplier.
 - **Usage patterns shift.** If shadow mode shows agents consistently near the budget ceiling on normal runs, the budget is too tight — raise it or optimize the workflow.
-- **Commit overage events climb.** Rising [`reservation.commit_overage`](/protocol/event-payloads-reference) events indicate your cost estimates are drifting from reality. Tool scores may need adjusting too.
+- **The consequence model changes.** Revisit scores when a tool gains new destinations, broader permissions, more sensitive data, or a larger audience.
 
 ## Next steps
 

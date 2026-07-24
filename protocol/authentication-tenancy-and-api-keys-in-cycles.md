@@ -5,7 +5,7 @@ description: "How Cycles authenticates API requests and scopes all budget operat
 
 # Authentication, Tenancy, and API Keys in Cycles
 
-Every request to the Cycles API is authenticated. Every budget operation is tenant-scoped.
+Every protected budget operation is authenticated and tenant-scoped. Liveness/readiness and other explicitly public operational or evidence endpoints are exceptions.
 
 These two properties — authentication and tenancy — are foundational. They determine who is making the request, which budgets are visible, and which reservations can be accessed.
 
@@ -13,22 +13,22 @@ These two properties — authentication and tenancy — are foundational. They d
 
 Cycles authenticates requests using the `X-Cycles-API-Key` header.
 
-Every request must include this header. If it is missing or the key is invalid, the server returns `401 UNAUTHORIZED`.
+Tenant-authenticated runtime requests must include this header. If it is missing or the key is invalid, the server returns `401 UNAUTHORIZED`. Admin and public endpoints follow their own authentication rules.
 
 ```
 X-Cycles-API-Key: your-api-key
 ```
 
-There is no session, no token exchange, no OAuth flow. Authentication is a single header on every request.
+There is no session, token exchange, or OAuth flow in the reference API. Protected tenant requests use one API-key header; admin-only routes use `X-Admin-API-Key`.
 
 ### Public endpoints (no API key)
 
-Two endpoints are explicitly public (declared with `security: []` in the protocol spec) and require no API key, both on the evidence surface:
+The runtime YAML declares two public evidence endpoints with `security: []`:
 
 - `GET /v1/evidence/{evidence_id}` — signed-envelope retrieval. The `evidence_id` is an unguessable content-hash capability, and the envelope is content-addressed and signed, so public read cannot forge or alter it.
 - `GET /v1/.well-known/cycles-jwks.json` — the signer's public JWK Set (public keys only, the standard posture for a verification key set), used to verify evidence signatures.
 
-Every other endpoint requires authentication.
+The reference server also leaves `/actuator/health/liveness` and `/actuator/health/readiness` public for probes. Aggregate health, metrics, API documentation, and the remaining operational/API routes require the configured tenant or admin credential.
 
 ## The effective tenant
 
@@ -215,18 +215,18 @@ The authentication and tenancy model provides several guarantees:
 
 - **Isolation**: tenants cannot see or modify each other's budgets, reservations, or balances
 - **Ownership**: reservations are permanently bound to the creating tenant
-- **Validation**: every request is checked against the effective tenant before processing
+- **Validation**: every protected tenant operation is checked against the effective tenant before processing
 - **Consistency**: the same tenancy rules apply to all endpoints (reserve, commit, release, extend, decide, events, balances, listing)
 
-These properties hold regardless of whether the client is trusted. The server enforces them on every request.
+These properties hold regardless of whether the client is trusted. The server enforces them on protected tenant operations.
 
 ## Summary
 
-Authentication in Cycles is a single API key header (`X-Cycles-API-Key`) on every request.
+Tenant-plane authentication uses the `X-Cycles-API-Key` header. Admin-only routes use `X-Admin-API-Key`, and explicitly public routes require neither.
 
 The server derives an effective tenant from the key and enforces tenant isolation across all operations:
 
-- **Subject.tenant** must match the effective tenant on every mutation and query
+- **Subject.tenant** must match the effective tenant on operations that carry a `Subject`; tenant query parameters are validation-only where supported
 - **Reservation ownership** is enforced on commit, release, extend, and get
 - **Balance visibility** is scoped to the effective tenant
 - **403 FORBIDDEN** is returned for any tenant mismatch

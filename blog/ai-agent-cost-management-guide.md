@@ -16,11 +16,11 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-An infrastructure team we work with had monitoring in place. Good monitoring. They had dashboards showing real-time spend per model, per [tenant](/glossary#tenant), per workflow. They had daily cost reports emailed to engineering leads. They caught their first overspend incident within 4 hours and considered it a success. Then the second incident happened — a [retry storm](/glossary#retry-storm) on a Friday evening that burned through $1,800 in 12 minutes. The dashboard showed it clearly. The alert fired on time. The on-call engineer saw it within 15 minutes. But by then, the money was already spent. That's when they realized: monitoring tells you what happened. It doesn't stop it from happening.
+Consider an application with dashboards showing spend per model, [tenant](/glossary#tenant), and workflow plus daily cost reports. In the [illustrative retry-storm model](/blog/ai-agent-failures-budget-controls-prevent), layered retries generate 1,026 model calls and $33.86 of spend in 12 minutes under the stated rates. A dashboard can show that clearly, but it does not stop the calls that occur before an operator responds.
 
 <!-- more -->
 
-This guide presents a maturity model for AI agent cost management. Five tiers, from "no controls" to "hard enforcement." Most teams are at Tier 0 or Tier 1. The teams that run agents at scale without cost surprises are at Tier 4. The path between those points is well-defined — and each tier is a legitimate stopping point depending on your risk tolerance and scale.
+This guide presents a five-tier maturity model for AI agent cost management, from no controls to mandatory pre-execution budgets. Use it to identify the capabilities your deployment has and the gaps that remain; the appropriate stopping point depends on risk tolerance and scale.
 
 ## The Cost Management Maturity Model
 
@@ -29,8 +29,8 @@ This guide presents a maturity model for AI agent cost management. Five tiers, f
 | 0 | No Controls | Trust the code, check the invoice | No | Days to weeks |
 | 1 | Monitoring | Dashboards and cost visibility | No | Hours |
 | 2 | Alerting | Automated notifications on thresholds | No | Minutes |
-| 3 | Soft Limits | Rate limiting, provider caps, counters | Partially | Seconds (but leaky) |
-| 4 | Hard Enforcement | Pre-execution [runtime authority](/glossary#runtime-authority) | Yes | Milliseconds (before execution) |
+| 3 | Independent Limits | Rate limits, provider controls, application counters | Scope-dependent | Vendor or application dependent |
+| 4 | Hard Enforcement | Mandatory pre-execution [budget authority](/glossary#budget-authority) | Bounds covered paths | Before protected execution |
 
 Each tier builds on the one below it. You don't skip tiers — you add capabilities. A team at Tier 4 still uses dashboards (Tier 1) and alerts (Tier 2). The difference is that dashboards are no longer the _last_ line of defense.
 
@@ -44,15 +44,14 @@ This is where every team starts. And for prototyping, it's fine. When you're bui
 
 The problem is that teams stay at Tier 0 longer than they should. The prototype works. Traffic grows. What was $20/month in testing becomes $2,000/month in production — and nobody notices until the invoice arrives because there's nothing to notice _with_.
 
-**When Tier 0 is acceptable:**
-- Prototyping and local development
-- Internal tools with fewer than 10 users
-- Batch jobs with predictable, bounded input sizes
-- Any workload where the maximum possible spend per month is less than you'd spend investigating the cost
+**When Tier 0 may be acceptable:**
+- Prototyping and disposable local development
+- Workloads with a deliberately bounded maximum and no consequential side effects
+- Environments where provider-side hard limits already match the full risk boundary
 
-**When to graduate:** The moment you deploy to production with real user traffic, or the moment a single agent run could theoretically cost more than $50, Tier 0 becomes a liability.
+**When to graduate:** Before a workload reaches production if one run, user, or side effect can exceed the team's documented risk tolerance.
 
-**Cost of staying too long:** We see teams discover $3,000-$15,000 in unexpected spend the first month they scale past prototype traffic. The most common trigger is a single runaway agent — not a fleet-wide problem, just one agent that looped 500 times on a weekend.
+**Cost of staying too long:** The invoice or provider dashboard becomes the first durable signal. The amount at risk depends on traffic, model pricing, retry behavior, and provider controls; use a constructed worst-case scenario instead of a universal dollar range.
 
 ## Tier 1: Monitoring
 
@@ -61,9 +60,9 @@ The problem is that teams stay at Tier 0 longer than they should. The prototype 
 **Tools:**
 | Tool | What it provides | Limitation |
 |---|---|---|
-| Provider dashboards (OpenAI, Anthropic, Google) | Per-model daily/monthly spend | 15-60 min delay, no per-run granularity |
+| Provider dashboards (OpenAI, Anthropic, Google) | Provider-defined usage and spend views | Refresh timing and scope granularity vary by provider |
 | Datadog / Grafana | Custom dashboards from application logs | Requires instrumentation, adds latency to analysis |
-| LangSmith / Langfuse | LLM-specific observability with traces | Focused on debugging, limited budget awareness |
+| LangSmith / Langfuse | LLM-specific observability with traces | Product-dependent gateway controls; tracing alone remains retrospective |
 | Custom logging | Full control over metrics and granularity | Engineering investment to build and maintain |
 
 **What you gain:** Visibility. You can answer "how much did we spend yesterday?" and "which agent costs the most?" within minutes instead of waiting for the monthly invoice. You can identify cost trends and catch anomalies — if someone is looking.
@@ -130,25 +129,25 @@ Alerts are essential. They are not sufficient. Every dollar spent between "alert
 | Tool | Mechanism | Limitation |
 |---|---|---|
 | Provider rate limits | Requests per minute / [tokens](/glossary#tokens) per minute | Not cost-aware — 100 RPM doesn't distinguish $0.01 and $5.00 calls |
-| Provider spending caps | Monthly/daily hard caps | Too coarse for per-run control, often have propagation delay |
+| Provider cost controls | Soft budgets, prepaid credits, account limits, or quotas | Vendor-defined scope and semantics may not match a run |
 | Application-level counters | In-process tracking of spend | Single-process only, breaks under concurrency |
 | API gateway rate limiting | Request-level throttling | No visibility into token counts or costs |
 
-**What you gain:** Automated response. The system takes action without waiting for a human. Rate limits prevent runaway loops from generating unlimited calls. Spending caps provide a hard ceiling at the account level.
+**What you gain:** Automated response. Rate limits bound request throughput at the scope they cover. Provider cost controls vary: some are soft alerts, some are prepaid-credit stops, and some are hard limits for a particular account or workspace.
 
 **What you don't gain:** Precision. Soft limits have three fundamental gaps:
 
-**Gap 1: Not cost-aware.** Rate limits cap throughput, not spend. A rate limit of 100 requests per minute treats a 500-token Haiku call the same as a 50,000-token Opus call. The former costs $0.004. The latter costs $4.50. Same rate limit, 1,000x cost difference.
+**Gap 1: Not cost-aware.** A request-count rate limit caps throughput, not spend. Two calls can consume very different input, output, cached, or reasoning-token volumes while counting as one request each.
 
 **Gap 2: Not atomic under concurrency.** Application-level counters work like this: read the current spend, check if there's room, execute the call, update the spend. With 10 concurrent agents, all 10 can read "budget has $5 remaining," all 10 can decide to proceed, and all 10 can execute — spending $50 against a $5 budget. This is a classic time-of-check-to-time-of-use (TOCTOU) race condition.
 
-**Gap 3: Not per-run scoped.** Provider caps are monthly or daily. They can't enforce "this single agent run should cost no more than $10." When the daily cap is $500 and one run burns $200, the cap doesn't fire — but you've consumed 40% of the day's budget in one run, starving every other run.
+**Gap 3: Scope mismatch.** Provider controls use vendor-defined account, project, workspace, key, credit, or time-window scopes. Unless one of those identities maps to an application run, it does not enforce "this single run should consume no more than $10."
 
-**When to graduate:** When any of these gaps cause a real incident. Typically, this is either a concurrency-related overspend (Gap 2) or a single run consuming a disproportionate share of a coarse budget (Gap 3). If you're running more than a few concurrent agents, you will hit Gap 2. It's a matter of when, not if.
+**When to graduate:** Add a stronger boundary when the existing control cannot express a required scope, unit, timing guarantee, or concurrency invariant. Do not wait for an incident if a load test already demonstrates the gap.
 
 ## Tier 4: Hard Enforcement
 
-**What it looks like:** A dedicated runtime authority service sits in the execution path of every LLM call. Before an agent calls a model, it requests authorization from the budget service. The service atomically reserves the estimated cost. If the budget is exhausted, the call is denied before it executes. The agent receives a clear signal and can degrade gracefully.
+**What it looks like:** A budget service sits in the mandatory execution path of each protected LLM call. Before the caller invokes a model, it requests a live reservation for the estimate. If the matching budget lacks capacity, the reservation fails and the caller must not send the model request.
 
 This is the tier where prevention replaces response. There is no gap between detection and action because the check happens _before_ the spend.
 
@@ -160,7 +159,7 @@ This is the tier where prevention replaces response. There is no gap between det
 4. If approved: the call proceeds, and actual cost is reconciled afterward
 5. If denied: the agent receives a budget-exhausted signal and follows its degradation path
 
-The atomic check-and-decrement is critical. It's what prevents the TOCTOU race condition from Tier 3. No matter how many concurrent agents check simultaneously, the runtime authority serializes the reservations. If the budget has $5 left and two agents each request $4, one succeeds and one is denied. Always.
+The atomic check-and-decrement is critical. Within the matching Cycles ledgers, if $5 remains and two concurrent reservations each request $4, at most one can succeed. The guarantee applies only to traffic that uses the boundary and to the submitted estimates.
 
 **What you gain:**
 
@@ -171,15 +170,15 @@ The atomic check-and-decrement is critical. It's what prevents the TOCTOU race c
 | Per-run granularity | A run can receive its own enforceable scope by placing a unique run ID in a standard Subject field |
 | Hierarchical budgets | Configured ledgers along tenant → workspace → app → workflow → agent → toolset are checked atomically; absent ledgers are skipped |
 | [Graceful degradation](/glossary#graceful-degradation) | Preflight can return `ALLOW_WITH_CAPS`; the application interprets and applies the caps |
-| Audit trail | Every reservation and denial is logged with full context |
+| Lifecycle records | Live reservations and settlements create budget records; retain non-persisting preflight results and application outcomes separately |
 
 **What Cycles provides at this tier:**
 
-[Cycles](/) is built specifically for Tier 4. It's an open-source runtime authority system that enforces hard spend limits before execution. The core API is a reserve-execute-commit loop that works across any model provider and any agent framework.
+[Cycles](/) is built specifically for Tier 4. Its reserve-execute-commit API can provide a mandatory budget boundary around model or tool calls regardless of provider, when the application integrates that path and supplies a conservative estimate.
 
-Budgets can be scoped at any level — per tenant, per workflow, per run, or any combination. When a budget is exhausted, the denial includes enough context for the agent to make an intelligent decision: fall back to a cheaper model, return a partial result, or stop and explain why.
+Budgets can use any standard subject level, and a unique workflow value can represent one run. A live denial returns a structured error code and request/trace identifiers; the application should already have the attempted subject and can query balances when it needs ledger detail. Its error handler decides whether to fall back to a cheaper model, return a partial result, or stop.
 
-The key insight behind Tier 4 is that budget enforcement is infrastructure, not application logic. You don't implement it in each agent. You implement it once, in the execution path, and every agent benefits.
+The key insight behind Tier 4 is that budget state belongs in shared infrastructure. Each protected execution path still needs an integration, but multiple agents can rely on the same authority instead of maintaining independent counters.
 
 ## How to Graduate Between Tiers
 
@@ -206,11 +205,11 @@ The best-run teams we see operate at all tiers simultaneously:
 
 - **Tier 1 (Monitoring):** Dashboards showing real-time and historical spend by tenant, workflow, and model. Used for capacity planning, cost optimization, and trend analysis.
 - **Tier 2 (Alerting):** Alerts on anomalies that enforcement alone doesn't catch — unusual patterns, new cost trends, budget utilization approaching limits. These are informational alerts for humans, not enforcement mechanisms.
-- **Tier 4 (Hard Enforcement):** Cycles runtime authority in the execution path. Every call is authorized before execution. Budgets are scoped per-tenant and per-run.
+- **Tier 4 (Pre-execution budget enforcement):** A mandatory Cycles integration checks the submitted estimate before protected execution. Application authorization remains separate.
 
-Notice Tier 3 is absent. That's intentional. Once you have Tier 4, rate limits and application counters are redundant for cost control. (For more on why building your own enforcement layer is deceptively complex, see [Vibe Coding a Budget Wrapper vs. Owning a Runtime Authority](/blog/vibe-coding-budget-wrapper-vs-budget-authority).) You might still have rate limits for other reasons (protecting downstream services, fairness), but they're no longer your cost control mechanism.
+Notice Tier 3 is absent from this example stack. A pre-execution budget boundary can replace a soft application cost counter, but rate limits remain useful for provider quotas, fairness, abuse resistance, and downstream protection. (For more on implementation trade-offs, see [Vibe Coding a Budget Wrapper vs. Owning a Runtime Authority](/blog/vibe-coding-budget-wrapper-vs-budget-authority).)
 
-The monitoring and alerting layers serve a different purpose once enforcement is in place. They shift from "detect overspend" to "understand cost patterns and optimize." An alert that says "Tenant X is using 80% of their monthly budget on day 15" isn't an emergency — enforcement prevents overspend. But it's a signal that you should review their budget allocation or their agent efficiency.
+The monitoring and alerting layers serve a different purpose once enforcement is in place. They help identify estimate drift, bypass traffic, unusual usage, and budgets that need review. Pre-execution holds protect submitted estimates on instrumented paths; they do not make those operational signals unnecessary.
 
 ## The Rollout Path
 
@@ -230,7 +229,7 @@ This process takes 4-8 weeks for most teams. The shadow mode step is critical �
 
 ## From cost visibility to cost control
 
-Cost overruns are a symptom. The root cause is the absence of a pre-execution enforcement layer — a system that asks "is there budget for this?" before every action, not after. That's what [runtime authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) provides: deterministic budget decisions at the point of execution, not retroactive alerts on a dashboard.
+The maturity step is from measurement to a mandatory execution boundary. Dashboards calibrate budgets; gateway limits protect routed inference; a [runtime budget authority](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) can reserve capacity across the additional application operations you instrument.
 
 ## Next steps
 

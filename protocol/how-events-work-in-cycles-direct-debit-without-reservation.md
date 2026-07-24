@@ -51,7 +51,7 @@ Events are useful when:
 - recording a model call that already happened through an external gateway
 - importing usage from a billing provider into Cycles for unified budget tracking
 - logging a known-cost action like sending an email or creating a ticket
-- accounting for background work that was not instrumented with reserve/commit
+- accounting for background work that was not instrumented with reserve-commit
 - migrating from a legacy usage system into Cycles
 
 ## When not to use events
