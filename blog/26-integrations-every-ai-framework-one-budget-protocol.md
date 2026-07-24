@@ -3,7 +3,7 @@ title: "26 Integrations for One AI Budget Protocol"
 date: 2026-04-02
 author: Albert Mavashev
 tags: [announcement, integrations, langchain, langgraph, autogen, openai, anthropic, groq, django, nextjs, flask, anyagent, runtime-authority]
-description: "Cycles ships 26 integrations across Python, TypeScript, Java, and Rust. See how one protocol coordinates runtime budget controls across diverse agent stacks."
+description: "At launch, Cycles documented 26 integrations across Python, TypeScript, Java, and Rust. See how one protocol coordinates runtime budget controls across stacks."
 blog: true
 sidebar: false
 head:

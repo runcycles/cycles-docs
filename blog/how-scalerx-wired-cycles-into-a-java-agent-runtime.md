@@ -4,7 +4,7 @@ date: 2026-05-05
 author: Cycles Team
 tags:
   - case-study
-  - integration
+  - integrations
   - java
   - spring-boot
   - agents
@@ -83,7 +83,7 @@ For the hot path, that's the entire integration.
 
 ## Why there's also an explicit service
 
-The LLM path is one annotation. The wallet-management path is a 542-line service called `CyclesBudgetManagementService`. Most of those lines aren't runtime enforcement — they're management-plane glue: wallet creation when a user signs up, funding when they buy credits, balance lookups for the [dashboard](/glossary#dashboard), event-history queries for receipts, and result parsing. Those operations don't fit the reserve/commit shape. They're CRUD against a budget admin API.
+The LLM path is one annotation. The wallet-management path is a 542-line service called `CyclesBudgetManagementService`. Most of those lines aren't runtime enforcement — they're management-plane glue: wallet creation when a user signs up, funding when they buy credits, balance lookups for the [dashboard](/glossary#dashboard), event-history queries for receipts, and result parsing. Those operations don't fit the reserve-commit shape. They're CRUD against a budget admin API.
 
 The annotation handled the request-time budget question — *can this user afford this LLM call right now* — with almost no code. The line count goes to the rest of the lifecycle, which is the kind of code most integrators end up writing themselves today.
 
@@ -121,7 +121,7 @@ This is the part of the integration that paid off most relative to its effort. C
 
 scalerX described their flow in five steps: user makes a request, Cycles tries to make a reservation, the LLM call is executed, the reservation is committed, the user gets a response. That's the happy path.
 
-Two reservation paths exist in their codebase. The hot LLM path runs through the `@Cycles` annotation, where the starter's interceptor builds the workspace-scoped subject from the SpEL expression and handles the reserve/commit/release transitions internally. A second path lives in `CyclesBudgetManagementService` for admin operations that don't fit a method-annotation shape — for example, programmatic reservations from background jobs, or wallet-side bookkeeping.
+Two reservation paths exist in their codebase. The hot LLM path runs through the `@Cycles` annotation, where the starter's interceptor builds the workspace-scoped subject from the SpEL expression and handles the reserve-commit-release transitions internally. A second path lives in `CyclesBudgetManagementService` for admin operations that don't fit a method-annotation shape — for example, programmatic reservations from background jobs, or wallet-side bookkeeping.
 
 The decision-handling logic is the same in both paths. Here's the relevant block from the manual path, since it makes the response shape concrete:
 
@@ -147,7 +147,7 @@ Three things in this path are worth pointing out:
 
 **Deny reason comes from a structured field.** When the decision is anything else, the helper `extractDenyReason` pulls a `reason_code` out of `deny_detail`. The codes — `INSUFFICIENT_BALANCE`, `EXPIRED`, `RATE_LIMITED`, etc. — are stable strings the application can branch on. scalerX surfaces them to the user as friendly errors without round-tripping to a separate metadata service.
 
-scalerX reports no meaningful latency overhead from the reserve/commit pair. That tracks with the architecture — the Cycles server runs in-cluster (or on the same Docker network locally), and the OpenAI Responses call dominates the request path by orders of magnitude.
+scalerX reports no meaningful latency overhead from the reserve-commit pair. That tracks with the architecture — the Cycles server runs in-cluster (or on the same Docker network locally), and the OpenAI Responses call dominates the request path by orders of magnitude.
 
 ## A deliberate choice: commit on failure
 

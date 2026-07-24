@@ -189,9 +189,9 @@ for SCOPE in \
 done
 ```
 
-When the `@cycles` decorator calls `POST /v1/reservations`, the server walks from the agent scope up to the tenant root, checking each ancestor's budget. If any scope is exhausted, the server returns `409 BUDGET_EXCEEDED` and the [reservation](/glossary#reservation) is denied. No partial execution. No overrun.
+When the `@cycles` decorator calls `POST /v1/reservations`, the server checks each applicable populated standard scope atomically. If any matching ledger lacks capacity, the server returns an error such as `409 BUDGET_EXCEEDED` and creates no reservation. The protected call is blocked only if the application makes this reservation a mandatory boundary; commit overage behavior remains governed by the selected overage policy.
 
-In this demo every scope has the same $1.00 limit, so the agent-level budget is the binding constraint. In production, you would set different limits at different levels — a $1.00 per-run budget at the agent level, a $50/day budget at the workspace level, and a $500/month budget at the tenant level. The server enforces whichever limit is hit first.
+In this demo every populated scope has the same $1.00 limit, so the agent-level budget is the binding constraint. In production, you might use a unique workflow value for a $1.00 per-run ledger, a $50/day workspace budget, and a $500/month tenant budget. The server checks every matching populated standard scope and rejects when any one lacks room.
 
 ## Why not just use a rate limit?
 

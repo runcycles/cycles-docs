@@ -18,7 +18,7 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-A team builds a research pipeline using CrewAI with three agents: a Planner that breaks topics into sub-questions, a Researcher that investigates each one, and a Writer that synthesizes the results. The Planner delegates 5 sub-questions per topic to the Researcher. For complex sub-questions, the Researcher delegates down to a Deep Analyst agent that makes 15 LLM calls per investigation. In development, one topic costs ~$3.50.
+Consider a constructed research pipeline with three agents: a Planner that breaks topics into sub-questions, a Researcher that investigates each one, and a Writer that synthesizes the results. The Planner delegates five sub-questions per topic to the Researcher. For complex sub-questions, the Researcher delegates to a Deep Analyst that makes 15 LLM calls per investigation. Under the illustrative assumptions below, one development topic costs about $3.50.
 
 In production, a batch of 40 topics kicks off overnight. The Researcher's delegation is non-deterministic — some topics trigger zero Deep Analyst calls, others trigger four. One topic causes all 5 sub-questions to delegate to the Deep Analyst, each triggering its own [tool loop](/glossary#tool-loop) with retries. That single topic costs $89.
 
@@ -32,159 +32,106 @@ In production, a batch of 40 topics kicks off overnight. The Researcher's delega
 
 The Deep Analyst's cost is not linear in call count — each retry sends a longer context window, so later calls cost 3-5× more than early ones. That is why 190 calls cost $89, not $7.
 
-The 40-topic batch: $1,740 instead of the projected $140. Most topics cost $15-30 because production topics are more complex than the development test set. The provider dashboard shows the total. It does not show which agent in the delegation chain caused the blowout, or that delegation depth was the problem.
+Under the same constructed model, a 40-topic batch totals $1,740 instead of the projected $140. Provider attribution depends on the keys, projects, and tracing metadata the application supplies; a shared provider identity will not infer this agent hierarchy on its own.
 
 <!-- more -->
 
 ## Why Delegation Chains Are Different from Fan-Out
 
-[Fan-out](/blog/langgraph-budget-control-durable-execution-retries-fan-out) creates parallel branches from a single parent — the total cost is the sum of the branches. Delegation chains create serial depth — Agent A calls Agent B calls Agent C. The cost is multiplicative because each delegator's retry and loop behavior wraps around the entire subtree below it.
+[Fan-out](/blog/langgraph-budget-control-durable-execution-retries-fan-out) creates parallel branches from a single parent. Delegation chains create serial depth—Agent A calls Agent B calls Agent C. Costs are still the sum of executed work, but a retry at a higher level can replay an entire lower subtree, causing the amount of work to grow rapidly with depth.
 
 If the Planner retries a failed topic, it re-executes the Researcher, which re-executes every Deep Analyst delegation. A single retry at the top of the chain replays every agent below it. This is the recursive version of the [retry storm pattern](/blog/ai-agent-failures-budget-controls-prevent) — except the blast radius grows with delegation depth, not retry count.
 
 | Property | [Fan-out](/glossary#fan-out) (parallel) | Delegation chain (serial depth) |
 |---|---|---|
-| Cost structure | Additive — sum of branches | Multiplicative — product of depths |
-| Concurrency risk | Branches race on shared budget | Child inherits parent's remaining budget |
+| Cost structure | Sum of concurrently executed branches | Sum of nested work, with upper-level retries able to replay subtrees |
+| Concurrency risk | Branches may contend for a shared budget | Nested calls may share an ancestor workflow budget when callers submit that scope |
 | Retry blast radius | One branch retries independently | Parent retries the entire child subtree |
 | Visibility | Branches visible at one graph level | Depth hidden inside opaque agent calls |
-| Budget scoping | Sub-budgets per branch | Budget must flow DOWN with diminishing allocation |
+| Budget scoping | Explicit branch/workflow scopes where the framework exposes them | Explicit workflow and agent ledgers; no automatic inheritance or transfer |
 
 ## The Delegation Tax: Framework by Framework
 
-None of the major multi-agent frameworks enforce per-agent budgets. Each provides a delegation mechanism with no cost boundary between delegator and delegate.
+Multi-agent frameworks expose different usage, termination, guardrail, and hook surfaces. Those controls should be used where they fit, but they do not automatically create Cycles ledgers or a shared cross-provider dollar boundary for each application-defined agent.
 
 ### CrewAI
 
-Agents in a Crew can delegate tasks to other agents via `allow_delegation=True`. When Agent A delegates to Agent B, the framework creates a new task execution context. There is no budget boundary between them — they share the same API key and the same global execution. The Crew has no concept of "Agent B's budget." A delegated agent can make unlimited LLM calls because nothing in the framework tracks per-agent spend.
+CrewAI supports delegation and exposes usage/operational controls that vary by version and configuration. A Cycles integration still needs to identify each protected model or tool call and submit the intended workflow and agent subjects; the framework does not provision those external budgets automatically.
 
 ### AutoGen
 
-Multi-agent conversations use `GroupChat` or `initiate_chat()` chains. When an AssistantAgent sends work to another agent, the receiving agent runs its own LLM call loop. AutoGen tracks message counts but not token costs. The `max_consecutive_auto_reply` setting limits message rounds, not spend. A single reply that involves 5 tool calls and 5 LLM calls counts as 1 reply toward the limit — the cost inside that reply is invisible to the framework.
+AutoGen APIs differ between its stable core/AgentChat packages and the legacy 0.2 `GroupChat`/`ConversableAgent` surface. Conversation termination controls such as legacy `max_consecutive_auto_reply` bound replies rather than an application-defined dollar amount. Use the current runtime's usage and termination features, then add an external budget boundary only where their semantics do not meet the requirement.
 
 ### OpenAI Agents SDK
 
-The `handoff()` mechanism passes control from one agent to another. Each agent has its own system prompt and tool definitions. The SDK provides tracing via `RunContext` but no budget enforcement. A handoff chain of 3 agents, each making 10 tool calls, produces 30+ LLM calls with no per-agent ceiling.
+The SDK's `handoff()` mechanism passes control to another agent. Current releases aggregate request and token usage across model calls, tool calls, and handoffs in the run context, and applications can use that usage to implement limits. That is useful, but it is not itself a pre-execution reservation against an external per-agent dollar ledger.
 
-| Framework | Delegation mechanism | Built-in cost control | What's missing |
+| Framework | Delegation mechanism | Useful native control | What a Cycles integration adds |
 |---|---|---|---|
-| CrewAI | `allow_delegation=True` | None | Per-agent spend limit |
-| AutoGen | `initiate_chat()`, `GroupChat` | `max_consecutive_auto_reply` (count, not cost) | Token/dollar cap per agent |
-| OpenAI Agents SDK | `handoff()` | None (tracing only) | Pre-execution budget check |
+| CrewAI | Crew/agent delegation | Framework usage and execution controls | External scoped budget for instrumented calls |
+| AutoGen | Version-specific AgentChat/Core orchestration | Termination and runtime controls | External cumulative budget with caller-supplied scopes |
+| OpenAI Agents SDK | `handoff()` / agents as tools | Aggregated request/token usage, hooks, and tool guardrails | Pre-execution reservation when the application requires it |
 
-The common gap: these frameworks control execution flow. They do not control execution cost. That requires a [runtime authority](/blog/ai-agent-budget-control-enforce-hard-spend-limits) that sits between each agent and the LLM provider, making a deterministic allow/deny decision before every call.
+The integration question is whether the native control is evaluated before the cost-bearing operation, uses the unit and scope your application needs, and remains consistent across every provider path. If not, a [runtime budget boundary](/blog/ai-agent-budget-control-enforce-hard-spend-limits) can fill that specific gap.
 
-## The Pattern: Hierarchical Budget Allocation for Delegation Chains
+## The Pattern: Explicit Shared and Per-Agent Ledgers
 
-The [reserve-commit lifecycle](/blog/ai-agent-budget-control-enforce-hard-spend-limits) already solves single-agent budget enforcement. For multi-agent delegation, the same pattern applies — but budget must flow down the chain with diminishing allocations.
+The [reserve-commit lifecycle](/blog/ai-agent-budget-control-enforce-hard-spend-limits) can apply to each protected call in a multi-agent run. Cycles does not transfer a parent balance to a child or infer the delegation graph. An operator provisions the intended workflow and agent budgets, and each integration submits the matching `Subject`.
 
 ```
-Run Budget: $25.00
-├── Planner: $2.00 (reserved from run)
-├── Researcher (sub-question 1): $4.00 (reserved from run)
-│   └── Deep Analyst: $2.00 (reserved from Researcher's allocation)
-├── Researcher (sub-question 2): $4.00
-│   └── (no delegation — stays within $4.00)
-├── Researcher (sub-question 3): $4.00
-│   └── Deep Analyst: $2.00
-├── Writer: $3.00
-└── Unallocated: $4.00 (safety margin)
+Topic workflow budget: $25.00  ← shared ancestor ceiling
+├── planner agent budget:       $2.00
+├── researcher agent budget:   $12.00
+├── deep-analyst agent budget:  $4.00
+└── writer agent budget:        $3.00
 ```
+
+These are overlapping ceilings, not carved-out balances. A Deep Analyst call submitted with both the topic workflow and `deep-analyst` agent scopes consumes the matching workflow and agent ledgers atomically.
 
 Three design principles make this work:
 
-**Diminishing allocation.** Each delegation level gets a fraction of the parent's budget, not the full remaining balance. The Deep Analyst receives $2.00 carved from the Researcher's $4.00 — not $23.00 from the run's remaining budget. This bounds the blast radius of any single agent regardless of depth.
+**Explicit child ceilings.** Provision smaller agent ledgers where deeper agents should have less room. An absent ledger is skipped; it is not a zero budget. If a path must be disabled, the host must deny it or the operator must provision an explicit zero allocation at the intended scope.
 
-**Pre-delegation [reservation](/glossary#reservation).** Before Agent A delegates to Agent B, Agent A reserves the sub-budget from its own allocation. If Agent A's remaining budget cannot fund the delegation, the delegation does not happen — the agent receives a clear budget-exhausted signal and can take an alternative path. This is enforcement before the action, not observation after.
+**Mandatory per-call integration.** Every cost-bearing child call must reserve before execution with the correct workflow and agent subjects. Creating a ledger does not intercept framework traffic on its own.
 
-**Commit on return.** When the delegated agent completes, actual cost is committed and unused budget is released back to the parent. The Researcher reserved $2.00 for the Deep Analyst, but if the Deep Analyst only spent $1.30, the remaining $0.70 returns to the Researcher's pool. No budget is permanently locked.
+**Per-call settlement.** A commit settles the caller-reported actual amount and releases any unused part of that call's estimate back to the same matching ledgers. It does not transfer a child allocation back to a parent.
 
 ## What This Looks Like in Practice
 
-Cycles — a [runtime authority](/glossary#runtime-authority) for [autonomous agents](/glossary#autonomous-agent) — integrates with any multi-agent framework through a budget-scoped handler per agent. Each agent in the delegation chain gets its own `Subject` in the Cycles hierarchy, creating a hard limit that survives across framework boundaries.
+The integration point depends on the framework version:
 
-For CrewAI, attach a handler to each agent's LLM:
-
-```python
-from langchain_openai import ChatOpenAI
-from runcycles import CyclesClient, CyclesConfig, Subject
-from budget_handler import CyclesBudgetHandler  # see integration guide
-
-client = CyclesClient(CyclesConfig.from_env())
-
-# Each agent gets a budget-scoped handler
-def make_agent_llm(agent_name: str) -> ChatOpenAI:
-    handler = CyclesBudgetHandler(
-        client=client,
-        subject=Subject(
-            tenant="acme",
-            workflow="research-pipeline",
-            agent=agent_name,
-        ),
-    )
-    return ChatOpenAI(model="gpt-4o", callbacks=[handler])
-
-planner_llm = make_agent_llm("planner")       # bounded by planner's budget
-researcher_llm = make_agent_llm("researcher") # bounded by researcher's budget
-analyst_llm = make_agent_llm("deep-analyst")   # bounded by analyst's budget
-```
-
-For AutoGen, attach the handler to each agent's underlying model:
-
-```python
-from autogen import ConversableAgent
-
-# Each agent gets a budget-scoped LLM
-researcher = ConversableAgent(
-    name="researcher",
-    llm_config={
-        "model": "gpt-4o",
-        "callbacks": [CyclesBudgetHandler(
-            client=client,
-            subject=Subject(
-                tenant="acme",
-                workflow="research-pipeline",
-                agent="researcher",
-            ),
-        )],
-    },
-)
-```
-
-For the OpenAI Agents SDK, intercept each `handoff()` boundary:
-
-```python
-from runcycles import CyclesClient, CyclesConfig, Subject
-
-# Before handoff, reserve sub-budget from parent
-def budget_handoff(parent_agent: str, child_agent: str, budget_usd: float):
-    client.reserve(
-        subject=Subject(
-            tenant="acme",
-            workflow="research-pipeline",
-            agent=child_agent,
-        ),
-        amount=int(budget_usd * 100_000_000),  # USD to microcents
-    )
-```
-
-The key is that each agent's LLM calls are bounded independently. A [checker variable in application memory is not enough](/blog/vibe-coding-budget-wrapper-vs-budget-authority) — it does not survive process restarts, does not handle concurrent agents, and does not provide atomic reservation semantics. The runtime authority must be external to the framework.
-
-For the full callback handler implementation, see [Integrating Cycles with LangChain](/how-to/integrating-cycles-with-langchain).
-
-## What Happens Without Per-Agent Budgets
-
-The difference between debugging a $1,740 bill and preventing it.
-
-| Scenario | Without per-agent budget | With Cycles |
+| Framework | Candidate boundary | Cycles requirement |
 |---|---|---|
-| Deep Analyst enters tool loop | 200+ calls, $89 per topic | Budget exhausted after ~15 calls, graceful denial |
-| Planner retries failed delegation | Recreates entire child subtree at full cost | New sub-budget from parent's remaining allocation |
-| 40-topic overnight batch | $1,740, discovered Monday morning | Each topic capped at $25, batch max = $1,000 |
-| Debugging which agent overspent | Parse API logs, reconstruct delegation chain manually | Per-agent balance queries show where spend accumulated |
-| Non-deterministic delegation depth | Cost variance of 25× between topics | Hard limit per agent regardless of delegation path |
+| CrewAI | Each agent's configured model client and consequential tool wrapper | Submit a stable workflow ID and the actual agent role on every protected call |
+| AutoGen | The current model-client or runtime middleware surface | Do not copy legacy `ConversableAgent` examples into a newer runtime without checking its API |
+| OpenAI Agents SDK | Model/tool lifecycle hooks; use the published Cycles integration where it covers the call | Usage is observable in `RunContext`, but a hard external budget still needs a reservation before the protected operation |
 
-The research pipeline from the opening scenario would have stopped at $25 per topic. The Deep Analyst's tool loop would have hit its $2.00 sub-budget after ~15 calls instead of running to 75+. The overnight batch of 40 topics would have cost at most $1,000 — bounded [exposure](/glossary#exposure) instead of an open-ended bill.
+The handler must build a `Subject` such as `tenant=acme`, `workflow=topic-123`, and `agent=deep-analyst` for each protected call. The corresponding workflow and agent budgets must already exist. A fictitious generic `CyclesBudgetHandler` is not part of the Cycles clients; use the framework-specific guide or implement the reserve/commit/release calls directly.
+
+See [Integrating Cycles with CrewAI](/how-to/integrating-cycles-with-crewai), [Integrating Cycles with AutoGen](/how-to/integrating-cycles-with-autogen), and [Integrating Cycles with OpenAI Agents](/how-to/integrating-cycles-with-openai-agents). Recheck those guides against the framework version in your lockfile.
+
+## What Explicit Ledgers Change
+
+For the constructed scenario, assume each topic has a unique workflow scope, all protected calls use conservative estimates, and the relevant workflow and agent ledgers are explicitly provisioned:
+
+| Scenario | Without the scoped boundary | With mandatory Cycles reservations |
+|---|---|---|
+| Deep Analyst enters tool loop | Calls continue until a framework/provider limit or application stop | First call whose estimate no longer fits the agent or workflow ledger is rejected |
+| Planner retries failed delegation | A new execution can replay the child subtree | New child calls continue consuming the same explicit workflow and agent ceilings |
+| 40-topic overnight batch | Illustrative total reaches $1,740 | Submitted estimates are bounded by $25 per topic when each topic has its own workflow ledger |
+| Debugging which agent consumed budget | Shared provider identity requires trace reconstruction | Cycles balance/lifecycle records show submitted and settled amounts by configured subject |
+| Non-deterministic delegation depth | Cost varies with executed work | Depth cannot consume beyond the configured estimated headroom without a denied reservation |
+
+This bounds the [exposure](/glossary#exposure) represented by the submitted estimates. It does not prove a $1,000 provider-bill maximum unless estimates conservatively cover actual usage, every path is instrumented, and the selected commit-overage policy is acceptable.
+
+## Framework sources
+
+Framework behavior was rechecked on July 24, 2026. APIs evolve, so use the documentation for the version in your lockfile:
+
+- [OpenAI Agents SDK usage tracking](https://openai.github.io/openai-agents-python/usage/)
+- [OpenAI Agents SDK handoffs](https://openai.github.io/openai-agents-python/handoffs/)
+- [AutoGen stable documentation](https://microsoft.github.io/autogen/stable/)
+- [CrewAI documentation](https://docs.crewai.com/)
 
 ## Next steps
 

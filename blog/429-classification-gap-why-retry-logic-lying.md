@@ -2,7 +2,7 @@
 title: "HTTP 429: Why Retry Logic Lies"
 date: 2026-04-10
 author: Brenton Williams
-tags: [ai-agents, retry-logic, retry-storms, rate-limits, http-429, 429, agent-infrastructure, runtime-authority]
+tags: [agents, retry-logic, retry-storms, rate-limits, http-429, 429, agent-infrastructure, runtime-authority]
 description: "HTTP 429 can mean wait, cap, or stop. Learn how classifying each response before retrying prevents retry storms and unsafe AI agent behavior in production."
 blog: true
 sidebar: false
@@ -111,7 +111,7 @@ And once that happens, everything downstream inherits the wrong decision.
 
 ## The failure cascade
 
-This is not theoretical. The [retry storm incident pattern](/incidents/retry-storms-and-idempotency-failures) — and the [$1,800 CRM outage retry storm](/blog/ai-agent-failures-budget-controls-prevent) — are exactly this failure mode.
+This is not theoretical as a failure pattern. The [retry-storm incident pattern](/incidents/retry-storms-and-idempotency-failures) and a [$33.86 illustrative CRM retry model](/blog/ai-agent-failures-budget-controls-prevent) show how layered retries multiply calls.
 
 **What this looks like in a real run**
 ```text
@@ -327,7 +327,7 @@ Until that is resolved, every layer above it is operating on a lie.
 ## Further reading
 
 - [Retry Storms and Idempotency Failures](/incidents/retry-storms-and-idempotency-failures) — the dedicated incident pattern this post describes
-- [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — includes a $1,800 retry storm incident from a CRM outage
+- [5 Agent Cost Failures Runtime Budgets Can Bound](/blog/ai-agent-failures-budget-controls-prevent) — includes a checked $33.86 retry-storm model
 - [The State of AI Agent Incidents](/blog/state-of-ai-agent-incidents-2026) — Category A4 catalogues retry-storm cost multiplication
 - [How Reserve-Commit Works in Cycles](/protocol/how-reserve-commit-works-in-cycles) — the enforcement model referenced throughout this post
 - [Degradation Paths in Cycles](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — deny, downgrade, disable, or defer strategies for the STOP case

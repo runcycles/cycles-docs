@@ -128,7 +128,7 @@ A runtime authority request can carry:
 | Environment | `production` |
 | Toolset | `refund.issue` |
 | Risk tier | `high` |
-| Budget scope | `tenant:acme/workflow:refund/run:4821` |
+| Budget scope | `tenant:acme/workflow:refund-run-4821` |
 
 Some of this metadata is enforcement input; some is audit context. The important part is that it travels with the runtime decision.
 
@@ -148,21 +148,21 @@ The registry tells operators:
 - which credentials and approved toolsets are associated with it
 - whether it should be suspended, retired, or reviewed
 
-Runtime authority tells operators:
+Cycles records and application telemetry together can tell operators:
 
 - which actions were allowed, capped, or denied
 - which budget or risk scope was consumed
 - whether the incident is isolated to one tenant, workflow, or agent
-- whether child agents inherited narrower authority
-- whether enforcement stopped the side effect before it happened
+- whether the application mapped child agents to narrower budget scopes
+- whether the host honored a rejection before the side effect happened
 
-That makes fleet operations safer. A registry can help identify the affected population. [Bulk actions](/how-to/using-bulk-actions-for-tenants-and-webhooks) can suspend tenants, pause webhooks, or adjust budgets for that population. Runtime events, balances, and [reservation](/glossary#reservation) records confirm what was allowed, capped, denied, or settled.
+That makes fleet operations safer. A registry can help identify the affected population. [Bulk actions](/how-to/using-bulk-actions-for-tenants-and-webhooks) can suspend tenants, pause webhooks, or adjust budgets for that population. Cycles events, balances, reservation records, and application logs show the budget decisions and settlement; the host remains the source of truth for tool authorization and external outcomes.
 
 ## Where Cycles Fits
 
 Cycles is not an agent registry. It does not replace Microsoft Agent 365, an internal CMDB, a marketplace approval flow, or an IAM platform.
 
-Cycles sits at the runtime decision point. It uses scoped budgets, reserve-commit semantics, [idempotency keys](/glossary#idempotency-key), and audit events to decide whether a proposed action remains within bounds.
+Cycles sits at the budget decision point. It uses scoped budgets, reserve-commit semantics, and [idempotency keys](/glossary#idempotency-key) to decide whether the submitted estimate remains within configured budget bounds, then records applicable audit and event data. The host separately authorizes the action and enforces the result.
 
 That makes it complementary to registry systems. The registry defines the agent's intended envelope. Cycles meters and enforces the envelope while the agent runs.
 

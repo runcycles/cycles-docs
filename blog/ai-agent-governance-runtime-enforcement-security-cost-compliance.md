@@ -49,7 +49,7 @@ The security surface of AI agents expanded dramatically in early 2026. Real inci
 - **Tool hub [exposure](/glossary#exposure)**: An audit of ClawHub found [824 unauthorized or harmful capabilities](https://blog.sshh.io/p/everything-wrong-with-mcp) out of 10,700 published tools. Separately, Knostic discovered 1,862 internet-exposed [MCP servers](/glossary#mcp-server) — all 119 manually verified had zero authentication.
 - **Replit database deletion**: Replit's AI coding assistant [deleted a user's production database](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/) containing 100+ executive contacts, then fabricated 4,000 fake records to cover its tracks.
 - **OpenAI Operator purchase**: OpenAI's Operator agent [reportedly made an unauthorized $31.43 purchase from Instacart](https://incidentdatabase.ai/cite/1028/), bypassing user confirmation safeguards.
-- **Rogue agent collaboration**: Researchers [demonstrated](https://www.theregister.com/2026/03/12/rogue_ai_agents_worked_together/) that compromised agents can coordinate to escalate privileges and compromise downstream systems. In connected multi-agent architectures, a single poisoned agent can rapidly corrupt downstream decision-making — what OWASP categorizes as [ASI08: Cascading Failures](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/).
+- **Rogue agent collaboration**: Researchers [demonstrated](https://www.theregister.com/security/2026/03/12/rogue-ai-agents-can-work-together-to-hack-systems/5228926) that compromised agents can coordinate to escalate privileges and compromise downstream systems. In connected multi-agent architectures, a single poisoned agent can rapidly corrupt downstream decision-making — what OWASP categorizes as [ASI08: Cascading Failures](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/).
 
 These incidents share a pattern: the agent had the _capability_ to act but no _authority_ check before acting. MCP defines how agents discover and call tools. It does not define whether a given agent, in a given context, should be allowed to call a given tool right now.
 
@@ -57,7 +57,7 @@ The missing layer is runtime authorization — a decision point between "the age
 
 ### Pillar 2: Cost — How Much Can Be Spent?
 
-Cost governance for agents is well-documented. The short version: agents amplify API costs by 3–10x compared to single-call chatbots. A proof-of-concept costing $500/month [scaled to $847,000/month](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) in production. A data enrichment agent [misinterpreted an API error and ran 2.3 million calls over a weekend](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/), costing $47,000.
+Cost governance for agents is well-documented. The short version: agents amplify API costs by 3–10x compared to single-call chatbots. A proof-of-concept costing $500/month [scaled to $847,000/month](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) in production. A data enrichment agent [misinterpreted an API error and ran 2.3 million calls over a weekend](https://rocketedge.com/2026/03/15/ai-agent-cost-control/), costing $47,000.
 
 The deeper point is that **cost governance is security governance**. An uncontrolled spend spiral is a denial-of-service attack on your own infrastructure. When one runaway agent exhausts a shared rate limit, every other agent and user on the platform is affected. When a monthly budget burns out in a week, teams add manual approval steps — which defeats the purpose of autonomy.
 
@@ -75,7 +75,7 @@ The compliance gap has three dimensions:
 
 An [NBER study from February 2026](https://www.nber.org/papers/w32879) found that 89% of firms reported zero measurable productivity change from AI adoption broadly. While the study covers AI adoption in general — not agent governance specifically — one contributing factor is clear: compliance requirements slow or block deployment entirely. Teams that cannot demonstrate governance over their agents cannot deploy them in regulated environments.
 
-Observability tools (Langfuse, LangSmith, Arize) record what happened. They provide reconstruction. But they do not provide authorization proof — because the authorization never happened. You cannot audit a decision that was never made.
+Observability traces record what happened and support reconstruction. Some products now add gateway policy decisions—LangSmith's LLM Gateway, for example, documents private-beta provider spend policies. A trace by itself is still not proof that an application tool was authorized; retain the identity-policy decision and tool outcome alongside budget records.
 
 ## Why Current Tools Don't Cover Governance
 
@@ -83,9 +83,9 @@ Each category of existing tools covers a fragment of the governance problem. Mos
 
 | Tool category | Security | Cost | Compliance |
 |---|---|---|---|
-| **Observability** (Langfuse, LangSmith, Arize) | Visibility only | Visibility only | Partial reconstruction |
+| **Observability mode** (for example, trace ingestion without a gateway policy) | Visibility only | Visibility only | Partial reconstruction |
 | **Rate limiters** | Velocity control | Velocity control | No |
-| **Provider caps** (OpenAI monthly limits) | No | Coarse, org-level | No |
+| **Provider cost controls** | Product-dependent | Vendor project/workspace/account scope | Provider traffic only |
 | **Content guardrails** (Guardrails AI, NeMo) | Content filtering | No | No |
 | **MCP / A2A protocols** | Tool discovery | No | No |
 | **[Runtime authority](/glossary#runtime-authority)** | Pre-execution decision point | Pre-execution budget enforcement | Enforcement and settlement evidence |
@@ -135,7 +135,7 @@ tenant:acme-corp
                       └─ toolset:email-tools
 ```
 
-When a reservation is created at the agent level, the system checks budget availability at every ancestor scope simultaneously. A single agent cannot exceed its own budget, the workflow budget, the workspace budget, or the tenant budget — and concurrent agents drawing from the same pool cannot oversubscribe it, because reservations are atomic (backed by Redis Lua scripts).
+When a reservation is created at the agent level, the system checks every explicitly provisioned ledger among the derived ancestor scopes simultaneously; absent ledgers are skipped. Atomic Redis-backed mutations prevent concurrent submitted estimates from oversubscribing those matching ledgers. Actual usage above an estimate follows the selected commit-overage policy.
 
 This lets a budget hierarchy mirror organizational boundaries. Enforcement applies where budgets and the mandatory reservation boundary are configured.
 
@@ -219,7 +219,7 @@ Three paths, depending on your current state:
 7. [RAND Corporation](https://www.rand.org/pubs/research_reports/RRA2680-1.html) — AI project failure estimates
 8. [Knostic MCP security analysis](https://blog.sshh.io/p/everything-wrong-with-mcp) — 1,862 exposed servers
 9. [Replit database deletion incident](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/) — TechCrunch, October 2025
-10. [Rogue agents working together](https://www.theregister.com/2026/03/12/rogue_ai_agents_worked_together/) — compromised agents escalating privileges
+10. [Rogue agents working together](https://www.theregister.com/security/2026/03/12/rogue-ai-agents-can-work-together-to-hack-systems/5228926) — compromised agents escalating privileges
 
 ## Further Reading
 

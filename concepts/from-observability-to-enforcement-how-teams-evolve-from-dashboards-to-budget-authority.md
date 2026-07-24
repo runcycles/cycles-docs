@@ -283,7 +283,7 @@ Enforcement does not have to mean “deny everything aggressively.”
 A mature control model often includes multiple outcomes:
 
 - allow normally
-- allow in shadow mode
+- return a hypothetical dry-run decision for the application to log
 - degrade to a smaller model
 - disable costly tools
 - switch to read-only behavior
@@ -317,7 +317,7 @@ Teams often need to observe policy against real workloads before turning on hard
 
 Shadow mode is often the bridge between observability and enforcement.
 
-It lets teams ask:
+With `dry_run: true`, Cycles returns a hypothetical decision without creating a reservation or modifying balances. The application must retain that response and correlate it with actual usage. Those records let teams ask:
 
 - what would have been denied?
 - which runs would have exceeded budget?
@@ -339,13 +339,13 @@ That is a much safer operational path.
 
 Once a system has a real runtime authority, several things change.
 
-### Incidents become easier to bound
+### Instrumented incidents become easier to bound
 
-Instead of relying only on dashboards and operator reaction, the system can stop or degrade work earlier.
+Instead of relying only on dashboards and operator reaction, a mandatory application boundary can stop or degrade protected work when a budget request fails.
 
 ### Policy becomes explicit
 
-Instead of scattered heuristics across code, the platform gains a clearer model of what is allowed at tenant, workflow, and run levels.
+Instead of scattered budget heuristics across code, the platform gains a clearer model of submitted exposure at tenant and workflow levels. An application can use a run ID as `subjects.workflow` when it needs one ledger per execution; a run ID in `dimensions` is attribution only.
 
 ### Teams can reason about autonomy operationally
 
@@ -394,9 +394,9 @@ At that point, the missing piece is clear.
 The platform does not need another chart.  
 It needs a way to say:
 
-- this run may only consume this much
+- protected actions in this run share a workflow ledger with this allocation
 - this tenant has this much remaining
-- this workflow should degrade after crossing this threshold
+- this application should degrade the workflow when a reservation is denied or returned caps require it
 - this next action may not proceed unless budget is reserved first
 
 That is the shift from observability to enforcement.

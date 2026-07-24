@@ -1,9 +1,9 @@
 ---
-title: "5 Agent Failures Action Controls Prevent"
+title: "5 Action-Risk Scenarios and Control Patterns"
 date: 2026-03-30
 author: Cycles Team
 tags: [action-control, risk, incidents, best-practices]
-description: "Five AI agent failures where model spend was under $5 but the business impact was severe — and how action authority with risk-point budgets prevents each one."
+description: "Five illustrative low-token, high-impact agent action scenarios, with application authorization and caller-assigned RISK_POINTS patterns to contain each one."
 blog: true
 sidebar: false
 head:
@@ -12,25 +12,25 @@ head:
       content: AI agent failures, action controls, runtime authority, risk budgets, agent side effects, pre-execution enforcement
 ---
 
-# 5 AI Agent Failures Only Action Controls Would Prevent
+# 5 Action-Risk Scenarios and Control Patterns
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-The companion post — [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — covers the cost dimension: runaway loops, [retry storms](/glossary#retry-storm), scope leaks. Every scenario is measured in dollars of model spend. But agents have a second failure dimension that dollar budgets cannot touch: **actions with consequences**.
+The companion post — [5 Agent Cost Failures Runtime Budgets Can Bound](/blog/ai-agent-failures-budget-controls-prevent) — covers runaway loops, [retry storms](/glossary#retry-storm), and scope leaks with checked cost models. Agents have a second failure dimension that dollar budgets alone do not measure: **actions with consequences**.
 
-An agent that sends 200 wrong emails costs $1.40 in [tokens](/glossary#tokens). An agent that triggers a production deploy costs $0.80. An agent that deletes production records costs $2.00. No spending limit — $100, $50, even $5 — would have stopped any of them. The damage is not monetary. It is operational, reputational, and in some cases regulatory.
+The five cases below are constructed scenarios, not reports of identified incidents. Their token-cost figures are illustrative estimates. They show how an inexpensive model call can trigger an email, deploy, delete, message, or ticket with much larger external consequences.
 
-These five patterns come up across teams deploying agents with tool-calling capabilities. Each one is preventable with [action authority](/concepts/action-authority-controlling-what-agents-do) — the dimension of [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) that controls what agents *do*, not just what they *spend*.
+Containment requires a composed boundary: application [action authority](/concepts/action-authority-controlling-what-agents-do) decides whether a principal may use a tool with particular arguments, while Cycles can meter caller-assigned cumulative exposure through `RISK_POINTS`. Neither layer substitutes for the other.
 
 <!-- more -->
 
 ## How Action Authority Works
 
-[Action authority](/glossary#action-authority) uses the same reserve-commit lifecycle as [budget authority](/glossary#budget-authority), but with a different unit: **[RISK_POINTS](/glossary#risk-points)** instead of dollars. Teams assign point values to each action class based on blast radius — a read costs 1 point, an email costs 20, a deploy costs 50. A workflow gets a fixed risk-point budget. Every consequential action deducts from it. When the budget is exhausted, the agent can still read and reason, but it cannot act.
+Applications can use the Cycles reserve-commit lifecycle with **[RISK_POINTS](/glossary#risk-points)** instead of dollars. Teams assign point values to authorized action classes — for example, a read costs 1 point, an email 20, and a deploy 50 — and require a reservation before each protected action. When that budget is exhausted, positive-risk reservations fail. The host still decides which tools are authorized and whether zero-risk actions remain available.
 
 For the full mechanism, see [Action Authority: Controlling What Agents Do](/concepts/action-authority-controlling-what-agents-do). For per-tool point assignment, see [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools). For the unit system, see [Understanding Units in Cycles](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points).
 
-## Failure 1: The Wrong Email Template — $1.40 in Tokens, $50K+ in Pipeline
+## Failure 1: The Wrong Email Template
 
 **The scenario:**
 
@@ -44,11 +44,10 @@ This scenario is [described in detail](/blog/ai-agent-action-control-hard-limits
 |---|---|
 | Model spend | $1.40 |
 | Emails sent | 200 |
-| Support tickets generated | 34 |
-| Social media complaints | 12 |
-| Estimated pipeline impact | $50,000+ |
+| Customer/support impact | Unquantified in this constructed scenario |
+| Pipeline impact | Unquantified in this constructed scenario |
 
-The model spend is the cost of generating 200 email bodies — a few hundred tokens each. The business impact is the result of 200 customers receiving a hostile message from a company they just signed up to evaluate. No dollar budget would have flagged this. The agent was under budget the entire time.
+The modeled spend covers generating 200 short email bodies. The external impact is not derived from token cost. A monetary budget calibrated for normal model usage might accept every call even though the template is wrong.
 
 **How action authority prevents this:**
 
@@ -60,9 +59,9 @@ Assign `send_email` a cost of 20 risk points. Set the workflow's risk-point budg
 | Generate email body | 1 | ~80 |
 | Send email | 20 | **5** |
 
-The agent sends 5 emails, then the 6th [reservation](/glossary#reservation) is denied with `BUDGET_EXCEEDED`. Five wrong emails is a bad day. Two hundred is a public incident. The difference is containment.
+If the host requires a reservation before every send, five email reservations consume 100 points and the sixth fails with `BUDGET_EXCEEDED`. This bounds budgeted sends; it does not validate the template.
 
-The team discovers the template bug after 5 emails instead of 200. They fix it and re-run. Total damage: 5 confused customers, zero social media complaints, zero pipeline impact.
+Alerting or review can then surface the template bug, but Cycles alone does not guarantee discovery or determine the resulting customer impact.
 
 ## Failure 2: The Accidental Deploy
 
@@ -80,9 +79,9 @@ The agent did exactly what its instructions implied: "fix the build and verify."
 
 Assign `trigger_deploy` a cost of 50 risk points. Set the debugging workflow's risk-point budget to 40.
 
-The agent can read logs (1 point), analyze code (1 point), and suggest fixes (1 point) freely. But when it attempts to reserve 50 risk points for the deploy, the reservation is denied — the workflow budget is only 40. The agent returns: "Fix identified. Deploy requires manual approval."
+If the host classifies deploy as 50 points and requires a reservation, a 40-point workflow budget rejects that request. Application policy can separately require manual approval and can return: "Fix identified. Deploy requires manual approval."
 
-Alternatively, a tool denylist can remove `trigger_deploy` entirely for debugging workflows. The agent never sees the tool as an option.
+Alternatively, the host can omit `trigger_deploy` from debugging workflows or enforce a denylist. A Cycles budget may return a configured denylist cap, but the host must apply it.
 
 ## Failure 3: The Data Cleanup Gone Wrong
 
@@ -100,11 +99,9 @@ A $5 per-run budget would not have helped. The delete query cost pennies to gene
 
 **How action authority prevents this:**
 
-Assign `execute_delete` a cost of 25 risk points per batch. Set the cleanup workflow's risk-point budget to 100.
+Application authorization should validate the target environment, database identity, query shape, and approval requirements before any delete. Separately, assigning `execute_delete` 25 risk points per batch against a 100-point budget bounds the caller-assigned cumulative exposure to four successful reservations.
 
-The agent can delete up to 4 batches before the budget is exhausted. If the first batch deletes unexpected records (production data instead of test data), the team catches it after a contained deletion — not after the entire dataset is gone.
-
-For an additional layer: a tool denylist can block `execute_delete` for any agent running outside a designated test environment. The configuration error that connected the agent to production would be caught at the action-authority layer, not discovered after the data is gone.
+That budget does not detect that the connection points to production or that the query matches the wrong records. Environment-scoped credentials, database permissions, argument validation, and review remain the controls that prevent the first destructive batch.
 
 ## Failure 4: The Slack Leak
 
@@ -122,11 +119,11 @@ A $2 per-conversation budget would not have prevented this. The agent was well w
 
 Two mechanisms, layered:
 
-1. **Channel allowlist.** The agent's Slack integration is configured with an allowlist of internal channels. Messages to channels not on the list are denied before sending. The `#acme-corp-support` channel is external — the reservation is denied.
+1. **Channel allowlist.** The Slack integration enforces an allowlist of internal channels before sending. The `#acme-corp-support` channel is external, so application authorization rejects it.
 
 2. **Risk-point budget.** Assign `send_slack_message` a cost of 20 risk points, with the external-channel variant at 50 points (or denied entirely). The agent can post freely to internal channels but cannot reach customer-facing channels without explicit authorization.
 
-The diagnostic message is blocked. The agent returns: "Cannot post to #acme-corp-support — external channel. Posted to #support-internal instead." The customer never sees the internal details.
+With both layers enforced, the application blocks the external-channel message while Cycles can bound the submitted exposure of allowed messages.
 
 ## Failure 5: The Ticket Storm
 
@@ -162,21 +159,21 @@ In every case, the agent was allowed to act without asking permission. The syste
 
 | Failure | Model Spend | Impact Category | Prevention | With Action Authority |
 |---|---|---|---|---|
-| Wrong email template | $1.40 | Reputational — [$50K+ pipeline](/blog/ai-agent-action-control-hard-limits-side-effects) | 20 risk pts/email, 100 budget | 5 emails instead of 200 |
+| Wrong email template | Illustrative $1.40 | Customer/reputational impact, unquantified | Template validation + 20 risk pts/email, 100 budget | At most 5 budgeted sends; content still needs validation |
 | Accidental deploy | ~$0.80 | Operational — production downtime | 50 risk pts/deploy, or denylist | Denied before execution |
 | Data deletion | ~$2.00 | Data loss — backup recovery required | 25 risk pts/batch, 100 budget | Stopped after 4 batches |
 | Slack leak | ~$0.30 | Security — data exposure | Channel allowlist | Blocked to internal only |
 | Ticket storm | ~$3.50 | Operational — notification cascade | 20 risk pts/ticket, 200 budget | 10 tickets instead of hundreds |
 
-Total model spend across all five scenarios: **under $8.** No dollar budget — $100, $50, $10, even $5 — would have prevented any of them. The common thread is not cost. It is **consequence**.
+The approximate model-spend figures across these constructed scenarios total under $8, but they are not measured incident data. A dollar budget sized for routine model use may accept each case because the consequential action, not token spend, carries the larger risk.
 
 ## From cost control to runtime authority
 
-Budget authority and action authority are two dimensions of the same architecture. Both use the reserve-commit lifecycle. Both enforce limits before execution, not after. Both support hierarchical scoping (tenant, workspace, workflow, run). Both degrade gracefully when budgets are exhausted.
+Budget authority and action authority are complementary parts of one architecture. Cycles can use reserve-commit for spend and caller-assigned exposure at protocol subject scopes. Application policy enforces tool and argument permissions and chooses any graceful-degradation behavior.
 
 The difference is the unit of account. Budget authority counts dollars. Action authority counts consequences — measured in risk points, scoped by toolset, enforced by the same infrastructure.
 
-Teams that implement only dollar budgets have half of [runtime authority](/blog/what-is-runtime-authority-for-ai-agents). The half they are missing is where agents cause the most damage — not by spending too much, but by doing the wrong thing.
+Teams that implement only dollar budgets still need identity, application authorization, argument validation, and outcome logging. Adding an exposure budget can bound repetition, but it does not make an authorized action safe.
 
 ## Next steps
 

@@ -5,7 +5,7 @@ description: "Add Cycles budget tools to Claude Desktop with the recommended des
 
 # Add Cycles to Claude Desktop
 
-This page is the exact setup for [Claude Desktop](https://claude.ai/download). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
+This page is the exact setup for [Claude Desktop](https://claude.com/download). For the protocol overview and reserve-commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
 Registering this MCP server gives Claude Desktop access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.
@@ -13,7 +13,7 @@ Registering this MCP server gives Claude Desktop access to Cycles tools — `cyc
 
 ## Prerequisites
 
-- **Claude Desktop installed** ([download](https://claude.ai/download))
+- **Claude Desktop installed** ([download](https://claude.com/download))
 - **Node.js 20+** on PATH if you use the manual `npx` configuration below.
 - **A Cycles API key** (`cyc_live_...`) — see [API key setup](/quickstart/getting-started-with-the-mcp-server#prerequisites). Skip this if you only want to try mock mode below.
 - **Cycles server running** locally or remote. Skip this for mock mode.

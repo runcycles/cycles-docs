@@ -94,11 +94,11 @@ Bulk actions cap at **500 matched rows per call**. If your filter resolves to mo
   "error": "LIMIT_EXCEEDED",
   "message": "filter matches more than 500 tenants; narrow the filter and retry",
   "request_id": "req_...",
-  "details": { "total_matched": 501 }
+  "details": { "total_matched": 637 }
 }
 ```
 
-In the reference implementation, `total_matched` in the error details acts as a sentinel — the server fetches only up to one row past the cap, so "501" means "over the limit" rather than an exact count. Treat any value above 500 as "too many", not a precise total. No rows are touched. To proceed, narrow the filter (add `status`, `search`, or a scoping field) and run multiple calls with distinct idempotency keys.
+`total_matched` is the exact server-counted result size, including when it exceeds the 500-row execution cap. No rows are touched. To proceed, narrow the filter (add `status`, `search`, or a scoping field) and run multiple calls with distinct idempotency keys.
 
 ### Count mismatch — `COUNT_MISMATCH`
 

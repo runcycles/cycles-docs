@@ -21,24 +21,24 @@ This guide shows how to add budget enforcement to OpenClaw agents using the [`cy
 
 AI agents make autonomous decisions — calling models, invoking tools, retrying on failure — with no human in the loop. Without runtime enforcement:
 
-- **Runaway spend** — a single [runaway agent](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) can blow through an entire budget in minutes. Provider spending caps are account-wide and react too slowly. Rate limits don't account for cost.
+- **Runaway spend** — a single [runaway agent](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent) can consume substantial budget quickly. Provider budgets, credits, and quotas use their own scopes and semantics; request-count limits do not account for variable call cost.
 - **Uncontrolled side-effects** — an agent can send hundreds of emails, trigger deployments, or call dangerous APIs with nothing to stop it. Cost limits alone don't help — some actions are consequential regardless of price.
 - **Noisy neighbors** — in multi-tenant or multi-user setups, one agent can consume the entire team budget, starving other users.
 - **No session-level cost visibility** — when a session ends, you have no idea what it spent, which tools it called most, or whether it was cost-efficient.
 - **Abrupt failure** — budget runs out and the agent crashes instead of adapting.
 
-This plugin solves all five — and goes further. Every model call and tool invocation is budget-checked *before* execution. When budget runs low, models are automatically downgraded, expensive tools are disabled, and the agent is told about its remaining budget via prompt hints so it can self-regulate. Side-effects are capped per tool via `toolCallLimits`. Spend is isolated per user, session, or team. And every session produces a full cost breakdown.
+The plugin adds budget checks to model and tool calls that pass through OpenClaw's supported lifecycle hooks. With `modelFallbacks`, low-budget strategies, and `toolCallLimits` configured, it can downgrade matching models, disable expensive tools, add remaining-budget prompt hints, and cap per-tool invocation counts. Standard subject fields in `budgetScope` select enforceable tenant, workspace, app, workflow, agent, or toolset ledgers; `userId` and `sessionId` are attribution dimensions unless you map them to those fields. Session summaries report the plugin's estimated model and tool costs.
 
 Beyond enforcement, the plugin actively protects you:
 
-- **Burn rate anomaly detection** catches runaway tool loops before they exhaust budget — if spending spikes 3x above the session average, the plugin emits `cycles.budget.burn_rate_anomaly` to your OTLP backend for immediate alerting
+- **Burn rate anomaly detection** emits `cycles.budget.burn_rate_anomaly` when the current window exceeds the configured comparison threshold; your OTLP backend decides whether to alert or intervene
 - **Predictive exhaustion warnings** estimate when budget will run out and emit `cycles.budget.exhaustion_forecast_ms` before it happens, so you can fund the budget or wind down gracefully
 - **Automatic retry with backoff** on transient Cycles server errors (429/503/504) prevents spurious denials during load spikes
 - **Reservation heartbeat** auto-extends long-running tool reservations so cost tracking doesn't silently break when a tool exceeds the default 60s TTL
-- **Full observability** via the built-in OTLP HTTP adapter (pipe 12 metrics into Datadog, Prometheus, Grafana, or any OTLP collector — configured through `otlpMetricsEndpoint`) and opt-in session event logs for debugging exactly what happened
+- **Budget observability** via the built-in OTLP HTTP adapter (14 metrics when the current features are enabled, configured through `otlpMetricsEndpoint`) and opt-in session logs of the plugin's reserve, commit, deny, block, and release decisions
 - **Unconfigured tool detection** reports which tools are using default cost estimates so you can tune `toolBaseCosts` after every session
 
-The result: predictable spend, controlled behavior, and full visibility — even when agents run autonomously for hours.
+The result is a mandatory budget boundary for the hook paths the plugin covers, plus configurable degradation and budget telemetry. External model and tool outcomes still belong in application or provider logs.
 
 Install, configure 3 fields, done. No agent code changes required.
 
@@ -176,12 +176,12 @@ Model fallbacks support both single values and ordered chains. When budget is lo
         "config": {
           "tenant": "acme",
           "modelFallbacks": {
-            "anthropic/claude-opus-4-20250514": ["anthropic/claude-sonnet-4-20250514", "anthropic/claude-haiku-4-5-20251001"],
+            "anthropic/claude-opus-4-8": ["anthropic/claude-sonnet-4-6", "anthropic/claude-haiku-4-5-20251001"],
             "openai/gpt-4o": "openai/gpt-4o-mini"
           },
           "modelBaseCosts": {
-            "anthropic/claude-opus-4-20250514": 1500000,
-            "anthropic/claude-sonnet-4-20250514": 300000,
+            "anthropic/claude-opus-4-8": 500000,
+            "anthropic/claude-sonnet-4-6": 300000,
             "anthropic/claude-haiku-4-5-20251001": 100000,
             "openai/gpt-4o": 1000000,
             "openai/gpt-4o-mini": 100000
@@ -448,7 +448,7 @@ The plugin tracks per-tool and per-model cost breakdowns throughout the session.
 - Tenant, budget, user, and session identifiers
 - Final remaining/spent/reserved balances
 - Total reservations made
-- Per-component cost breakdown (e.g., `tool:web_search`, `model:anthropic/claude-sonnet-4-20250514`)
+- Per-component cost breakdown (e.g., `tool:web_search`, `model:anthropic/claude-sonnet-4-6`)
 - Per-tool invocation counts (e.g., `{ web_search: 15, code_execution: 3 }`)
 - Session timing (start/end timestamps)
 - Average cost and estimated remaining calls
@@ -530,7 +530,7 @@ Surface hierarchical budget information by setting a parent budget ID:
 }
 ```
 
-When `parentBudgetId` is set, the pool balance is included in budget snapshots and prompt hints (e.g., "Team pool: 50000000 remaining."). Reservations target the individual scope — the Cycles server handles hierarchical deduction from the pool.
+When `parentBudgetId` is set, the matching balance is included in budget snapshots and prompt hints (for example, "Team pool: 50000000 remaining."). This setting is read-only visibility: reservations still target `budgetScope`, and `parentBudgetId` does not add another enforced ledger. To enforce a broader limit as well, create a budget at a broader standard scope that is actually present in the reservation subject.
 
 ## Dry-run mode
 
@@ -623,7 +623,7 @@ The plugin also warns about common misconfigurations on startup (e.g., `downgrad
 With `logLevel: "debug"`, you'll see per-call activity:
 
 ```
-[openclaw-budget-guard] before_model_resolve: model=anthropic/claude-sonnet-4-20250514 level=healthy
+[openclaw-budget-guard] before_model_resolve: model=anthropic/claude-sonnet-4-6 level=healthy
 [openclaw-budget-guard] before_prompt_build: injecting hint (142 chars)
 [openclaw-budget-guard] Tool "web_search" has no entry in toolBaseCosts — using default estimate (100000 USD_MICROCENTS)
 [openclaw-budget-guard] before_tool_call: tool=web_search callId=abc123 estimate=100000
@@ -795,11 +795,11 @@ For production agents handling real spend. Blocks on exhaustion, downgrades mode
           "failClosed": true,
           "lowBudgetStrategies": ["downgrade_model", "disable_expensive_tools", "limit_remaining_calls"],
           "modelFallbacks": {
-            "anthropic/claude-opus-4-20250514": ["anthropic/claude-sonnet-4-20250514", "anthropic/claude-haiku-4-5-20251001"]
+            "anthropic/claude-opus-4-8": ["anthropic/claude-sonnet-4-6", "anthropic/claude-haiku-4-5-20251001"]
           },
           "modelBaseCosts": {
-            "anthropic/claude-opus-4-20250514": 1500000,
-            "anthropic/claude-sonnet-4-20250514": 300000,
+            "anthropic/claude-opus-4-8": 500000,
+            "anthropic/claude-sonnet-4-6": 300000,
             "anthropic/claude-haiku-4-5-20251001": 100000
           },
           "toolBaseCosts": {
@@ -858,7 +858,7 @@ Aggressive cost savings. Low thresholds, model downgrade with token limits, expe
           "maxTokensWhenLow": 512,
           "expensiveToolThreshold": 200000,
           "modelFallbacks": {
-            "anthropic/claude-opus-4-20250514": "anthropic/claude-haiku-4-5-20251001",
+            "anthropic/claude-opus-4-8": "anthropic/claude-haiku-4-5-20251001",
             "openai/gpt-4o": "openai/gpt-4o-mini"
           }
         }
@@ -878,8 +878,8 @@ v0.5.0 introduces the **reserve-then-commit** pattern for models: the plugin res
 {
   "config": {
     "modelBaseCosts": {
-      "anthropic/claude-sonnet-4-20250514": 300000,
-      "anthropic/claude-opus-4-20250514": 1500000
+      "anthropic/claude-sonnet-4-6": 300000,
+      "anthropic/claude-opus-4-8": 500000
     }
   }
 }
@@ -966,7 +966,7 @@ The plugin retries Cycles server requests on transient HTTP errors (429, 503, 50
 }
 ```
 
-With default settings, a 429 response triggers up to 2 retries with 500ms and 1000ms delays. Each retry generates a fresh idempotency key, creating a separate reservation attempt at the Cycles server.
+With default settings, a 429 response triggers up to 2 retries with 500ms and 1000ms delays. The plugin builds one request body and idempotency key for the logical reservation, then reuses both across those transport retries. A successful retry therefore resolves to the same idempotent reservation operation rather than creating a second hold.
 
 ### Heartbeat for long-running tools
 
@@ -1015,7 +1015,7 @@ When estimated time-to-exhaustion drops below 120 seconds (based on current burn
 
 ## Session event log (v0.6.0)
 
-Enable a full audit trail of every budget decision:
+Enable a session log of the plugin's budget decisions:
 
 ```json
 {

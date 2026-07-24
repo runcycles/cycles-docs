@@ -75,4 +75,4 @@ The badge is available in two variants to suit light and dark backgrounds:
 
 ## Tell Us About Your Project
 
-We'd love to feature your project on the [Integration Ecosystem](/how-to/ecosystem) page. Open a [GitHub issue](https://github.com/runcycles/cycles-protocol/issues) or start a [GitHub discussion](https://github.com/runcycles/cycles-protocol/discussions) to tell us what you've built and how you're using Cycles. Community projects that use the badge and integrate Cycles are eligible to be showcased on the ecosystem page.
+We'd love to feature your project on the [Integration Ecosystem](/how-to/ecosystem) page. Open a [GitHub issue](https://github.com/runcycles/cycles-protocol/issues) or start an [organization discussion](https://github.com/orgs/runcycles/discussions) to tell us what you've built and how you're using Cycles. Community projects that use the badge and integrate Cycles are eligible to be showcased on the ecosystem page.

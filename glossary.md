@@ -19,11 +19,11 @@ The role Cycles plays in an autonomous system: authorizing or denying execution 
 
 ### Action Authority
 
-The subset of [runtime authority](#runtime-authority) that governs what actions an agent is permitted to take — independent of cost. While budget authority controls spend, action authority controls side effects: emails sent, deployments triggered, records modified. Cycles enforces action authority through toolset-scoped budgets denominated in [RISK_POINTS](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points). See the [Action Authority Demo](/demos/) and [AI Agent Action Control](/blog/ai-agent-action-control-hard-limits-side-effects).
+The subset of [runtime authority](#runtime-authority) that governs what actions an agent is permitted to take—independent of cost. Application or gateway authorization controls side effects such as emails, deployments, and record changes. Cycles can contribute a caller-assigned [RISK_POINTS](/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points) budget and return configured caps, but it does not infer tool permissions or authorize arguments; the host must enforce both the permission decision and the budget boundary. See the [Action Authority Demo](/demos/) and [AI Agent Action Control](/blog/ai-agent-action-control-hard-limits-side-effects).
 
 ### Exposure
 
-The cumulative cost, risk, or side effects an autonomous system can create before it is stopped. An agent with a $5 budget but no pre-execution enforcement has unbounded exposure — every action executes before any limit is checked. Cycles bounds exposure through the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles): budget is reserved before work begins, capping the maximum possible damage. See [Exposure Estimation](/how-to/how-to-estimate-exposure-before-execution-practical-reservation-strategies-for-cycles).
+The cumulative cost or caller-modeled risk an autonomous system can create before a control intervenes. Cycles can bound submitted estimates on mandatory instrumented paths through the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles). It does not cap uninstrumented work or prove the real-world damage of an action, and settled spend can differ according to the commit overage policy. See [Exposure Estimation](/how-to/how-to-estimate-exposure-before-execution-practical-reservation-strategies-for-cycles).
 
 ### Reservation
 
@@ -147,7 +147,7 @@ The current state of a budget, including fields such as `allocated`, `spent`, `r
 
 ### Budget Envelope
 
-A fixed upper bound on how much an entity (tenant, workflow, run) is allowed to consume. Budget envelopes are enforced hierarchically — a run's envelope cannot exceed its parent workflow's remaining budget, which in turn cannot exceed the tenant's allocation.
+A configured ledger limit at one standard scope such as tenant, workspace, app, workflow, agent, or toolset. A run can use a unique workflow value as an application-level mapping. One reservation checks every matching configured ledger atomically, but allocations are independent: Cycles does not transfer or subdivide funds between parent and child ledgers.
 
 ### Graceful Degradation
 
@@ -223,7 +223,7 @@ An HTTP POST callback triggered by a state change event. Cycles delivers webhook
 
 ### Event (Webhook)
 
-An immutable record of a state change (e.g., `budget.exhausted`, `reservation.denied`). The v0.1.25 Admin API `EventType` enum registers 51 event types across 7 categories (budget: 17, reservation: 6, tenant: 6, api_key: 7, policy: 3, webhook: 7, system: 5). The `webhook` category covers six lifecycle events (`webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted`) added in spec v0.1.25.33; the four `_via_tenant_cascade` event names emitted by the tenant-close cascade are part of the registered enum since governance revision v0.1.25.35. Events are stored in Redis with configurable TTL (default 90 days) and dispatched to matching webhook subscriptions.
+An immutable record of an emitted decision, lifecycle outcome, or state change (for example, `reservation.denied` or `budget.exhausted`). The v0.1.25 Admin API `EventType` enum registers 51 event types across 7 categories (budget: 17, reservation: 6, tenant: 6, api_key: 7, policy: 3, webhook: 7, system: 5); registration does not mean every type is currently emitted. The `webhook` category covers six lifecycle events (`webhook.created` / `.updated` / `.paused` / `.resumed` / `.disabled` / `.deleted`) added in spec v0.1.25.33; the four `_via_tenant_cascade` event names emitted by the tenant-close cascade are part of the registered enum since governance revision v0.1.25.35. Events are stored in Redis with configurable TTL (default 90 days) and matching subscriptions are delivered when the Events Service is deployed.
 
 ### Signing Secret
 
@@ -271,7 +271,7 @@ The W3C Trace Context HTTP header (`00-<trace_id>-<span_id>-<flags>`). Cycles ac
 
 ### correlation_id
 
-A server-set identifier that groups a family of related events in the event stream, in one of two shapes: for protocol event-stream clusters, a deterministic hash over `(tenant_id, scope, action_kind_or_risk_class, window, window_key)` — so threshold-alert → trip → reset chains and `observed_denied` ↔ `reservation.denied` pairs join without an operator supplying anything; for governance/admin operations, an explicit server-composed operation ID (e.g. `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, tenant-cascade IDs). Scoped to the event stream only. Distinct from `trace_id` (logical-operation grain, W3C-compatible) and `request_id` (one HTTP request) — both of which are also server-managed but answer different questions.
+A server-managed event field. The runtime YAML requires deterministic cluster IDs derived from `(tenant_id, scope, action_kind_or_risk_class, window, window_key)`, but the current reference runtime leaves `correlation_id` absent on its implemented emit paths. The current admin server does populate explicit operation IDs for selected lifecycle and fan-out operations (for example, `webhook_create:<id>`, `webhook_bulk_action:<action>:<request_id>`, and tenant-cascade IDs). It is distinct from `trace_id` (the W3C-compatible logical-operation join that callers can propagate) and `request_id` (one HTTP request).
 
 ## Admin Plane
 

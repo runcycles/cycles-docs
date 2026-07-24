@@ -170,7 +170,7 @@ except BudgetExceededError:
     result = {"content": "GPU budget exhausted — try again later.", "cost": 0}
 ```
 
-For shared GPU infrastructure, this prevents one tenant from monopolizing the hardware. The budget authority can set per-tenant limits and Cycles enforces them before inference begins.
+For shared GPU infrastructure, a mandatory wrapper can stop a tenant's protected inference calls once its configured compute budget is unavailable. Scheduler fairness, GPU isolation, and calls that bypass the wrapper remain infrastructure concerns.
 
 See [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) for patterns like queueing, model downgrade, and caching.
 

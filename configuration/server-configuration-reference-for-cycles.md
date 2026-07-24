@@ -111,7 +111,7 @@ Runtime audit rows never use the admin-plane `__admin__` / `__unauth__` sentinel
 |---|---|---|---|
 | `cycles.metrics.tenant-tag.enabled` | `true` | `CYCLES_METRICS_TENANT_TAG_ENABLED` | When `true`, Prometheus counters include a `tenant` label. Set to `false` in deployments with many thousands of tenants to bound series cardinality. |
 
-The runtime server publishes seven domain counters under `cycles_*_total` (introduced in v0.1.25.10); the events service publishes `cycles_webhook_*` counters plus a latency timer. The `tenant-tag.enabled` toggle is mirrored on both services, but note the defaults differ: `true` on the runtime, `false` on the events service. For the full metric enumeration, tag definitions, scrape targets, and alert recipes, see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference).
+The runtime server publishes 11 domain counters plus one maintenance timer; the events service publishes 17 delivery, evidence, dispatcher, and security counters plus one delivery-latency timer. The `tenant-tag.enabled` toggle is mirrored on both services, but the defaults differ: `true` on the runtime and `false` on the events service. For the complete current inventory, tag definitions, scrape targets, and alert recipes, see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference).
 
 ## JSON serialization
 
@@ -513,7 +513,7 @@ A delivery that exceeds `dispatch.max-delivery-age-ms` (default 24h) is failed i
 
 ### Events service metrics
 
-Introduced in `cycles-server-events` v0.1.25.6. Seven counters plus one latency timer under the `cycles_webhook_*` namespace, with `tenant` and `event_type` labels gated by `cycles.metrics.tenant-tag.enabled`. For the full enumeration — metric names, tags, cardinality guidance, scrape config, and alert recipes — see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference#events-service-cycles-server-events).
+Introduced in `cycles-server-events` v0.1.25.6 and expanded in later releases. The current service exposes 17 delivery, evidence, dispatcher, and security counters plus one delivery-latency timer. Metrics that carry `tenant` respect `cycles.metrics.tenant-tag.enabled`; metrics without that tag are unaffected. For the complete enumeration, see [Prometheus Metrics Reference](/how-to/prometheus-metrics-reference#events-service-cycles-server-events).
 
 ### Encryption key (shared across all services)
 

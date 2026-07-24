@@ -26,12 +26,18 @@ Each is valid.
 Each solves a different problem.  
 The best choice depends on the failure mode you are trying to prevent first.
 
+::: warning “Run budget” is an integration pattern
+Cycles has no native `run` scope. This guide uses **run budget** to mean a standard `workflow` ledger whose `subjects.workflow` value is the run ID. Every protected action in that execution must submit the same workflow subject for the shared envelope to apply. A run ID stored only in `dimensions` adds attribution, not enforcement.
+
+The ledger bounds only instrumented actions and the exposure the application submits. The host must handle a denial by stopping or degrading the run, and must authorize tools and side effects separately.
+:::
+
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
 - **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
-- **Audit** — reservations, commits, releases, and direct-usage events create lifecycle records; non-persisting preflight decisions need application logging
+- **Audit** — live operations create their applicable reservation, balance, and audit records; successful reserve/commit/release/direct-debit paths do not each emit a current runtime Event, and non-persisting preflight decisions need application logging
 
-All three rollouts on this page create budget lifecycle records when they use live reservations and settlement. Dry-run and `decide` responses are non-persisting unless the application logs them. Tenant budgets and run budgets primarily address spend; run budgets also bound risky agent loops; model-call guardrails are the lowest-friction way to start with per-call LLM spend enforcement.
+All three rollouts on this page create the applicable live reservation, balance, and audit records when they use reservations and settlement. Dry-run and `decide` create no reservation or balance mutation; the current server emits `reservation.denied` for denied evaluations, but the application must log all responses and external outcomes for a complete record. Tenant budgets and run budgets primarily address spend; run budgets also bound risky agent loops; model-call guardrails are the lowest-friction way to start with per-call LLM spend enforcement.
 :::
 
 ## The wrong way to start
@@ -108,7 +114,7 @@ Tenant budgets are easy to explain.
 You can say:
 
 - each tenant gets a daily, weekly, or monthly envelope
-- all governed actions count against that envelope
+- all instrumented actions submitted against that ledger and unit count against the envelope
 - once exhausted, certain actions stop, downgrade, or defer
 
 This is intuitive for operators, finance, product, and customer-facing teams.
@@ -173,9 +179,9 @@ Run budgets are where “bounded execution” becomes real.
 
 ### What run budgets solve well
 
-Run budgets are strong at:
+With consistent instrumentation and host-side denial handling, run budgets are strong at:
 
-- stopping runaway loops
+- denying further budgeted actions in runaway loops once the ledger lacks room
 - limiting recursive tool chains
 - bounding one workflow execution
 - protecting against local over-consumption
@@ -375,9 +381,9 @@ No matter which first rollout you choose, shadow mode is often the safest way to
 
 That means:
 
-- evaluate reservations
-- observe would-allow and would-deny decisions
-- compare estimates with actuals
+- send reservation requests with `dry_run: true`
+- log would-allow and would-deny responses in the application
+- compare estimates with actuals from application telemetry because dry runs cannot be committed
 - tune thresholds before hard enforcement
 
 This is especially useful if you are unsure whether tenant ceilings, run envelopes, or model-level estimates are well calibrated yet.

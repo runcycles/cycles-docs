@@ -7,7 +7,7 @@ description: "Exposure is the gap between what an agent does and when enforcemen
 
 Exposure is the total cost, risk, or damage an autonomous system can create before something stops it.
 
-It is not the same as spend. A support agent that sends 200 customer emails costs $1.40 in model tokens — but creates $50,000 in lost pipeline. The spend was trivial. The exposure was catastrophic.
+It is not the same as spend. In an illustrative scenario, 200 mistaken customer emails cost about $1.40 in model tokens while their unquantified customer and business impact can be much larger. Low spend does not imply low exposure.
 
 > **Quantify exposure for your agent:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — model action classes by reversibility and visibility; the catastrophic *irreversible + public* class is what rate limits leave unbounded.
 
@@ -18,7 +18,7 @@ Every autonomous system has two numbers:
 1. **Spend** — what it costs to run (tokens, compute, API fees)
 2. **Exposure** — what it can do before it is stopped (emails sent, records modified, deploys triggered, dollars committed)
 
-Most cost controls target spend. Rate limits cap requests per second. Provider spending caps pause billing at a monthly threshold. Observability dashboards show what happened after the fact.
+Most cost controls target one dimension. Rate limits cap throughput. Provider controls may alert on budgets, consume prepaid credits, or enforce account and capacity limits. Observability dashboards report what happened. None automatically represents every application run, tenant, or side effect.
 
 None of these bound exposure, because none of them enforce limits **before** the next action executes.
 
@@ -38,7 +38,7 @@ Observability is essential — but it observes exposure. It does not bound it. S
 
 Cycles bounds exposure by requiring agents to **reserve** budget before execution and **commit** the actual cost afterward.
 
-The reservation is the enforcement point. If the budget is exhausted, the reservation is denied, and the action never executes. The maximum possible damage is capped at the reserved amount — not at infinity.
+The reservation is the enforcement point. If sufficient budget is unavailable, a live reservation fails and correctly integrated protected work does not execute. This bounds the submitted cumulative exposure at that boundary; it does not cap all possible business harm, validate the estimate, or cover work that bypasses instrumentation.
 
 This applies to both financial exposure (USD, tokens) and operational exposure (risk points). A toolset-scoped budget denominated in RISK_POINTS can cap the number of consequential actions an agent takes, regardless of their dollar cost. See [Action Authority](/concepts/action-authority-controlling-what-agents-do).
 

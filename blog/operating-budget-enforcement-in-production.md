@@ -16,7 +16,7 @@ head:
 
 > **Part of: [Multi-Tenant AI Operations Reference](/guides/multi-tenant-operations)** — the full pillar covering scope hierarchy, per-tenant enforcement, multi-agent coordination, tenant lifecycle, and identity.
 
-Budget enforcement works. Your agents are denied when they exceed limits. [Webhook events](/blog/real-time-budget-alerts-for-ai-agents) fire in real time. PagerDuty pages you.
+An instrumented action can be denied when a matching budget has insufficient room. If you run the events service and configure a matching [webhook subscription](/blog/real-time-budget-alerts-for-ai-agents), the resulting event can reach your incident tooling.
 
 <!-- more -->
 
@@ -30,16 +30,16 @@ Not every webhook event is a page. Map events to severity and expected response 
 
 | Severity | Events | Response | What's Happening |
 |---|---|---|---|
-| **Critical** | `budget.exhausted`, `budget.over_limit_entered`, `system.store_connection_lost` | Minutes | Agents are blocked or enforcement is degraded. Revenue-impacting. |
-| **Warning** | `reservation.denied`, `budget.threshold_crossed` (95%) | Hours | Agents may be failing or budget is nearly depleted. |
-| **Info** | `budget.threshold_crossed` (80%), `reservation.commit_overage` | Next business day | Early warning. Review estimates and capacity. |
+| **Critical** | `budget.exhausted` or `budget.over_limit_entered` on a customer-critical scope | Per your SLO | New positive reservations matching the affected ledger may be blocked. |
+| **Warning** | Rising live-denial metric or application 4xx errors; rising `reservation.commit_overage` | Per your SLO | Protected actions may be failing, or estimates may need recalibration. |
+| **Info** | `budget.funded`, `budget.debited`, `budget.reset`, `budget.debt_repaid` | Routine review | An operator or automation changed ledger state. |
 | **Audit** | `tenant.suspended`, `api_key.revoked`, `api_key.auth_failed` | As needed | Security or lifecycle event. Verify intentional. |
 
-Route critical events to PagerDuty. Route warnings to a Slack channel. Send info to a dashboard or email digest. See the [webhook integrations guide](/how-to/webhook-integrations) for setup.
+These severity assignments are examples; route events according to the affected scope and your service SLOs. The current reference server emits exhaustion at 100% utilization, but does not automatically emit configurable 80% or 95% `budget.threshold_crossed` alerts. Calculate early-warning thresholds from balance snapshots or your telemetry. See the [webhook integrations guide](/how-to/webhook-integrations) for delivery setup.
 
-## Diagnostic decision tree: reservation.denied
+## Diagnostic decision tree: a budget denial
 
-`reservation.denied` is the most common operational event. An agent tried to reserve budget and was refused. Here's how to diagnose why.
+A live reservation that cannot proceed returns a protocol error such as `409 BUDGET_EXCEEDED`; the current exception path does not emit `reservation.denied`. Detect live failures through application error handling or `cycles_reservations_reserve_total{decision="DENY"}`. The `reservation.denied` event is emitted only when a dry-run reservation or `/v1/decide` evaluation returns `DENY`, making it useful for calibration rather than proof that live work was blocked.
 
 ### Step 1: Identify scope and tenant
 
@@ -51,15 +51,28 @@ The event payload tells you who, what, and where:
   "tenant_id": "acme-corp",
   "scope": "tenant:acme-corp/workspace:prod/agent:support-bot",
   "actor": { "type": "api_key", "key_id": "key_9f8e7d6c" },
-  "data": { "reason_code": "BUDGET_EXCEEDED", "requested_amount": 5000000 }
+  "data": {
+    "scope": "tenant:acme-corp/workspace:prod/agent:support-bot",
+    "unit": "USD_MICROCENTS",
+    "reason_code": "BUDGET_EXCEEDED",
+    "requested_amount": 5000000,
+    "remaining": 0,
+    "action": { "kind": "llm.chat", "name": "support-reply" },
+    "subject": { "tenant": "acme-corp", "workspace": "prod", "agent": "support-bot" }
+  }
 }
 ```
 
-Pull recent denial events for this [tenant](/glossary#tenant) to see if it's a single agent or widespread:
+For a hypothetical denial, pull recent `reservation.denied` events for this [tenant](/glossary#tenant). For a live incident, start from the application's error response and runtime metric tags instead:
 
 ```bash
 curl "http://localhost:7979/v1/admin/events?tenant_id=acme-corp&event_type=reservation.denied&limit=50" \
   -H "X-Admin-API-Key: $ADMIN_KEY"
+
+# Live reservation denials (Prometheus; tenant tag is optional by configuration)
+sum by (tenant, reason) (
+  rate(cycles_reservations_reserve_total{decision="DENY"}[5m])
+)
 ```
 
 ### Step 2: Check the budget
@@ -87,11 +100,11 @@ Look at the response:
 
 | Symptom | Likely Cause | Immediate Fix |
 |---|---|---|
-| Single agent, many denials in quick succession | Retry loop or runaway agent | Revoke the API key: `DELETE /v1/admin/api-keys/{key_id}` |
-| Many agents across workspace, all denied | Budget exhausted for shared scope | Emergency fund: `POST /v1/admin/budgets/fund` with CREDIT |
-| Intermittent denials, some agents succeed | Concurrent agents competing for limited remaining budget | Increase allocation or add overdraft buffer |
-| Denials started after a deploy | New code version has higher cost estimates | Review and lower estimate amounts in agent code |
-| Denials for one tenant only | Tenant-specific budget depleted | Fund that tenant's budget specifically |
+| Single key, many denials in quick succession | Retry loop, intentional fan-out, or duplicate instrumentation | Correlate with application traces; revoke the key if the activity is unauthorized or cannot be stopped safely |
+| Many agents across one workspace, all denied at the same scope | Shared ledger exhausted, frozen, closed, or over-limit | Inspect the reason code and ledger state before funding or changing policy |
+| Intermittent denials, some agents succeed | Limited remaining budget, varying estimates, or concurrent reservations | Inspect estimates and active reservations; resize only if the allocation is actually wrong |
+| Denials started after a deploy | Changed estimates, scope mapping, or workload behavior | Compare the deployed signals with the previous version |
+| Denials for one tenant only | A tenant-owned ledger or tenant lifecycle state is denying work | Inspect that tenant's denying scope and reason code |
 
 ## Emergency response playbook
 
@@ -117,11 +130,9 @@ curl -X POST "http://localhost:7979/v1/admin/budgets/fund?scope=tenant:acme-corp
     "reason": "emergency top-up: agents blocked in prod"
   }'
 
-# 3. Verify agents can reserve again
-# Agents will automatically succeed on next attempt — no restart needed
+# 3. Verify a new reservation succeeds
+# No restart is required, but other denying scopes or states can still block it
 ```
-
-**Time to resolution:** Under 60 seconds if you have the API key ready.
 
 ### Scenario B: Over-limit — debt exceeds overdraft
 
@@ -155,7 +166,7 @@ One API key is generating hundreds of reservation attempts per minute.
 # 1. Identify the key from denial events
 # Event data: actor.key_id = "key_9f8e7d6c"
 
-# 2. Revoke the key immediately (permanent, takes effect instantly)
+# 2. Revoke the key if the activity is unauthorized or cannot be stopped
 curl -X DELETE "http://localhost:7979/v1/admin/api-keys/key_9f8e7d6c" \
   -H "X-Admin-API-Key: $ADMIN_KEY"
 
@@ -167,41 +178,36 @@ curl "http://localhost:7979/v1/admin/audit/logs?key_id=key_9f8e7d6c&limit=100" \
 curl -X POST "http://localhost:7979/v1/admin/api-keys" \
   -H "X-Admin-API-Key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"tenant_id": "acme-corp", "name": "support-bot-v2", "permissions": ["reservations:create", "reservations:commit", "balances:read"]}'
+  -d '{"tenant_id": "acme-corp", "name": "support-bot-v2", "permissions": ["reservations:create", "reservations:commit", "reservations:release", "balances:read"]}'
 ```
 
 **Important:** Revoking a key is permanent via the API — there is no un-revoke. Active reservations created before revocation can still be committed or released using another valid key for the same tenant. Only new requests using the revoked key are blocked.
 
 ## Estimate accuracy: the most underrated metric
 
-The gap between what agents *reserve* and what they *commit* is the single best leading indicator of budget incidents.
-
-- **Reserve >> Commit** (ratio > 2:1): Agents over-estimate. Budget *appears* consumed but most is released after commit. You're experiencing false scarcity — budgets run out sooner than actual spend warrants.
-- **Reserve << Commit** (ratio < 0.8:1): Agents under-estimate. Overage events fire. Debt accumulates. You'll see `reservation.commit_overage` and eventually `budget.over_limit_entered`.
-- **Reserve ≈ Commit** (ratio 0.8-1.2:1): Estimates are accurate. Budget utilization is predictable. This is the target range.
+The gap between what agents *reserve* and what they *commit* is a useful leading indicator of budget pressure.
 
 | Reserve:Commit Ratio | What It Means | Action |
 |---|---|---|
-| > 2:1 | Severe over-estimation | Reduce agent estimate amounts to free budget capacity |
-| 1.2 – 2:1 | Moderate buffer | Acceptable for workloads with high variance |
-| 0.8 – 1.2:1 | Accurate | Ideal range. No action needed. |
-| < 0.8:1 | Under-estimation | Increase estimates or add overdraft buffer |
+| Consistently above 1 | Estimates exceed actual usage | Decide whether the safety buffer is intentional; excessive buffers can reduce concurrent headroom |
+| Near 1 | Estimates are close to actual usage | Verify the distribution, not just the aggregate |
+| Consistently below 1 | Actual usage exceeds estimates | Improve the estimator and review the configured commit-overage policy |
 
-How to measure: compare `reserved` and `spent` from the balance API over time. A rising `reserved` with flat `spent` signals over-estimation. Rising `debt` with low `reserved` signals under-estimation.
+There is no universal healthy band: a deterministic call can target a narrow tolerance, while a high-variance tool may need a larger safety buffer. Calculate the ratio from completed reservation estimates and their actual amounts in application telemetry or exported reservation records. The balance API's `reserved` field is a point-in-time total of active holds and `spent` is cumulative, so dividing those two fields is not a reserve-to-commit ratio.
 
 ## Five metrics that predict budget incidents
 
-These are the numbers your budget operations dashboard should show. The thresholds below are suggested starting points — tune them based on your workload patterns.
+These are useful numbers for a budget operations dashboard. Derive alert thresholds from workload baselines, service objectives, and the time operators need to respond.
 
 | Metric | What It Shows | Watch For |
 |---|---|---|
-| **Denial rate** | % of reservation attempts denied | > 5% sustained over 15 minutes |
-| **Budget velocity** | $ consumed per hour | > 2x the 7-day rolling average |
-| **Estimate accuracy** | reserved / committed ratio | Outside 0.8 – 2.0 range |
-| **Time to exhaustion** | Hours until remaining = 0 at current velocity | < 4 hours |
-| **[Webhook delivery](/glossary#webhook-delivery) failure rate** | % of deliveries failing | > 10% (your alerting pipeline is degraded) |
+| **Denial rate** | % of reservation attempts denied | Deviation from the expected, classified baseline |
+| **Budget velocity** | Units consumed per time window | Unexpected change after accounting for seasonality and traffic |
+| **Estimate accuracy** | Estimate / actual ratio per completed reservation | Drift outside the tolerance chosen for that workload |
+| **Time to exhaustion** | Time until remaining reaches zero at current velocity | Less than the funding or degradation response lead time |
+| **[Webhook delivery](/glossary#webhook-delivery) failure rate** | % of deliveries failing | Breach of your alert-delivery SLO |
 
-**Denial rate** is the most important. A 0% denial rate means budgets are either too generous or enforcement isn't active. A 20% denial rate means agents are routinely failing — either budgets are too tight or there's a systemic issue. Target: < 2% for healthy workloads.
+Interpret denial rate in context. A zero rate can be correct for normal traffic but does not prove that tested runaway cases are bounded. A high rate can be intentional on abusive traffic or harmful on ordinary user workflows; classify denials before changing limits.
 
 **Budget velocity** catches runaway agents before budgets exhaust. If a workspace normally spends $5/hour and suddenly spends $50/hour, you have a problem — even if the budget isn't exhausted yet.
 
@@ -211,17 +217,17 @@ These are the numbers your budget operations dashboard should show. The threshol
 
 Budget enforcement works best when budgets are calibrated to actual workloads. Here's how to get there:
 
-1. **Start at 2x expected cost.** Over-allocate on day one. You can always reduce later. Under-allocation on a new workload causes immediate agent failures.
+1. **Size from representative data and failure objectives.** Use workload percentiles, concurrency, estimate uncertainty, and the maximum exposure you are prepared to accept. A universal multiplier cannot encode those trade-offs.
 
-2. **Use shadow mode for the first week.** Set [`dry_run: true`](/protocol/dry-run-shadow-mode-evaluation-in-cycles) on reservation requests. The server evaluates the budget decision but doesn't actually reserve funds, so agents are never blocked. Review the decisions to tune budgets before enforcing.
+2. **Evaluate representative traffic with dry runs.** Set [`dry_run: true`](/protocol/dry-run-shadow-mode-evaluation-in-cycles) on reservation requests. The server returns a hypothetical decision without creating a reservation or balance mutation; the application must retain that response and actual outcome for analysis. Observe enough traffic and edge cases for your workload rather than relying on a fixed duration.
 
-3. **Set overdraft_limit to 10-20% of allocation.** This handles burst variance without blocking agents during normal traffic spikes. A $100 budget with $15 overdraft tolerates short bursts without hitting over-limit.
+3. **Configure overdraft only when the accounting policy needs it.** `overdraft_limit` applies to `ALLOW_WITH_OVERDRAFT`. Size it from the largest tolerated overage and concurrent-commit behavior, then monitor and reconcile debt. Do not add overdraft merely to hide an undersized budget.
 
-4. **Configure threshold alerts at 80% and 95%.** Default thresholds fire `budget.threshold_crossed` at 80%, 95%, and 100% utilization. The 80% alert gives you time to fund before agents are affected.
+4. **Create early-warning alerts from balances or telemetry.** Choose utilization and time-to-exhaustion thresholds that leave enough response time. The current reference runtime emits `budget.exhausted` on the transition to zero remaining; configurable pre-exhaustion `budget.threshold_crossed` emission is not implemented.
 
-5. **Review monthly.** Are budgets running out mid-cycle? Increase allocation. Is 40% unused at month-end? Reduce allocation to get more accurate cost visibility.
+5. **Review on a workload-appropriate cadence.** Revisit budgets after model, price, traffic, or workflow changes and at the boundaries that matter to your billing period.
 
-6. **Track estimate accuracy.** If reserve:commit ratio drifts outside 0.8-2.0, agent code needs estimate tuning — not budget changes.
+6. **Track estimate accuracy.** Investigate drift outside the tolerance chosen for each workload. Fix estimate formulas when they stop tracking reality; change budgets only when the intended exposure changes.
 
 ---
 

@@ -17,7 +17,7 @@ head:
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-A customer-onboarding agent sends 200 collections emails instead of welcome emails. Total model cost: $1.40. Business impact: [$50K+ in lost pipeline](/blog/ai-agent-action-control-hard-limits-side-effects). A coding agent retries an ambiguous error 240 times. Total model cost: [$4,200](/blog/ai-agent-failures-budget-controls-prevent). Both agents passed every test. Both were under their dollar budgets. In both cases, the agent had no tool-level risk assessment.
+Two illustrative scenarios show the difference between spend and action risk. Two hundred mistaken emails might cost about $1.40 in model tokens while creating much larger, unquantified business harm. Separately, a coding-agent loop runs 240 iterations and costs [$52.80 under its stated token assumptions](/blog/ai-agent-failures-budget-controls-prevent). Neither dollar figure describes whether the underlying action was authorized or safe.
 
 These are not anomalies. They are what happens when teams deploy agents without classifying what those agents can do. Model risk — bias, hallucination, drift — gets attention. **Tool risk** — what happens when the agent acts on the world — does not.
 
@@ -62,7 +62,7 @@ The agent does something it should not have done, or does the right thing too ma
 
 ### Dimension 3: Delegation Risk
 
-The agent spawns sub-agents, delegates tasks, or hands off to other agents. Each delegation multiplies exposure — the parent's budget covers the child's mistakes. A three-level delegation chain with a 3x retry multiplier at each level creates 27x worst-case cost amplification.
+The agent spawns sub-agents, delegates tasks, or hands off to other agents. Nested retry policies can replay lower subtrees; under an illustrative three-level chain with a 3× execution multiplier at each level, one logical path can produce up to 27 executions. Cycles does not infer this graph or transfer parent balances, so callers must submit a shared workflow scope and any explicitly provisioned child agent scopes.
 
 **Unit of measurement:** Delegation depth, sub-agent count, inherited permissions.
 **Existing coverage:** Covered in [Multi-Agent Budget Control](/blog/multi-agent-budget-control-crewai-autogen-openai-agents-sdk).
@@ -79,7 +79,7 @@ Every tool your agent can call has a risk profile. Classifying tools by tier is 
 |:----:|-------|---------|---------------|-------------|-------------------|
 | 0 | **Read-only** | Search, retrieve, summarize, vector lookup | No state change | None (side-effect risk only; sensitive-read risk may be budgeted separately) | [Event](/protocol/how-events-work-in-cycles-direct-debit-without-reservation) (post-hoc accounting) |
 | 1 | **Write-local** | Save draft, write log, update cache, create temp file | Easy to reverse | Internal only | Event or reserve-commit depending on volume |
-| 2 | **Write-external** | API call to third party, webhook trigger, external query | Possible but not guaranteed | Partner systems affected | [Reserve-commit](/protocol/how-reserve-commit-works-in-cycles) (always) |
+| 2 | **Write-external** | API call to third party, webhook trigger, external query | Possible but not guaranteed | Partner systems affected | Host authorization plus [reserve-commit](/protocol/how-reserve-commit-works-in-cycles) before execution |
 | 3 | **Mutation** | DB write/update/delete, send email, post to Slack, create ticket | Difficult or impossible | Customer-facing | Reserve-commit with caps |
 | 4 | **Execution** | Deploy, payment processing, infrastructure change, permission grant | Irreversible in practice | Production users, financial, regulatory | Reserve-commit with strict allowlist |
 
@@ -391,25 +391,25 @@ curl -s -X POST http://localhost:7979/v1/admin/budgets \
   }'
 ```
 
-Both risk-point and cost budgets enforce independently. The agent can be under its dollar budget but over its risk-point budget — or vice versa. This is the dual-control model: cost authority and [action authority](/concepts/action-authority-controlling-what-agents-do) operating in parallel. Budgets at both levels enforce hierarchically — a run cannot exceed its own 250-point limit, and all runs together cannot exceed the app-level ceiling. See [common budget patterns](/how-to/common-budget-patterns) for more examples.
+Risk-point and cost ledgers are separate because each reservation has one unit. A mandatory host can require both controls before an action, coordinating the two reservations in application code. Within each unit, explicitly provisioned run and app ledgers can provide overlapping ceilings; the host still authorizes the action and handles partial acquisition or settlement failures. See [common budget patterns](/how-to/common-budget-patterns) for examples.
 
 ### Step 2: Validate with Shadow Mode
 
-Before turning enforcement on, run the assessment against real traffic. [Shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) evaluates every action against the budget but never denies. The output shows:
+Before turning enforcement on, route representative protected traffic through [dry-run evaluation](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production). A dry-run request evaluates the submitted exposure without creating a reservation or mutating balances and does not itself execute or block the action. Current v0.1.25.x emits `reservation.denied` for denied evaluations, but the application must log all responses and actual outcomes for a complete dataset. That dataset can show:
 
 - How many runs would have been denied (budget too tight)
 - Which tools consume the most risk points (scoring calibration)
 - How actual usage compares to your "normal run" estimate
 - Whether the degradation thresholds trigger at the right points
 
-Run shadow mode for at least one week of production traffic. If more than 5% of runs would have been denied, the budget is too tight — either raise the per-run limit or re-examine the tool scores. If zero runs would have been denied, the budget may be too loose — it would not have caught the incidents you designed it to prevent.
+Collect enough traffic to cover normal peaks, retries, and rare high-risk paths. Choose an acceptable would-deny rate from your own service objectives; there is no universal one-week window or 5% threshold. Investigate both false denials and an implausible absence of denials before enabling blocking behavior.
 
 ### Step 3: Calibrate and Adjust
 
 Risk assessments are living documents. Scores should change when:
 
 - **A new tool is added.** Classify it, score it, update the worksheet before deployment.
-- **An incident occurs.** If a tool caused damage, re-evaluate its tier and multiplier. The $50K email incident would justify raising `send_customer_email` from 40 to 60 points.
+- **An incident occurs.** If a tool caused damage, re-evaluate its tier and multiplier. A mistaken-email event can justify raising `send_customer_email` from 40 to 60 points, but the application should also fix template, recipient, and authorization controls.
 - **Usage patterns shift.** If shadow mode shows agents consistently using 230 of 250 points on normal runs, the budget is too tight for safe operation — raise it or optimize the workflow.
 - **Context changes.** Entering a new market with different regulatory requirements, expanding the customer base, or adding delegation capabilities all change the multipliers.
 

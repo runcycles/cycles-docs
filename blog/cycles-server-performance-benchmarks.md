@@ -160,7 +160,7 @@ Every mutation response includes current balance snapshots for all affected scop
 
 ### Event emission: async and off the hot path
 
-As of v0.1.25, every reservation deny and commit overage triggers a webhook event. These events are emitted asynchronously via `CompletableFuture.runAsync()` on a dedicated daemon thread pool — they never block the request thread. Redis commands for event storage and subscription lookup are pipelined into a single round-trip. The runtime balance events (budget.exhausted, budget.over_limit_entered, budget.debt_incurred) only inspect the in-memory balance list returned by the Lua script — no additional Redis calls.
+As of the current v0.1.25 runtime, a DENY from a dry-run reservation or `/v1/decide`, plus each commit overage, queues an event; live reservation exceptions do not emit `reservation.denied`. `EventEmitterService` uses a dedicated bounded `ThreadPoolExecutor`, so emission does not wait on Redis, but an event can be dropped and logged if the queue is saturated. Redis commands for event storage and subscription lookup are pipelined. The runtime balance events (`budget.exhausted`, `budget.over_limit_entered`, `budget.debt_incurred`) inspect the balance list returned by the Lua operation without an extra balance read.
 
 ## How we measure
 

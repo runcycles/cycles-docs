@@ -41,7 +41,7 @@ The last two rows are where this stops being an ordinary leak. A leaked session 
 
 Moltbook's headline number claimed 1.5 million [autonomous agents](/glossary#autonomous-agent). Wiz's investigation found ~17,000 humans operating them, with no verification distinguishing an autonomous agent from a human-driven bot fleet. The platform's unit of trust — "this is an agent, with karma" — measured nothing.
 
-The industry response to problems like this is identity infrastructure: registries, agent credentials, signed agent cards. Those are necessary — an agent without provenance can't be governed at all, which is why [agent identity is not user identity](/blog/agent-identity-is-not-user-identity) argues for dedicated agent identities with owner mapping. But Moltbook shows the ceiling of identity alone: even perfect verification of *who* an agent is says nothing about *what it may do next, at whose expense*. Palo Alto Networks' [read of the case](https://www.paloaltonetworks.com/blog/network-security/the-moltbook-case-and-how-we-need-to-think-about-agent-security/) gets the framing right — identity, operating boundaries, and context integrity as three pillars. The operational question it leaves open is the one that matters in production: boundaries defined where, enforced by what, at which moment? A boundary that lives in a policy document is a wish. A boundary evaluated before each action is a control.
+The industry response to problems like this is identity infrastructure: registries, agent credentials, signed agent cards. Those are necessary — an agent without provenance can't be governed at all, which is why [agent identity is not user identity](/blog/agent-identity-is-not-user-identity) argues for dedicated agent identities with owner mapping. But Moltbook shows the ceiling of identity alone: even perfect verification of *who* an agent is says nothing about *what it may do next, at whose expense*. Palo Alto Networks' [read of the case](https://www.paloaltonetworks.com/blog/ai-security/the-moltbook-case-and-how-we-need-to-think-about-agent-security/) gets the framing right — identity, operating boundaries, and context integrity as three pillars. The operational question it leaves open is the one that matters in production: boundaries defined where, enforced by what, at which moment? A boundary that lives in a policy document is a wish. A boundary evaluated before each action is a control.
 
 ### 2. One credential carried total authority
 
@@ -83,14 +83,14 @@ The Moltbook exposure ended as well as these things can: found by researchers, p
 
 1. [Wiz Research — Exposed Moltbook database reveals millions of API keys](https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys) — disclosure timeline, exposed data, root cause
 2. [Fortune — Moltbook security concerns, with Karpathy and Marcus reactions](https://fortune.com/2026/02/02/moltbook-security-agents-singularity-disaster-gary-marcus-andrej-karpathy/) — February 2, 2026
-3. [Palo Alto Networks — The Moltbook case and how we need to think about agent security](https://www.paloaltonetworks.com/blog/network-security/the-moltbook-case-and-how-we-need-to-think-about-agent-security/) — identity / boundaries / context-integrity framing
+3. [Palo Alto Networks — The Moltbook case and how we need to think about agent security](https://www.paloaltonetworks.com/blog/ai-security/the-moltbook-case-and-how-we-need-to-think-about-agent-security/) — identity / boundaries / context-integrity framing
 4. [SecurityWeek — Permiso's analysis of Moltbook: bot-to-bot prompt injection and data leaks](https://www.securityweek.com/security-analysis-of-moltbook-agent-network-bot-to-bot-prompt-injection-and-data-leaks/) — live malicious activity, distinct from the database exposure
 
 ## Further Reading
 
 - [Agent Identity Is Not User Identity](/blog/agent-identity-is-not-user-identity) — why agents need dedicated, owner-mapped identities
 - [Least-Privilege API Keys for AI Agents](/blog/least-privilege-api-keys-for-ai-agents) — making a leaked credential a bounded liability
-- [MCP Tool Poisoning: 84% Success Rate](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — the tool-channel variant of the same gap
+- [MCP-ITP: Target-Tool Calls Reached 84.2%](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — the controlled tool-channel benchmark
 - [Agent Skills Are the New Supply Chain](/blog/agent-skills-are-the-new-supply-chain) — governing what agents ingest and execute
 - [The State of AI Agent Incidents (2026)](/blog/state-of-ai-agent-incidents-2026) — the catalog this incident joins
 - [Agent Delegation Chains Need Authority Attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) — capping fleets by design

@@ -47,7 +47,7 @@ export CYCLES_MOCK=true
 
 > **Need setup help?** See [Getting Started with the MCP Server](/quickstart/getting-started-with-the-mcp-server) for per-host configuration (Claude Desktop, Claude Code, Cursor, Windsurf).
 
-## Pattern 1: Simple reserve/commit
+## Pattern 1: Simple reserve-commit
 
 The most common pattern — reserve budget before a costly operation, commit actual usage after:
 
@@ -78,7 +78,7 @@ An accepted response includes `decision: "ALLOW"` or `decision: "ALLOW_WITH_CAPS
     "tokensInput": 1200,
     "tokensOutput": 800,
     "latencyMs": 2500,
-    "modelVersion": "claude-sonnet-4-20250514"
+    "modelVersion": "claude-sonnet-4-6"
   }
 }
 ```

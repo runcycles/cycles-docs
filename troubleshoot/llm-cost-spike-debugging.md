@@ -68,7 +68,7 @@ Diagnosis after the fact is reactive. The class of problem is "the application e
 - **Per-tenant budgets.** A noisy tenant cannot consume cross-tenant headroom because their own ledger is exhausted. Other tenants are unaffected. See [Multi-tenant SaaS guide](/how-to/multi-tenant-saas-with-cycles).
 - **Per-action authority.** Cap not just total spend but per-call cost (e.g., max input tokens, max output tokens, allowed models). Prevents the model-upgrade regression by *policy* — code that asks for a model not on the allow-list is denied. See [Action authority](/concepts/action-authority-controlling-what-agents-do).
 - **Atomic reservations.** Solves the concurrent-agent case where ten parallel runs all believe there is enough budget. See [Concurrent agent overspend](/incidents/concurrent-agent-overspend).
-- **Run-level budgets.** Each agent run gets a fixed per-run budget. Loops self-terminate when the budget is exhausted, even if the per-tenant budget is fine. See [How to model tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
+- **Per-run workflow ledgers.** Give each agent run a unique workflow value and require every protected step to reserve against it. When the ledger is exhausted, the next live reservation fails; the host must stop or degrade the loop. See [How to model tenant, workflow, and run budgets](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles).
 
 A reactive cost-spike playbook is necessary. A reactive *only* posture is not — the fix is structurally eliminating the class.
 

@@ -96,7 +96,7 @@ Capture these fields in the drill notes:
 |---|---|
 | `evidence_id` | Content address to verify and fetch |
 | `cycles_evidence_url` | Retrieval path used by the reviewer |
-| `trace_id` / `correlation_id` | Join point across events, application logs, and audit records |
+| `trace_id` / `request_id` | Join point across related Cycles requests, application logs, events, and audit records |
 | Denial code | The policy outcome being proven |
 | Subject scope | [Tenant](/glossary#tenant), workspace, app, workflow, agent, or toolset boundary |
 | Timestamp | Human-readable incident time, separate from envelope `issued_at_ms` |
@@ -268,7 +268,7 @@ Minimum contents:
 | Key material reference | JWK Set URL or archived key-set snapshot used for verification |
 | Rotation note | Which `kid` covered `issued_at_ms`; active/retired status |
 | Decision summary | Human-readable statement of what was denied and why |
-| Correlation links | `trace_id`, `correlation_id`, incident ticket, relevant audit/event IDs |
+| Correlation links | `trace_id`, `request_id`, applicable admin-event `correlation_id`, incident ticket, relevant audit/event IDs |
 | Retention statement | Hot retention, cold archive, restore procedure, key-history retention |
 | Gaps found | Findings, owners, due dates, and follow-up drill date |
 

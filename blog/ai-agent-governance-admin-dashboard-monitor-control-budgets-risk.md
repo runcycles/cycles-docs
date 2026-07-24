@@ -59,7 +59,7 @@ From there, one click opens the fund dialog. Select **Credit**, enter the amount
 
 ![Budget detail showing RISK_POINTS utilization at 85% with the Fund Budget dialog open](/images/dashboard/risk-budget-fund.png)
 
-If the usage looks suspicious instead of legitimate? Click **Freeze** directly from the budget list. No detail page needed. The scope is locked immediately — new reservations and commits are blocked until you unfreeze it.
+If the usage looks suspicious instead of legitimate? Click **Freeze** directly from the budget list. No detail page needed. The scope is locked immediately for new reservations, direct events, and funding operations until you unfreeze it. Reservations that were already active can still be committed or released.
 
 The same workflow applies to cost budgets — USD spend, token usage, credits. Whether you're capping dollars or risk points, the operational pattern is the same.
 
@@ -71,7 +71,7 @@ You need to revoke it immediately, provision a replacement, hand the new secret 
 
 ![Audit logs with expanded metadata showing operation details, resource IDs, and request context](/images/dashboard/audit-investigation.png)
 
-Filter audit logs by `resource_type: api_key` and the time window. Expand any row to see the full context: who did what, from which IP, with what parameters. The metadata shows the exact resource ID, operation, and request details.
+Filter audit logs by `resource_type: api_key` and the time window. Expanded rows show the fields the admin server persisted, including the operation, resource ID, status, request and trace identifiers, actor key when present, and operation-specific metadata. Source IPs, raw request parameters, and application context are not guaranteed audit fields; retain them in your gateway or application logs when required.
 
 Found the compromised key? Click **Revoke** on the API Keys page. It's invalidated instantly. New operations using that key stop immediately.
 
@@ -105,7 +105,7 @@ A few things surprised us.
 
 ## Try it
 
-The screenshots above show a demo environment with 12 tenants, 42 budgets across four unit types, 6 webhooks, and a full audit trail — representative of a mid-scale production deployment.
+The screenshots above show a demo environment with 12 tenants, 42 budgets across four unit types, 6 webhooks, and budget lifecycle records. They demonstrate the dashboard surface, not a complete log of external application actions or outcomes.
 
 ```bash
 docker compose up -d   # starts admin server + Redis

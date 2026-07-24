@@ -3,7 +3,7 @@ title: "Webhook Delivery That Operators Can Trust"
 date: 2026-05-01
 author: Albert Mavashev
 tags:
-  - webhook
+  - webhooks
   - operations
   - reliability
   - incident-response
@@ -20,7 +20,7 @@ head:
 
 # Webhook Delivery That Operators Can Trust
 
-A budget denial event fires at 2:14 AM. PagerDuty never opens an incident. Slack never receives the message. The agent owner keeps seeing retries, but the receiver logs are empty because the reverse proxy dropped the request body on the way in.
+A `budget.exhausted` event fires at 2:14 AM. PagerDuty never opens an incident. Slack never receives the message. The agent owner sees live reservation failures, but the receiver logs are empty because the reverse proxy dropped the webhook request on the way in.
 
 The problem is not that the event system failed to be clever. The problem is that the delivery contract was not explicit enough for operators to debug it under pressure.
 
@@ -73,9 +73,9 @@ For the full delivery reference, see [Webhook Event Delivery Protocol](/protocol
 
 Cycles webhooks are delivered at least once. Duplicates can happen when a network timeout hides a successful receiver response, when the [events service](/glossary#events-service) restarts during delivery, or when an operator replays a delivery.
 
-Events for the same tenant are dispatched in order. Cross-tenant ordering is not guaranteed, so a receiver that aggregates across tenants must not assume a global timeline from arrival order.
+Webhook arrival order is not guaranteed, including within one tenant: concurrent consumers and retries can reorder deliveries. Consumers should deduplicate by `event_id` and use the event timestamp or stored event log when reconstructing a sequence.
 
-That is the right reliability tradeoff for budget and governance events. Losing a `reservation.denied` event is worse than delivering it twice, as long as the receiver deduplicates correctly.
+That is the right reliability tradeoff for budget and governance events. Losing a `budget.exhausted` event is worse than delivering it twice, as long as the receiver deduplicates correctly.
 
 The receiver contract is simple:
 
@@ -106,7 +106,7 @@ This predictability matters during incidents. If the receiver returns 500 for te
 
 ## Stale delivery cutoff prevents old control signals
 
-Some events are no longer useful after enough time has passed. A `budget.threshold_crossed` event from yesterday may be useful for reporting, but it should not page someone as if the threshold crossed right now. A `system.webhook_delivery_failed` event from an old outage can create false urgency if it lands after the system recovered.
+Some events are no longer useful after enough time has passed. A `budget.exhausted` event from yesterday may be useful for reporting, but it should not page someone as if the ledger reached zero right now. A `system.webhook_delivery_failed` event from an old outage can create false urgency if it lands after the system recovered.
 
 Cycles marks deliveries older than the configured maximum delivery age as `FAILED` without another HTTP attempt. The default is 24 hours.
 

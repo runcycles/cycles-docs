@@ -65,14 +65,14 @@ Once the local test passes, try Cycles against the actions in your product that 
 For each, decide:
 
 - What action kind does it map to? (`llm.completion`, `web.search`, `message.email.send`, `code.exec.shell`, etc.)
-- What should be enforced — spend budget, token budget, risk budget, action-count quota, or some combination?
-- What scope does the cap belong on — tenant, workflow, run, agent, tool?
+- What should be enforced today — spend, token, or caller-assigned risk budget? Treat action-count quotas as a v0.1.26 preview until the reference server implements them.
+- Which standard scope owns the ledger — tenant, workspace, app, workflow, agent, or toolset? Map a run to a unique workflow value when needed.
 
 That mapping is the design exercise. See [Assigning Risk Points to Agent Tools](/how-to/assigning-risk-points-to-agent-tools) for the framework, and [Choosing the Right Integration Pattern](/how-to/choosing-the-right-integration-pattern) for where to put the gate (SDK in-process, MCP, gateway, framework plugin).
 
 ## The architecture in one sentence
 
-Cycles becomes the **runtime authority layer** between agent intent and external execution: every consequential action passes through `reserve → execute → commit` (or `release` on failure), scoped by tenant / workflow / run / tool.
+Cycles becomes a **runtime budget-authority layer** between agent intent and external execution when every selected consequential path passes through `reserve → execute → commit` (or `release` on failure), using the standard subject scopes. Application authorization still decides whether the tool and arguments are permitted.
 
 That is the core idea. Multi-tenant isolation, per-tier budgets, [action-governance previews](/protocol/action-governance-preview-in-cycles), OTLP metrics, MCP integration, and dashboard workflows all build on that one reserve-before-execute boundary.
 

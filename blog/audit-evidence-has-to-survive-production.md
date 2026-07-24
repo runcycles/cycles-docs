@@ -200,7 +200,7 @@ The last item is the one that matters most. A control that has never been drille
 
 Without signed evidence, the audit conversation depends on trust in the operator's live system. "Our server denied it" is a claim. "Here is the signed, content-addressed receipt; here is the key that was authoritative at the time; here is the verifier output" is a different conversation.
 
-That difference matters for budget controls, but it matters even more as runtime authority expands to action surfaces: memory writes, merge buttons, computer-use clicks, voice frames, and every other place an agent can cause durable change. A `DENY` against USD spend and a `DENY` against RISK_POINTS are both policy decisions. Both should be provable later when the question is not "what did the system log?" but "what was the agent authorized to do?"
+That difference matters for budget controls, but it matters even more as runtime authority expands to action surfaces: memory writes, merge buttons, computer-use clicks, voice calls, and other places an agent can cause durable change. A `DENY` against USD spend and a `DENY` against caller-assigned RISK_POINTS are budget decisions. Retain them alongside host authorization and outcome records so a later reviewer can distinguish “the budget rejected this attempt” from “the principal lacked permission” and “the external action actually occurred.”
 
 The enforcement layer is the gate. Evidence is the receipt. Operations is what keeps the receipt believable after the gate has done its job.
 

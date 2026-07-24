@@ -1,9 +1,9 @@
 ---
-title: "How Cycles Controls Agent Actions"
+title: "How Cycles Meters Caller-Assigned Action Exposure"
 date: 2026-04-02
 author: Albert Mavashev
 tags: [action-authority, RISK_POINTS, runtime-authority, tool-governance, agents]
-description: "Learn how Cycles applies reserve-commit accounting to caller-assigned risk budgets, helping applications limit agent actions as well as model spend at runtime."
+description: "Learn how Cycles meters caller-assigned risk budgets while application authorization controls which agent tools and arguments may execute at runtime boundaries."
 blog: true
 sidebar: false
 head:
@@ -12,7 +12,7 @@ head:
       content: AI agent action control, action authority, RISK_POINTS, reserve commit, tool governance, runtime authority
 ---
 
-# Beyond Budget: How Cycles Controls Agent Actions, Not Just Spend
+# Beyond Spend: Metering Caller-Assigned Action Exposure
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
@@ -41,7 +41,7 @@ Cycles' reserve → commit → release lifecycle doesn't care what you're measur
 | `CREDITS` | Abstract [credits](/glossary#credits) | Internal allocation systems |
 | `RISK_POINTS` | Action risk | Tool calls, API requests, side effects |
 
-When you use `RISK_POINTS`, you're not tracking cost — you're tracking **consequence**. An agent that reserves 50 risk points for `send_email` and 0 for `search_knowledge` isn't managing a budget. It's managing what the agent is allowed to do.
+When you use `RISK_POINTS`, the application submits its own exposure estimate rather than a monetary cost. That budget can bound repeated authorized attempts, but it does not decide whether the principal may call `send_email` or whether particular recipients and arguments are safe.
 
 ## How tool estimate mapping works
 
@@ -64,13 +64,13 @@ hooks = CyclesRunHooks(
 )
 ```
 
-With a budget of 200 risk points per session:
+With a budget of 200 risk points per session, assuming every protected tool attempt passes through the hooks:
 - The agent can search knowledge unlimited times (0 points each)
 - It can send 4 emails (50 × 4 = 200 points)
 - It can deploy to production twice (100 × 2 = 200 points)
 - It **cannot** send 3 emails and deploy once (150 + 100 = 250 > 200)
 
-The [budget authority](/glossary#budget-authority) decides the risk allocation. The protocol enforces it. The agent never sees the limits — it just gets `DENY` when it tries to exceed them.
+The application decides the estimates and provisions the budget. The plugin requires a live reservation before nonzero mapped attempts; it separately depends on the host and SDK to authorize and dispatch the tool.
 
 ## Beyond tool calls: action authority in every integration
 
@@ -89,29 +89,29 @@ res = client.create_reservation(ReservationCreateRequest(
 ))
 
 if not res.is_success:
-    # Agent is not authorized to send this email
+    # The submitted exposure does not fit the configured budget.
     return "Email blocked — action limit reached."
 ```
 
-The `action.kind` and `action.name` fields give you per-action-type governance. The budget authority can set different limits for `tool.email` vs `tool.search` vs `tool.deploy`, and the agent's available actions shrink as it consumes its authority.
+The `action.kind` and `action.name` fields describe the attempted operation in the lifecycle record. Current budget selection follows tenant and subject scopes, not an allow/deny rule inferred from those action strings. To isolate email, search, and deploy exposure, the caller can use distinct toolset subjects and provision explicit budgets for them. The host must still authorize the action.
 
-## Real scenarios
+## Illustrative scenarios
 
 ### Scenario 1: Support agent with email limits
 
-A customer support agent can research, draft responses, and search the knowledge base freely. But it can only send 5 emails per session. On the 6th attempt, Cycles returns `DENY`, and the agent queues the email for human review instead.
+A customer support host can allow research and drafting while requiring a 20-point reservation for every authorized email attempt against a 100-point session budget. The sixth attempt does not fit, and the host can queue it for human review.
 
 Without action authority, the agent's retry logic could send the same apology email dozens of times before anyone notices.
 
 ### Scenario 2: DevOps agent with deployment gates
 
-A DevOps agent can run diagnostics, read logs, and suggest fixes with no limits. But deployments cost 100 risk points, and the agent has 100 per day. One deployment per day. If it needs a second, it escalates to a human.
+A DevOps host can authorize diagnostics separately while assigning 100 risk points to each deployment attempt against a 100-point daily budget. A second attempt does not fit unless the host provisions more budget after its normal approval process.
 
 Without action authority, a debugging loop that keeps trying "deploy and check if fixed" could push 12 broken builds in an hour.
 
 ### Scenario 3: Research agent with API call caps
 
-A research agent calls a third-party API during a research session. Each API call costs 1 risk point, and the agent has 50 points per session. After 50 calls, Cycles denies the 51st — the agent must summarize what it has and stop searching. Without this cap, a recursive research loop could make hundreds of API calls in a single session, burning through external API quotas and producing diminishing returns.
+A research host can assign 1 risk point to each third-party API attempt and provide 50 points per session. At a mandatory boundary, the 51st attempt does not fit. The host decides whether to summarize, defer, or request more budget.
 
 ## Cost and consequence together
 
@@ -134,25 +134,25 @@ def send_email(to: str, body: str) -> str:
     ...
 ```
 
-The agent can spend up to $5 on LLM calls (checked against the [USD_MICROCENTS](/glossary#usd-microcents) budget). It can send up to 4 emails (checked against the [RISK_POINTS](/glossary#risk-points) budget, 200 / 50). Each action checks its own unit's budget — the same protocol, the same concurrency safety, the same scope hierarchy, applied to different dimensions of authority.
+The instrumented LLM path can reserve against a $5 [USD_MICROCENTS](/glossary#usd-microcents) budget. The mandatory email handler can separately authorize the call and reserve 50 points against a 200-point [RISK_POINTS](/glossary#risk-points) budget. Each submitted unit uses the same budget protocol; authorization remains outside that protocol.
 
 ## Why this matters for multi-agent systems
 
 In multi-agent systems — LangGraph workflows, AutoGen teams, CrewAI crews — action authority becomes critical. Each agent in the system can have its own risk budget:
 
-- The **researcher** agent gets unlimited search but zero email authority
-- The **writer** agent gets LLM budget but zero deployment authority
-- The **executor** agent gets tool authority but limited LLM budget
+- The **researcher** host role allows search and denies email
+- The **writer** host role receives LLM budget while the host denies deployment
+- The **executor** host role can receive a narrow toolset budget and a smaller LLM budget
 
-The scope hierarchy (`tenant → workspace → app → workflow → agent → toolset`) means these limits are enforced independently per agent. The researcher cannot borrow the executor's deployment authority. A bug in the writer cannot trigger the executor's tools.
+Caller-supplied agent and toolset subjects can isolate budgets when the corresponding ledgers are explicitly provisioned. Missing budgets are skipped, so a zero allocation or host denial—not an absent ledger—is required to block a path. Tool inventory and credentials remain host controls.
 
 This is the same hierarchical isolation that prevents one [tenant](/glossary#tenant) from spending another tenant's budget — applied to actions instead of dollars.
 
 ## Key points
 
-- **Cycles governs actions, not just spend.** `RISK_POINTS` track consequence — tool calls, API requests, side effects — using the same reserve-commit protocol.
-- **Zero-cost tools skip enforcement.** Assign 0 points to safe actions (search, read) so they never hit the Cycles API.
-- **Per-agent action budgets.** In multi-agent systems, each agent gets its own risk allocation through the scope hierarchy.
+- **Cycles meters submitted exposure as well as spend.** `RISK_POINTS` carry the application's estimate through the same reserve-commit protocol.
+- **Zero-estimate tools skip this plugin's reservation.** The host still authorizes them and may need independent audit logging.
+- **Per-agent exposure budgets require explicit subjects and ledgers.** They are not inferred from the agent graph.
 - **Cost and consequence together.** Use `USD_MICROCENTS` for spend limits and `RISK_POINTS` for action limits on the same agent — both enforced independently.
 - **The protocol is the same.** Reserve before the action, commit after, release on error. Whether you're tracking dollars or deployments, the lifecycle is identical.
 

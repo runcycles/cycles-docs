@@ -51,7 +51,7 @@ Agents add more change surfaces:
 | Memory | Prior outcomes influence future actions |
 | Delegation | Parent agent starts spawning child agents |
 | Retry logic | A harmless retry becomes a loop |
-| Scope mapping | A workflow starts charging the wrong [tenant](/glossary#tenant) or run |
+| Scope mapping | A workflow starts charging the wrong [tenant](/glossary#tenant) or application-mapped run ledger |
 
 That makes static review necessary but insufficient. The review captures one snapshot. The agent keeps moving.
 
@@ -131,7 +131,7 @@ For the protocol mechanics, see [Dry Run and Shadow Mode Evaluation](/protocol/d
 
 Drift will still happen. Runtime limits make it bounded.
 
-If a prompt update makes the agent call search ten more times, a mandatory run budget can bound reserved exposure. If a skill update starts sending Slack messages, the handler can assign and reserve toolset [RISK_POINTS](/glossary#risk-points) before each send. If a child-agent path appears, the orchestrator can apply the [authority-attenuation pattern](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) so the child receives a carved-out budget instead of a fresh envelope.
+If a prompt update makes the agent call search ten more times, a mandatory run-mapped workflow budget can bound reserved exposure. If a skill update starts sending Slack messages, the handler can assign and reserve toolset [RISK_POINTS](/glossary#risk-points) before each send. If a child-agent path appears, the orchestrator can apply the [authority-attenuation pattern](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) by provisioning a narrower child ledger and restricting the child's actual tools.
 
 The useful pattern is:
 
@@ -151,7 +151,7 @@ A practical drift review can be short:
 
 1. **What changed?** Prompt, model, tool descriptor, skill, code, retry policy, scope mapping, or data source.
 2. **Which action classes changed?** Read, write, external send, deploy, payment, delete, or delegate.
-3. **Which scopes moved?** Tenant, workspace, workflow, run, agent, or toolset.
+3. **Which scopes moved?** Tenant, workspace, app, workflow, agent, or toolset. If the application keys workflow per run, analyze those workflow values by run.
 4. **Which budgets changed pressure?** [USD_MICROCENTS](/glossary#usd-microcents), [TOKENS](/glossary#tokens), [CREDITS](/glossary#credits), or RISK_POINTS.
 5. **Which decisions changed?** ALLOW, ALLOW_WITH_CAPS, DENY, or denial reason.
 6. **Which audit trail proves it?** Reservation, commit, event, webhook, and correlation ID records.

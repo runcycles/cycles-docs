@@ -154,5 +154,5 @@ The release-by-release sequence is worth recording for the trail it leaves. 0.1.
 
 - [`langchain-runcycles` on GitHub](https://github.com/runcycles/langchain-runcycles) — source, releases, integration tests
 - [`langchain-runcycles` on PyPI](https://pypi.org/project/langchain-runcycles/) — package releases, including the v0.3.0 tool-side `cost_fn`
-- [LangChain `AgentMiddleware` reference](https://docs.langchain.com/oss/python/langchain/middleware/) — the framework hook this package implements
+- [LangChain `AgentMiddleware` reference](https://docs.langchain.com/oss/python/langchain/middleware/overview) — the framework hook this package implements
 - [Cycles Protocol](https://github.com/runcycles/cycles-protocol) — the open spec for runtime budget and [action authority](/glossary#action-authority)

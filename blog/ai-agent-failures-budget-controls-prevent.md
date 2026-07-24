@@ -1,9 +1,9 @@
 ---
-title: "5 AI Agent Failures Budget Controls Would Prevent"
+title: "5 Agent Cost Failures Runtime Budgets Can Bound"
 date: 2026-03-14
 author: Cycles Team
 tags: [incidents, costs, best-practices]
-description: "Review five AI agent failure scenarios with cost estimates and learn how pre-execution budget enforcement can stop runaway work before spend escapes safely."
+description: "Review five illustrative AI agent cost scenarios and learn how mandatory pre-execution budget reservations can bound spend before it escapes control early."
 blog: true
 sidebar: false
 head:
@@ -12,17 +12,17 @@ head:
       content: AI agent failures, budget controls, runaway agent costs, pre-execution budgets, LLM spend limits, runtime authority
 ---
 
-# 5 AI Agent Failures Budget Controls Would Prevent
+# 5 Agent Cost Failures Runtime Budgets Can Bound
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-Every team running AI agents in production has at least one horror story. The details vary — a runaway loop, a [retry storm](/glossary#retry-storm), a weekend deployment nobody was watching — but the punchline is always the same: a surprising number on an invoice and a postmortem that concludes with "we need better controls." We've collected these stories from teams across the industry, and five patterns come up again and again. Each one is preventable. Each one keeps happening because the same architectural gap — no pre-execution budget check — exists in most agent systems.
+Runaway loops, [retry storms](/glossary#retry-storm), unattended batches, stale counters, and poorly scoped limits are recurring agent-cost risks. The five cases below are illustrative scenarios built from those patterns, not reports from identified teams. Their arithmetic uses the stated token volumes and model rates.
 
 <!-- more -->
 
-These aren't edge cases. They're the predictable consequences of running autonomous systems that can spend money without asking permission first. Here are five failures, the math behind each one, and the specific mechanism that would have prevented them.
+Here are five failure models, the math behind each one, and the budget mechanism that can bound configured spend when every protected path uses a mandatory reservation boundary.
 
-## Failure 1: The Infinite Tool Loop — $4,200 in 3 Hours
+## Failure 1: The Infinite Tool Loop — $52.80 in 3 Hours
 
 **The scenario:**
 
@@ -45,24 +45,22 @@ The agent doesn't give up because it's not designed to. Its instructions say "it
 | Avg input [tokens](/glossary#tokens) per call (growing context) | 12,000 |
 | Avg output tokens per call | 2,500 |
 
-Context growth is the killer here. Each iteration appends the previous attempt and the test output to the conversation. By iteration 50, the agent is sending 25,000 input tokens per call. By iteration 200, it's sending 40,000+. The average across all iterations works out to about 12,000 input tokens — heavily weighted toward the later, more expensive calls.
+This model assumes 12,000 input tokens per call on average. A real loop with growing context should use its measured per-call distribution rather than extrapolating from this flat average.
 
 Cost calculation:
 - Input: 960 calls x 12,000 tokens = 11.52M tokens x $2.50/1M = $28.80
 - Output: 960 calls x 2,500 tokens = 2.4M tokens x $10.00/1M = $24.00
-- Subtotal per iteration is low, but 240 iterations compound to: **~$4,200**
-
-The actual cost is higher than the simple average suggests because the later iterations — when the context is largest — are disproportionately expensive. The last 50 iterations alone account for nearly 40% of the total cost.
+- Total: **$52.80**, or about **$0.22 per iteration**
 
 **How budget enforcement prevents this:**
 
-A per-run budget of $15 — generous for a test generation task — would have stopped this agent after approximately 8 iterations. Cycles checks the budget before each LLM call. When the run budget is exhausted, the call is denied. The agent receives a budget-exhausted signal and stops, returning a clear message: "Budget limit reached. Test generation did not converge after 8 iterations. Manual review required."
+A per-run budget of $15 would reject a protected call at roughly iteration 68 under the flat-average assumptions above. The host must require a successful reservation before each LLM call and stop on a live reservation error. Its message could say: "Budget limit reached. Test generation did not converge within the configured allocation. Manual review required."
 
-The team would have lost $15 instead of $4,200. More importantly, they would have discovered the dependency issue hours earlier because the agent's failure would have surfaced immediately instead of being hidden behind a loop that _appeared_ to be making progress.
+The configured budget would bound this run near $15 rather than allowing the full $52.80 scenario, subject to the integration's estimates and settlement policy. It would also surface non-convergence earlier.
 
 For the full anatomy of this failure mode, see [Runaway Agents: Tool Loops and Budget Overruns](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent).
 
-## Failure 2: The Retry Storm — $1,800 in 12 Minutes
+## Failure 2: The Retry Storm — $33.86 in 12 Minutes
 
 **The scenario:**
 
@@ -98,27 +96,25 @@ Now multiply across all conversations during the degraded period:
 | Conversations hitting CRM lookup | 38 |
 | LLM calls per conversation (with retry cascades) | ~27 |
 | Total LLM calls | ~1,026 |
-| Model | Claude Sonnet 4 |
+| Model | Claude Sonnet 4.6 |
 | Avg input tokens per call | 5,000 |
 | Avg output tokens per call | 1,200 |
 
 Cost calculation:
 - Input: 1,026 x 5,000 = 5.13M tokens x $3.00/1M = $15.39
 - Output: 1,026 x 1,200 = 1.23M tokens x $15.00/1M = $18.47
-- Per-conversation cost during storm: ~$0.89
-- But many conversations had multiple CRM lookups, and the retry cascades overlapped
-
-The total across all affected conversations, including partial retries and the cascading effect of shared infrastructure load (retries from one conversation slowing responses for others, triggering timeout-based retries): **~$1,800**.
+- Per-conversation cost during storm: **~$0.89**
+- Total across the 38 affected conversations: **~$33.86**
 
 **How budget enforcement prevents this:**
 
-A per-conversation budget of $2.00 would have capped each conversation's retry cascade. After the first few retry cycles consumed the budget, subsequent LLM calls would be denied. The agent would return: "I'm unable to look up your order status right now. Our systems are experiencing issues. Please try again in a few minutes."
+A per-CRM-lookup budget of $0.25 would allow roughly seven calls at the stated average cost before the next protected call fails to reserve. The host could then return: "I'm unable to look up your order status right now. Our systems are experiencing issues. Please try again in a few minutes."
 
-Total cost with enforcement: ~$76 (38 conversations x $2.00 cap) instead of $1,800. And the user experience would actually be _better_ — a fast, clear error message instead of a long wait followed by the same error.
+Total configured exposure across 38 affected conversations would be about $9.50 instead of $33.86. The exact result depends on estimate accuracy and which calls the integration protects.
 
 For more on this failure pattern, see [Retry Storms and Idempotency Failures](/incidents/retry-storms-and-idempotency-failures).
 
-## Failure 3: The Friday Deploy — $12,400 Over the Weekend
+## Failure 3: The Friday Deploy — $2,300 Over the Weekend
 
 **The scenario:**
 
@@ -147,23 +143,21 @@ Cost calculation:
 - Output: 57,500 x 2,000 = 115M tokens x $10.00/1M = $1,150
 - Subtotal: $2,300
 
-But this assumes flat context size. In practice, the refactoring tasks (about 30% of items) loaded much larger files — some with 30,000+ input tokens per call. And the conversation context grew within each task.
+Total under the stated flat-average assumptions: **$2,300**. Larger context windows would raise that number, but this scenario does not invent an unmeasured long-tail multiplier.
 
-Adjusted total with realistic context sizes and the long tail of expensive refactoring tasks: **~$12,400**.
-
-The dashboard updated hourly. The alert was set for daily spend thresholds. The agent processed items steadily all weekend — never fast enough to trigger rate limits, never failing hard enough to stop, just continuously spending at a rate that looked normal in any single hour but accumulated to $12,400 over 60 hours.
+The dashboard updated hourly. The alert was set for daily spend thresholds. The agent processed items steadily all weekend — never fast enough to trigger rate limits and never failing hard enough to stop.
 
 **How budget enforcement prevents this:**
 
 Two levels of enforcement would have contained this:
 
-1. **Per-task budget of $5.00**: Caps each individual task. The few tasks that hit edge cases and consumed 40+ calls would have been stopped early. Cost savings: ~$2,000 from runaway individual tasks.
+1. **Per-task budget of $5.00**: Bounds an individual task that enters an unusually expensive retry or context-growth path.
 
-2. **Batch budget of $2,500**: A budget for the entire backlog processing run. When the total spend hit $2,500, processing would pause. The team would return Monday to find 80% of the backlog completed within budget and a clear log showing why processing stopped.
+2. **Batch budget of $500**: Bounds the unattended backlog run. When the next protected call cannot reserve within that allocation, the host pauses processing. Completion percentage depends on task ordering and actual context sizes.
 
-Instead of a $12,400 surprise, the team would have spent $2,500 with full visibility into the remaining work. They could then decide: increase the budget for the remaining items, optimize the expensive tasks first, or switch to a cheaper model for the remainder.
+Instead of allowing the full $2,300 illustrative run, the team would return to a batch stopped near its $500 allocation. They could then decide whether to increase the budget, optimize expensive tasks, or switch models.
 
-## Failure 4: The Concurrent Burst — $3,200 in 4 Minutes
+## Failure 4: The Concurrent Burst — $32.40 Against a $5 Balance
 
 **The scenario:**
 
@@ -171,9 +165,9 @@ A SaaS platform provides AI-powered document analysis to enterprise customers. E
 
 At 2:15 PM, a large customer uploads a batch of 200 documents simultaneously through the API. The platform spins up 20 concurrent agent instances to process them in parallel. Each agent checks the customer's remaining budget before starting.
 
-Here's the race condition: all 20 agents read the budget balance at nearly the same time. The balance shows $500 remaining. Each agent estimates its task will cost ~$15 and sees sufficient budget. All 20 proceed.
+Here's the race condition: all 20 agents read the budget balance at nearly the same time. The balance shows $5 remaining. Each agent estimates its document will cost about $0.17 and sees sufficient budget. All 20 proceed.
 
-But 20 agents each spending $15 is $300 per round. And each agent makes multiple LLM calls before reporting its spend back to the counter. By the time the first agent finishes and updates the balance, the other 19 have already committed to their calls.
+Each agent makes multiple LLM calls before reporting spend back to the counter. By the time the first agent finishes and updates the balance, the other 19 have already started. More documents enter subsequent work before delayed counter updates converge.
 
 **The math:**
 
@@ -183,34 +177,34 @@ But 20 agents each spending $15 is $300 per round. And each agent makes multiple
 | Documents processed before detection | 200 |
 | LLM calls per document | 4 |
 | Total LLM calls | 800 |
-| Model | Claude Sonnet 4 |
+| Model | Claude Sonnet 4.6 |
 | Avg input tokens per call | 6,000 (document content) |
 | Avg output tokens per call | 1,500 |
 
 Cost calculation:
 - Input: 800 x 6,000 = 4.8M tokens x $3.00/1M = $14.40
 - Output: 800 x 1,500 = 1.2M tokens x $15.00/1M = $18.00
-- Per-document cost: ~$16.20
-- 200 documents: **~$3,200**
+- Per-document cost: **~$0.162**
+- 200 documents: **~$32.40**
 
-The customer's budget was $500. The actual spend was 6.4x the budget. The application counter showed the correct balance at every read — it was never wrong. It was just stale. The time between reading the balance and updating it (the TOCTOU window) was long enough for 19 other agents to squeeze through.
+The customer's remaining budget was $5. The modeled spend was about 6.5 times that balance. The application counter was not necessarily arithmetically wrong; its read-then-update sequence was stale under concurrency.
 
 **How budget enforcement prevents this:**
 
 Cycles uses atomic [reservations](/glossary#reservation). When an agent requests permission to spend, Cycles atomically decrements the balance. There is no window between checking and spending — they're the same operation.
 
-With a $500 customer budget and atomic reservations:
-- Agents 1-31 get approved (31 documents x ~$16.20 = ~$502)
-- Agent 32 is denied — the atomic decrement shows insufficient balance
-- All subsequent requests are denied immediately
+With a $5 remaining budget and $0.17 estimates:
+- Reservations for 29 documents can hold $4.93
+- The reservation for document 30 is rejected for insufficient remaining budget
+- Later requests remain rejected until capacity is released or added
 
-Total spend: ~$502 (slightly over due to estimation variance, reconciled afterward). That's $500 instead of $3,200. The 169 remaining documents are queued for processing when the customer adds budget or the next billing period starts.
+At the stated average actual cost, 29 documents settle near $4.70. The remaining documents are queued until capacity is added or reset. Exact settlement still depends on actual usage and the configured overage policy.
 
 The critical difference is atomicity. Cycles doesn't read-then-write. It performs an atomic compare-and-decrement. No matter how many concurrent agents check simultaneously, the budget can never be overdrawn by more than a single reservation's estimation variance.
 
 For the full technical analysis of this failure pattern, see [Concurrent Agent Overspend](/incidents/concurrent-agent-overspend).
 
-## Failure 5: The Scope Leak — $8,500/Month Unnoticed
+## Failure 5: The Scope Leak — $5,600/Month Above Plan
 
 **The scenario:**
 
@@ -234,7 +228,7 @@ The org-level budget of $10,000 was set based on initial estimates. For the firs
 
 But here's the thing: nobody noticed for another two months. The org-level budget didn't have hard enforcement — it was a monitoring threshold. The alert fired, someone checked the dashboard, saw total spend was up, but couldn't quickly attribute it to a single workspace. The growth looked gradual on the org-level chart. It took a quarterly cost review to identify the ML workspace as the source.
 
-Five months of $8,500/month overspend from the ML workspace (relative to the $3,000 expectation): **$27,500 in excess spend over the quarter**, of which roughly $8,500/month was the ongoing unnoticed overage.
+At the month-three run rate, the ML workspace is **$5,600/month above its $3,000 expectation**. If that rate continues for three months, the ML excess is **$16,800**. Total organization spend is $3,500/month above the $10,000 organization threshold, or **$10,500 over three months**.
 
 **The math of scope misconfiguration:**
 
@@ -245,7 +239,7 @@ Five months of $8,500/month overspend from the ML workspace (relative to the $3,
 | Per-workflow | Workflow-level anomalies | Cross-workflow accumulation |
 | Per-run | Individual runaway runs | Gradual accumulation from many normal runs |
 
-The right answer is hierarchical scoping: [tenant](/glossary#tenant) > workspace > app > workflow > agent > toolset. Each level has its own budget. A single agent can't blow through the workflow budget. A single workspace can't consume the tenant budget. Each scope catches a different category of failure.
+The right answer is hierarchical scoping: [tenant](/glossary#tenant) > workspace > app > workflow > agent > toolset. Each configured ledger contributes an atomic admission check for submitted estimates. A unique workflow value can represent one run. Coverage, estimate quality, and settlement policy still determine the economic bound.
 
 **How budget enforcement prevents this:**
 
@@ -254,9 +248,9 @@ Per-workspace budgets in Cycles would have capped the ML team at $3,000/month. W
 The ML team would immediately know they've hit their budget. They could request an increase (with justification), optimize their agent's efficiency, or prioritize which experiments run within the cap. The decision is explicit and intentional instead of invisible and accidental.
 
 With hierarchical enforcement:
-- Tenant budget: $10,000/month (hard cap)
-- ML workspace: $3,000/month (hard cap)
-- ML research workflow: $50/agent run (hard cap)
+- Tenant ledger: $10,000/month reservation ceiling
+- ML workspace ledger: $3,000/month reservation ceiling
+- ML research workflow keyed per run: $50 reservation ceiling
 - If any level is exhausted, the specific scope is blocked while everything else continues
 
 For more on this failure pattern, see [Scope Misconfiguration and Budget Leaks](/incidents/scope-misconfiguration-and-budget-leaks).
@@ -269,21 +263,21 @@ In every case, the agent was allowed to spend money without asking permission. T
 
 | Failure | Cost | Prevention mechanism | Cost with enforcement |
 |---|---|---|---|
-| Infinite Tool Loop | $4,200 | Per-run budget ($15) | $15 |
-| Retry Storm | $1,800 | Per-conversation budget ($2) | $76 |
-| Friday Deploy | $12,400 | Per-task + batch budget | $2,500 |
-| Concurrent Burst | $3,200 | Atomic reservations ($500 cap) | $502 |
-| Scope Leak | $8,500/mo | Hierarchical workspace budgets | $3,000/mo |
+| Infinite Tool Loop | $52.80 | Per-run budget ($15) | Near $15 |
+| Retry Storm | $33.86 | Per-lookup budget ($0.25) | Up to $9.50 across 38 lookups |
+| Friday Deploy | $2,300 | Per-task + batch budget | Near $500 batch cap |
+| Concurrent Burst | $32.40 against $5 remaining | Atomic reservations ($5 remaining) | About $4.70 under stated averages |
+| Scope Leak | $5,600/mo above plan | Hierarchical workspace budgets | $3,000/mo ML cap |
 
-The total across these five scenarios: **$30,100 in preventable spend** (counting three months of the scope leak). With enforcement, the total would have been roughly $6,100 — an 80% reduction, with better user experience and faster failure detection.
+These scenarios use different time windows and assumptions, so adding them into one savings figure would be misleading. The useful comparison is the configured bound in each row.
 
-The pattern is simple. Budget enforcement is a pre-execution check. It asks one question before every LLM call: "Is there budget remaining for this?" If yes, proceed. If no, stop. Every failure in this post would have been caught by that single question. For failures where the risk is operational rather than monetary, the same pattern applies with a different unit — [risk points instead of dollars](/concepts/action-authority-controlling-what-agents-do).
+The pattern is simple. A mandatory budget boundary asks before every protected LLM call whether the configured budget can cover the submitted estimate. If a live reservation fails, the host does not execute the call. Coverage, estimation, settlement, and overage policy still determine the real bound. For operational exposure, the host can assign and submit [risk points instead of dollars](/concepts/action-authority-controlling-what-agents-do); application authorization remains separate.
 
 ## Budget failures are not the only kind
 
-The five failures above are all denominated in dollars. But agents also fail by *doing the wrong thing* — and those failures can cost far more than any token bill. A support agent that [sends 200 collections emails instead of welcome emails](/blog/ai-agent-action-control-hard-limits-side-effects) costs $1.40 in model spend. The business impact: $50K+ in lost pipeline. No spending limit would have caught it.
+The five failures above are all denominated in dollars. But agents also fail by *doing the wrong thing*. As an illustrative action-risk scenario, 200 mistaken emails might consume only about $1.40 in model tokens while causing much larger business harm. No monetary spending limit calibrated to token cost would necessarily catch that.
 
-This is why Cycles is positioned as [runtime authority](/blog/what-is-runtime-authority-for-ai-agents), not just [budget authority](/glossary#budget-authority). Budget authority caps what agents spend (the five scenarios above). [Action authority](/concepts/action-authority-controlling-what-agents-do) caps what agents *do* — gating high-consequence operations like email, deploy, and delete with risk-point budgets per toolset. Both dimensions use the same reserve-commit protocol and the same infrastructure.
+This is why a complete [runtime authority](/blog/what-is-runtime-authority-for-ai-agents) design needs more than spend accounting. Cycles can budget spend and caller-assigned exposure through the reserve-commit protocol. [Application action authority](/concepts/action-authority-controlling-what-agents-do) separately authenticates the principal and authorizes tools and arguments at the mandatory boundary.
 
 ## Next steps
 
@@ -301,7 +295,7 @@ For failures where the risk is action rather than cost:
 - **[AI Agent Action Control: Hard Limits on Side Effects](/blog/ai-agent-action-control-hard-limits-side-effects)** — [RISK_POINTS](/glossary#risk-points), toolset budgets, and progressive capability narrowing
 - **[Action Authority](/concepts/action-authority-controlling-what-agents-do)** — risk-point budgets and toolset-scoped controls
 
-The cheapest incident is the one that never happens. The second cheapest is the one that's capped at $15 instead of $4,200.
+The cheapest incident is the one that never happens. The next best outcome is a protected path that rejects the next estimate when configured capacity is unavailable.
 
 ## Related how-to guides
 

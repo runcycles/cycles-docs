@@ -204,8 +204,10 @@ what happened after the work completed
 Cycles tells you:
 
 ::: info
-whether the work is allowed to begin, how much room it has, and what it actually consumed afterward
+whether the submitted estimate fits the matching budget ledgers, how much room remains, and what the instrumented work commits afterward
 :::
+
+Application authorization still decides whether the caller may perform the action; Cycles accounts for the submitted exposure.
 
 That distinction becomes critical in long-running or multi-step systems.
 
@@ -225,7 +227,9 @@ You can begin by enforcing:
 
 - per-tenant budget (set the tenant on `CyclesProperties`, or supply a `SubjectResolver` bean that pulls tenant from your authenticated principal)
 - per-workflow budget
-- optional per-run budget
+- optional per-run envelope by resolving that run ID into `subjects.workflow`
+
+`run` is not a separate Cycles scope. The standard hierarchy is `tenant → workspace → app → workflow → agent → toolset`; a run ID stored only in `dimensions` is attribution and does not create an enforceable ledger.
 
 Then expand to:
 
@@ -235,19 +239,11 @@ Then expand to:
 
 This staged rollout works well because you do not need to boil the ocean on day one.
 
-## Shadow mode first
+## Shadow evaluation before enabling the advisors
 
-Hard enforcement is powerful, but many teams should begin in shadow mode.
+The current `cycles-spring-ai-starter` advisors implement the live reserve → model call → commit/release lifecycle. They do not expose a shadow-mode property: a Cycles dry-run response deliberately has no `reservation_id`, while the advisor requires one before it invokes the model.
 
-That means:
-
-- estimate and reserve as if policy were active
-- observe what would have been allowed or denied
-- compare expected vs actual usage
-- tune budgets and thresholds
-- move to enforcement once the model is calibrated
-
-This is especially useful for existing Spring AI applications, where you want to understand normal usage patterns before introducing hard stops.
+To evaluate policy before enabling the advisors, make an explicit Cycles reservation request with `dry_run: true` alongside the existing model path, then log the hypothetical decision and the model's actual usage in your application. Dry runs create no reservation, balance mutation, or commit; the current server does emit `reservation.denied` for denied evaluations, but not a complete record of allowed decisions and outcomes. Once those results meet your cutover criteria, enable the starter for live enforcement. See the [shadow-mode rollout guide](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production).
 
 ## Handling failure correctly
 
@@ -294,10 +290,10 @@ Start with the actions most likely to create budget surprises.
 Examples of useful first policies include:
 
 - hard cap per tenant
-- hard cap per workflow run
-- shadow evaluation for new workflows
+- hard cap per workflow, with a run ID mapped to `subjects.workflow` when each execution needs its own ledger
+- application-side dry-run evaluation before enabling the advisors on new workflows
 - downgrade path when reservation fails
-- operator-configured tool restrictions applied by the integration
+- application-configured tool fallback or denial handling
 - per-workspace limits for staging vs production
 
 These are practical controls that map well to real incidents.
@@ -315,7 +311,7 @@ It brings:
 - pre-execution budget checks
 - retry-safe enforcement
 - multi-scope budget enforcement
-- support for shadow mode and progressive rollout
+- live advisor enforcement after separate dry-run calibration
 - a clean reserve → commit / release lifecycle
 
 In other words, it gives Spring AI applications a way to move from “watching usage” to **governing execution**.
@@ -325,7 +321,7 @@ In other words, it gives Spring AI applications a way to move from “watching u
 A simple rollout path looks like this:
 
 ### Phase 1: Observe
-Instrument model calls and estimate reservations in shadow mode.
+Issue explicit `dry_run: true` evaluations beside the existing model calls and retain the responses and actual usage in application telemetry.
 
 ### Phase 2: Guard core model usage
 Add reservation and commit around the most expensive model calls.
@@ -334,7 +330,7 @@ Add reservation and commit around the most expensive model calls.
 Guard tool invocations and side-effecting actions.
 
 ### Phase 4: Add hierarchical budgets
-Apply policies at tenant, application, workflow, and run scopes.
+Apply policies at tenant, app, and workflow scopes. Map a run ID to the workflow subject only when you intentionally want a separate ledger per execution.
 
 ### Phase 5: Enforce degradation paths
 When reservations fail, downgrade or reroute instead of simply crashing.

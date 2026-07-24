@@ -62,14 +62,14 @@ Current admin-list defaults are endpoint-specific: tenants and API keys use `cre
 
 Pagination is cursor-based:
 
-- `limit` — maximum results per page. The default is 50 on every endpoint. Where the spec declares a cap it is 100 (`/v1/admin/tenants`, `/v1/admin/webhooks`, `/v1/admin/events`); `/v1/admin/budgets`, `/v1/admin/api-keys`, and `/v1/admin/audit/logs` declare no maximum. Out-of-range values on capped endpoints return `400 INVALID_REQUEST`.
+- `limit` — maximum results per page. The default is 50 on every endpoint. The runtime `/v1/reservations` cap is 200. The capped admin endpoints use 100 (`/v1/admin/tenants`, `/v1/admin/webhooks`, `/v1/admin/events`); `/v1/admin/budgets`, `/v1/admin/api-keys`, and `/v1/admin/audit/logs` declare no maximum. Out-of-range values on capped endpoints return `400 INVALID_REQUEST`.
 - `cursor` — opaque string from a previous response's `next_cursor`. Do not construct or modify it.
 - `has_more` — boolean in the response. `true` means there is at least one more page.
 - `next_cursor` — the value to pass as `cursor` on the next call. Absent when `has_more` is `false`.
 
 ### Cursor binding
 
-When `sort_by` is provided, the returned cursor encodes the sort key so "Load more" continues in sort order. The spec does not define a cursor-invalidation error — a cursor reused under a different sort key, direction, or filter set is handled gracefully rather than rejected, but the resulting page order is whatever the cursor encoded, not what your new parameters asked for.
+When `sort_by` is provided, the returned cursor encodes the sort key so "Load more" continues in sort order. Current admin servers bind the cursor to the result-set parameters: reusing it after changing the sort key, direction, or filters returns `400 INVALID_REQUEST`. The response uses the generic error code rather than a cursor-specific code.
 
 **Reset the cursor whenever you change the sort key, sort direction, or any filter.** The client's job is to either preserve those parameters across all pages of a traversal or start over from page one.
 
@@ -200,7 +200,9 @@ v0.1.25.28 renamed the previous single `<unauthenticated>` sentinel. Historical 
 
 ## Hydration warning on sorted reservation listings
 
-On `/v1/reservations`, current runtime servers hydrate all matches for sorted queries, then sort and slice. If a sorted query hydrates 2,000 or more rows, the server logs a WARN so operators can narrow filters or plan sorted indices. Rows beyond 2,000 are not truncated in v0.1.25.39+.
+On `/v1/reservations`, `sort_by=created_at_ms` can use the optional, completeness-gated created-at sorted index in runtime v0.1.25.54 and later. The index is used only when it is enabled and ready; otherwise the server falls back without returning incomplete results. Track `cycles_reservations_created_at_index_reads_total{outcome=...}` to distinguish index reads from disabled, not-ready, drift, and error fallbacks.
+
+The other six reservation sort keys—and `created_at_ms` when the index cannot be used—hydrate all matches, then sort and slice. If a sorted query hydrates 2,000 or more rows, the server logs a WARN so operators can narrow filters. Rows beyond 2,000 are not truncated in v0.1.25.39+.
 
 For faster, more predictable queries, narrow the filter: add `status`, `idempotency_key`, a time window, or a subject field (`workspace`, `app`, `workflow`, `agent`, `toolset`). The admin list endpoints keep their own endpoint-specific sort behavior.
 
@@ -208,11 +210,11 @@ For faster, more predictable queries, narrow the filter: add `status`, `idempote
 
 | `error` | Meaning |
 |---------|---------|
-| `INVALID_REQUEST` | Unknown `sort_by`, unknown `sort_dir`, out-of-range `limit`, or `search` over 128 chars |
+| `INVALID_REQUEST` | Unknown `sort_by`, unknown `sort_dir`, out-of-range `limit`, `search` over 128 chars, or a cursor reused with different result-set parameters |
 | `FORBIDDEN` | Tenant-scoped key attempted a cross-tenant listing |
 | `UNAUTHORIZED` | Invalid API key |
 
-The error code is carried in the `error` field of the standard `ErrorResponse` body. Note there is no cursor-specific error code — see [Cursor binding](#cursor-binding) for how stale cursors behave.
+The error code is carried in the `error` field of the standard `ErrorResponse` body. There is no cursor-specific error code; reset pagination after any result-set parameter changes.
 
 ## Next steps
 

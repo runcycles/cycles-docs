@@ -40,19 +40,23 @@ Shadow mode is the bridge between those two states.
 
 ## What shadow mode is
 
-In the Cycles protocol, shadow mode is enabled by setting `dry_run: true` on a reservation request. The server evaluates the same reservation and budget logic it would use in enforcement mode, but instead of blocking execution, it returns what **would have happened** — the decision, caps, and affected scopes — in the response. The server must not persist anything for a dry run: no balances are modified, no reservation is created, and no commit or release is required. Recording those would-be outcomes for analysis is the caller's job.
+In the Cycles protocol, shadow mode is enabled by setting `dry_run: true` on a reservation request. The server evaluates the same reservation and budget logic it would use in enforcement mode, but instead of blocking execution, it returns what **would have happened**—the decision, caps, and affected scopes—in the response. No balances are modified, no reservation is created, and no commit or release is required.
+
+The current reference server emits `reservation.denied` for a denied dry-run or `decide` evaluation, and an enabled evidence pipeline may retain a signed evaluation artifact. It does not emit a corresponding allowed lifecycle event or know the eventual external outcome. Record every response and actual outcome in the application when you need a complete shadow dataset.
 
 That means your system can answer questions like:
 
 - would this action have been allowed?
 - which scope would have denied it?
-- how often would this workflow exceed its run budget?
+- how often would this execution exceed a workflow ledger mapped to its run ID?
 - which tenants are consistently near their limits?
-- how accurate are our estimates versus actual usage?
+- how accurate are our estimates versus actual usage recorded by the application?
 
 In other words, shadow mode gives you production-grade policy feedback without introducing production-grade disruption.
 
-As a fleet-wide complement to per-request `dry_run`, servers implementing the v0.1.26 admin extension also preview a tenant-level `observe_mode` setting, which lets operators put an entire tenant into shadow evaluation without changing any call sites.
+The protocol's v0.1.26 admin extension previews tenant-level `observe_mode` fields. The current v0.1.25.x server accepts those fields for forward compatibility but does not apply fleet-wide shadow semantics or emit observed decisions from them. Use per-request `dry_run: true` and application-side logging today.
+
+Cycles' standard budget hierarchy is `tenant → workspace → app → workflow → agent → toolset`. If you want a separate ledger for each run, map the run ID to `subjects.workflow`; putting a run ID only in `dimensions` adds attribution but does not create a budget scope.
 
 ## What shadow mode is not
 
@@ -134,7 +138,7 @@ For example:
 
 - tenant budget
 - workflow budget
-- run budget
+- workflow budget keyed by run ID
 
 This shows whether the problem is broad account-level consumption or a local execution issue.
 
@@ -144,6 +148,8 @@ How often are your reservations too high or too low?
 
 If estimates are consistently inflated, you may create unnecessary policy pressure.  
 If estimates are consistently too low, your controls may be less protective than expected.
+
+Because a dry run creates no reservation to commit, record actual usage in application telemetry and join it to the logged dry-run response.
 
 ### 4. Workflow distribution
 
@@ -187,7 +193,7 @@ Do not try to model every possible action on day one.
 Start with a small set of budget scopes, usually:
 
 - tenant
-- run
+- workflow, optionally keyed by run ID
 
 Those two often provide the clearest operational signal.
 
@@ -242,7 +248,7 @@ A successful shadow period usually produces a few things.
 
 ### Clear budget boundaries
 
-You begin to understand what reasonable tenant, workflow, and run limits look like.
+You begin to understand what reasonable tenant and workflow limits look like, including workflows keyed per execution when that mapping fits your application.
 
 ### Estimate quality improves
 
@@ -268,7 +274,7 @@ If nobody looks at the would-deny outcomes, shadow mode becomes passive logging.
 
 ### Mistake 2: Starting with too many scopes
 
-If you begin with tenant, application, workflow, agent, tool, run, environment, and custom policy layers all at once, it becomes difficult to understand what is actually driving decisions.
+If you begin with tenant, workspace, app, workflow, agent, and toolset scopes all at once, it becomes difficult to understand what is actually driving decisions.
 
 Start small.
 
@@ -329,10 +335,10 @@ That makes Cycles easier to adopt operationally.
 For many teams, a strong first rollout looks like this:
 
 - evaluate **tenant budgets** in shadow mode
-- evaluate **run budgets** in shadow mode
+- evaluate **workflow budgets**, optionally keyed by run ID, in shadow mode
 - instrument model calls and expensive tools
-- record would-deny events
-- compare estimated vs actual usage
+- log would-deny responses in the application
+- compare estimates with actual usage from application telemetry
 - review top offending runs and tenants
 - add degradation rules before hard enforcement
 
@@ -367,7 +373,7 @@ That is critical because autonomous systems are hard to model perfectly in advan
 By using shadow mode, teams can:
 
 - learn real consumption patterns
-- tune tenant, workflow, and run budgets
+- tune tenant and workflow budgets, including per-execution workflow mappings
 - refine estimate quality
 - identify runaway behavior
 - design degradation paths

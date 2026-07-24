@@ -1,11 +1,11 @@
 ---
 title: "One Customer's Runaway Agent Shouldn't Affect Your Other 500"
-description: "In a multi-tenant AI SaaS, one customer's agent loop can exhaust shared API budgets, starve other tenants, and blow through your gross margin. Cycles isolates every customer."
+description: "Use mandatory tenant-scoped Cycles budgets to contain covered agent spend per customer, with correct provisioning, routing, estimates, and settlement behavior."
 ---
 
 # One Customer's Runaway Agent Shouldn't Affect Your Other 500
 
-You ship an AI copilot to 500 customers. Customer #47 discovers a prompt that triggers a research loop. Their agent makes 3,000 LLM calls in an hour — well within the prompt's intent, but 50x the average session.
+Consider an illustrative AI copilot serving 500 customers. Customer #47 triggers a research loop whose agent makes 3,000 LLM calls in an hour — 50 times the modeled average session.
 
 Without per-tenant isolation, Customer #47's session burns through the shared API budget. Your provider's org-wide spending cap kicks in and blocks **every customer** — including the 499 who did nothing wrong. Your status page goes red. Support tickets flood in. The incident post-mortem reveals a $2,800 bill for one tenant's session.
 
@@ -13,7 +13,7 @@ This isn't a scaling problem. It's an isolation problem.
 
 ## Why shared controls fail for multi-tenant
 
-**Provider spending caps are org-wide.** Your provider's monthly limit doesn't know which of your 500 customers triggered the spend. When it fires, it blocks all of them.
+**Provider identities may not match your tenants.** Project, workspace, and key controls can help, but a provider does not infer which of 500 application customers caused spend behind a shared identity. A hard provider stop at that shared scope can affect all of them.
 
 **Rate limits are per-key, not per-tenant.** If all customers share an API key (common in SaaS), one customer's burst consumes the rate limit for everyone. If each customer has their own key, you're managing 500 API keys at the provider level — and still have no budget enforcement.
 
@@ -21,7 +21,7 @@ This isn't a scaling problem. It's an isolation problem.
 
 ## How Cycles fixes it
 
-Each customer maps to a Cycles tenant. Each tenant has its own budget, its own API key, and its own scope hierarchy — enforced atomically by the protocol.
+An application can map each customer to a Cycles tenant, provision separate budgets and API keys, and submit the correct tenant subject on every protected call. The protocol atomically enforces applicable budget scopes; the application remains responsible for secure tenant derivation and complete routing.
 
 ```python
 # Your onboarding logic (see Multi-Tenant SaaS Guide for full implementation)
@@ -39,28 +39,28 @@ async def handle_chat(request: Request, prompt: str) -> str:
     ...
 ```
 
-When Customer #47's agent hits $50, their next reservation is denied. Customer #48 through #500 are unaffected — their budgets are independent. No shared caps. No cross-tenant interference.
+When Customer #47's submitted spend reaches $50, the next over-budget live reservation returns an error. If every protected path uses the correct tenant scope, Customer #48 through #500 retain their separate Cycles allocations. The upstream provider account may still be shared, so provider-wide limits remain a separate dependency.
 
 ## What happens now
 
-- **Blast radius contained.** One customer's runaway agent can only burn their own budget. Other tenants continue operating normally.
+- **Covered budget impact contained.** Correctly scoped mandatory paths cannot consume another tenant's Cycles allocation.
 - **Per-customer limits map to plan tiers.** Free: $5/month. Pro: $50/month. Enterprise: $500/month. The budget authority enforces what the billing system promises.
 - **Concurrency safe.** Atomic reservations prevent the classic race condition where 20 parallel agents all read "budget available" and all proceed. Cycles locks the budget before execution.
-- **Graceful degradation per tenant.** When Customer #47 hits their limit, their agent can downgrade to a cheaper model, show an upgrade prompt, or queue work for later — while every other tenant continues at full quality.
+- **Graceful degradation per tenant.** When a live reservation fails, the host can downgrade the model, show an upgrade prompt, or queue work for later.
 
 ## The math
 
 | | Shared budget | Per-tenant with Cycles |
 |---|---|---|
 | Customer #47's session | $2,800 from shared pool | $50 from their own budget |
-| Impact on other customers | All blocked by provider cap | None |
-| Time to detect | When provider cap fires | Immediately (reservation denied) |
+| Impact on other customers | Shared provider identity can affect all tenants when its hard boundary binds | Separate Cycles allocations remain; provider-wide dependencies still apply |
+| Time to detect | Depends on provider alert or cutoff semantics | At the first rejected over-budget live reservation |
 | Recovery | Manually increase cap, apologize to 499 customers | Customer #47 sees upgrade prompt |
-| Gross margin | Unpredictable — one tenant can destroy it | Bounded per tenant |
+| Covered gross-margin exposure | Shared across tenants | Submitted estimates bounded per tenant on mandatory paths |
 
 ## Beyond budget: per-tenant action authority
 
-The same isolation applies to actions. Customer #47's agent can send 10 emails. Customer #48's agent can send 10 emails. They can't share, borrow, or exhaust each other's action authority — even if both agents run on the same infrastructure.
+The same scope isolation can apply to caller-assigned action exposure. If the host authorizes an email, assigns it a risk amount, and reserves against the correct tenant, one tenant cannot consume another tenant's risk-point budget. Tool permissions, recipient validation, and exact action counts remain application concerns.
 
 ```
 Customer #47 (Pro plan)

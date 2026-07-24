@@ -16,7 +16,7 @@ head:
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
-A team ships an autonomous support agent. It reads tickets, queries a knowledge base, drafts replies, and sends emails. In staging it handles 50 tickets without incident. On day three in production, a customer submits a ticket in a language the model handles poorly. The agent misinterprets the request, drafts a refund confirmation for a billing dispute, and sends it — along with 47 follow-up emails to related accounts offering refunds nobody requested.
+Consider a constructed support-agent scenario. The agent reads tickets, queries a knowledge base, drafts replies, and sends emails. In production-shaped testing, an ambiguous ticket causes it to draft a refund confirmation and send 47 follow-up emails offering refunds nobody requested.
 
 Total API cost of the emails: $1.40. Business damage: $34,000 in honored refunds, an incident review, and a week of manual cleanup.
 
@@ -74,11 +74,11 @@ Runtime permissions are pre-execution decisions about whether an agent may invok
 
 This is different from static configuration. A static tool allowlist says "this agent can send emails" — a decision made at deploy time. A runtime permission says "this agent can send emails, but it has already sent 5 in this run, and its action budget for external writes is exhausted, so the next email is denied." The first is a capability declaration. The second is a live enforcement decision that adapts as the agent acts.
 
-An application can combine its permission decision with Cycles' [three-way budget decision](/glossary#three-way-decision):
+An application can combine its permission decision with Cycles' [three-way preflight or dry-run decision](/glossary#three-way-decision):
 
 - **ALLOW** — the action is within limits; proceed normally
 - **ALLOW_WITH_CAPS** — the action is allowed but should be constrained (disable certain tools, limit remaining steps)
-- **DENY** — the action is not permitted; the agent must stop or degrade
+- **DENY** — the submitted estimate does not fit the configured budget; the application must stop or degrade
 
 The three-way model is what makes runtime permissions practical. A binary allow/deny forces hard stops. ALLOW_WITH_CAPS enables [graceful degradation](/glossary#graceful-degradation) — the agent loses dangerous capabilities while retaining useful ones.
 
@@ -93,7 +93,7 @@ In the current Cycles server, the allowlist or denylist comes from the deepest m
 
 ### RISK_POINTS: a non-monetary unit for action risk
 
-Dollar budgets measure financial exposure. But the opening scenario shows that the costliest incidents are not the most expensive in token terms. Two hundred wrong emails cost $1.40 in model calls and $34,000 in business damage.
+Dollar budgets measure financial exposure. A constructed 200-email scenario can have about $1.40 in model-call cost while creating much larger, deployment-specific business impact. The latter cannot be inferred from token spend.
 
 [RISK_POINTS](/glossary#risk-points) is a unit designed for this problem. Instead of denominating action budgets in dollars, teams assign point values to each action class based on blast radius and reversibility:
 

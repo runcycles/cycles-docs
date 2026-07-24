@@ -85,7 +85,7 @@ We ended up with a fragmented system:
 - No way to enforce provider-specific limits (*"this user can spend $50/month on video but unlimited on search"*)
 - Cost estimates drifted: what we predicted vs. what the provider actually billed diverged over time
 
-Worse, OpenAI's own rate limits are [organization- and project-scoped](https://platform.openai.com/docs/guides/rate-limits), vary by model, and some model families share limits. That meant our single-budget design couldn't even represent OpenAI's constraints cleanly, let alone the five other providers we were integrating.
+Worse, OpenAI's own rate limits are [organization- and project-scoped](https://developers.openai.com/api/docs/guides/rate-limits), vary by model, and some model families share limits. That meant our single-budget design couldn't even represent OpenAI's constraints cleanly, let alone the five other providers we were integrating.
 
 Every provider addition was a week of work. Every provider pricing change was a fire drill. We called this the **whack-a-mole phase**.
 
@@ -104,7 +104,7 @@ v3 held for a while. Then the third wall showed up — and this one changed how 
 
 **The wall: risk wasn't cost.**
 
-An agent got stuck in a loop and [sent 200 emails](/blog/ai-agent-action-control-hard-limits-side-effects) to customers. Token cost: $1.40. Business damage: much larger.
+In a constructed failure scenario, an agent gets stuck in a loop and [sends 200 emails](/blog/ai-agent-action-control-hard-limits-side-effects) to customers. Assumed token cost: $1.40. Potential business damage: much larger and not quantified by that inference bill.
 
 Our rate limiter never fired. Because it measured dollars, and the emails were cheap. The harm was in the action, not the spend.
 

@@ -10,8 +10,8 @@ description: "See how Cycles differs from rate limiters, observability tools, pr
 | Approach | What it controls | Pre-execution? | Per-tenant? | Cost-aware? | Degradation? |
 |---|---|:---:|:---:|:---:|:---:|
 | **Rate limiter** | Request velocity | Velocity only | Partial | No | No |
-| **Observability** | Post-hoc visibility | No | No | After the fact | No |
-| **Provider cap** | Org-level spend | No (delayed) | No | Partial | No |
+| **Observability** | Traces, metrics, and product-specific controls | Product/config dependent | Product/config dependent | Usually | Product/config dependent |
+| **Provider controls** | Vendor spend, credits, or capacity | Soft or hard, vendor dependent | Provider identity only | Yes for covered usage | Application chooses fallback |
 | **In-app counter** | Custom metric | Partial | Partial | Partial | No |
 | **Job scheduler** | Execution timing | No | No | No | No |
 | **Cycles** | Bounded budget, risk exposure | Yes | Yes | Yes | Yes (ALLOW / ALLOW_WITH_CAPS / DENY) |
@@ -155,40 +155,40 @@ But do not confuse explaining the past with governing the present.
 
 Most LLM providers offer some form of spending cap or usage limit.
 
-These are typically:
+Depending on the vendor and plan, these include:
 
-- monthly dollar limits on an API key or organization
-- hard caps that block all requests once the limit is hit
+- monthly spend alerts or hard limits on an organization or project
+- prepaid-credit cutoffs
 - daily or monthly spend alerts
-- per-model token limits
+- per-model request or token-rate limits
 
 ### Where provider caps fall short
 
-Provider caps are coarse, global, and external to your application.
+Provider controls are scoped to vendor-defined identities and are external to your application's own subject hierarchy.
 
 They operate at the wrong level of granularity for autonomous systems.
 
-**No per-tenant enforcement.**
-A provider cap applies to the entire organization or API key. It cannot distinguish between tenants, workflows, or runs. One runaway tenant can exhaust the cap for everyone.
+**No automatic application-tenant enforcement.**
+A provider project, workspace, account, or key can isolate traffic assigned to it. When multiple application tenants share that identity, however, the provider cannot infer their separate ledgers. One tenant can consume the shared allowance.
 
-**No per-run or per-workflow limits.**
-A provider cap cannot say "this workflow may only spend $5." It only knows about total organizational consumption.
+**No automatic per-run or per-workflow limit.**
+A team could dedicate a provider project or key to a workload where supported, but a shared provider boundary does not learn the application's workflow or run identity.
 
-**Binary enforcement.**
-When the cap is hit, all requests fail. There is no degradation, no per-action decision, no nuanced response. The system goes from fully operational to fully blocked.
+**Provider-specific enforcement.**
+Some controls only alert; others reject affected requests when a credit, quota, or hard spend limit binds. The provider does not know which application-specific degradation path is safe, so the application must choose the fallback.
 
-**No reservation semantics.**
-Provider caps do not support reserve-before-execute. They decrement a counter after usage. That means concurrent requests can race past the limit before it takes effect.
+**No application reserve-commit semantics.**
+Provider controls can reject at their request boundary, but they do not expose a reserve-commit lifecycle for an application-defined tenant/run estimate. For example, OpenAI documents that hard spend-limit enforcement is not instantaneous and tracked spend can slightly exceed the configured amount.
 
-**Delayed accounting.**
-Provider usage data is often updated with a delay of minutes to hours. That means the cap may not reflect real-time exposure accurately, especially under high concurrency.
+**Timing varies.**
+Alerts, dashboards, hard spend limits, credit checks, and rate quotas have different timing. Treat each according to its documented behavior rather than assuming every control is either immediate or delayed.
 
 **No lifecycle awareness.**
-Provider caps do not know that a request is a retry, that the run has already used most of its budget, or that the workflow should degrade instead of continuing at full cost.
+Provider controls do not infer that a request belongs to an application retry, how much a particular run has used, or which workflow-specific degradation is safe.
 
 ### How Cycles differs
 
-Cycles provides fine-grained, application-aware budget enforcement.
+Cycles provides budget state for caller-supplied application scopes.
 
 It operates at the level your system actually needs:
 
@@ -201,19 +201,19 @@ It operates at the level your system actually needs:
 
 Budget is reserved before execution rather than inferred after usage occurs.
 
-| | Provider budget cap | Cycles |
+| | Provider controls | Cycles |
 |---|---|---|
-| Scope | Organization or API key | Tenant, workspace, app, workflow, agent, toolset |
-| Enforcement | Binary (all-or-nothing) | Three-way (ALLOW / ALLOW_WITH_CAPS / DENY) |
-| Timing | Post-usage counter (often delayed) | Pre-execution reservation |
-| Multi-tenant aware | No | Yes |
-| Degradation support | No | Yes |
-| Retry-safe | No | Yes (idempotent reservations) |
+| Scope | Vendor organization, project, workspace, account, key, credit, or quota | Caller-supplied tenant, workspace, app, workflow, agent, toolset |
+| Enforcement | Soft or hard, vendor/configuration dependent | Live reservation accepted with optional configured caps, or rejected |
+| Timing | Alert, request-time rejection, or non-instantaneous spend cutoff | Pre-execution hold for instrumented work |
+| Multi-tenant aware | Only through explicit provider-identity mapping | Yes, when the caller submits tenant scopes |
+| Degradation support | Provider-specific; application chooses fallback | Configured caps returned; application applies fallback |
+| Retry-safe | Provider-specific | Same idempotency key and body deduplicate a budget mutation |
 | Under your control | No (vendor-managed) | Yes (self-hosted, operator-defined) |
 
-**Provider caps are a safety net of last resort.**
+**Provider controls are an independent safety layer.**
 
-They can prevent catastrophic overspend at the organization level.
+Depending on their semantics, they can alert, constrain capacity, exhaust credits, or stop provider traffic at an organization or project boundary.
 
 But they are not a substitute for application-level budget governance.
 
@@ -241,7 +241,7 @@ If two requests check the counter simultaneously, both may see "under budget" an
 Counters typically increment after execution. That means the system commits to work before knowing whether the budget can absorb it. If the model call costs more than expected, the counter reflects reality too late.
 
 **No hierarchical scopes.**
-A counter per tenant is useful. But autonomous systems often need limits at multiple levels: tenant, workspace, workflow, run, and action. Building and maintaining hierarchical counters with correct rollup logic is significantly more complex than a single counter.
+A counter per tenant is useful. But autonomous systems often need limits at multiple levels such as tenant, workspace, app, workflow, agent, and toolset. An application can key a workflow ledger per run, while action authorization remains a host concern. Building and maintaining hierarchical counters with correct rollup logic is significantly more complex than a single counter.
 
 **Fragile under retries.**
 If a request fails and retries, does the counter increment once or twice? If the retry uses a different code path, does it check the same counter? Most ad hoc counters do not handle retries cleanly.
@@ -337,28 +337,26 @@ But pair it with a runtime authority so retries and fan-out do not become unboun
 
 The table below maps specific capabilities against each approach.
 
-✅ = supported&ensp; ◐ = partial or manual effort&ensp; ✗ = not supported
-
 | Capability | Rate limiter | Observability | Provider cap | In-app counter | Job scheduler | Cycles |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Pre-execution budget check | ✗ | ✗ | ✗ | ◐ | ✗ | ✅ |
-| Reserve → commit lifecycle | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ |
-| Per-tenant limits | ◐ | ✗ | ✗ | ◐ | ✗ | ✅ |
-| Per-workflow / per-agent limits | ✗ | ✗ | ✗ | ◐ | ✗ | ✅ |
-| Hierarchical scopes | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ |
-| Cost-aware decisions | ✗ | ◐ | ◐ | ◐ | ✗ | ✅ |
-| Retry / idempotency safety | ✗ | ✗ | ✗ | ✗ | ◐ | ✅ |
-| Graceful degradation (ALLOW_WITH_CAPS) | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ |
-| Concurrency-safe accounting | ✗ | ✗ | ◐ | ✗ | ◐ | ✅ |
-| Real-time enforcement | ✅ | ✗ | ◐ | ◐ | ✗ | ✅ |
-| Post-hoc analysis and traces | ✗ | ✅ | ◐ | ✗ | ◐ | ◐ |
-| Traffic shaping / abuse prevention | ✅ | ✗ | ✗ | ✗ | ◐ | ✗ |
-| Execution scheduling and retries | ✗ | ✗ | ✗ | ✗ | ✅ | ✗ |
+|---|---|---|---|---|---|---|
+| Pre-execution budget check | No | No for tracing-only tools | Yes, at provider/gateway scope | Partial | No | Yes |
+| Caller-estimated reserve-commit lifecycle | No | No | No | Partial, if custom-built | No | Yes |
+| Per-tenant limits | Partial | Attribution, not enforcement | Partial, product-specific | Partial | No | Yes |
+| Per-workflow / per-agent limits | Partial, with custom keys | Attribution, not enforcement | Partial, product-specific | Partial | Partial | Yes |
+| Hierarchical scopes | No | Partial for grouping | Partial, product-specific | Partial | Partial | Yes |
+| Cost-aware decisions | No | No for tracing-only tools | Yes | Partial | No | Yes |
+| Retry / idempotency safety | Partial | No | Partial | Partial | Yes for job execution | Yes for budget lifecycle |
+| Configured `ALLOW_WITH_CAPS` outcome | No | No | Product-specific alternatives | Partial | No | Yes; caller applies caps |
+| Concurrency-safe accounting | No | No | Product-specific | Partial | Partial | Yes, for reservations |
+| Real-time enforcement | Yes, for traffic | No for tracing-only tools | Yes, at provider/gateway scope | Partial | No | Yes, at instrumented boundary |
+| Post-hoc analysis and traces | No | Yes | Partial | Partial | Partial | Partial; lifecycle records only |
+| Traffic shaping / abuse prevention | Yes | No | Partial | No | Partial | No |
+| Execution scheduling and retries | No | No | No | No | Yes | No |
 
 A few things worth noting:
 
 - No single tool covers every row. That is expected.
-- The ◐ ratings are honest. Some of these capabilities can be approximated with enough custom work. But "possible with effort" is different from "supported by design."
+- "Partial" covers product-specific support or substantial custom work. Check the exact gateway, provider, or scheduler rather than treating a category as one uniform product.
 - Cycles does not try to replace traffic shaping, observability, or scheduling. Those are separate concerns with mature tooling. Cycles focuses on the budget governance column because that is the gap most teams hit as autonomous systems scale.
 
 Each of these tools earns its place in a production stack. The question is whether the stack has a gap where runtime authority should be.
@@ -373,9 +371,9 @@ A well-governed autonomous system typically includes:
 
 - a **rate limiter** for traffic shaping and abuse prevention
 - an **observability platform** for visibility, traces, and alerts
-- **provider caps** as an organizational safety net
+- **provider controls** as an independent vendor-side boundary
 - a **job scheduler** for execution timing and retry policies
-- **Cycles** as the runtime authority that decides whether bounded work may proceed
+- **Cycles** as the budget authority for caller-submitted application scopes
 
 These layers are complementary, not competitive.
 
@@ -393,7 +391,7 @@ Consider adding Cycles to your stack when:
 - **Cost is unpredictable** — fan-out, tool loops, or retries make per-run cost hard to bound
 - **Multiple tenants share infrastructure** — one tenant's runaway agent should not affect others
 - **You need graceful degradation** — switching to cheaper models or reducing scope when budget is low, rather than hard-failing
-- **Compliance requires cost limits** — audit trails showing that every action was authorized against a budget
+- **Governance requires budget evidence** — lifecycle records showing which instrumented operations reserved, committed, released, or were denied against configured budgets
 - **You've outgrown ad hoc counters** — custom counters work until concurrency, retries, and hierarchy make them unreliable
 
 If none of these apply yet, start with [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) to see what enforcement would look like on your current traffic.

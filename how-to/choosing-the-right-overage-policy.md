@@ -20,7 +20,7 @@ Ask these questions in order:
    → **REJECT** with a 10–20% buffer — hard enforcement is safe when estimates are tight
 
 3. **Everything else** — variable-cost LLM calls, tool invocations, streaming responses, multi-step agents
-   → **ALLOW_IF_AVAILABLE** (the default) — always commits, never creates debt, caps at budget boundary
+   → **ALLOW_IF_AVAILABLE** (the default) — does not reject a valid commit merely because of overage, never creates debt, and caps the charged delta at available budget
 
 ## By use case
 
@@ -28,7 +28,7 @@ Ask these questions in order:
 
 **Recommended:** ALLOW_IF_AVAILABLE
 
-Token counts vary by prompt, context window, and model behavior. Estimation is inherently imprecise. ALLOW_IF_AVAILABLE ensures every call is recorded and caps the charge when budget runs low.
+Token counts vary by prompt, context window, and model behavior. Estimation is inherently imprecise. For an instrumented call whose commit passes ownership, state, expiry, and unit validation, ALLOW_IF_AVAILABLE records the submitted actual but caps the charged overage when budget runs low.
 
 ```python
 @cycles(estimate=50000, action_kind="llm.completion", action_name="openai:gpt-4o")

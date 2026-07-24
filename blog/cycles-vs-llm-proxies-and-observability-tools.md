@@ -14,7 +14,7 @@ head:
 
 # Cycles vs LLM Proxies and Observability Tools: Where Budget Enforcement Fits
 
-A platform team runs [autonomous agents](/glossary#autonomous-agent) in production. They have a solid stack: LiteLLM routes model calls across OpenAI and Anthropic with automatic fallback. Langfuse traces every request with per-model cost attribution. Provider caps are set at $10,000 per month as a safety net.
+Consider an illustrative platform team running [autonomous agents](/glossary#autonomous-agent) in production. LiteLLM routes model calls across OpenAI and Anthropic with automatic fallback. Langfuse traces requests with per-model cost attribution. Provider caps are set at $10,000 per month as a safety net. The team has not configured a LiteLLM budget policy for this workload.
 
 <!-- more -->
 
@@ -28,7 +28,7 @@ The provider cap is set at $10,000 per month. It is March 7th. Monthly spend is 
 
 By Monday morning, the agent has made 4,700 calls and consumed $2,800. The team discovers it on the Langfuse dashboard during their weekly cost review.
 
-Every tool in the stack worked exactly as designed. None of them prevented the overspend.
+Every configured control worked as designed. The stack had routing and visibility, but no workload-level limit that matched this agent.
 
 The missing layer was not routing or visibility. It was **[runtime authority](/glossary#runtime-authority)** — a pre-execution decision about whether the next action should proceed given the remaining budget.
 
@@ -38,15 +38,13 @@ Most teams building on LLMs end up assembling a stack that addresses three disti
 
 | Layer | Question | When it acts | Examples |
 |---|---|---|---|
-| **Routing** | *Which* model handles this call? | Before execution (model selection) | LiteLLM, Portkey |
+| **Gateway and routing** | *Which* model handles this call, and does it satisfy gateway policy? | Before execution | LiteLLM, OpenRouter, Helicone |
 | **Visibility** | *What* happened during this call? | After execution (logging, tracing) | Helicone, Langfuse, LangSmith |
-| **Authority** | *Should* this call happen at all? | Before execution (budget check) | Cycles |
+| **Application budget authority** | *Does this instrumented operation fit its application-defined budget?* | Before execution | Cycles |
 
 Routing and visibility are well-understood layers with mature tooling.
 
-Authority — the pre-execution budget decision — is the layer most teams are missing.
-
-It is also the only layer that can prevent overspend rather than report it.
+Modern gateways can enforce inference budgets and rate limits before a provider call. Cycles addresses a different boundary: reserve-commit accounting across arbitrary operations the application instruments, including work that never traverses an LLM gateway.
 
 ## LLM proxies and gateways
 
@@ -68,17 +66,17 @@ Tools like LiteLLM and Portkey solve real problems that teams hit as soon as the
 
 These are valuable capabilities. A proxy earns its place in any production LLM stack.
 
-### Where proxies stop
+### Where gateway boundaries stop
 
 The gap appears when you need to **enforce** a budget, not just **track** spend.
 
 **Proxies only see model calls.** An autonomous agent does more than call LLMs. It invokes tools, writes to databases, sends emails, makes API requests, and triggers deployments. A proxy sitting between the app and the model provider has no visibility into these non-LLM actions. If your agent's tool calls cost money — and they often do — the proxy cannot meter them.
 
-**Proxies report after the call completes.** The model call happens. [Tokens](/glossary#tokens) are consumed. The proxy logs the cost. This is useful for dashboards but cannot prevent the call from happening. By the time the proxy records the expense, the money is already spent.
+**Current gateways can reject before a provider call.** LiteLLM supports project/user spend management, OpenRouter checks workspace budgets before routing, and Helicone can return `429` for request- or cost-window limits. Those controls are useful and should not be described as post-hoc-only.
 
-**No atomic budget [reservations](/glossary#reservation).** When ten agents share a $100 budget and make concurrent calls, a proxy cannot atomically check-and-decrement the remaining balance. Each call proceeds independently. The total can exceed the budget before any individual call sees the overrun.
+**Their accounting model is gateway-specific.** Gateway spend windows govern routed inference. OpenRouter documents that already-dispatched requests can produce slight budget overage. Cycles instead atomically [reserves](/glossary#reservation) a caller estimate before protected work and reconciles the actual amount afterward.
 
-**No hierarchical scopes.** Proxies track spend per API key or per model. They cannot enforce limits at the level your business actually needs: per [tenant](/glossary#tenant), per workspace, per workflow, per run. If three tenants share the same API key, the proxy cannot distinguish their budgets.
+**Hierarchy varies by product.** LiteLLM supports multi-tenant spend management per project/user, and OpenRouter supports organization, workspace, member, and key controls. The remaining distinction is not "no hierarchy"; it is whether those gateway identities match application boundaries such as a workflow, an individual run mapped to a workflow ledger, or a non-LLM operation.
 
 **No shared budget-degradation signal.** A proxy can route to a cheaper model when the primary is unavailable. A Cycles preflight can return the canonical `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` decision from configured budget state; the application must interpret any caps and perform the downgrade.
 
@@ -88,14 +86,14 @@ The gap appears when you need to **enforce** a budget, not just **track** spend.
 |---|---|---|
 | Model routing and fallback | Yes | No (not its role) |
 | Unified provider API | Yes | No |
-| Cost tracking (post-hoc) | Yes | Yes |
-| Pre-execution budget check | No | Yes |
+| Cost tracking | Yes | Yes |
+| Pre-execution inference limit | Varies; supported by current LiteLLM, OpenRouter, and Helicone gateways | Can protect an instrumented inference call |
 | Non-LLM action coverage | No | Instrumented tools and APIs |
-| Atomic reservations | No | Yes |
-| Per-tenant / per-agent scopes | Limited by proxy keys/metadata | Yes |
+| Caller-estimated reserve-commit lifecycle | Generally no | Yes |
+| Per-tenant / per-agent scopes | Product-specific projects, workspaces, users, keys, and metadata | Subject scopes configured by the application |
 | [Graceful degradation](/glossary#graceful-degradation) | Partial (model fallback) | Three-way decision; caller applies caps |
 | Caching | Yes | No |
-| Concurrency-safe accounting | No | Yes |
+| Concurrency behavior | Product-specific; in-flight overage may be possible | Atomic estimate reservation |
 
 ### Using both together
 
@@ -120,7 +118,7 @@ If Cycles allows the reservation, the proxy routes the call as usual. After the 
 
 **Keep your proxy.** It solves model routing, provider abstraction, and operational resilience.
 
-But do not expect it to govern what an autonomous system is allowed to spend in total.
+Use its native spend controls for inference. Add a broader budget boundary when the governed workload also includes non-LLM operations or application scopes the gateway cannot represent.
 
 ## Observability platforms
 
@@ -128,7 +126,7 @@ Observability tools give you visibility into what your LLM-powered application i
 
 ### What observability does well
 
-Tools like Helicone and Langfuse have become standard in LLM application stacks, and for good reason.
+Tools like Langfuse and LangSmith provide dedicated tracing and evaluation. Helicone also offers observability, but its gateway mode includes enforceable custom rate and cost limits, so it spans both categories.
 
 **Trace visualization.** See every step of an agent run — each LLM call, tool invocation, and intermediate result — laid out in a timeline. This is invaluable for debugging multi-step agent behavior.
 
@@ -161,7 +159,7 @@ Consider an agent making 100 calls per minute at $0.03 per call:
 
 By the time an alert fires and a human responds, the system has already spent. The observability platform reported accurately. It just could not intervene.
 
-**No enforcement mechanism.** An observability tool can tell you "this run has cost $50." It cannot prevent the next call that would push it to $53. There is no hook in the execution path where the observability platform can say "stop."
+**Pure tracing does not imply enforcement.** A tracing-only integration can tell you "this run has cost $50" without participating in the next-call decision. A gateway product may add an enforcement hook; Helicone's gateway, for example, supports request- and cost-based limits.
 
 **No reservation semantics.** There is no concept of reserving budget before a call and committing actual cost afterward. Observability records what happened. It does not participate in deciding what should happen next.
 
@@ -174,8 +172,8 @@ By the time an alert fires and a human responds, the system has already spent. T
 | Trace visualization | Yes | No (not its role) |
 | Cost attribution | Yes | Yes (via hierarchical scopes) |
 | Prompt debugging | Yes | No |
-| Pre-execution budget enforcement | No | Yes |
-| Live reservation rejection | No | Yes |
+| Pre-execution budget enforcement | No for tracing-only tools; some gateway products add it | Yes for instrumented operations |
+| Live reservation rejection | No for tracing-only tools | Yes |
 | Real-time alerting | Yes | Partial (through events/webhooks) |
 | Concurrency-safe accounting | No | Yes |
 | Shadow mode evaluation | Varies by platform | Yes; caller persists responses |
@@ -187,7 +185,7 @@ Observability and runtime authority form a feedback loop.
 
 **Observability informs budgets.** Trace data shows you what runs actually cost — the distribution of per-run spend, which models drive the most cost, which workflows are bursty. This is how you set accurate budget limits instead of guessing.
 
-**Cycles enforces budgets.** Once you know what runs should cost, Cycles ensures they stay within bounds. Pre-execution reservations prevent overspend. Three-way decisions (ALLOW, ALLOW_WITH_CAPS, DENY) enable degradation instead of hard failure.
+**Cycles enforces submitted budget estimates on instrumented paths.** Atomic reservations prevent concurrent holds from oversubscribing matching ledgers. The host must make the boundary mandatory, estimate conservatively, settle actual usage, and apply any configured caps or fallback.
 
 **Together, they close the loop.** Observability shows patterns. Cycles enforces limits. When Cycles denies a request, that event appears in your observability traces — giving you visibility into enforcement decisions, not just execution results.
 
@@ -220,7 +218,7 @@ Remove any one of these and a gap appears:
 - Without a proxy, you manage provider differences manually and lose fallback routing.
 - Without observability, you cannot debug, optimize, or understand cost trends.
 - Without provider caps, you have no last-resort safety net.
-- Without Cycles, you have no pre-execution budget enforcement. Autonomous agents can spend without limit until a human intervenes or a monthly cap triggers.
+- Without a matching pre-execution limit, any operation outside the gateway—or outside its configured identity and budget model—can continue until another control intervenes.
 
 These layers do not compete with each other. They solve different problems at different points in the execution lifecycle.
 
@@ -228,14 +226,16 @@ The question is not "which one should I use?"
 
 It is "which layer is missing?"
 
-For most teams running autonomous agents, the missing layer is runtime authority.
+The missing layer is whichever boundary your current controls do not cover. For inference-only workloads, a configured gateway budget may be sufficient. For workflows that span providers and non-LLM tools, an application-level reserve-commit boundary can fill the gap.
+
+Feature claims were rechecked on July 24, 2026 against [LiteLLM's gateway documentation](https://docs.litellm.ai/), [OpenRouter workspace budgets](https://openrouter.ai/docs/guides/features/workspaces/workspace-budgets), and [Helicone custom rate limits](https://docs.helicone.ai/features/advanced-usage/custom-rate-limits).
 
 ## Next steps
 
 - [What Is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents) — the foundational explainer for runtime authority as a concept
 - [From Observability to Enforcement](/concepts/from-observability-to-enforcement-how-teams-evolve-from-dashboards-to-budget-authority) — the maturity curve from dashboards to pre-execution budget decisions
 - [How Cycles Compares](/concepts/how-cycles-compares-to-rate-limiters-observability-provider-caps-in-app-counters-and-job-schedulers) — full capability matrix across rate limiters, observability, provider caps, in-app counters, and job schedulers
-- [Cycles vs Provider Spending Caps](/concepts/cycles-vs-provider-spending-caps) — why monthly limits and delayed enforcement create blind spots
+- [Cycles vs Provider Cost Controls](/concepts/cycles-vs-provider-spending-caps) — how vendor budgets, credits, and quotas differ from application-scoped runtime budgets
 - [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents) — real-world costs of running agents without budget limits
 - [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — concrete failure scenarios with dollar math
 - [AI Agent Cost Management: The Complete Guide](/blog/ai-agent-cost-management-guide) — the five-tier maturity model from no controls to hard enforcement

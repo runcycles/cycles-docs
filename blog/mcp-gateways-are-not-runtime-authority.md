@@ -85,7 +85,7 @@ Examples:
 
 An MCP gateway can block tools that should not be visible. It can help with authentication and central routing. But once a tool is approved, the gateway alone does not usually provide cumulative budget state, risk-point accounting, hierarchical tenant scopes, or reserve-commit semantics.
 
-That is the gap [MCP Tool Poisoning Has an 84% Success Rate](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) addresses from the attack side. This post is the architecture-side version: even clean tools need per-action authority.
+That is the attack-side gap examined in [MCP-ITP: Target-Tool Calls Reached 84.2%](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it). This post is the architecture-side version: even clean tools need an independently enforced application authorization boundary.
 
 ## The Two-Layer Pattern
 
@@ -170,6 +170,6 @@ If that answer matters in production, a gateway alone is incomplete.
 - [OWASP MCP Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html) - MCP deployment guidance for least privilege, schema integrity, sandboxing, monitoring, and supply chain controls
 - [OWASP Top 10 for Agentic Applications 2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) - broader agentic risk framework
 - [Runtime Authority vs Runtime Authorization](/concepts/runtime-authority-vs-runtime-authorization) - local layer distinction
-- [MCP Tool Poisoning Has an 84% Success Rate](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) - attack-side context for MCP security
+- [MCP-ITP: Target-Tool Calls Reached 84.2%](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) - attack-side context and benchmark boundaries
 - [Zero Trust for AI Agents](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) - why every tool call needs an external policy decision
 - [Getting Started with the Cycles MCP Server](/quickstart/getting-started-with-the-mcp-server) - config-level integration path

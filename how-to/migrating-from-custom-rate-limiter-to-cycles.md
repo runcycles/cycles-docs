@@ -306,7 +306,7 @@ The migration is safe because:
 | Action-level risk control | No | RISK_POINTS budgets |
 | Webhook alerts | Custom implementation | Built-in (51 registered event types across 7 categories, PagerDuty/Slack) |
 | Multi-tenant isolation | Manual Redis key prefixing | Built-in scope hierarchy |
-| Delegation attenuation | No | Sub-budget carving for sub-agents |
+| Delegation attenuation | No | Explicit child ledgers plus orchestrator-owned tool/depth restrictions |
 | Shadow mode validation | No | `decide()` endpoint for shadow evaluation |
 | Graceful degradation | No | ALLOW_WITH_CAPS with tool denylists |
 

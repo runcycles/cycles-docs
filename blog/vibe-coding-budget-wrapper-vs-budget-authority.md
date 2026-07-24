@@ -64,7 +64,7 @@ A lot of internal implementations are really **checkers**. They observe local st
 
 Cycles is built to be an **authority**.
 
-That means the system deciding whether work is allowed is not just another helper library embedded in the runtime. It is the place where budget is **reserved, committed, and released** in a way that remains correct under concurrency, retries, and partial failure. The [reserve/commit lifecycle](/blog/ai-agent-budget-control-enforce-hard-spend-limits) is designed specifically for this — atomic [reservations](/glossary#reservation) that prevent concurrent actors from claiming the same budget.
+That means the system deciding whether work is allowed is not just another helper library embedded in the runtime. It is the place where budget is **reserved, committed, and released** in a way that remains correct under concurrency, retries, and partial failure. The [reserve-commit lifecycle](/blog/ai-agent-budget-control-enforce-hard-spend-limits) is designed specifically for this — atomic [reservations](/glossary#reservation) that prevent concurrent actors from claiming the same budget.
 
 A checker can say "I think there is still budget available."
 
@@ -165,7 +165,7 @@ If the answer is no, that is exactly why Cycles exists.
 ## Next steps
 
 - **[What is Cycles?](/quickstart/what-is-cycles)** — start here if you are new to Cycles
-- **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — see the reserve/commit lifecycle in action
+- **[End-to-End Tutorial](/quickstart/end-to-end-tutorial)** — see the reserve-commit lifecycle in action
 - **[How Reserve/Commit Works](/protocol/how-reserve-commit-works-in-cycles)** — the protocol mechanics behind runtime authority
 
 ## Related how-to guides

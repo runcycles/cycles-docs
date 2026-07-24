@@ -27,7 +27,7 @@ For the operation counters below, null or blank tag values are normalised to the
 
 ## Runtime server (`cycles-server`)
 
-Introduced in v0.1.25.10. All counters live under the `cycles.*` namespace.
+Introduced in v0.1.25.10 and expanded in later v0.1.25 releases. The current runtime inventory is 11 counters and one timer under the `cycles.*` namespace.
 
 | Source | Prometheus | Type | Tags | Description |
 |---|---|---|---|---|
@@ -36,6 +36,10 @@ Introduced in v0.1.25.10. All counters live under the `cycles.*` namespace.
 | `cycles.reservations.release` | `cycles_reservations_release_total` | Counter | `tenant`, `actor_type`, `decision`, `reason` | Every release outcome (`decision` is `RELEASED` or `DENY`). `actor_type` distinguishes tenant-driven releases from v0.1.25.8 admin-on-behalf-of releases. |
 | `cycles.reservations.extend` | `cycles_reservations_extend_total` | Counter | `tenant`, `decision`, `reason` | Every `POST /v1/reservations/{id}/extend` outcome. |
 | `cycles.reservations.expired` | `cycles_reservations_expired_total` | Counter | `tenant` | Each reservation the expiry sweep actually marks EXPIRED. Skipped reservations (still in grace, already finalised) do not increment. |
+| `cycles.reservations.quarantined` | `cycles_reservations_quarantined_total` | Counter | `tenant`, `reason` | Malformed reservation records quarantined by maintenance. `reason`: `INVALID_EXPIRY`, `INVALID_ESTIMATE`, `MISSING_SCOPES`, or `MALFORMED_SCOPES`. |
+| `cycles.reservations.created_at_index.reads` | `cycles_reservations_created_at_index_reads_total` | Counter | `outcome` | Read-path result for the optional created-at sorted index. `outcome`: `INDEX`, `SCAN_DISABLED`, `SCAN_NOT_READY`, `SCAN_DRIFT`, or `SCAN_ERROR`. |
+| `cycles.maintenance.runs` | `cycles_maintenance_runs_total` | Counter | `job`, `outcome` | Scheduled maintenance run outcomes. |
+| `cycles.maintenance.duration` | `cycles_maintenance_duration_seconds` | Timer | `job`, `outcome` | Duration of scheduled maintenance runs. |
 | `cycles.events` | `cycles_events_total` | Counter | `tenant`, `decision`, `reason`, `overage_policy` | Every `POST /v1/events` outcome. |
 | `cycles.overdraft.incurred` | `cycles_overdraft_incurred_total` | Counter | `tenant` | Any commit or event that actually accrued non-zero debt. Unit-free signal — debt amount is tracked by the balance store, not here, to avoid leaking user-value distributions into metrics. |
 | `cycles.evidence.emit_failed` | `cycles_evidence_emit_failed_total` | Counter | `artifact_type` | Evidence-source enqueue failures (fail-open path) — a lifecycle op committed but its evidence record could not be queued (e.g. Redis died just after the ledger write). No `tenant` tag. |
@@ -48,6 +52,8 @@ Introduced in v0.1.25.10. All counters live under the `cycles.*` namespace.
 | `reason` | `OK` on success, `IDEMPOTENT_REPLAY` on idempotent replays, an `ErrorCode` name on denials (`BUDGET_EXCEEDED`, `BUDGET_FROZEN`, `BUDGET_CLOSED`, `RESERVATION_EXPIRED`, `RESERVATION_FINALIZED`, `IDEMPOTENCY_MISMATCH`, `UNIT_MISMATCH`, `OVERDRAFT_LIMIT_EXCEEDED`, `DEBT_OUTSTANDING`, `MAX_EXTENSIONS_EXCEEDED`, `NOT_FOUND`, …), or `INTERNAL_ERROR` on unexpected failures. `UNKNOWN` when the code path doesn't produce one. |
 | `overage_policy` | `REJECT`, `ALLOW_IF_AVAILABLE`, `ALLOW_WITH_OVERDRAFT` — which commit overage policy was in effect for the scope. `UNKNOWN` when not resolved. |
 | `actor_type` | `tenant` (tenant-driven) or `admin_on_behalf_of` (admin-driven, v0.1.25.8+). |
+| `job` | `reservation_expiry`, `audit_retention`, `event_retention`, `created_at_repair`, or `created_at_sweep`. |
+| `outcome` (maintenance) | `success`, `failed`, `skipped_locked`, `skipped_disabled`, `lease_error`, or `lease_lost`. |
 
 ### Not instrumented (by design)
 
@@ -56,7 +62,7 @@ Introduced in v0.1.25.10. All counters live under the `cycles.*` namespace.
 
 ## Events service (`cycles-server-events`)
 
-Introduced in v0.1.25.6. Mirrors the runtime's conventions: `cycles.webhook.*` rewrites to `cycles_webhook_*_total` (counters) or `cycles_webhook_*_seconds` (timer). Unlike the runtime, this service emits an explicit latency timer because it's the HTTP *client* — Spring's auto `http.server.requests` doesn't cover its primary I/O surface.
+Introduced in v0.1.25.6 and expanded with evidence, boundary, dispatcher, and security instrumentation. The current inventory is 17 counters and one timer. `cycles.webhook.*` rewrites to `cycles_webhook_*_total` (counters) or `cycles_webhook_*_seconds` (timer). This service emits an explicit latency timer because it is the HTTP *client*—Spring's auto `http.server.requests` does not cover its primary I/O surface.
 
 | Source | Prometheus | Type | Tags | Description |
 |---|---|---|---|---|
@@ -65,9 +71,19 @@ Introduced in v0.1.25.6. Mirrors the runtime's conventions: `cycles.webhook.*` r
 | `cycles.webhook.delivery.failed` | `cycles_webhook_delivery_failed_total` | Counter | `tenant`, `event_type`, `reason` | Failed deliveries. `reason` is one of `event_not_found`, `subscription_not_found`, `subscription_inactive`, `http_4xx`, `http_5xx`, `transport_error`, `ssrf_blocked`. |
 | `cycles.webhook.delivery.retried` | `cycles_webhook_delivery_retried_total` | Counter | `tenant`, `event_type` | Deliveries that re-entered the retry queue. |
 | `cycles.webhook.delivery.stale` | `cycles_webhook_delivery_stale_total` | Counter | `tenant` | Deliveries auto-failed on pickup for exceeding `dispatch.max-delivery-age-ms` (default 24h). |
+| `cycles.webhook.delivery.dead_lettered` | `cycles_webhook_delivery_dead_lettered_total` | Counter | `reason` | Delivery jobs moved to dead letter. |
+| `cycles.webhook.delivery.boundary_skipped` | `cycles_webhook_delivery_boundary_skipped_total` | Counter | `tenant`, `event_type`, `category` | Deliveries intentionally skipped at a configured dispatch boundary. |
 | `cycles.webhook.subscription.auto_disabled` | `cycles_webhook_subscription_auto_disabled_total` | Counter | `tenant`, `reason` | Subscriptions auto-disabled after consecutive failures crossed the threshold. `reason` is `consecutive_failures` (the accompanying `webhook.disabled` Event's payload uses the longer `disable_reason=consecutive_failures_exceeded_threshold`). Always emitted together with a `webhook.disabled` Event (v0.1.25.11). |
 | `cycles.webhook.delivery.latency` | `cycles_webhook_delivery_latency_seconds` | Timer | `tenant`, `event_type`, `outcome` | Round-trip time on deliveries that actually produced a transport response. `outcome`: `success` or `failure`. Upstream failures (event_not_found, etc.) have no meaningful latency and do not record to this timer. |
 | `cycles.webhook.events.payload.invalid` | `cycles_webhook_events_payload_invalid_total` | Counter | `type`, `rule` | Non-fatal shape discrepancy found by `EventPayloadValidator` on an ingested event. No tenant dimension — the discrepancy is about payload shape, not tenant traffic. `rule` values: `missing_required`, `unknown_event_type`, `unknown_category`, `category_mismatch`, `budget_data_shape`, `reset_spent_shape`, `trace_id_shape`. |
+| `cycles.evidence.claimed` | `cycles_evidence_claimed_total` | Counter | `artifact_type` | Evidence-source records claimed for processing. |
+| `cycles.evidence.stored` | `cycles_evidence_stored_total` | Counter | `artifact_type` | Signed evidence envelopes stored successfully. |
+| `cycles.evidence.dead_lettered` | `cycles_evidence_dead_lettered_total` | Counter | `artifact_type`, `reason` | Evidence-source records moved to dead letter. |
+| `cycles.evidence.retry_deferred` | `cycles_evidence_retry_deferred_total` | Counter | `artifact_type`, `reason` | Evidence work deferred for a later retry. |
+| `cycles.webhook.dispatcher.event.published` | `cycles_webhook_dispatcher_event_published_total` | Counter | `event_type` | Dispatcher lifecycle events published successfully. |
+| `cycles.webhook.dispatcher.event.deferred` | `cycles_webhook_dispatcher_event_deferred_total` | Counter | `event_type`, `reason` | Dispatcher lifecycle events deferred. |
+| `cycles.webhook.dispatcher.event.dead_lettered` | `cycles_webhook_dispatcher_event_dead_lettered_total` | Counter | `event_type`, `reason` | Dispatcher lifecycle events moved to dead letter. |
+| `cycles.webhook.security.config.indeterminate` | `cycles_webhook_security_config_indeterminate_total` | Counter | — | Delivery attempts blocked because the webhook-security configuration could not be determined safely. |
 
 ### Tag value reference (events)
 
@@ -76,6 +92,8 @@ Introduced in v0.1.25.6. Mirrors the runtime's conventions: `cycles.webhook.*` r
 | `event_type` | Event kind from the [Event Payloads Reference](/protocol/event-payloads-reference) (e.g. `reservation.denied`, `budget.exhausted`, `webhook.disabled`). Up to 51 registered values, plus additive implementation events over time. |
 | `status_code_family` | `2xx` (success bucket). Non-2xx responses land on `cycles_webhook_delivery_failed_total` with `reason` instead. |
 | `reason` (on `_failed_total`) | `event_not_found`, `subscription_not_found`, `subscription_inactive`, `http_4xx`, `http_5xx`, `transport_error` (timeouts, connection resets, DNS/SSL failures — status code 0), `ssrf_blocked`. |
+| `artifact_type` | `decide`, `reserve`, `commit`, `release`, `error`, or `UNKNOWN`. |
+| `event_type` (dispatcher lifecycle) | `webhook.disabled`, `system.webhook_delivery_failed`, or `UNKNOWN`. |
 
 ## Admin server (`cycles-server-admin`)
 
@@ -86,7 +104,10 @@ Exposed since admin observability rollout (v0.1.25.9+). Metric names use the `cy
 | `cycles_admin_audit_writes_total` | Counter | `path_class`, `outcome` | Audit-trail write accounting. `outcome` values: `written`, `error` (Redis write failed — alert on nonzero), `sampled-out` (pre-auth sampling dropped the entry per `audit.sample.unauthenticated`). `path_class` groups endpoints for coarse-grained triage. Shipped v0.1.25.20 alongside the audit-on-failure coverage. |
 | `cycles_admin_events_emitted_total` | Counter | `type`, `result` | Admin-emitted Event accounting. `result`: `success` or `failure`. |
 | `cycles_admin_events_payload_invalid_total` | Counter | `type`, `expected_class` | Jackson round-trip found an Event payload that didn't match its declared schema. Non-fatal — admin continues to accept the event. Shipped v0.1.25.12. |
-| `cycles_admin_webhook_dispatched_total` | Counter | `result` | Enqueue-to-dispatcher accounting. The end-to-end delivery metric is `cycles_webhook_delivery_*` on the events service. |
+| `cycles_admin_webhook_dispatched_total` | Counter | `result` | Enqueue-to-dispatcher accounting. `result`: `queued`, `failure`, or `boundary_skipped`. The end-to-end delivery metric is `cycles_webhook_delivery_*` on the events service. |
+| `cycles_admin_tenant_close_outbox_dead_letter_total` | Counter | `resource_type` | Tenant-close outbox records moved to dead letter. |
+| `cycles_admin_tenant_close_reconcile_incomplete_total` | Counter | — | Tenant-close reconciliation runs that ended with incomplete work. |
+| `cycles_admin_tenant_close_reconcile_errors_total` | Counter | — | Tenant-close reconciliation errors. |
 
 ## Sample scrape config
 
@@ -118,7 +139,7 @@ scrape_configs:
 
 ## Cardinality guidance
 
-The `tenant` tag is the dominant cardinality driver. A deployment with 10,000 tenants and all seven runtime counters produces ~70,000 time series just from the tenant dimension. If Prometheus memory / scrape duration becomes a concern:
+The `tenant` tag is the dominant cardinality driver. It appears on eight runtime counters and six events-service metrics in the current inventory; each metric can expand further across its bounded decision, reason, event, or outcome labels. If Prometheus memory or scrape duration becomes a concern:
 
 1. **Flip `cycles.metrics.tenant-tag.enabled` to `false`** on the runtime server (the events service already defaults to `false`). Counters drop the `tenant` tag; you lose per-tenant drill-downs but keep decision / reason / outcome signals.
 2. **Aggregate at scrape time** with `metric_relabel_configs` to drop the tag selectively on high-cardinality metrics while keeping it on the ones you still want tenant-sliced.

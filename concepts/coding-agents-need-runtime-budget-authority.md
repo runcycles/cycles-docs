@@ -11,7 +11,7 @@ They can search a codebase, scaffold features, write tests, fix bugs, and compre
 
 It becomes more important.
 
-> **Quantify a coding agent's blast radius:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — DROP TABLE, schema migration, deploy, and read-only rows are pre-loaded with realistic severity factors. The "with Cycles containment" slider shows what runtime action authority is worth for an agent with database credentials.
+> **Model a coding agent's blast radius:** [Blast Radius Risk Calculator →](/calculators/ai-agent-blast-radius-standalone) — DROP TABLE, schema migration, deploy, and read-only rows are pre-loaded with illustrative severity factors. Set the containment slider to an assumption supported by your actual authorization and budget controls.
 
 Coding agents and runtime authority solve different problems at different layers. A coding agent is designed to complete work. Runtime authority is designed to decide whether autonomous work is still allowed to continue, under what limits, and with what reconciliation afterward.
 
@@ -68,7 +68,7 @@ Provider-level spending caps and rate limits are useful safety nets, but they so
 
 **Rate limits** bound how fast a system can act. They do not bound how much total exposure a system creates over time.
 
-**Provider caps** are global kill switches. They apply to all usage across all tenants and workflows — they cannot express "this tenant may spend $50 on this run" or "this agent may use 100,000 tokens for this task."
+**Provider controls** use vendor-defined organization, project, workspace, credit, or quota scopes. Those can be valuable hard or soft boundaries, but shared provider identities do not automatically express "this tenant may spend $50 on this run" or "this agent may use 100,000 tokens for this task."
 
 **In-app counters** are fragile under concurrency. Two agents checking the same counter simultaneously can both proceed, creating double-spend that is only visible after the fact.
 
@@ -88,13 +88,13 @@ Runtime authority introduces a control loop around autonomous execution:
 3. **Commit** — report actual usage after work completes (unused remainder is released automatically)
 4. **Release** — explicitly release budget if work is canceled
 
-This is the [reserve/commit model](/protocol/how-reserve-commit-works-in-cycles) that Cycles implements.
+This is the [reserve-commit model](/protocol/how-reserve-commit-works-in-cycles) that Cycles implements.
 
 For coding agents, this means:
 
 - a run can check whether budget is available before starting
 - each model call or tool invocation can debit against a scoped budget
-- retries consume from the same reservation, preventing unbounded cost
+- retries can share one reservation only when its estimate covers the whole retry envelope; otherwise each retry needs another reservation against the same scoped ledger
 - if the budget is exhausted, the agent receives a clear signal to stop or degrade
 - operators see real-time budget consumption, not just post-hoc bills
 
@@ -143,7 +143,7 @@ To learn more:
 
 - Read [Why Coding Agents Do Not Replace Cycles](/concepts/why-coding-agents-do-not-replace-cycles) for the business-layer companion to this piece
 - Read [Why Rate Limits Are Not Enough](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) for the broader case for runtime authority
-- Understand the [reserve/commit lifecycle](/protocol/how-reserve-commit-works-in-cycles)
+- Understand the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles)
 - See [how events work](/protocol/how-events-work-in-cycles-direct-debit-without-reservation) for direct-debit accounting
 - Explore the full [API Reference](/protocol/api-reference-for-the-cycles-protocol)
 - Try the [MCP Server](/quickstart/getting-started-with-the-mcp-server) to give a coding agent direct budget tool access — zero code changes

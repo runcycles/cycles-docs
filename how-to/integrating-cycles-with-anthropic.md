@@ -29,10 +29,10 @@ from runcycles import CyclesClient, CyclesConfig, cycles, set_default_client
 
 set_default_client(CyclesClient(CyclesConfig.from_env()))
 
-@cycles(estimate=2_000_000, action_kind="llm.completion", action_name="claude-sonnet-4")
+@cycles(estimate=2_000_000, action_kind="llm.completion", action_name="claude-sonnet-4-6")
 def ask(prompt: str) -> str:
     return Anthropic().messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     ).content[0].text
@@ -71,7 +71,7 @@ PRICE_PER_OUTPUT_TOKEN = 1_500    # $15.00 / 1M tokens in microcents
         + result["usage"]["output_tokens"] * PRICE_PER_OUTPUT_TOKEN
     ),
     action_kind="llm.completion",
-    action_name="claude-sonnet-4-20250514",
+    action_name="claude-sonnet-4-6",
     unit="USD_MICROCENTS",
     ttl_ms=60_000,
 )
@@ -81,7 +81,7 @@ def send_message(prompt: str, max_tokens: int = 1024) -> dict:
         max_tokens = min(max_tokens, ctx.caps.max_tokens)
 
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -127,7 +127,7 @@ def chat_with_tools(prompt: str) -> str:
         res = client.create_reservation(ReservationCreateRequest(
             idempotency_key=key,
             subject=Subject(tenant="acme", agent="tool-agent"),
-            action=Action(kind="llm.completion", name="claude-sonnet-4-20250514",
+            action=Action(kind="llm.completion", name="claude-sonnet-4-6",
                           tags=[f"turn-{turn}"]),
             estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),
             ttl_ms=30_000,
@@ -147,7 +147,7 @@ def chat_with_tools(prompt: str) -> str:
         # Call Claude with tools; release the reservation if the call fails
         try:
             response = anthropic_client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 tools=TOOLS,
                 messages=messages,
@@ -203,9 +203,11 @@ Adjust these constants for the model you use:
 
 | Model | Input (microcents/token) | Output (microcents/token) |
 |-------|--------------------------|---------------------------|
-| Claude Haiku 3.5 | 80 | 400 |
-| Claude Sonnet 4 | 300 | 1,500 |
-| Claude Opus 4 | 1,500 | 7,500 |
+| Claude Haiku 4.5 | 100 | 500 |
+| Claude Sonnet 4.6 | 300 | 1,500 |
+| Claude Opus 4.8 | 500 | 2,500 |
+
+Rates verified against Anthropic's pricing page on July 24, 2026. Recheck pricing before deploying, especially if you switch models, use prompt caching, or select regional inference.
 
 ## Key points
 

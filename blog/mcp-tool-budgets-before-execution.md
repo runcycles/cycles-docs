@@ -8,7 +8,7 @@ tags:
   - budget-control
   - runtime-authority
   - architecture
-description: "MCP exposes tools, but it does not decide whether the next call should run. Wrap MCP handlers with Cycles reserve/commit checks before side effects happen."
+description: "MCP exposes tools, but it does not decide whether the next call should run. Wrap MCP handlers with Cycles reserve-commit checks before side effects happen."
 blog: true
 sidebar: false
 featured: false
@@ -491,7 +491,7 @@ An MCP gateway answers *can this tool be reached?* — authentication, allowlist
 
 The first question is about access. The second is about [exposure](/glossary#exposure) — the cumulative cost, action count, or blast radius the agent has already accumulated. Two questions, two layers. A gateway without runtime authority is a pass/fail access system; the 201st email goes through if the tool is allowed at all. Runtime authority without a gateway has to trust the tool inventory.
 
-Many production incidents we see are not unknown tools. They are approved tools called too many times, in the wrong scope, after the budget should have run out. That's exactly the gap a per-tool-call reservation closes; when run dimensions are enforced, the same pattern also caps the whole run.
+A common failure pattern is an approved tool called too many times or under the wrong application scope. A mandatory per-tool-call reservation can bound the cumulative estimate. To create a per-run budget with the current subject model, the caller must map that run to an enforceable scope such as a unique workflow; `subject.dimensions.run_id` is attribution-only.
 
 For the architecture-side detail of where this sits relative to gateways and authorization, see [MCP Gateways Are Not Runtime Authority](/blog/mcp-gateways-are-not-runtime-authority).
 

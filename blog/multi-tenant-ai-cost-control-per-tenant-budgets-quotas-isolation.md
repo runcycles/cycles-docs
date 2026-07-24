@@ -18,7 +18,7 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-A platform team runs a SaaS product with AI-powered document analysis. Fifty customers share the same infrastructure. One afternoon, a single customer's integration triggers an agent loop — the same 200-page PDF reprocessed 40 times with increasingly long context windows. In three hours, that one [tenant](/glossary#tenant) consumes $4,200 of the platform's $5,000 monthly provider budget.
+Consider a SaaS product with AI-powered document analysis and 50 customers on shared infrastructure. One customer's integration reprocesses the same 200-page PDF 40 times with growing context. Without tenant-scoped enforcement, that [tenant](/glossary#tenant) can consume a disproportionate share of the platform's monthly provider budget; the exact cost depends on model, tokens, and retries.
 
 The other 49 customers start seeing failures. Model calls return rate-limit errors. Jobs queue indefinitely. The platform's shared spending cap — set at the provider level — does not distinguish between customers. It just shuts everything down when the ceiling is reached.
 
@@ -46,17 +46,17 @@ The common thread: **one tenant's behavior affects every other tenant's experien
 
 It also makes billing and trust harder. When a customer asks "why did my costs spike?" and the answer is "because another customer's agent ran away," you have a credibility problem. Customers need predictable usage envelopes — knowing that their allocation is theirs, regardless of what other tenants do.
 
-## Why Provider-Level Caps Fail in Multi-Tenant Systems
+## Where Provider Controls Stop in Multi-Tenant Systems
 
-Every major AI provider offers some form of spending limit — OpenAI monthly caps, Anthropic usage tiers, AWS Bedrock service quotas. These controls are designed for single-account governance. They sit at the wrong level of the stack for multi-tenant platforms.
+Major providers offer different controls: OpenAI has soft spend alerts and optional hard monthly organization/project limits, Anthropic uses prepaid credits and usage tiers with workspace reporting, and AWS Bedrock exposes capacity quotas plus separate billing controls. These remain useful outer boundaries.
 
-**No per-customer isolation.** A $10,000 monthly cap on your OpenAI organization applies to all tenants combined. There is no mechanism to say "Tenant A gets $500, Tenant B gets $200, Tenant C gets $1,000." The cap is a single number shared by everyone.
+**No automatic customer mapping.** A $10,000 hard limit on one shared OpenAI project applies to all application tenants using that project. A platform can create separate provider projects, workspaces, or keys where supported, but it must maintain that mapping; the provider does not infer "Tenant A gets $500, Tenant B gets $200."
 
-**No per-workflow or per-run boundaries.** Provider caps do not know what a "workflow" or "run" is in your system. They cannot limit a single agent execution to $25, or cap a particular feature at $100/month per customer. The granularity stops at the account or project level.
+**No automatic workflow or run identity.** Provider controls operate on vendor identities, billing windows, credits, or quotas. A shared identity does not express a $25 application run or a $100/month feature budget unless the platform creates and enforces that mapping.
 
-**Reactive, not preventive.** Most provider caps operate on billing cycles. They tell you what happened; they do not block the next model call in real time. By the time the cap triggers, the damage is done — and it affects everyone.
+**Different timing and fallback semantics.** Alerts are reactive; credit, quota, and hard-limit controls can reject requests. OpenAI documents that hard spend-limit enforcement is not instantaneous, and no provider knows which application-specific fallback is safe.
 
-The structural problem is clear: provider caps protect the provider's [exposure](/glossary#exposure) to you, not your exposure to individual customers. For multi-tenant AI platforms, the enforcement boundary must exist **per customer, inside your runtime**. This is the problem [Cycles](/) was built to solve — [runtime authority](/glossary#runtime-authority) as infrastructure, enforced before execution, scoped to each tenant.
+The structural gap is the application's own customer hierarchy. A multi-tenant platform needs a per-customer boundary in its runtime unless it is willing to mirror every tenant and workflow into provider identities. Cycles supplies shared budget state for caller-submitted tenant and subject scopes; the application must instrument every protected path.
 
 ## What Per-Tenant Budget Enforcement Looks Like
 
@@ -65,7 +65,7 @@ Per-tenant enforcement means treating each customer as an independent budget sco
 The core behavior is simple:
 
 1. **Each tenant gets a defined budget** — $500/month, 1M [tokens](/glossary#tokens)/day, whatever matches your pricing model
-2. **Every agent action reserves budget from the tenant's scope** before execution — not from a shared pool
+2. **Every protected agent path submits the tenant scope** and reserves before execution
 3. **When a tenant's budget is exhausted, that tenant is denied** — their agents stop or degrade
 4. **Other tenants are completely unaffected** — their budgets, their [reservations](/glossary#reservation), their agent executions continue normally
 
@@ -96,10 +96,10 @@ When an agent makes a reservation, the system checks every applicable ledger amo
 
 This means:
 
-- A single run cannot exceed its $25 ceiling, even if the tenant has $1,500 remaining
-- An agent cannot exceed its allocation, even if the workflow has capacity
-- A workflow cannot exceed its share of the tenant budget
-- The tenant cannot exceed their overall limit, regardless of how budget is distributed internally
+- A run's submitted reservations cannot oversubscribe its $25 ledger even if the tenant ledger has room
+- An agent's submitted reservations cannot oversubscribe its ledger even if the workflow ledger has room
+- A workflow ledger can bound submitted reservations across its instrumented agents
+- A tenant ledger can bound submitted reservations across instrumented descendant paths
 
 Scopes compose naturally. You do not need to implement enforcement at every level on day one. Start with tenant budgets for isolation, then add run-specific standard-field scopes for execution safety, and layer in product-workflow or agent budgets as your model matures. The [modeling guide](/how-to/how-to-model-tenant-workflow-and-run-budgets-in-cycles) covers the trade-offs involved in choosing which standard field carries a run identifier.
 
@@ -110,7 +110,7 @@ Multi-tenant cost control requires two complementary mechanisms: **budgets** and
 | | Budget | Quota |
 |--|--------|-------|
 | **What it controls** | Total economic exposure (dollars, tokens) | Policy boundaries (counts, rates, access) |
-| **How it works** | Real-time balance with reserve/commit | Policy rule checked at request time |
+| **How it works** | Real-time balance with reserve-commit | Policy rule checked at request time |
 | **Enforcement** | Atomic — tracks cumulative spend | Stateless or counter-based — tracks occurrences |
 | **Example** | "$500/month for this tenant" | "Max 100 agent runs per day" |
 | **What it prevents** | Overspend, runaway costs | Abuse, resource hogging, plan enforcement |
@@ -145,15 +145,15 @@ Per-tenant budget enforcement, combined with quotas, delivers concrete operation
 
 Each copilot session runs within a per-session budget nested inside the monthly account budget. The [three-way decision model](/protocol/caps-and-the-three-way-decision-model-in-cycles) can carry operator-configured caps such as lower token limits through `ALLOW_WITH_CAPS`. The application must select and enforce that degradation policy; the current server does not tighten caps automatically as the session balance falls.
 
-**Agent platform with per-run ceilings.** A development tools company offers AI agent pipelines that customers configure and run. Each pipeline execution gets a per-run budget based on the pipeline type: code review at $5/run, deep analysis at $30/run, simple chat at $1/run. The tenant's monthly budget caps total spend across all runs. A customer running 200 code reviews in a month spends up to $1,000 — and no more, even if their agents loop.
+**Agent platform with per-run ceilings.** A development tools company offers AI agent pipelines that customers configure and run. Each pipeline execution maps its run ID to a unique workflow ledger: code review at $5/run, deep analysis at $30/run, simple chat at $1/run. A separate tenant ledger constrains aggregate submitted usage. Exact maximum settled spend still depends on mandatory coverage and the configured commit overage policy, so size strict estimates conservatively.
 
-**Enterprise customer with departmental sub-budgets.** A large enterprise tenant gets $10,000/month. Their IT team allocates sub-budgets by workspace: Engineering gets $5,000, Marketing gets $2,000, Support gets $3,000. Each department's agents draw from their own workspace scope. When Marketing's budget is exhausted mid-month, Engineering and Support are unaffected. The enterprise admin can reallocate budget between workspaces via the [admin API](/how-to/budget-allocation-and-management-in-cycles) without involving the platform operator.
+**Enterprise customer with departmental ledgers.** In this illustrative structure, a tenant has a $10,000 monthly ledger and explicit workspace ledgers set to Engineering $5,000, Marketing $2,000, and Support $3,000. Each protected call consumes the matching tenant and workspace ledgers. When Marketing's workspace ledger is exhausted, its next reservation fails while the other workspace ledgers can retain capacity. Operators can adjust allocations through separately authorized [admin API](/how-to/budget-allocation-and-management-in-cycles) mutations; Cycles does not transfer balances automatically.
 
 ## Rolling It Out
 
-You do not need the full hierarchy on day one. The proven path for multi-tenant platforms:
+You do not need the full hierarchy on day one. A practical sequence for multi-tenant platforms:
 
-1. **Start with tenant-level budgets.** This is the highest-leverage change — it creates isolation between customers. Every customer gets a defined ceiling. One tenant's behavior can no longer affect others. Start here even if the limits are generous.
+1. **Start with tenant-level budgets.** This creates budget isolation between customers on mandatory instrumented paths. It does not isolate shared provider rate limits, credentials, data, or compute capacity; use separate controls for those resources.
 
 2. **Add run-level budgets next.** Per-run caps are the best defense against runaway execution — loops, [retry storms](/glossary#retry-storm), and recursive tool calls. They protect both the tenant and the platform from a single bad execution.
 
@@ -161,7 +161,7 @@ You do not need the full hierarchy on day one. The proven path for multi-tenant 
 
 4. **Layer in workflow and agent budgets.** As your product matures, add scopes that match your product model — per-workflow caps for different features, per-agent budgets for multi-agent systems, per-workspace budgets for enterprise customers.
 
-5. **Differentiate by plan tier.** Map your pricing model directly to budget and quota configurations. Free, Pro, and Enterprise plans get different limits enforced at the same infrastructure layer.
+5. **Differentiate by plan tier.** Map your pricing model to budget configurations. If you also use an external quota system, keep its plan limits aligned; the current v0.1.25 reference server does not implement the v0.1.26 action-quota preview.
 
 For teams introducing enforcement to an existing system, [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) returns what would be denied without blocking. Log those non-persisting responses in the application, alongside actual outcomes, to size budgets before enabling hard enforcement.
 

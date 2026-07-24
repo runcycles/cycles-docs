@@ -138,7 +138,7 @@ Response:
 |---|---|
 | `status` | Filter by status: `ACTIVE`, `SUSPENDED`, or `CLOSED` |
 | `parent_tenant_id` | Filter by parent tenant (for hierarchical tenants) |
-| `observe_mode` | Filter by observe-mode flag (`true`/`false`) |
+| `observe_mode` | Preview filter: `DISABLED`, `OBSERVE`, or `ENFORCE`; accepted but not applied by current v0.1.25.x admin servers |
 | `search` | Case-insensitive substring match over `tenant_id` and `name` |
 | `sort_by` / `sort_dir` | Sort key and direction (default: `created_at` descending) |
 | `cursor` | Pagination cursor from a previous response |

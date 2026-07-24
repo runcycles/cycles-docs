@@ -45,7 +45,7 @@ Start with the smallest config that produces useful data:
           "enableEventLog": true,
           "analyticsWebhookUrl": "https://analytics.example.com/openclaw-sessions",
           "logLevel": "info",
-          "defaultModelName": "anthropic/claude-sonnet-4-20250514"
+          "defaultModelName": "anthropic/claude-sonnet-4-6"
         }
       }
     }
@@ -70,8 +70,8 @@ At `agent_end`, the plugin builds a `SessionSummary`, attaches the full object t
   "remaining": 850000000,
   "spent": 150000000,
   "costBreakdown": {
-    "model:anthropic/claude-sonnet-4-20250514": { "count": 22, "totalCost": 66000000 },
-    "model:anthropic/claude-opus-4-20250514":   { "count": 4,  "totalCost": 60000000 },
+    "model:anthropic/claude-sonnet-4-6": { "count": 22, "totalCost": 66000000 },
+    "model:anthropic/claude-opus-4-8":   { "count": 4,  "totalCost": 20000000 },
     "tool:web_search":     { "count": 12, "totalCost": 12000000 },
     "tool:code_execution": { "count": 3,  "totalCost": 6000000 },
     "tool:read_file":      { "count": 18, "totalCost": 1800000 }
@@ -97,12 +97,12 @@ Two things to do with this:
 
 The integration guide gives the baseline band: `"External API tools (web search, code execution) typically cost 500K-1M. Lightweight tools (text formatting, math) cost 10K-50K."` Start there unless your sandbox provider, timeout, or container lifecycle makes code execution materially more expensive. The plugin's session summaries will tell you which tools are being used and how often; provider telemetry or a custom estimator tells you whether the unit price is too low.
 
-**Confirm or update `modelBaseCosts`.** The plugin reserves a fixed amount per model call regardless of token count, and the [$5 walkthrough](/blog/openclaw-budget-guard-five-dollar-agent) flagged that this produces ±20% variance. That's fine for budget *enforcement* — you're approximating, not billing — but the estimates need to be in the right ballpark relative to each other or `downgrade_model` won't pick the right fallback. In the JSON-configured OpenClaw path, `costBreakdown.totalCost / count` usually reflects the configured estimate that was committed, not independent provider billing. Use provider token/billing telemetry, an LLM proxy, or a programmatic `modelCostEstimator` when you need measured per-call cost. A rough Anthropic-pricing-anchored ratio:
+**Confirm or update `modelBaseCosts`.** The plugin reserves a fixed amount per model call regardless of token count. The difference from provider billing depends on prompt and output size, so treat the fixed values as policy estimates rather than invoice reconstruction. The estimates still need to be in the right ballpark relative to each other or `downgrade_model` will choose fallbacks from a misleading cost order. In the JSON-configured OpenClaw path, `costBreakdown.totalCost / count` usually reflects the configured estimate that was committed, not independent provider billing. Use provider token/billing telemetry, an LLM proxy, or a programmatic `modelCostEstimator` when you need measured per-call cost. A rough ratio anchored to [Anthropic's published pricing](https://platform.claude.com/docs/en/about-claude/pricing), verified July 24, 2026:
 
 | Model | Starting estimate (USD_MICROCENTS) |
 |---|---|
-| Claude Opus 4 | 15,000,000 |
-| Claude Sonnet 4 | 3,000,000 |
+| Claude Opus 4.8 | 5,000,000 |
+| Claude Sonnet 4.6 | 3,000,000 |
 | Claude Haiku 4.5 | 1,000,000 |
 
 These are *per-call* averages, not per-token. Adjust upward if your prompts run long. After a few sessions, use the summary's model `count` values to understand call mix, then compare against external/provider cost data. Only treat `totalCost / count` as an observed average if you have wired in a real estimator; otherwise it is just the estimate you configured being charged back through the summary.
@@ -112,12 +112,12 @@ A concrete fitted config after day 3 looks like:
 ```json
 {
   "modelBaseCosts": {
-    "anthropic/claude-opus-4-20250514":   15000000,
-    "anthropic/claude-sonnet-4-20250514": 3000000,
+    "anthropic/claude-opus-4-8":   5000000,
+    "anthropic/claude-sonnet-4-6": 3000000,
     "anthropic/claude-haiku-4-5-20251001": 1000000
   },
   "modelFallbacks": {
-    "anthropic/claude-opus-4-20250514": ["anthropic/claude-sonnet-4-20250514", "anthropic/claude-haiku-4-5-20251001"]
+    "anthropic/claude-opus-4-8": ["anthropic/claude-sonnet-4-6", "anthropic/claude-haiku-4-5-20251001"]
   },
   "toolBaseCosts": {
     "web_search":      1000000,
@@ -169,7 +169,7 @@ A useful heuristic: set `lowBudgetThreshold` to **roughly the cost of the most e
 Read this off your event log. With `enableEventLog: true`, every [reservation](/glossary#reservation) logs the running balance:
 
 ```
-Model reserved: anthropic/claude-sonnet-4-20250514 (estimate=3000000, remaining=147000000)
+Model reserved: anthropic/claude-sonnet-4-6 (estimate=3000000, remaining=147000000)
 ```
 
 Look at the `remaining` values across a representative session. The threshold you want is somewhere between *"agent is two thirds done"* and *"agent has one Opus call left"*. That's where degradation has time to matter.
@@ -192,7 +192,7 @@ Now apply the [cutover decision tree](/blog/shadow-to-enforcement-cutover-decisi
 
 | Category | OpenClaw-specific check | Green when |
 |---|---|---|
-| **Cost calibration** | Compare configured `toolBaseCosts` and `modelBaseCosts` against provider telemetry, billing logs, or estimator output. Use `costBreakdown.totalCost / count` only when a real estimator is feeding actuals. | Per-call observations within ~20% of estimates for a representative sample; extend to a steady week before high-risk workflows |
+| **Cost calibration** | Compare configured `toolBaseCosts` and `modelBaseCosts` against provider telemetry, billing logs, or estimator output. Use `costBreakdown.totalCost / count` only when a real estimator is feeding actuals. | Estimate error stays within the conservative tolerance your overage policy and workload can absorb across a representative sample |
 | **Policy coverage** | `unconfiguredTools` list across recent session summaries | List is empty (or only contains tools you've explicitly chosen not to budget) |
 | **Operational readiness** | Has anyone on the team run a denial rehearsal and seen the relevant model block, tool reservation denial, call-limit block, or access-list block in OpenClaw logs? | Yes — at least one rehearsed denial |
 | **Reversion readiness** | Can you flip `failClosed: false` (or `dryRun: true`) without a deploy? | Yes — config-toggle path tested |

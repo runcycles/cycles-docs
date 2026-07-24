@@ -133,7 +133,7 @@ This is a classic time-of-check-to-time-of-use (TOCTOU) race condition. Rate lim
 
 Cycles handles this with atomic reservations. When the first thread reserves $5, that budget is immediately unavailable to the second thread. The second thread's reservation attempt sees the reduced balance and can be denied or degraded.
 
-No race condition. No overspend.
+No oversubscription of the submitted estimates across matching Cycles ledgers. Actual provider spend still depends on estimate quality, complete instrumentation, and settlement policy.
 
 ## When to use both together
 
@@ -186,11 +186,11 @@ Rate limiting and runtime authority are orthogonal controls.
 
 Rate limiting governs the speed of requests. It prevents bursts and abuse. It is stateless in the sense that it does not track what those requests cost in aggregate.
 
-Runtime authority governs the total exposure of execution. It prevents overspend and cost runaway. It is stateful — it tracks reservations, commits, and remaining balances across scopes.
+Runtime budget authority governs submitted cumulative exposure. It is stateful — it tracks reservations, commits, and remaining balances across configured scopes.
 
 An AI agent that respects rate limits can still create unbounded cost.
 
-An AI agent governed by Cycles cannot exceed its budget envelope — overages under `ALLOW_WITH_OVERDRAFT` surface as bounded, tracked debt — regardless of how fast or slow it operates.
+For paths that must reserve before execution, Cycles prevents concurrent submitted estimates from oversubscribing the matching ledgers. Actual usage can exceed an estimate and is handled by the configured commit-overage policy; bypass traffic remains outside the boundary.
 
 Rate limiting answers **how fast?**
 

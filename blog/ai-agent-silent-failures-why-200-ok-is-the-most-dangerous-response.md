@@ -54,7 +54,7 @@ This is the [0.95^10 problem](https://www.artiquare.com/why-multi-agent-ai-fails
 
 But here's what makes silent failures worse than the raw math suggests: **you don't know which 40% failed**. A crash at step 3 gives you a stack trace. A silent failure at step 3 gives you a wrong result at step 10 — with no indication of where things went off track.
 
-[Google DeepMind research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found that multi-agent systems amplify errors by **17x**. [OWASP's 2026 Top 10 for Agentic Applications](https://adversa.ai/blog/cascading-failures-in-agentic-ai-complete-owasp-asi08-security-guide-2026/) lists cascading failures (ASI08) as a critical security concern, noting three factors that make agentic cascading failures categorically worse than traditional distributed systems:
+In a controlled evaluation of 180 agent configurations, [Google Research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found that the independent-agent architecture amplified errors by up to **17.2x**, while centralized coordination limited amplification to 4.4x. Those benchmark results depend on the evaluated tasks and architectures. [OWASP's 2026 Top 10 for Agentic Applications](https://adversa.ai/blog/cascading-failures-in-agentic-ai-complete-owasp-asi08-security-guide-2026/) lists cascading failures (ASI08) as a critical security concern, noting three factors that make agentic cascading failures categorically worse than traditional distributed systems:
 
 1. **Semantic opacity** — Agent-to-agent communication happens in natural language or loosely-typed JSON. Semantic errors pass validation and propagate as "valid" data.
 2. **Emergent behavior** — Two agents acting "correctly" per their local objectives can produce catastrophic results when their actions combine.
@@ -113,7 +113,7 @@ Each checkpoint creates three things that combat silent failures:
 
 2. **A cost signal for anomaly detection** — Silent failures often have a distinct cost signature. A fabricated tool output costs nothing (no actual API call). A context-loss handoff shows a sudden drop in token usage. A looping agent shows monotonically increasing per-step costs. When you track the _economics_ of every step, anomalies that are invisible in logs become obvious in the spend pattern.
 
-3. **Blast radius containment** — Even if a silent failure slips past the checkpoint, [per-step and per-run budgets](/blog/ai-agent-budget-control-enforce-hard-spend-limits) cap how far the damage can spread. A wrong answer at step 3 can't cascade through 50 more steps if the run budget only allows 10.
+3. **Blast radius containment** — Even if a silent failure slips past the checkpoint, mandatory per-step reservations against a [workflow ledger keyed per run](/blog/ai-agent-budget-control-enforce-hard-spend-limits) can bound the caller-assigned exposure. If each step costs one configured unit, a ledger with ten units rejects the next protected step after ten successful charges; the host must then stop or degrade the run.
 
 ## How This Works in Practice with Cycles
 
@@ -143,7 +143,7 @@ A commit with near-zero cost and near-zero latency for a tool call that should i
 
 ### Capping test-rewriting agents
 
-[Action authority](/blog/ai-agent-action-control-hard-limits-side-effects) assigns severity scores to different actions. A coding agent with authority to _read_ test files and _write_ source files but restricted authority to _modify_ test files would be blocked at the reserve step. The reserve request specifies the action kind (`file.write`) and target (`tests/`), and the policy denies it:
+[Action authority](/blog/ai-agent-action-control-hard-limits-side-effects) combines host authorization with a caller-defined exposure budget. A coding-agent host can deny writes to `tests/` through its own path policy. For writes that are authorized, the integration can assign `RISK_POINTS` and reserve them at the mandatory execution boundary:
 
 ```jsonc
 // Agent tries to modify test file
@@ -152,16 +152,16 @@ POST /v1/reservations
   "action": { "kind": "file.write", "name": "tests/unit/customer.test.js" },
   "estimate": { "unit": "RISK_POINTS", "amount": 25 }
 }
-// → 409 BUDGET_EXCEEDED — test modification not in allowed scope
+// → 409 BUDGET_EXCEEDED when the matching RISK_POINTS ledger is exhausted
 ```
 
-The agent can't silently rewrite tests because the checkpoint requires explicit permission for that action category.
+Cycles does not infer that `tests/` is forbidden or turn risk points into a permission list. The host must enforce the path rule independently; the Cycles reservation bounds cumulative caller-submitted exposure for operations that pass that rule.
 
 ### Detecting lost state handoffs
 
-When a multi-agent workflow uses [hierarchical scopes](/protocol/how-scope-derivation-works-in-cycles) — a parent workflow scope with child agent scopes — the cost signature of each handoff is visible. If the research agent reserves and commits budget for 15 data-collection steps, but the analysis agent only reserves budget for 9 analysis steps, the mismatch is visible in the balance ledger. An automated check on the workflow scope can flag: "Research agent produced 15 items; analysis agent processed 9. Discrepancy of 6 items."
+When a multi-agent workflow uses [hierarchical scopes](/protocol/how-scope-derivation-works-in-cycles) — a broader workflow ledger plus narrower agent ledgers — separately instrumented steps leave reservation records. If the research agent commits 15 action records but the analysis agent commits only 9, application-side monitoring can correlate those records with handoff IDs and flag a discrepancy.
 
-This doesn't require the agents to be aware of the check. The checkpoint layer sees the _economic footprint_ of each step and can detect when downstream steps don't match upstream work.
+The aggregate balance alone does not reveal how many items crossed a handoff, and Cycles does not perform this anomaly check automatically. Record handoff and item identifiers in application telemetry or reservation metadata, retain the external outcomes, and run the comparison in your observability layer.
 
 ## The Broader Pattern: Budget as a Reliability Signal
 
@@ -177,7 +177,7 @@ An agent that's working correctly has a predictable cost pattern: consistent per
 | Wrong tool selection | Unexpected action kind in the [reservation](/glossary#reservation) |
 | Hallucinated completion | Missing commit for reserved steps (agent skipped execution) |
 
-None of these signals are guaranteed catches. But they're signals that _don't exist_ in architectures without per-step checkpoints. And they're automatically generated — no extra instrumentation, no custom logging, no manual review. Every reserve-commit cycle produces the data needed to detect anomalies.
+None of these signals is a guaranteed catch. An instrumented reserve-commit cycle produces budget lifecycle data, but anomaly detection, alert thresholds, and external outcome correlation still require observability and application logic.
 
 Combined with [per-run budgets](/blog/ai-agent-budget-control-enforce-hard-spend-limits) that cap total [exposure](/glossary#exposure) and [atomic reservations](/concepts/idempotency-retries-and-concurrency-why-cycles-is-built-for-real-failure-modes) that prevent concurrent agents from racing past limits, the checkpoint pattern creates defense in depth against both loud failures (budget exceeded) and quiet ones (cost anomaly detected).
 
@@ -191,7 +191,7 @@ The cheapest silent failure is the one caught at the checkpoint. Here's how to s
 
 2. **[Instrument one high-risk workflow first](/quickstart/how-to-choose-a-first-cycles-rollout-tenant-budgets-run-budgets-or-model-call-guardrails)** — Pick the workflow where a wrong answer has real consequences. Add reserve-commit checkpoints. Set per-step budgets. Monitor for the cost anomaly signals described above.
 
-3. **[Add action authority for sensitive operations](/blog/ai-agent-action-control-hard-limits-side-effects)** — Any action that modifies data, sends communications, or affects external systems should require explicit permission at the checkpoint. If the agent tries to do something outside its authorized scope, it's blocked — not logged after the fact.
+3. **[Add action authority for sensitive operations](/blog/ai-agent-action-control-hard-limits-side-effects)** — Put host authorization and argument validation before sensitive operations, then reserve caller-assigned risk points at the same mandatory boundary. The host blocks disallowed actions; Cycles denies authorized actions whose matching exposure budget is exhausted.
 
 4. **[Run the 60-second demo](/demos/)** — See budget enforcement and action checkpoints stop a runaway agent in real time. Then imagine the same mechanism catching a silent failure before it reaches your customers.
 

@@ -156,7 +156,7 @@ Use this rule for the first production budget:
 
 Then add the next layer once the first one proves useful.
 
-The end state may include tenant, workspace, workflow, run, agent, and toolset budgets. The starting point should be narrower: one meaningful control, one measurable failure mode, one denial path operators understand.
+The end state may include tenant, workspace, app, workflow, agent, and toolset budgets. A workflow ledger can be keyed per run when each execution needs a separate envelope. The starting point should be narrower: one meaningful control, one measurable failure mode, one denial path operators understand.
 
 ## Resource links
 

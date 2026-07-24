@@ -2,7 +2,7 @@
 title: "OpenAI Agents SDK Guardrails vs Action Control"
 date: 2026-03-30
 author: Albert Mavashev
-tags: [openai, agents, runtime-authority, governance, risk, actions, python, RunHooks]
+tags: [openai, agents, runtime-authority, governance, risk, action-control, python, RunHooks]
 description: "OpenAI Agents SDK tool guardrails validate individual function tools. They aren't cross-tenant budget or risk authority — RunHooks is where that fits."
 blog: true
 sidebar: false
@@ -38,7 +38,7 @@ What none of those primitives provide is cross-cutting [runtime authority](/glos
 
 The gap has three dimensions:
 
-**Cost.** There are no spending limits. A tenant running a support agent and a tenant running an analytics pipeline share the same unlimited OpenAI budget. If one tenant's agent enters a retry loop, the entire account pays for it. Provider-level spending caps are account-wide and may react too slowly — by the time they trigger, the damage is done.
+**Cost.** The Agents SDK does not provide a cross-tenant spend ledger. OpenAI's API platform now offers monthly spend alerts and optional hard limits at organization and project scope, but it does not infer application tenants or agent runs within a shared project. OpenAI also documents that hard-limit enforcement is not instantaneous. Per-tenant, per-run, or shorter-window controls therefore require separate provider projects or an application/gateway boundary.
 
 **Risk.** Tool guardrails let you write a custom validator per function tool, but there's no first-class concept of a risk level or an authorization threshold, and no shared ledger that tallies cumulative risk across the run. `search_knowledge_base` and `send_email` have to be policed by independently maintained guardrail code; nothing tracks "this agent has already burned its risk budget for the session."
 

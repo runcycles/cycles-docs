@@ -7,7 +7,7 @@ description: "Use the Cycles programmatic client in Python, Java, and TypeScript
 
 The decorator / annotation handles most use cases automatically. But sometimes you need direct control — building requests manually, managing the lifecycle yourself, or calling endpoints that the decorator does not cover.
 
-The Python `CyclesClient`, the Java `CyclesClient` interface, and the TypeScript `CyclesClient` class all provide programmatic access to every Cycles protocol endpoint.
+The Python `CyclesClient`, Java `CyclesClient`, and TypeScript `CyclesClient` provide the core runtime operations: decide; reserve, commit, release, and extend; reservation list/get; balances; and usage events. They do not expose helpers for every public or preview endpoint, such as evidence retrieval and JWKS discovery; use direct HTTP for an endpoint your client's current API does not cover.
 
 ## Getting the client
 

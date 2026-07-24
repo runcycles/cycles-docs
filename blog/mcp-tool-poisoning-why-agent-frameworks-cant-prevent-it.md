@@ -1,9 +1,9 @@
 ---
-title: "MCP Tool Poisoning: 84% Success Rate"
+title: "MCP-ITP: Target-Tool Calls Reached 84.2%"
 date: 2026-03-27
 author: Albert Mavashev
 tags: [security, MCP, tool-poisoning, agents, production, OWASP, runtime-authority, supply-chain]
-description: "In benchmarks, tool poisoning attacks succeed 84% of the time with auto-approval. 10,000+ MCP servers, 30+ CVEs, and no independent runtime enforcement gate."
+description: "MCP-ITP induced selected target-tool calls in up to 84.2% of MCPTox prompts. Learn what the benchmark measured and how to layer MCP defenses in production."
 blog: true
 sidebar: false
 head:
@@ -12,7 +12,7 @@ head:
       content: MCP tool poisoning, Model Context Protocol security, MCP supply chain, tool description injection, runtime enforcement, MCP security controls
 ---
 
-# MCP Tool Poisoning: Why Framework Controls Need Backup
+# MCP-ITP: Target-Tool Calls Reached 84.2% in MCPTox
 
 > **Part of: [AI Agent Risk & Blast Radius Reference](/guides/risk-and-blast-radius)** — the full pillar covering action authority, risk scoring, blast-radius containment, and degradation paths.
 
@@ -22,7 +22,7 @@ That's the finding that reframed MCP security in 2026. [Invariant Labs demonstra
 
 <!-- more -->
 
-The ecosystem is large enough that provenance and configuration matter. As of early 2026, one directory reported [over 10,000 public MCP servers](https://mcpplaygroundonline.com/blog/mcp-security-tool-poisoning-owasp-top-10-mcp-scan). [Trend Micro found 492 MCP servers](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) exposed to the internet with zero authentication, while researchers [reported 1,184 malicious skills](https://www.cryptonewsz.com/openclaws-clawhub-flags-1184-malicious-skills/) in OpenClaw's separate ClawHub ecosystem. In controlled benchmark testing, the [MCP-ITP framework](https://arxiv.org/abs/2601.07395) measured tool-poisoning success rates **up to 84.2%** under auto-approval. That benchmark condition should not be read as evidence about how common auto-approval is in production.
+The ecosystem is large enough that provenance and configuration matter. As of early 2026, one directory reported [over 10,000 public MCP servers](https://mcpplaygroundonline.com/blog/mcp-security-tool-poisoning-owasp-top-10-mcp-scan). [Trend Micro found 492 MCP servers](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) exposed to the internet with zero authentication, while researchers [reported 1,184 malicious skills](https://www.cryptonewsz.com/openclaws-clawhub-flags-1184-malicious-skills/) in OpenClaw's separate ClawHub ecosystem. On the controlled MCPTox benchmark, [MCP-ITP](https://arxiv.org/abs/2601.07395) induced the selected legitimate target-tool call in up to **84.2% of evaluated prompts across 12 model/agent settings**. The study measured whether the model selected the target tool; it did not test production auto-approval prevalence or confirm live side-effect execution.
 
 OWASP responded by publishing the [MCP Top 10](https://owasp.org/www-project-mcp-top-10/), a dedicated security framework for MCP vulnerabilities (currently in beta), separate from the broader Agentic AI Top 10. Researchers have also [catalogued more than 30 CVEs](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f) across MCP implementations. Those reports establish a broad implementation and supply-chain attack surface; they do not mean every CVE or exposed server is a metadata-poisoning exploit in the wild.
 
@@ -106,13 +106,11 @@ This is the architectural gap. And it's why scanners, pinning, and per-tool appr
 
 What's missing is an enforcement layer that sits **between** the agent's decision and the tool's execution — evaluating every tool call against policy before it runs, without requiring human-in-the-loop for every invocation.
 
-## The Enforcement Gap: What the $47,000 Incident Taught Us
+## The Cumulative-Control Gap
 
 The missing enforcement layer isn't just a security problem. It's an operational one.
 
-In March 2026, a multi-agent research system built on a common open-source stack [generated a $47,000 API bill](https://earezki.com/ai-news/2026-03-23-the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working/) when two agents entered a recursive loop that ran for 11 days. Traditional monitoring — Datadog, PagerDuty — didn't catch it because the API calls were succeeding. Every tool call returned 200. The agents were "working."
-
-The reported incident illustrates a cumulative-control gap: individually successful calls can still form an unsafe loop. OWASP's MCP guidance covers pre-execution authorization, audit, scope enforcement, and other controls, while the [Coalition for Secure AI (CoSAI)](https://www.helpnetsecurity.com/2026/03/03/enterprise-ai-agent-security-2026/) maps additional MCP threat categories. Evaluation before execution is one requirement among supply-chain, identity, sandbox, and monitoring controls.
+Individually successful calls can still form an unsafe loop. Monitoring can show that each call returned successfully without deciding whether the cumulative sequence should continue. OWASP's MCP guidance covers pre-execution authorization, audit, scope enforcement, and other controls. Evaluation before execution is one requirement among supply-chain, identity, sandbox, and monitoring controls.
 
 ## How a Mandatory Boundary Limits MCP Blast Radius
 
@@ -204,10 +202,10 @@ For everyone else, here's a practical path:
 Research and data referenced in this post:
 
 - [Invariant Labs: MCP Security Notification — Tool Poisoning Attacks](https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks) — Original tool poisoning research with proof-of-concept
-- [MCP-ITP: An Automated Framework for Implicit Tool Poisoning](https://arxiv.org/abs/2601.07395) — Ruiqi Li et al., January 2026. Benchmark showing up to 84.2% attack success rate across 12 LLM agents
+- [MCP-ITP: An Automated Framework for Implicit Tool Poisoning](https://arxiv.org/abs/2601.07395) — Ruiqi Li et al., January 2026. On MCPTox, the method induced selected target-tool calls in up to 84.2% of evaluated prompts across 12 model/agent settings; it did not test live production execution.
 - [OWASP MCP Top 10](https://owasp.org/www-project-mcp-top-10/) — The dedicated security framework for MCP vulnerabilities
 - [AISecHub: MCP's First Year — 30 CVEs and 500 Server Scans](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f) — February 2026. CVE breakdown, audit scores, and attack surface analysis
-- [Trend Micro: MCP Security — Network-Exposed Servers](https://www.trendmicro.com/vinfo/us/security/news/cybercrime-and-digital-threats/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) — 492 exposed servers with zero authentication
+- [Trend Micro: MCP Security — Network-Exposed Servers](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) — 492 exposed servers with zero authentication
 - [CyberArk: Poison Everywhere — No Output From Your MCP Server Is Safe](https://www.cyberark.com/resources/threat-research-blog/poison-everywhere-no-output-from-your-mcp-server-is-safe) — Full-schema poisoning beyond tool descriptions
 - [Snyk: Malicious MCP Server on npm — postmark-mcp](https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails/) — First confirmed malicious MCP server in the wild
 - [Palo Alto Networks Unit 42: MCP Sampling Attack Vectors](https://unit42.paloaltonetworks.com/model-context-protocol-attack-vectors/) — Resource theft, conversation hijacking, covert invocation

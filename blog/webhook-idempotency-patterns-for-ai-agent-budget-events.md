@@ -3,7 +3,7 @@ title: "Webhook Idempotency for Agent Budget Events"
 date: 2026-04-24
 author: Albert Mavashev
 tags:
-  - webhook
+  - webhooks
   - engineering
   - reliability
   - production
@@ -22,7 +22,7 @@ head:
 
 # Webhook Idempotency Patterns for AI Agent Budget Events
 
-At 11:42 PM, PagerDuty fires on a `reservation.denied` event. At 11:42 PM, PagerDuty fires again on the same `reservation.denied` event. The on-call engineer pages an agent owner twice, who calmly notes that there's only one denial in the Cycles audit log. The webhook delivered twice, the pager receiver processed both deliveries, and the duplicate turned one incident into two acknowledgments and twice the noise budget.
+At 11:42 PM, PagerDuty fires on a `budget.exhausted` event. At 11:42 PM, PagerDuty fires again on the same event. The on-call engineer pages an agent owner twice, who confirms that there is only one event in the Cycles event log. The webhook delivered twice, the pager receiver processed both deliveries, and the duplicate turned one incident into two acknowledgments and twice the noise budget.
 
 This is what at-least-once delivery actually looks like in production. It's not a bug in the webhook pipeline — it's the contract. Cycles' event delivery, like Stripe's webhooks, GitHub's deliveries, and AWS SNS messages, offers at-least-once semantics, which is another way of saying "assume your receiver will see the same event more than once and design accordingly." Teams that skip the dedup step aren't absent from the contract; they're just the receiver that didn't hold up their end.
 
@@ -45,7 +45,7 @@ The delivery contract the rest of this post assumes:
 
 - **At-least-once delivery.** Retries happen on network timeouts, events-service restarts, and operator-triggered event replay. The same `X-Cycles-Event-Id` may arrive multiple times.
 - **Exponential backoff.** Default schedule is 1s, 2s, 4s, 8s, 16s — capped at 60s — across up to six total attempts (initial + five retries). Success is any HTTP 2xx; any other response is a retry.
-- **Auto-disable after ten consecutive failures.** The subscription is paused and must be re-enabled via `PATCH /v1/admin/webhooks/{id}`. This prevents a permanently broken receiver from accumulating a backlog of stale deliveries.
+- **Auto-disable after ten consecutive failures.** With the default threshold, the subscription enters `DISABLED` and must be re-enabled via `PATCH /v1/admin/webhooks/{id}`. This prevents a permanently broken receiver from accumulating a backlog of stale deliveries.
 - **Stale-delivery timeout.** Deliveries older than 24 hours are marked `FAILED` without another HTTP attempt.
 
 The full spec lives in [Webhook Event Delivery Protocol](/protocol/webhook-event-delivery-protocol). The [Security](/security#webhook-security) page covers signing-secret rotation and SSRF protection. This post focuses on the receiver side.

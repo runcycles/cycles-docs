@@ -39,16 +39,16 @@ The shipped Cycles server can evaluate scoped budgets, including caller-assigned
 
 The reasons that make calendar-driven cutovers fail for budget enforcement apply unchanged to the new surfaces. The healthy pattern is the same: instrument first, observe, calibrate, then enforce — per surface, not in one big bang. The [synthesis post](/blog/what-four-new-surfaces-taught-us) framed reserve-commit as the stable layer the four surfaces preserved at their boundaries: every surface gets the same shape of rollout, with different specifics in the middle.
 
-The four-week structure that fits most teams:
+The following four-phase schedule is an illustrative planning aid:
 
 | Week | Goal | Output |
 |---|---|---|
 | 1 | Inventory the agent fleet's action surfaces | Surface-by-surface list with current gate state |
-| 2 | Shadow-mode instrumentation, per surface | Dry-run decisions flowing for every surface |
+| 2 | Shadow-mode instrumentation, per surface | Application logs combining host-rule preflight results with Cycles dry-run budget decisions |
 | 3 | Per-surface gate primitives + calibration | Application gate rules and Cycles budget amounts tuned against shadow data |
 | 4 | Cutover, surface by surface, in false-positive-cost order | Hard enforcement on the surface where a wrongful denial costs least first; remaining surfaces on a planned schedule |
 
-The schedule is illustrative. Teams with mature shadow-mode tooling and a single surface in scope can move faster; teams adopting all four surfaces simultaneously will usually want two weeks per surface, not one. The structure is the load-bearing piece, not the calendar.
+Choose the duration of each phase from traffic volume, workload variation, surface criticality, and the time needed to exercise rare failure cases. The structure matters more than the calendar.
 
 ## Week 1: Inventory the Action Surfaces
 
@@ -67,23 +67,23 @@ For each agent in scope, list every consequential action it can take. The invent
 | Frequency | Calls per hour at production volume | ~200/hr |
 | Existing audit | Where the action shows up if it goes wrong | CRM audit log only |
 
-The output is usually a mess of rows where the team realizes a third of the agent's actions don't have any pre-execution gate and another third have a gate that does the wrong thing (rate limit when it should be authority, content guardrail when it should be [action authority](/glossary#action-authority)). That mess is the actual inventory.
+The output often exposes actions without a pre-execution authorization or budget gate, as well as controls that answer a different question—for example, a rate limit cannot validate a merge target, and a content guardrail cannot bound cumulative spend.
 
-A useful sanity check at the end of week 1: every row in the inventory should map to exactly one of the canonical surfaces (outbound tool, memory write, merge, click, voice, or a sibling not yet covered). Rows that don't map are typically either misclassified or signal a new surface the corpus has not addressed yet. Either is worth a separate conversation before instrumentation.
+Use the listed surfaces as prompts, not a closed taxonomy. If an action does not fit them, document its actual execution boundary, authorization control, exposure unit, and recovery path before instrumentation.
 
 ## Week 2: Shadow-Mode Instrumentation Per Surface
 
-Once the inventory exists, every row needs a shadow-mode path. The general dry-run pattern from [How to Add Runtime Enforcement Without Breaking Your Agents](/blog/how-to-add-runtime-enforcement-without-breaking-your-agents) applies; what changes per surface is what gets instrumented.
+Once the inventory exists, each protected row needs an application-side preflight path. Host rules evaluate authorization and action-specific conditions. A separate Cycles `decide()` or `reserve(dry_run: true)` call can evaluate the caller-assigned budget without persistence. The general dry-run pattern from [How to Add Runtime Enforcement Without Breaking Your Agents](/blog/how-to-add-runtime-enforcement-without-breaking-your-agents) applies; what changes per surface is what the host validates and records.
 
 | Surface | Shadow-mode call | What to log |
 |---|---|---|
-| Outbound tool calls | `decide()` / `reserve(dry_run: true)` before the tool dispatches | Tool name, args, would-be decision, would-be caps |
-| Memory writes | `decide()` against the write target + scope before the memory layer persists | Operation, scope, provenance fields, would-be decision |
-| Merge buttons | Pre-execution hook on `gh pr merge` (or equivalent) in the agent harness | Source branch, target branch, head SHA, agent identity, would-be decision |
-| Computer-use clicks | Pre-emission hook on the click event in the agent harness | URL pattern, DOM target (if available), action verb, screenshot crop, would-be decision |
-| Voice frames | [Reservation](/glossary#reservation)-at-call-start probe, plus per-turn-boundary dry-run | Call-level features, predicted consumption, would-be reservation amount |
+| Outbound tool calls | Host authorization plus `decide()` / `reserve(dry_run: true)` before dispatch | Tool identity, validated arguments or a safe digest, host-rule result, Cycles budget decision |
+| Memory writes | Host validates tenant and write target; Cycles evaluates submitted exposure | Operation, scope, provenance fields, host-rule result, Cycles budget decision |
+| Merge buttons | Pre-execution hook on `gh pr merge` (or equivalent) in the agent harness | Source branch, target branch, head SHA, agent identity, host-rule result, Cycles budget decision |
+| Computer-use clicks | Pre-emission hook on the click event in the agent harness | URL pattern, DOM target (if available), action verb, host-rule result, Cycles budget decision |
+| Voice calls | Call-start estimate plus host-controlled re-evaluation points | Call-level features, predicted consumption, host-rule result, Cycles budget decision |
 
-The output of week 2 is a stream of dry-run decisions per surface. Teams with mature event pipelines route these into the same observability stack they use for everything else; teams without can start with structured logs. Either works for the calibration phase.
+The output of phase 2 is an application-owned stream of preflight results per surface. Cycles dry runs create no reservation or balance mutation. The current server emits `reservation.denied` for denied evaluations, but the application must log all responses and later outcomes for a complete stream.
 
 A few practical things to watch for during week 2:
 
@@ -99,12 +99,12 @@ With shadow data flowing, week 3 is where the per-surface specifics enter the pi
 
 | Gate primitive | What it does | Tune against |
 |---|---|---|
-| Per-tenant write quota | Cap writes per run per tenant scope | Distribution of writes-per-run from shadow data |
+| Per-tenant write quota | Host counter, or caller-assigned `RISK_POINTS` reserved by every protected write | Distribution of writes and assigned exposure from application shadow data |
 | TTL on unverified facts | Facts written without corroboration auto-expire | Survival rate of memory entries vs production retention need |
 | Per-write provenance | Run ID + agent identity + risk-budget context attached to every write | Existing audit trail — fields you already log |
-| Scope isolation enforcement | Reject cross-tenant writes unless explicitly allowed | Shadow events showing cross-tenant attempts |
+| Scope isolation enforcement | Host rejects cross-tenant writes unless explicitly authorized | Application preflight records showing cross-tenant attempts |
 
-Calibration target (starting heuristic): when shadow mode is evaluating the proposed quotas, the would-be denial rate on memory writes typically sits in the 1–5% band once the calibration data has stabilized — which usually takes at least a week of representative production traffic. Substantially higher rates suggest the quota is too tight; substantially lower rates suggest the quota isn't constraining anything in practice. Tune from the shadow data, not from this band alone. (Calibrating four surfaces in parallel typically requires extending Week 3 to 2–3 weeks; the table above is the single-surface schedule.)
+Calibration target: exercise legitimate writes, cross-tenant attempts, duplicate instrumentation, and the runaway pattern the boundary is meant to contain. Set acceptable false-denial and missed-detection rates from the memory product's own SLOs; Cycles defines no standard percentage or observation duration.
 
 ### Merge buttons
 
@@ -137,41 +137,40 @@ Calibration target: the would-be denial rate on clicks should distinguish the ro
 | Tier-aware gating | Slow-path tool calls sync-gated; fast-path audio against predictive reservation | Shadow data on which calls trigger tool look-ups |
 | Per-turn-boundary re-check | Re-reservation lands at turn boundaries, not mid-utterance | Turn-boundary timing observed in shadow |
 
-Calibration target: the reserve-to-commit ratio (per the [estimate-drift framework](/blog/estimate-drift-silent-killer-of-enforcement)) should sit between 0.8 and 1.2 on call-level reservations after the first week of shadow data. If it's drifting, recalibrate before cutover.
+Calibration target: choose a reserve-to-commit tolerance from call-duration variance and the amount of concurrent headroom you need. The [estimate-drift framework](/blog/estimate-drift-silent-killer-of-enforcement) explains why Cycles defines no universal ratio band or observation duration.
 
 Across all four surfaces, the calibration signals echo the [shadow-to-enforcement decision tree](/blog/shadow-to-enforcement-cutover-decision-tree): false-positive denial rate, calibration accuracy (where it can be defined — voice has a true reserve-to-commit ratio; the others use cap-fire rate vs shadow baseline as the analogue), instrumentation coverage, and operational readiness. The thresholds vary by surface; the questions don't.
 
 ## Week 4: Cutover, Lowest-False-Positive-Cost Surface First
 
-The cutover decision is per-surface, not all-or-nothing. The order below is ranked by *cost of a false-positive denial* — what happens if the gate denies an action the team meant to allow — not by the action's own blast radius (which the four siblings address). Lowest-cost-of-false-positive first:
+The cutover decision is per-surface, not all-or-nothing. Rank your own surfaces by the cost of a false-positive denial, recoverability, traffic volume, and action blast radius. One illustrative order is:
 
-1. **Memory writes** — the highest-volume surface, where a denied write is cheap to recover from. The agent can retry or work around; few false-positive denials produce immediate customer-facing damage. Good first.
-2. **Computer-use clicks** — similar volume, more sensitive to false positives because a denied click can break a workflow mid-step. The fresh-screenshot cap is the one that needs the most calibration headroom.
-3. **Voice frames** — lower per-call volume but higher per-failure visibility (a denied frame mid-conversation is audible). The predictive reservation pattern means most of the cutover risk is concentrated in the first 24 hours.
-4. **Merge buttons** — lowest volume but highest cost per false-positive denial. A denied merge that should have been allowed produces a stuck PR and an engineering escalation. Last.
+1. **Memory writes** — first only when a denied write is recoverable and does not discard required state.
+2. **Computer-use clicks** — later when a denial can interrupt a workflow mid-step.
+3. **Voice calls** — later when a failed call-start reservation or host re-check is immediately user-visible.
+4. **Merge buttons** — later when a false denial blocks a time-sensitive delivery path.
+
+Your ordering may be different: for example, an ephemeral memory write can be less important than a merge, while a durable compliance record can be more important.
 
 Each cutover follows the same per-surface checklist:
 
-- Shadow data shows the calibration targets met for at least the last 7 days
-- The team has classified a sample of would-be denials. >85% in the intended class is a minimum triage bar before cutover; substantially higher fractions are the target for sensitive surfaces (merge, voice mid-conversation)
+- Application-side shadow data covers representative normal traffic and the known failure cases
+- The team has classified enough would-be denials to meet the surface's false-denial SLO
 - An on-call rotation knows what to do when the first denial fires (per the [operating-budget-enforcement guide](/blog/operating-budget-enforcement-in-production))
-- The kill switch is wired and tested — flipping the gate back to shadow mode should take seconds, not a deploy
+- The application kill switch is wired, tested, and meets the surface's rollback-time objective without a redeploy
 - The rollback decision tree (below) is reviewed and signed off
 
-The cutover itself is undramatic when the calibration is good. The first denial that fires looks like the shadow denials the team has been classifying for days. The on-call playbook handles it. The next 24 hours produce some scattered denials, mostly on patterns the team has seen before. By day 3, the metrics stabilize.
-
-The cutover is undramatic in a different way when the calibration is bad. The first hour produces a denial rate the team has not seen before. The on-call playbook handles five denials, then ten, then a hundred. The kill switch is for that hour. Treat its existence as a routine operational primitive, not a failure marker.
+After cutover, compare live denials, user impact, and application-rule results with the calibrated baseline. Use the kill switch when the surface breaches its rollback objective; the required window depends on traffic and impact.
 
 ## The Rollback Decision Tree
 
 | Signal observed | Reaction |
 |---|---|
-| Denial rate >2× shadow-data rate, sustained over 1 hour | Flip the gate back to shadow mode; resume tuning |
-| Denial rate >5× shadow-data rate, sustained over 15 minutes | Kill switch — gate fully off; incident review |
-| Reserve-to-commit ratio drifts outside 0.8–1.2 in a 24-hour window *(voice-specific; the ratio is well-defined for predictive reservation but not for the other surfaces' cap-fire denominators)* | Adjust reservation estimates; keep enforcement live |
-| A specific tenant produces a disproportionate share of denials (rough starting heuristic: >20%) | Partial rollback — exempt that tenant scope, keep enforcement on the rest |
-| The same agent identity produces a disproportionate share of denials (rough starting heuristic: >40%) | Scope rollback — exempt that agent, investigate separately |
-| Surface-specific application rule fires above the calibrated baseline (rough starting heuristic: a 30%+ jump from shadow data, e.g. the host's fresh-screenshot rule) | Tune that rule, do not roll the whole surface back |
+| Denial rate breaches the surface's user-impact or availability SLO | Restore the application gate to dry-run/bypass mode; resume tuning |
+| A single denial causes an unacceptable irreversible outcome | Stop the affected surface and begin incident review |
+| Reserve-to-commit ratio leaves the workload-specific tolerance *(voice-call estimate example)* | Re-evaluate estimates; roll back if the drift threatens availability or exposure objectives |
+| One tenant or agent dominates unexpected denials | Investigate its scope mapping and workload; use a scoped rollback only if that exemption is authorized and safe |
+| An application rule fires materially above its calibrated baseline | Tune or roll back that host rule based on its surface-specific SLO |
 
 The decision tree is per-surface. Memory writes rolling back does not require clicks to roll back. The point of cutting over one surface at a time is that the blast radius of a bad cutover is bounded to that surface.
 
@@ -179,14 +178,14 @@ The decision tree is per-surface. Memory writes rolling back does not require cl
 
 The metrics that matter day-1 are not the same as the metrics that matter month-1. Both phases have their own [dashboards](/glossary#dashboard).
 
-**First 72 hours:**
+**Initial observation window:**
 
 - Sustained denial rate per surface, per tenant
 - Kill-switch state (boolean — is the gate live or off?)
 - Page volume from the on-call rotation
 - A sample of denied actions, manually classified — confirms the gate is denying the intended pattern
 
-**First month:**
+**Longer comparison window:**
 
 - Voice reserve-to-commit ratio, trending; for the other three surfaces, application-rule fire rates vs the shadow-mode baseline
 - Drift in (target, intent) distribution for clicks — A/B tests, new admin features, agent prompt updates all show up here first
@@ -198,7 +197,7 @@ The metrics that matter day-1 are not the same as the metrics that matter month-
 
 - Anything in the surface-specific drift signals from [policy drift](/blog/policy-drift-in-ai-agents). Memory writes, in particular, are a slow-drift surface — what shadow data shows in week 1 may not be what production looks like in month 3.
 
-A runbook entry per surface is the minimum bar. Most teams find they want one per surface plus one cross-surface entry for the kill switch.
+A runbook entry per enforced surface keeps its host rules, budget integration, and rollback procedure explicit. A cross-surface entry can document shared application kill switches.
 
 ## A Short Runbook Template
 
@@ -220,13 +219,13 @@ A few patterns to avoid, drawn from teams that have done this before:
 
 - **Don't cut over all surfaces simultaneously.** The whole point of per-surface gates is per-surface blast radius. A simultaneous cutover collapses that property.
 - **Don't skip shadow mode because "we already know what to enforce."** The team that knows what to enforce is the team that has been wrong before; the shadow phase is how you find out where you're wrong this time.
-- **Don't treat the cutover date as the goal.** The goal is the enforcement that works in production. A cutover that has to roll back the same week was not a successful cutover.
-- **Don't tune away the denial rate to zero.** A gate that never fires is a gate that is not protecting anything. Some denial rate is expected and healthy.
-- **Don't separate authority from observability.** The same audit trail that catches drift in policy is the audit trail that proves to auditors the system was under control. They are not two systems.
+- **Don't treat the cutover date as the goal.** The goal is enforcement that meets the surface's exposure and availability objectives; rollback is a designed response, not proof that the rollout failed.
+- **Don't infer effectiveness from denial rate alone.** A zero production-denial rate can be valid, but test cases must demonstrate that the boundary denies the failures it is meant to catch.
+- **Don't separate authority from observability.** Correlate host authorization records, Cycles lifecycle data, and action outcomes. Together they can support an audit, but budget records alone do not prove the action was authorized or compliant.
 
 ## What Action Authority Adoption Is
 
-A minimum bar: the inventory from week 1, the shadow data from week 2, the per-surface application rules and budget amounts tuned in week 3, and the per-surface cutover in week 4 (or weeks 4–N for multi-surface adoption) in false-positive-cost order with a tested kill switch, runbook entries committed before the cutover, and the discipline of treating each new surface as its own rollout on its own schedule.
+A practical readiness package includes the surface inventory, application-owned preflight records, tested host rules, calibrated budget amounts, a per-surface cutover order, a tested application kill switch, and runbook entries written before enforcement.
 
 The framework is the cheap part. The rollout is the work.
 

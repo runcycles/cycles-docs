@@ -5,7 +5,7 @@ description: "Guard Pydantic AI agent runs with Cycles budget reservations for c
 
 # Integrating Cycles with Pydantic AI
 
-This guide shows how to guard [Pydantic AI](https://ai.pydantic.dev/) agent runs with Cycles budget reservations so that every agent invocation is cost-controlled and observable.
+This guide shows how to guard [Pydantic AI](https://pydantic.dev/docs/ai/overview/) agent runs with Cycles budget reservations so that every agent invocation is cost-controlled and observable.
 
 ## Prerequisites
 

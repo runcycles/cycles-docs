@@ -3,7 +3,7 @@ title: "Estimate Drift in Budget Enforcement"
 date: 2026-04-07
 author: Albert Mavashev
 tags: [operations, production, observability, runtime-authority, incident-response, calibration]
-description: "Cost estimates drift in AI agent production. When reserve:commit ratios wander outside 0.8-1.2, budgets lie. Detect drift early and recalibrate safely."
+description: "Detect AI agent estimate drift by comparing reservations with actual usage, segmenting changes by workload, and recalibrating without masking budget intent."
 head:
   - - meta
     - name: keywords
@@ -17,7 +17,7 @@ featured: false
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-You calibrated your budgets correctly. You ran shadow mode for two weeks. You chose enforcement thresholds based on real data. Enforcement went live and worked.
+You calibrated your budgets against representative traffic, chose enforcement thresholds from the observed data, and moved protected paths to live reservations.
 
 Then three months later, something changes: your `reservation.commit_overage` events start climbing. In overdraft-tolerant setups, debt may begin to accumulate; in capped-charge setups, scopes may start drifting toward `is_over_limit`. A workflow that used to run comfortably starts triggering `budget.over_limit_entered`. Nobody deployed anything. Nobody changed the budgets. Nothing obvious broke.
 
@@ -35,7 +35,7 @@ Over time, four forces push estimates away from reality:
 
 **1. Context growth.** An agent that reserves 500 tokens for an LLM call on day one may need 4,000 tokens on day ninety as conversation history, retrieved documents, and tool outputs accumulate. The estimate formula was right for the small context — but the context grew.
 
-**2. Model behavior shifts.** Provider-side model updates change output verbosity, reasoning depth, and token consumption patterns. OpenAI [warns about this explicitly](https://developers.openai.com/cookbook/examples/how_to_count_tokens_with_tiktoken): *"The exact way that tokens are counted from messages may change from model to model. Consider the counts from the function below an estimate, not a timeless guarantee."*
+**2. Model behavior shifts.** Provider-side model updates can change output verbosity, reasoning depth, and token consumption patterns. OpenAI's [token-counting guidance](https://developers.openai.com/cookbook/examples/how_to_count_tokens_with_tiktoken) cautions that message-token calculations vary by model and should be treated as estimates.
 
 **3. Tool path variance.** The same agent workflow can take different paths through its tool set depending on input. If users start asking more complex questions, the agent starts making more tool calls per run — but the estimate hasn't caught up.
 
@@ -45,25 +45,24 @@ None of these forces fire alarms. They just slowly shift the ratio between what 
 
 ## The Reserve:Commit Ratio
 
-The single most useful signal for estimate drift is the **reserve-to-commit ratio**: how much budget you reserved divided by how much you actually spent, measured over a window.
+One useful signal for estimate drift is the **reserve-to-commit ratio**: total submitted estimates divided by total actual usage for completed reservations over a window.
 
 | Ratio | Meaning | What's happening |
 |---|---|---|
-| **> 2:1** | You're reserving 2x what you spend | Estimates are too high — false scarcity, unnecessary denials |
-| **1.2 - 2:1** | Moderately over-estimated | Tighten estimates to recover capacity |
-| **0.8 - 1.2:1** | Estimates are accurate | The target range |
-| **< 0.8:1** | Estimates are too low | Commits consistently exceed reserves — overage events, drift toward over-limit |
+| **Consistently above 1** | Estimates exceed actual usage | The buffer may be intentional, but excessive holds can reduce concurrent headroom or deny calls whose likely actual would fit |
+| **Near 1** | Aggregate estimates are close to actual usage | Inspect the distribution because over- and under-estimates can cancel out |
+| **Consistently below 1** | Actual usage exceeds estimates | Commit overages are likely; the configured overage policy determines whether they reject, cap the charge, or accrue debt |
 
-The [operator's guide](/blog/operating-budget-enforcement-in-production) defines 0.8-1.2 as the ideal range and 0.8-2.0 as the operationally acceptable watch range. This post focuses on the *why* behind ratio drift over weeks and months; the operator's guide covers *what to do* when enforcement fires in the moment.
+There is no implementation-defined target band. Set a tolerance per workload from its variance, concurrency needs, and desired safety margin. The [operator's guide](/blog/operating-budget-enforcement-in-production) covers what to do when enforcement fires in the moment.
 
-**One measurement note:** compute the ratio against **actual spend**, not the charged amount. In capped-charge setups (`ALLOW_IF_AVAILABLE`), the charged amount can be less than actual when overage is capped — using charged amounts would mask under-estimation drift.
+**Measurement notes:** compute the ratio against **actual usage**, not the charged amount. In capped-charge setups (`ALLOW_IF_AVAILABLE`), the charged amount can be less than actual when overage is capped, which would mask under-estimation drift. Use completed reservation records or application telemetry; the point-in-time balance fields `reserved` and `spent` do not form this ratio.
 
 The subtle thing about drift is that it can happen in either direction:
 
-- **Over-estimation drift** (ratio climbing above 1.2): Your budgets appear to deplete faster than actual spend justifies. Agents hit denials before they've really used their allocation. Teams respond by raising budgets — which masks the problem instead of fixing it.
-- **Under-estimation drift** (ratio falling below 0.8): Commits exceed reserves. `reservation.commit_overage` events fire. In overdraft-tolerant setups, debt may accumulate; in capped-charge setups, scopes can drift toward `is_over_limit`. Eventually you hit `budget.over_limit_entered` in production, with no budget change to blame.
+- **Over-estimation drift** (ratio rising above its workload baseline): Active reservations hold more headroom than their work tends to consume, and a submitted estimate can be denied even when the eventual actual would have fit. Raising budgets may mask the estimator problem.
+- **Under-estimation drift** (ratio falling below its workload baseline): Commits exceed reserves and `reservation.commit_overage` events fire. In overdraft-tolerant setups, debt may accumulate; in capped-charge setups, a scope is marked `is_over_limit` when the full overage cannot be charged.
 
-Both failure modes start the same way: a ratio that wanders out of the goldilocks zone and stays there.
+Both failure modes appear as sustained movement away from the tolerance chosen for that workload.
 
 ## Drift Detection: Catching Problems Before Production Incidents
 
@@ -73,22 +72,16 @@ Drift detection is a monitoring problem, not an alerting problem. You're watchin
 
 This is the most direct under-estimation signal. Every time actual cost exceeds reserved estimate on a commit, Cycles fires a `reservation.commit_overage` event. Track the rate over time:
 
-As a rule of thumb based on the same calibration logic as denial-rate thresholds:
-
-- **Healthy:** < 1% of commits fire overage
-- **Warning:** 1-5% of commits fire overage — investigate specific workflows
-- **Drift:** > 5% sustained for a week — recalibrate estimates
-
-The rate matters more than individual events. A single overage is an edge case. A rising rate is drift. Calibrate these thresholds to your own production baseline — what matters is the *trend*, not the exact percentage.
+Compare the rate with the workload's calibrated baseline and segment it by model, workflow, and tenant. A rising rate is evidence that the input distribution or estimator changed; an individual overage may simply be expected variance. Set alerts from your own tolerance rather than a universal percentage.
 
 ### Signal 2: Reserve:commit ratio drift over time
 
-Plot the ratio weekly. Look for trend, not noise:
+Plot the ratio at a window appropriate to your traffic volume. Look for trend, not isolated noise:
 
 - Ratio held steady at 1.05 for three months, then started climbing to 1.4 → over-estimation drift emerging
 - Ratio held at 0.95 for two months, then dropped to 0.75 → under-estimation drift, overage events incoming
 
-Drift happens at the timescale of weeks. Daily fluctuations are noise.
+High-volume workloads can reveal drift quickly; low-volume or seasonal workloads need longer comparison windows. Choose a window that contains enough completed reservations to be representative.
 
 ### Signal 3: Per-entity drift segmentation
 
@@ -103,18 +96,18 @@ A 1.1 overall ratio can hide a 0.7 ratio on one specific workflow that's heading
 
 ### Signal 4: Budget utilization trajectory
 
-If shadow mode showed you'd hit denials ~2% of the time, and live enforcement is now denying 5%, with the same budgets and same workload volume — something estimated differently. Either your budgets drifted, your estimates drifted, or the workload drifted. The ratio tells you which.
+If application-side dry-run records established one denial baseline and live enforcement now denies materially more often, compare policy changes, scope mapping, workload mix, and estimate ratios. The ratio helps identify estimate movement, but cannot by itself distinguish every cause.
 
 ## Recalibrating Without Breaking Production
 
 Detecting drift is half the battle. The other half is updating estimates without causing a new incident. Two patterns:
 
-### Pattern 1: Gradual estimate migration (safe default)
+### Pattern 1: Gradual estimate migration
 
 Don't change estimate formulas abruptly. Instead:
 
-1. **Observe the new target** in shadow mode. Compute what your new estimate formula *would* have produced for the last week of production traffic.
-2. **Compare shadow estimates to live actuals.** If shadow estimates are closer to actuals than current estimates, you have your new target.
+1. **Evaluate the candidate formula side by side.** Compute what it would have produced over a representative set of production traffic.
+2. **Compare candidate estimates to actuals.** If the distribution improves without removing the safety margin you require, the formula is a candidate for rollout.
 3. **Roll out per scope.** Apply the new estimate to one workflow, watch the reserve:commit ratio, expand to others if it stabilizes.
 4. **Watch `commit_overage` rate** during rollout. Spikes mean your new estimate is still wrong.
 
@@ -125,14 +118,14 @@ This is the estimate-update equivalent of shadow mode itself: observe first, enf
 If drift is small but persistent, sometimes the fix is adjusting the safety buffer rather than the core formula.
 
 - Current formula: `estimate = predicted_tokens * cost_per_token * 1.2` (20% buffer)
-- Drift shows actuals consistently 30% above estimates
-- Adjusted formula: `estimate = predicted_tokens * cost_per_token * 1.4` (40% buffer)
+- Analysis shows the prediction component remains useful but the chosen buffer no longer covers the desired percentile
+- Adjust the multiplier to the value measured for that percentile, then validate it against held-out traffic
 
-Buffer adjustments are easier to roll out than formula rewrites — they preserve the logic of the estimate while giving it more headroom.
+A buffer adjustment preserves the prediction logic, but it still needs validation: a broad multiplier can hide a model- or workflow-specific error.
 
 ### Anti-pattern: Raising budgets to absorb drift
 
-The most common wrong move: when overage events start climbing, raise the budget so the warnings stop. This is the same mistake as raising a capacity budget when your app has a memory leak. It hides the drift. It doesn't fix it. And it reduces the value of enforcement, because the budget is no longer representing actual intent — it's absorbing calibration error.
+A tempting response to rising overage events is to raise the budget so the warnings stop. That hides estimate drift instead of fixing it and weakens the connection between the ledger and the exposure the operator intended to allow.
 
 Budgets should track *what you want to spend*. Estimates should track *what you actually spend*. When those diverge, fix the estimate. Raising the budget to paper over drift just guarantees a bigger drift-driven incident later.
 
@@ -140,19 +133,19 @@ Budgets should track *what you want to spend*. Estimates should track *what you 
 
 Drift rate varies by workload. Set a cadence based on your signal frequency:
 
-| Signal frequency | Recommended cadence |
+| Workload behavior | Example review cadence |
 |---|---|
-| Workload changes weekly (fast iteration) | Review ratios weekly, recalibrate monthly |
-| Workload changes monthly (stable) | Review ratios monthly, recalibrate quarterly |
-| Workload changes rarely (mature system) | Review quarterly, recalibrate when drift signal fires |
+| Changes frequently or after most releases | Review after material releases and over a representative traffic window |
+| Stable but seasonal | Review across comparable seasonal periods |
+| Changes rarely | Review when a drift alert, model change, or pricing change fires |
 
-**Don't skip cadence entirely.** Even stable systems drift — provider pricing shifts, model updates happen, user input complexity evolves. An enforcement system you haven't re-examined in six months is probably operating on stale assumptions.
+Even stable systems can drift as provider pricing, model behavior, or user input changes. Tie review to those changes and to a recurring interval appropriate for your workload.
 
 ## The Take
 
 Estimate drift is the failure mode that turns well-calibrated enforcement into false-positive theater or silent debt accumulation. It's not dramatic — no single event triggers it — which is why it's easy to ignore until it causes an incident.
 
-The defense is continuous ratio monitoring, segmented by the dimensions that matter for your workload (model, tool, workflow, tenant). The reserve:commit ratio is the leading indicator. The `reservation.commit_overage` event is the confirmation signal. Staying in the 0.8-1.2 band is the goal.
+The defense is continuous ratio monitoring, segmented by the dimensions that matter for your workload (model, tool, workflow, tenant). The reserve-to-commit ratio shows estimate movement, while `reservation.commit_overage` confirms individual under-estimates. The goal is to remain within a workload-specific tolerance, not a universal band.
 
 And when drift appears, recalibrate *estimates*, not *budgets*. Estimates track reality. Budgets track intent. If you raise the budget every time estimates drift, the budget stops meaning anything.
 

@@ -5,7 +5,7 @@ description: "Add Cycles budget tools to Cursor via MCP, with project and global
 
 # Add Cycles to Cursor
 
-This page is the exact setup for [Cursor](https://cursor.com). For the protocol overview and reserve/commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
+This page is the exact setup for [Cursor](https://cursor.com). For the protocol overview and reserve-commit lifecycle, see the [umbrella MCP quickstart](/quickstart/getting-started-with-the-mcp-server).
 
 ::: warning MCP availability is not enforcement
 Registering this MCP server gives Cursor access to Cycles tools — `cycles_reserve`, `cycles_commit`, `cycles_release`, and balance queries. **MCP is useful for local assistant workflows and discovery. It is not, by itself, a hard runtime control unless the host or tool harness is required to call Cycles before executing the real action.** For production, place the Cycles check in the execution path — SDK wrapper, gateway, or framework adapter. See [Add Cycles with Claude, Codex, Cursor, or Windsurf](/how-to/add-cycles-with-claude-or-codex) for the application-side recipe.

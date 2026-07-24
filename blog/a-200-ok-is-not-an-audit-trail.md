@@ -50,7 +50,7 @@ It is the difference between "trust me, the budget said no" and handing someone 
 
 Three properties, each doing a specific job:
 
-- **Content-addressed.** The `evidence_id` is the SHA-256 of the envelope's [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JCS) canonical bytes — computed with the `evidence_id` and `signature` fields themselves left blank. The id *is* the integrity check: change one byte of a decision and it no longer matches.
+- **Content-addressed.** The `evidence_id` is the SHA-256 of the envelope's [RFC 8785](https://www.rfc-editor.org/info/rfc8785/) (JCS) canonical bytes — computed with the `evidence_id` and `signature` fields themselves left blank. The id *is* the integrity check: change one byte of a decision and it no longer matches.
 - **Signed.** An Ed25519 signature then covers a second canonical pass — the same envelope with the `evidence_id` now filled in and `signature` still blank — proving origin. Forge the contents and the signature fails.
 - **In-band, then fetchable.** Cycles computes the `evidence_id` *synchronously* and returns it on the response (`cycles_evidence: { evidence_id, cycles_evidence_url }`); the expensive signing and storage happen asynchronously, off the request path. A consumer records the id and later fetches the signed envelope from the public `GET /v1/evidence/{id}` capability URL — and verifies it on its own. (Because signing is async, a fetch immediately after the response can return a transient `404` until the envelope lands — retry.)
 
