@@ -85,7 +85,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Restore link-check cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .lycheecache
           key: lychee-${{ runner.os }}-${{ github.sha }}
