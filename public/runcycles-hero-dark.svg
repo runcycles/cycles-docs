@@ -1,9 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 530" width="620" height="530">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 530" width="620" height="530" role="img">
   <title>CYCLES enforcement and audit flow</title>
-  <desc>Three AI agents submit actions through the CYCLES budget gate. Allowed actions proceed; blocked actions are rejected when budget is exceeded. Every decision is appended to a signed audit ledger.</desc>
+  <desc>Three AI agents submit actions through the CYCLES budget gate. Allowed actions proceed; blocked actions are rejected when the budget cap is exceeded. Every decision is appended to a signed audit ledger.</desc>
   <style>
+    /* Static fallback: hide pure movers, pin fade-in content visible,
+       freeze pulsing strokes/fills at their resting state. */
     @media (prefers-reduced-motion: reduce) {
-      .flow-dot { display: none; }
+      .anim-dot { display: none; }
+      .glow-animated { display: none; }
+      .fade-in { opacity: 1 !important; }
+      .pct-alt { opacity: 0 !important; }
+      .meter-fill { width: 18px !important; fill: #00C9A7 !important; }
+      .dash-line { stroke-dashoffset: 0 !important; }
+      .shield-outline { stroke-width: 2.5 !important; }
+      .rm-static { transform: none !important; }
+      .op-label { fill: #A0A0A8 !important; }
     }
   </style>
   <defs>
@@ -25,72 +35,88 @@
     <marker id="arr-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
       <path d="M0,0 L0,6 L8,3 z" fill="#FF9500"/>
     </marker>
+    <radialGradient id="halo" gradientUnits="userSpaceOnUse" cx="300" cy="240" r="190">
+      <stop offset="0" stop-color="#00C9A7" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#00C9A7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shield-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17463A"/>
+      <stop offset="1" stop-color="#0D2B24"/>
+    </linearGradient>
+    <pattern id="dotgrid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#FFFFFF" opacity="0.05"/>
+    </pattern>
+    <clipPath id="bg-clip"><rect x="0" y="0" width="620" height="530" rx="18"/></clipPath>
   </defs>
 
-  <!-- Dark background for grounding -->
-  <rect x="0" y="0" width="620" height="530" rx="18" fill="#141420" stroke="#2A2A3A" stroke-width="1"/>
+  <!-- Background: dark base, faint dot grid, teal halo behind the gate -->
+  <rect x="0" y="0" width="620" height="530" rx="18" fill="#14141F" stroke="#2A2A3A" stroke-width="1"/>
+  <g clip-path="url(#bg-clip)">
+    <rect x="0" y="0" width="620" height="530" fill="url(#dotgrid)"/>
+    <circle cx="300" cy="240" r="190" fill="url(#halo)"/>
+  </g>
 
-  <!-- Agent A — LLM completion (blue tint) -->
-  <rect x="24" y="72" width="120" height="56" rx="12" fill="#2A2C38" filter="url(#shadow)"/>
-  <circle cx="52" cy="100" r="13" fill="#383A48"/>
+  <!-- Agent A — LLM completion (blue) -->
+  <rect x="24" y="72" width="120" height="56" rx="12" fill="#21232F" stroke="#32344A" stroke-width="1" filter="url(#shadow)"/>
+  <circle cx="48" cy="100" r="12" fill="#2A3450"/>
   <!-- Chat bubble icon -->
-  <path d="M44 94 h16 a2 2 0 0 1 2 2 v8 a2 2 0 0 1-2 2 h-10 l-3 3 v-3 h-3 a2 2 0 0 1-2-2 v-8 a2 2 0 0 1 2-2 z"
-        fill="none" stroke="#C7C7CC" stroke-width="1.5" stroke-linejoin="round"/>
-  <circle cx="48" cy="100" r="1.2" fill="#C7C7CC"/>
-  <circle cx="52" cy="100" r="1.2" fill="#C7C7CC"/>
-  <circle cx="56" cy="100" r="1.2" fill="#C7C7CC"/>
-  <text x="74" y="95" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent A</text>
-  <text x="74" y="112" font-size="10" fill="#8E8E93" font-family="-apple-system,system-ui,sans-serif">llm.completion</text>
+  <path d="M40 94 h16 a2 2 0 0 1 2 2 v8 a2 2 0 0 1-2 2 h-10 l-3 3 v-3 h-3 a2 2 0 0 1-2-2 v-8 a2 2 0 0 1 2-2 z"
+        fill="none" stroke="#8FB0FF" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="44" cy="100" r="1.2" fill="#8FB0FF"/>
+  <circle cx="48" cy="100" r="1.2" fill="#8FB0FF"/>
+  <circle cx="52" cy="100" r="1.2" fill="#8FB0FF"/>
+  <text x="66" y="95" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent A</text>
+  <text x="66" y="112" font-size="10" fill="#A0A0A8" class="op-label" font-family="-apple-system,system-ui,sans-serif">llm.completion</text>
   <!-- Send pulse -->
-  <rect x="24" y="72" width="120" height="56" rx="12" fill="#FFFFFF" opacity="0" class="flow-dot">
+  <rect x="24" y="72" width="120" height="56" rx="12" fill="#8FB0FF" opacity="0" class="anim-dot">
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
-      values="0;0;0.25;0;0" keyTimes="0;0.01;0.04;0.08;1"/>
+      values="0;0;0.18;0;0" keyTimes="0;0.01;0.04;0.08;1"/>
   </rect>
 
-  <!-- Agent B — Web search (neutral) -->
-  <rect x="24" y="212" width="120" height="56" rx="12" fill="#2C2C2E" filter="url(#shadow)"/>
-  <circle cx="52" cy="240" r="13" fill="#3A3A3C"/>
+  <!-- Agent B — Web search (violet) -->
+  <rect x="24" y="212" width="120" height="56" rx="12" fill="#21232F" stroke="#32344A" stroke-width="1" filter="url(#shadow)"/>
+  <circle cx="48" cy="240" r="12" fill="#332A50"/>
   <!-- Magnifying glass icon -->
-  <circle cx="50" cy="237" r="5" fill="none" stroke="#C7C7CC" stroke-width="1.8"/>
-  <line x1="54" y1="241" x2="59" y2="246" stroke="#C7C7CC" stroke-width="2" stroke-linecap="round"/>
-  <text x="74" y="235" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent B</text>
-  <text x="74" y="252" font-size="10" fill="#8E8E93" font-family="-apple-system,system-ui,sans-serif">tool.web_search</text>
+  <circle cx="46" cy="237" r="5" fill="none" stroke="#B79CFF" stroke-width="1.8"/>
+  <line x1="50" y1="241" x2="55" y2="246" stroke="#B79CFF" stroke-width="2" stroke-linecap="round"/>
+  <text x="66" y="235" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent B</text>
+  <text x="66" y="252" font-size="10" fill="#A0A0A8" class="op-label" font-family="-apple-system,system-ui,sans-serif">tool.web_search</text>
   <!-- Send pulse -->
-  <rect x="24" y="212" width="120" height="56" rx="12" fill="#FFFFFF" opacity="0" class="flow-dot">
+  <rect x="24" y="212" width="120" height="56" rx="12" fill="#B79CFF" opacity="0" class="anim-dot">
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
-      values="0;0;0.25;0;0" keyTimes="0;0.05;0.08;0.12;1"/>
+      values="0;0;0.18;0;0" keyTimes="0;0.05;0.08;0.12;1"/>
   </rect>
 
-  <!-- Agent C — Send email (warm tint) -->
-  <rect x="24" y="352" width="120" height="56" rx="12" fill="#382A2A" filter="url(#shadow)"/>
-  <circle cx="52" cy="380" r="13" fill="#483838"/>
+  <!-- Agent C — Send email (orange, the risky one) -->
+  <rect x="24" y="352" width="120" height="56" rx="12" fill="#21232F" stroke="#32344A" stroke-width="1" filter="url(#shadow)"/>
+  <circle cx="48" cy="380" r="12" fill="#3E2A21"/>
   <!-- Envelope icon -->
-  <rect x="43" y="374" width="18" height="12" rx="2" fill="none" stroke="#C7C7CC" stroke-width="1.5"/>
-  <polyline points="43,374 52,382 61,374" fill="none" stroke="#C7C7CC" stroke-width="1.5" stroke-linejoin="round"/>
-  <text x="74" y="375" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent C</text>
-  <text x="74" y="392" font-size="10" fill="#8E8E93" font-family="-apple-system,system-ui,sans-serif">tool.send_email
+  <rect x="39" y="374" width="18" height="12" rx="2" fill="none" stroke="#FFA45C" stroke-width="1.5"/>
+  <polyline points="39,374 48,382 57,374" fill="none" stroke="#FFA45C" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="66" y="375" font-size="13" font-weight="700" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Agent C</text>
+  <text x="66" y="392" font-size="10" fill="#A0A0A8" class="op-label" font-family="-apple-system,system-ui,sans-serif">tool.send_email
     <animate attributeName="fill" dur="8s" repeatCount="indefinite"
-      values="#8E8E93;#8E8E93;#FF9500;#8E8E93;#8E8E93" keyTimes="0;0.10;0.13;0.17;1"/>
+      values="#A0A0A8;#A0A0A8;#FFA45C;#A0A0A8;#A0A0A8" keyTimes="0;0.10;0.13;0.17;1"/>
   </text>
   <!-- Send pulse -->
-  <rect x="24" y="352" width="120" height="56" rx="12" fill="#FFFFFF" opacity="0" class="flow-dot">
+  <rect x="24" y="352" width="120" height="56" rx="12" fill="#FFA45C" opacity="0" class="anim-dot">
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
-      values="0;0;0.25;0;0" keyTimes="0;0.10;0.13;0.17;1"/>
+      values="0;0;0.18;0;0" keyTimes="0;0.10;0.13;0.17;1"/>
   </rect>
 
   <!-- Curved flow lines to gate -->
-  <path id="path-a" d="M146 100 C180 100, 200 170, 240 200" fill="none" stroke="#8E8E93" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr-gray)">
+  <path id="path-a" class="dash-line" d="M146 100 C180 100, 200 170, 240 200" fill="none" stroke="#AEAEB2" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr-gray)">
     <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
   </path>
-  <path id="path-b" d="M146 240 C190 240, 210 240, 240 240" fill="none" stroke="#8E8E93" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr-gray)">
+  <path id="path-b" class="dash-line" d="M146 240 C190 240, 210 240, 240 240" fill="none" stroke="#AEAEB2" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr-gray)">
     <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
   </path>
-  <path id="path-c" d="M146 380 C180 380, 200 310, 240 280" fill="none" stroke="#FF9500" stroke-width="2" stroke-opacity="0.5" stroke-dasharray="6 4" marker-end="url(#arr-orange)">
+  <path id="path-c" class="dash-line" d="M146 380 C180 380, 200 310, 240 280" fill="none" stroke="#FF9500" stroke-width="2" stroke-opacity="0.6" stroke-dasharray="6 4" marker-end="url(#arr-orange)">
     <animate attributeName="stroke-dashoffset" from="10" to="0" dur="1s" repeatCount="indefinite"/>
   </path>
 
   <!-- Flow dot A -->
-  <circle r="3.5" fill="#8E8E93" opacity="0" class="flow-dot">
+  <circle r="3.5" fill="#AEAEB2" opacity="0" class="anim-dot">
     <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1;1" keyTimes="0;0.01;0.25;0.375;1" calcMode="linear">
       <mpath href="#path-a"/>
     </animateMotion>
@@ -99,7 +125,7 @@
   </circle>
 
   <!-- Flow dot B -->
-  <circle r="3.5" fill="#8E8E93" opacity="0" class="flow-dot">
+  <circle r="3.5" fill="#AEAEB2" opacity="0" class="anim-dot">
     <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1;1" keyTimes="0;0.05;0.3;0.425;1" calcMode="linear">
       <mpath href="#path-b"/>
     </animateMotion>
@@ -108,7 +134,7 @@
   </circle>
 
   <!-- Flow dot C (orange — danger) -->
-  <circle r="3.5" fill="#FF9500" opacity="0" class="flow-dot">
+  <circle r="3.5" fill="#FF9500" opacity="0" class="anim-dot">
     <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1;1" keyTimes="0;0.1;0.35;0.475;1" calcMode="linear">
       <mpath href="#path-c"/>
     </animateMotion>
@@ -137,8 +163,8 @@
   </circle>
 
   <!-- Shield shape — enforcement gate -->
-  <path d="M300 166 L348 184 L348 244 Q348 280 300 300 Q252 280 252 244 L252 184 Z"
-        fill="#1A3A32" stroke="#00C9A7" stroke-width="2.5" filter="url(#shadow-lg)">
+  <path class="shield-outline" d="M300 166 L348 184 L348 244 Q348 280 300 300 Q252 280 252 244 L252 184 Z"
+        fill="url(#shield-grad)" stroke="#00C9A7" stroke-width="2.5" filter="url(#shadow-lg)">
     <animate attributeName="stroke-width" dur="8s" repeatCount="indefinite"
       values="2.5;2.5;3.5;2.5;2.5" keyTimes="0;0.35;0.5;0.65;1"/>
   </path>
@@ -156,41 +182,42 @@
 
   <!-- Lock icon inside shield -->
   <rect x="288" y="220" width="24" height="18" rx="4" fill="#00C9A7"/>
-  <g>
+  <g class="rm-static">
     <path d="M294 220 L294 213 Q294 204 300 204 Q306 204 306 213 L306 220" fill="none" stroke="#4DE8CC" stroke-width="3" stroke-linecap="round"/>
     <animateTransform attributeName="transform" type="translate" dur="8s" repeatCount="indefinite"
       values="0 0;0 0;0 -4;0 0;0 0" keyTimes="0;0.48;0.52;0.60;1"/>
   </g>
-  <circle cx="300" cy="229" r="3" fill="#141420"/>
-  <line x1="300" y1="231" x2="300" y2="235" stroke="#141420" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="300" cy="229" r="3" fill="#0D2B24"/>
+  <line x1="300" y1="231" x2="300" y2="235" stroke="#0D2B24" stroke-width="2.5" stroke-linecap="round"/>
 
-  <!-- CYCLES label -->
-  <text x="300" y="330" text-anchor="middle" font-size="15" font-weight="800" fill="#00C9A7" font-family="-apple-system,system-ui,sans-serif" letter-spacing="0.15em">CYCLES</text>
+  <!-- CYCLES wordmark badge (x=301 compensates trailing letter-spacing in centered SVG text) -->
+  <rect x="263" y="314" width="74" height="22" rx="11" fill="#0F2B25" stroke="#1F5D4B" stroke-width="1"/>
+  <text x="301" y="329" text-anchor="middle" font-size="12" font-weight="800" fill="#00C9A7" font-family="-apple-system,system-ui,sans-serif" letter-spacing="0.14em">CYCLES</text>
 
   <!-- Budget meter — tighter integration below shield -->
-  <rect x="232" y="346" width="136" height="32" rx="8" fill="#2C2C2E" filter="url(#shadow)"/>
+  <rect x="232" y="346" width="148" height="32" rx="8" fill="#26262E" stroke="#3A3A44" stroke-width="1" filter="url(#shadow)"/>
   <text x="244" y="366" font-size="10" font-weight="700" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif">BUDGET</text>
   <rect x="290" y="360" width="60" height="6" rx="3" fill="#3A3A3C"/>
-  <rect x="290" y="360" width="18" height="6" rx="3" fill="#00C9A7">
+  <rect x="290" y="360" width="18" height="6" rx="3" fill="#00C9A7" class="meter-fill">
     <animate attributeName="width" dur="8s" repeatCount="indefinite"
-      values="18;18;48;54;54;18;18" keyTimes="0;0.25;0.55;0.70;0.85;0.875;1"/>
+      values="18;18;48;57;57;18;18" keyTimes="0;0.25;0.55;0.70;0.85;0.875;1"/>
     <animate attributeName="fill" dur="8s" repeatCount="indefinite"
       values="#00C9A7;#00C9A7;#00C9A7;#FF9500;#FF9500;#00C9A7;#00C9A7" keyTimes="0;0.25;0.55;0.70;0.85;0.875;1"/>
   </rect>
   <!-- Percentage labels (opacity-swapped since SMIL can't animate text content) -->
-  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="1">30%
+  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="1" class="fade-in">30%
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="1;1;0;0;0;1;1" keyTimes="0;0.35;0.40;0.85;0.875;0.88;1"/>
   </text>
-  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0">55%
+  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0" class="pct-alt">55%
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="0;0;1;0;0;0;0" keyTimes="0;0.40;0.45;0.55;0.85;0.875;1"/>
   </text>
-  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0">80%
+  <text x="355" y="367" font-size="10" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0" class="pct-alt">80%
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="0;0;1;0;0;0;0" keyTimes="0;0.55;0.58;0.68;0.85;0.875;1"/>
   </text>
-  <text x="355" y="367" font-size="10" fill="#FF9500" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0">90%
+  <text x="355" y="367" font-size="10" fill="#FFA940" font-family="-apple-system,system-ui,sans-serif" font-weight="600" opacity="0" class="pct-alt">95%
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="0;0;1;1;0;0;0" keyTimes="0;0.68;0.72;0.85;0.875;0.88;1"/>
   </text>
@@ -199,7 +226,7 @@
   <path id="path-allowed" d="M350 210 C380 195, 420 160, 452 145" fill="none" stroke="#00C9A7" stroke-width="2" marker-end="url(#arr-teal)"/>
 
   <!-- Allowed flow dot -->
-  <circle r="3.5" fill="#00C9A7" opacity="0" class="flow-dot">
+  <circle r="3.5" fill="#00C9A7" opacity="0" class="anim-dot">
     <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1;1" keyTimes="0;0.5;0.7;0.8;1" calcMode="linear">
       <mpath href="#path-allowed"/>
     </animateMotion>
@@ -207,19 +234,19 @@
       values="0;0;0.9;0.9;0;0" keyTimes="0;0.5;0.55;0.75;0.8;1"/>
   </circle>
 
-  <!-- ALLOWED card -->
-  <rect x="454" y="96" width="148" height="64" rx="12" fill="#1A3A32" filter="url(#shadow)"/>
+  <!-- ALLOWED card — matches ledger row 2 (tool.web_search / evt_d44c) -->
+  <rect x="454" y="96" width="148" height="64" rx="12" fill="#12352C" stroke="#1F5D4B" stroke-width="1" filter="url(#shadow)"/>
   <!-- ALLOWED flash on arrival -->
-  <rect x="454" y="96" width="148" height="64" rx="12" fill="#00C9A7" opacity="0" class="flow-dot">
+  <rect x="454" y="96" width="148" height="64" rx="12" fill="#00C9A7" opacity="0" class="anim-dot">
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="0;0;0.3;0;0" keyTimes="0;0.70;0.74;0.80;1"/>
   </rect>
   <rect x="454" y="96" width="4" height="64" rx="2" fill="#00C9A7"/>
   <text x="474" y="114" font-size="13" font-weight="800" fill="#00C9A7" font-family="-apple-system,system-ui,sans-serif">ALLOWED</text>
-  <text x="474" y="128" font-size="11" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Reserved: 50,000</text>
+  <text x="474" y="128" font-size="11" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Reserved: 12,000</text>
   <text x="474" y="142" font-size="11" fill="#D1D1D6" font-family="-apple-system,system-ui,sans-serif">&#x2713; proceed</text>
   <!-- Audit stamp — fades in at decision arrival -->
-  <text x="474" y="154" font-size="10" fill="#AEAEB2" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="flow-dot">evt_a8f2 &#xb7; signed
+  <text x="474" y="154" font-size="10" fill="#A8A8B0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="fade-in">evt_d44c &#xb7; signed
     <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
       values="0;0;1;1;0;0" keyTimes="0;0.70;0.74;0.95;0.98;1"/>
   </text>
@@ -228,7 +255,7 @@
   <path id="path-blocked" d="M350 272 C380 287, 420 320, 452 335" fill="none" stroke="#FF453A" stroke-width="2" marker-end="url(#arr-red)"/>
 
   <!-- Blocked flow dot -->
-  <circle r="3.5" fill="#FF453A" opacity="0" class="flow-dot">
+  <circle r="3.5" fill="#FF453A" opacity="0" class="anim-dot">
     <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1;1" keyTimes="0;0.55;0.75;0.85;1" calcMode="linear">
       <mpath href="#path-blocked"/>
     </animateMotion>
@@ -236,22 +263,22 @@
       values="0;0;0.9;0.9;0;0" keyTimes="0;0.55;0.6;0.8;0.85;1"/>
   </circle>
 
-  <!-- BLOCKED card (with shake on arrival) -->
-  <g>
+  <!-- BLOCKED card (with shake on arrival) — matches ledger row 3 (tool.send_email / evt_b1cd) -->
+  <g class="rm-static">
     <animateTransform attributeName="transform" type="translate" dur="8s" repeatCount="indefinite"
       values="0 0;0 0;-3 0;3 0;-2 0;0 0;0 0" keyTimes="0;0.75;0.77;0.79;0.81;0.83;1"/>
-    <rect x="454" y="320" width="148" height="64" rx="12" fill="#3A1A1A" filter="url(#shadow)"/>
+    <rect x="454" y="320" width="148" height="64" rx="12" fill="#3A1A18" stroke="#67302B" stroke-width="1" filter="url(#shadow)"/>
     <!-- BLOCKED flash on arrival -->
-    <rect x="454" y="320" width="148" height="64" rx="12" fill="#FF453A" opacity="0" class="flow-dot">
+    <rect x="454" y="320" width="148" height="64" rx="12" fill="#FF453A" opacity="0" class="anim-dot">
       <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
         values="0;0;0.3;0;0" keyTimes="0;0.75;0.79;0.85;1"/>
     </rect>
     <rect x="454" y="320" width="4" height="64" rx="2" fill="#FF453A"/>
-    <text x="474" y="338" font-size="13" font-weight="800" fill="#FF453A" font-family="-apple-system,system-ui,sans-serif">BLOCKED</text>
-    <text x="474" y="352" font-size="11" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Budget: $0.00</text>
+    <text x="474" y="338" font-size="13" font-weight="800" fill="#FF6B61" font-family="-apple-system,system-ui,sans-serif">BLOCKED</text>
+    <text x="474" y="352" font-size="11" fill="#F2F2F7" font-family="-apple-system,system-ui,sans-serif">Budget at 95%</text>
     <text x="474" y="366" font-size="11" fill="#D1D1D6" font-family="-apple-system,system-ui,sans-serif">&#x2717; 409 exceeded</text>
     <!-- Audit stamp — fades in at decision arrival -->
-    <text x="474" y="378" font-size="10" fill="#AEAEB2" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="flow-dot">evt_b1cd &#xb7; signed
+    <text x="474" y="378" font-size="10" fill="#A8A8B0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" opacity="0" class="fade-in">evt_b1cd &#xb7; signed
       <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
         values="0;0;1;1;0;0" keyTimes="0;0.79;0.83;0.95;0.98;1"/>
     </text>
@@ -263,7 +290,7 @@
        log existed before this loop); the two new rows fade in at the
        same moment as ALLOWED/BLOCKED flash. -->
   <g>
-    <rect x="24" y="436" width="572" height="78" rx="10" fill="#22222C" stroke="#363648" stroke-width="1"/>
+    <rect x="24" y="436" width="572" height="78" rx="10" fill="#20202B" stroke="#363648" stroke-width="1"/>
 
     <!-- Header -->
     <text x="38" y="453" font-size="12" font-weight="800" fill="#C7C7CC" font-family="-apple-system,system-ui,sans-serif" letter-spacing="0.10em">AUDIT LOG</text>
@@ -283,7 +310,7 @@
     </g>
 
     <!-- Row 2 — NEW allowed decision (fades in with ALLOWED flash at 0.70) -->
-    <g opacity="0" class="flow-dot">
+    <g opacity="0" class="fade-in">
       <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
         values="0;0;1;1;0;0" keyTimes="0;0.70;0.74;0.95;0.98;1"/>
       <text x="38" y="492" font-size="11" font-weight="700" fill="#00C9A7" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2713;</text>
@@ -294,12 +321,12 @@
     </g>
 
     <!-- Row 3 — NEW blocked decision (fades in with BLOCKED flash at 0.79) -->
-    <g opacity="0" class="flow-dot">
+    <g opacity="0" class="fade-in">
       <animate attributeName="opacity" dur="8s" repeatCount="indefinite"
         values="0;0;1;1;0;0" keyTimes="0;0.79;0.83;0.95;0.98;1"/>
-      <text x="38" y="508" font-size="11" font-weight="700" fill="#FF453A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2717;</text>
+      <text x="38" y="508" font-size="11" font-weight="700" fill="#FF6B61" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">&#x2717;</text>
       <text x="58" y="508" font-size="11" fill="#F2F2F7" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">tool.send_email</text>
-      <text x="218" y="508" font-size="11" fill="#FF453A" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">409 exceeded</text>
+      <text x="218" y="508" font-size="11" fill="#FF6B61" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">409 exceeded</text>
       <text x="380" y="508" font-size="11" font-style="italic" fill="#AEAEB2" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">evt_b1cd&#x2026;</text>
       <text x="510" y="508" font-size="11" fill="#8E8E93" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">17:58:43</text>
     </g>
