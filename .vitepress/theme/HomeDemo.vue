@@ -1,4 +1,6 @@
 <script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+
 // Both demos appear on the homepage and on /demos/.
 // Runaway-cost goes first — universally visceral "money on fire" hook.
 // Action-authority goes second — the natural "and the same for actions" follow-on.
@@ -42,6 +44,34 @@ const demos = [
     ctaLink: '/demos/#action-authority-demo',
   },
 ]
+
+// Playback policy: only the first video autoplays (the second is below
+// the fold and starts with preload="none" so it costs nothing until
+// scrolled to). An IntersectionObserver plays whichever video is in
+// view and pauses it when scrolled past. Under prefers-reduced-motion
+// nothing plays automatically — Chrome does not block muted autoplay on
+// its own — and controls are surfaced so the demos stay watchable.
+const videoEls = ref([])
+const showControls = ref(false)
+let observer = null
+
+onMounted(() => {
+  const videos = videoEls.value.filter(Boolean)
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    showControls.value = true
+    for (const video of videos) video.pause()
+    return
+  }
+  observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) entry.target.play().catch(() => {})
+      else entry.target.pause()
+    }
+  }, { threshold: 0.25 })
+  for (const video of videos) observer.observe(video)
+})
+
+onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
@@ -70,12 +100,15 @@ const demos = [
         <div class="demo-frame">
           <video
             class="demo-video"
-            autoplay
+            :ref="el => (videoEls[i] = el)"
+            :autoplay="i === 0"
             muted
             loop
             playsinline
+            :controls="showControls"
             :poster="demo.poster"
-            preload="metadata"
+            :preload="i === 0 ? 'metadata' : 'none'"
+            :aria-label="demo.alt"
           >
             <source :src="demo.mp4" type="video/mp4" />
             <source :src="demo.webm" type="video/webm" />
