@@ -21,6 +21,12 @@ export interface InstallsData {
   total: number
   /** Accumulated clone count across tracked repos (cumulative via day-cursor). */
   clones: number
+  /** GitHub stars across first-party org repos. Tracked for analytics but
+   *  NOT displayed on the homepage (count is currently too small to be
+   *  persuasive — same rationale as clones). Fresh value wins when the
+   *  fetch succeeds (stars can legitimately decrease, so no HWM); the
+   *  cached value is only a fallback for API failures. */
+  stars: number
   fetchedAt: string
 }
 
@@ -48,6 +54,7 @@ interface InstallsCache {
   releasesByRepo: Record<string, number>
   ghPackages: number
   maven: number
+  stars: number
   total: number
   fetchedAt: string
 }
@@ -71,7 +78,7 @@ function readCache(): InstallsCache {
       clones: 0, clonesByRepo: {},
       releases: 0, releasesByRepo: {},
       ghPackages: 0,
-      maven: 0, total: 0, fetchedAt: '',
+      maven: 0, stars: 0, total: 0, fetchedAt: '',
     }
   }
 
@@ -106,6 +113,7 @@ function readCache(): InstallsCache {
     releasesByRepo:  raw.releasesByRepo ?? {},
     ghPackages:      raw.ghPackages ?? 0,
     maven:           raw.maven ?? 0,
+    stars:           raw.stars ?? 0,
     total:           raw.total ?? 0,
     fetchedAt:       raw.fetchedAt ?? '',
   }
@@ -328,6 +336,39 @@ async function listOrgRepos(): Promise<string[]> {
   return repos
 }
 
+// ── GitHub stars ─────────────────────────────────────────────────────
+// Public endpoint (auth raises rate limits). Stars can legitimately
+// decrease, so this is NOT a high-water mark: a successful fetch wins
+// outright and the cache is only a fallback for API failures. `stars`
+// is deliberately absent from MONOTONIC_FIELDS for the same reason.
+async function fetchGithubStars(): Promise<number | null> {
+  let total = 0
+  let sawAny = false
+  let page = 1
+  while (page < 10 /* hard cap to avoid runaway loops */) {
+    try {
+      const res = await fetch(
+        `https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100&page=${page}`,
+        { headers: ghHeaders() }
+      )
+      if (!res.ok) break
+      const list = await res.json() as Array<{
+        fork: boolean; archived: boolean; stargazers_count?: number
+      }>
+      if (list.length === 0) break
+      sawAny = true
+      for (const r of list) {
+        if (!r.fork && !r.archived) total += r.stargazers_count ?? 0
+      }
+      if (list.length < 100) break
+      page++
+    } catch {
+      break
+    }
+  }
+  return sawAny ? total : null
+}
+
 // ── GitHub clones ────────────────────────────────────────────────────
 // API returns a 14-day rolling window with per-day counts. We accumulate
 // by tracking the lastSeenDay cursor per repo and only adding strictly
@@ -465,6 +506,7 @@ export default {
       clonesResult,
       releasesResult,
       mavenFetched,
+      starsFetched,
     ] = await Promise.all([
       fetchNpmDownloads(),
       fetchPypiDownloads(),
@@ -472,6 +514,7 @@ export default {
       fetchGithubClones(cached.clonesByRepo),
       fetchGithubReleaseDownloads(cached.releasesByRepo),
       Promise.resolve(fetchMavenDownloads()),
+      fetchGithubStars(),
     ])
 
     // Per-package HWM: each package's count never decreases independently.
@@ -496,6 +539,10 @@ export default {
     // the maintainer accidentally lowers a number while editing).
     const ghPackagesFetched = fetchManualPackageCounts()
     const ghPackages = Math.max(ghPackagesFetched, cached.ghPackages)
+
+    // Stars: fresh value wins on a successful fetch (no HWM — see
+    // fetchGithubStars); cache is only the API-failure fallback.
+    const stars = starsFetched ?? cached.stars
 
     // Displayed total — excludes `clones`. Clones are still tracked in
     // the cache for analytics, but the home-page counter is limited to
@@ -528,7 +575,7 @@ export default {
       clones, clonesByRepo: clonesResult.updatedByRepo,
       releases, releasesByRepo: releasesResult.updatedByRepo,
       ghPackages,
-      maven, total, fetchedAt: now,
+      maven, stars, total, fetchedAt: now,
     }
 
     if (
@@ -540,6 +587,7 @@ export default {
       || releases > cached.releases
       || ghPackages > cached.ghPackages
       || maven > cached.maven
+      || stars !== cached.stars
     ) {
       writeCache(newCache)
     }
@@ -548,10 +596,10 @@ export default {
     try {
       writeFileSync(
         PUBLIC_PATH,
-        JSON.stringify({ total, clones, fetchedAt: now }) + '\n',
+        JSON.stringify({ total, clones, stars, fetchedAt: now }) + '\n',
       )
     } catch { /* non-critical */ }
 
-    return { total, clones, fetchedAt: now }
+    return { total, clones, stars, fetchedAt: now }
   },
 }

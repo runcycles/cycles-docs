@@ -20,6 +20,12 @@ export interface HomeSnippet {
 
 export declare const data: Record<string, HomeSnippet>
 
+// GPT-5 list price in USD microcents per token ($1.25/1M in, $10/1M out).
+// Interpolated into the Java and Vercel snippets so a price change can't
+// half-update the homepage.
+const GPT5_IN_MICROCENTS = 125
+const GPT5_OUT_MICROCENTS = 1000
+
 const snippets: Record<string, { lang: string; code: string }> = {
   python: {
     lang: 'python',
@@ -55,8 +61,8 @@ const ask = withCycles(
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-// GPT-5: 125 microcents/token in, 1000 out ($1.25 / $10 per 1M)
-@Cycles(value = "#prompt.length() / 4 * 125 + #maxTokens * 1000",
+// GPT-5: ${GPT5_IN_MICROCENTS} microcents/token in, ${GPT5_OUT_MICROCENTS} out ($1.25 / $10 per 1M)
+@Cycles(value = "#prompt.length() / 4 * ${GPT5_IN_MICROCENTS} + #maxTokens * ${GPT5_OUT_MICROCENTS}",
         actionKind = "llm.completion",
         actionName = "gpt-5")
 public String chat(String prompt, int maxTokens) {
@@ -133,7 +139,7 @@ const handle = await reserveForStream({
 const result = streamText({
   model: openai("gpt-5"), messages,
   onFinish: async ({ usage }) =>
-    handle.commit((usage.promptTokens ?? 0) * 125 + (usage.completionTokens ?? 0) * 1000),
+    handle.commit((usage.promptTokens ?? 0) * ${GPT5_IN_MICROCENTS} + (usage.completionTokens ?? 0) * ${GPT5_OUT_MICROCENTS}),
 });`,
   },
 
