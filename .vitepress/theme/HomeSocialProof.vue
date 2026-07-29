@@ -21,8 +21,8 @@ const showInstalls = computed(() => installs.value > 0)
 </script>
 
 <template>
-  <p v-if="showInstalls" class="social-proof">
-    <span class="stat">
+  <p class="social-proof">
+    <span v-if="showInstalls" class="stat">
       <svg
         class="stat-icon"
         xmlns="http://www.w3.org/2000/svg"
@@ -37,6 +37,9 @@ const showInstalls = computed(() => installs.value > 0)
         <line x1="12" y1="15" x2="12" y2="3" />
       </svg>
       <span class="stat-text">{{ formatted.format(installs) }}+ package installs</span>
+    </span>
+    <span class="stat">
+      <span class="stat-text">Apache 2.0 &#183; self-hosted &#183; no prompt storage</span>
     </span>
   </p>
 </template>
@@ -62,6 +65,12 @@ const showInstalls = computed(() => installs.value > 0)
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+}
+
+.stat + .stat::before {
+  content: '\00b7';
+  margin-right: 14px;
+  color: var(--vp-c-text-3);
 }
 
 .stat-icon { flex-shrink: 0; }

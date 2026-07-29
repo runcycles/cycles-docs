@@ -27,6 +27,21 @@ const tabs = [
   { key: 'vercel', label: 'Vercel AI', icon: vercelPath },
   { key: 'openclaw', label: 'OpenClaw', icon: openclawPath },
 ]
+
+// WAI-ARIA tabs pattern: arrow keys move between tabs (roving tabindex),
+// Home/End jump to the ends.
+function onTablistKeydown(e) {
+  if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return
+  e.preventDefault()
+  const current = tabs.findIndex(t => t.key === activeTab.value)
+  let next
+  if (e.key === 'ArrowRight') next = (current + 1) % tabs.length
+  else if (e.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length
+  else if (e.key === 'Home') next = 0
+  else next = tabs.length - 1
+  activeTab.value = tabs[next].key
+  document.getElementById(`snippet-tab-${tabs[next].key}`)?.focus()
+}
 </script>
 
 <template>
@@ -35,10 +50,15 @@ const tabs = [
     <h2 class="code-heading">Add runtime authority in a few lines</h2>
     <p class="code-caption"><code>@cycles</code> reserves budget before the action runs. No remaining cycles — no action.</p>
     <div class="code-container">
-      <div class="tab-bar">
+      <div class="tab-bar" role="tablist" aria-label="Integration code examples" @keydown="onTablistKeydown">
         <button
           v-for="tab in tabs"
           :key="tab.key"
+          :id="`snippet-tab-${tab.key}`"
+          role="tab"
+          :aria-selected="activeTab === tab.key"
+          aria-controls="snippet-panel"
+          :tabindex="activeTab === tab.key ? 0 : -1"
           :class="['tab', { active: activeTab === tab.key }]"
           @click="activeTab = tab.key"
         >
@@ -48,7 +68,7 @@ const tabs = [
           {{ tab.label }}
         </button>
       </div>
-      <div class="code-block">
+      <div class="code-block" role="tabpanel" id="snippet-panel" :aria-labelledby="`snippet-tab-${activeTab}`">
         <button class="copy-btn" @click="copyCode" :aria-label="copied ? 'Copied' : 'Copy code'">
           {{ copied ? 'Copied!' : 'Copy' }}
         </button>

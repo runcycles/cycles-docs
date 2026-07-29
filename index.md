@@ -11,7 +11,7 @@ hero:
   image:
     light: /runcycles-hero.svg?v=8
     dark: /runcycles-hero-dark.svg?v=8
-    alt: Cycles hero — agents → gate → allow/block → signed audit ledger
+    alt: Three AI agents submit actions to the Cycles gate; allowed actions proceed, blocked ones are denied, and every decision is appended to a signed audit log.
   actions:
     - theme: brand
       text: "Start with Claude or Codex"
@@ -59,7 +59,7 @@ features:
     link: /how-to/add-cycles-with-claude-or-codex
     linkText: Browse guides
   - icon:
-      src: /icons/book-text.svg
+      src: /icons/file-code.svg
       alt: Protocol icon
     title: "Protocol Reference"
     details: "Reserve-commit lifecycle, authentication, scope derivation, units, caps, overage policies, TTL, decide, dry run, events, debt, balances, metrics, and error handling."

@@ -34,6 +34,7 @@ const problems = [
 <template>
   <section class="home-problems">
     <div class="inner">
+      <h2 class="heading">Four incidents Cycles prevents</h2>
       <div class="grid">
         <a
           v-for="item in problems"
@@ -69,6 +70,18 @@ const problems = [
 .inner {
   max-width: 1152px;
   margin: 0 auto;
+}
+
+.heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  margin: 0 0 32px;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-align: center;
+  border: none;
+  padding: 0;
 }
 
 .grid {

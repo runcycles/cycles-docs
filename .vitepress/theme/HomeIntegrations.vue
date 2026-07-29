@@ -2,6 +2,7 @@
 import {
   pythonPath, typescriptPath, springAiPath, mcpPath, langchainPath,
   openaiAgentsPath, vercelPath, openclawPath, anthropicPath, mozillaPath,
+  genericIntegrationPath,
 } from './FrameworkIcons'
 
 const integrations = [
@@ -14,15 +15,15 @@ const integrations = [
   { name: 'MCP', icon: mcpPath, link: '/how-to/integrating-cycles-with-mcp' },
   { name: 'OpenAI Agents', icon: openaiAgentsPath, link: '/how-to/integrating-cycles-with-openai-agents' },
   { name: 'OpenClaw', icon: openclawPath, link: '/how-to/integrating-cycles-with-openclaw' },
-  { name: 'AWS Bedrock', icon: typescriptPath, link: '/how-to/integrating-cycles-with-aws-bedrock' },
-  { name: 'Google Gemini', icon: typescriptPath, link: '/how-to/integrating-cycles-with-google-gemini' },
-  { name: 'LlamaIndex', icon: pythonPath, link: '/how-to/integrating-cycles-with-llamaindex' },
-  { name: 'CrewAI', icon: pythonPath, link: '/how-to/integrating-cycles-with-crewai' },
-  { name: 'Pydantic AI', icon: pythonPath, link: '/how-to/integrating-cycles-with-pydantic-ai' },
-  { name: 'AutoGen', icon: pythonPath, link: '/how-to/integrating-cycles-with-autogen' },
+  { name: 'AWS Bedrock', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-aws-bedrock' },
+  { name: 'Google Gemini', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-google-gemini' },
+  { name: 'LlamaIndex', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-llamaindex' },
+  { name: 'CrewAI', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-crewai' },
+  { name: 'Pydantic AI', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-pydantic-ai' },
+  { name: 'AutoGen', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-autogen' },
   { name: 'AnyAgent', icon: mozillaPath, link: '/how-to/integrating-cycles-with-anyagent' },
-  { name: 'Groq', icon: pythonPath, link: '/how-to/integrating-cycles-with-groq' },
-  { name: 'Ollama', icon: pythonPath, link: '/how-to/integrating-cycles-with-ollama' },
+  { name: 'Groq', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-groq' },
+  { name: 'Ollama', icon: genericIntegrationPath, link: '/how-to/integrating-cycles-with-ollama' },
   { name: 'Next.js', icon: typescriptPath, link: '/how-to/integrating-cycles-with-nextjs' },
   { name: 'Express', icon: typescriptPath, link: '/how-to/integrating-cycles-with-express' },
   { name: 'Django', icon: pythonPath, link: '/how-to/integrating-cycles-with-django' },
