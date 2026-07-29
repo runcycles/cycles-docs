@@ -5,7 +5,7 @@ description: "Configure Cycles Spring AI chat and tool gates, token estimates, f
 
 # Spring AI Starter Configuration Reference
 
-This page is the complete configuration reference for `io.runcycles:cycles-spring-ai-starter` 0.3.1. The authoritative implementation is [`CyclesSpringAiProperties`](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/cycles-spring-ai-starter/src/main/java/io/runcycles/client/java/springai/autoconfigure/CyclesSpringAiProperties.java).
+This page is the complete configuration reference for `io.runcycles:cycles-spring-ai-starter` 0.4.0. The authoritative implementation is [`CyclesSpringAiProperties`](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/cycles-spring-ai-starter/src/main/java/io/runcycles/client/java/springai/autoconfigure/CyclesSpringAiProperties.java).
 
 The integration uses two property namespaces:
 

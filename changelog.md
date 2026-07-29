@@ -15,9 +15,9 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | Component | Version | Release date |
 |---|---|---|
-| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.15) | 2026-07-21 |
+| Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.16) | 2026-07-28 |
 | Governance spec (admin) | v0.1.25.42 | 2026-07-21 |
-| `cycles-server` (runtime) | v0.1.25.58 | 2026-07-14 |
+| `cycles-server` (runtime) | v0.1.25.59 | 2026-07-28 |
 | `cycles-server-admin` | v0.1.25.55 | 2026-07-21 |
 | `cycles-server-events` | v0.1.25.25 | 2026-07-18 |
 | `cycles-dashboard` | v0.1.25.85 | 2026-07-21 |
@@ -26,17 +26,17 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | SDK / plugin | Version | Release date | Runtime | Release notes |
 |---|---|---|---|---|
-| `cycles-client-typescript` | 0.3.4 | 2026-07-24 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
-| `cycles-client-rust` | 0.2.7 | 2026-07-17 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
-| `cycles-client-python` | 0.4.3 | 2026-05-22 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
-| `cycles-spring-boot-starter` | 0.2.5 | 2026-06-18 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
-| `cycles-mcp-server` | 0.6.0 | 2026-07-22 | Node 20+, MCP protocol, Claude Desktop `.mcpb` | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
-| `cycles-openai-agents` | 0.2.1 | 2026-05-07 | OpenAI Agents SDK (Python) | [CHANGELOG](https://github.com/runcycles/cycles-openai-agents/blob/main/CHANGELOG.md) |
-| `cycles-openclaw-budget-guard` | 0.8.4 | 2026-05-07 | OpenClaw plugin (Node) | [CHANGELOG](https://github.com/runcycles/cycles-openclaw-budget-guard/blob/main/CHANGELOG.md) |
+| `cycles-client-typescript` | 0.4.1 | 2026-07-28 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
+| `cycles-client-rust` | 0.3.1 | 2026-07-28 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
+| `cycles-client-python` | 0.5.1 | 2026-07-28 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
+| `cycles-spring-boot-starter` | 0.3.1 | 2026-07-28 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
+| `cycles-mcp-server` | 0.6.1 | 2026-07-27 | Node 20+, MCP protocol, Claude Desktop `.mcpb` | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
+| `cycles-openai-agents` | 0.3.0 | 2026-07-27 | OpenAI Agents SDK (Python) | [CHANGELOG](https://github.com/runcycles/cycles-openai-agents/blob/main/CHANGELOG.md) |
+| `cycles-openclaw-budget-guard` | 0.9.0 | 2026-07-27 | OpenClaw plugin (Node) | [CHANGELOG](https://github.com/runcycles/cycles-openclaw-budget-guard/blob/main/CHANGELOG.md) |
 | `cycles-claude-plugin` | 0.2.0 | 2026-07-22 | Cycles Budget Guard for Claude Code (Node 22+; companion MCP server 0.6.0) | [CHANGELOG](https://github.com/runcycles/cycles-claude-plugin/blob/main/CHANGELOG.md) |
-| `langchain-runcycles` | 0.3.0 | 2026-05-15 | LangChain `create_agent` middleware (Python) — `CyclesModelGate` (with `cost_fn` actual-cost extraction, v0.2.0+) + `CyclesToolGate` (with tool-side `cost_fn`, v0.3.0+) + `CyclesFanOutGate` + streaming-path verified (v0.2.1+); settlement HTTP failures honored per `settlement_error_policy` (v0.2.3+) | [CHANGELOG](https://github.com/runcycles/langchain-runcycles/blob/main/CHANGELOG.md) |
-| `cycles-spring-ai-starter` | 0.3.1 | 2026-05-12 | Spring Boot 3.5+, Spring AI 1.0+/1.1+, Java 21 — three extension points added in 0.3.0: **pluggable `SubjectResolver`** for per-call attribution (multi-tenant agents can route the Cycles subject from an authenticated principal, header, or thread-local); **pluggable `PromptTokenEstimator`** with a real BPE impl (`JtokkitPromptTokenEstimator` via `com.knuddels:jtokkit`, opt in with `cycles.spring-ai.token-estimator-encoding=cl100k_base` / `o200k_base`); **`cycles.reservation_id` on chat-client traces** as a high-cardinality `KeyValue` for trace ↔ reservation correlation. End-to-end integration test added. 98.3% instruction / 95.7% branch test coverage at 0.3.0; 0.3.1 is a documentation-only patch (fixed a 10x cost-per-token example) verified at 100% / 100%. No breaking changes vs 0.2.0. Companion to `cycles-spring-boot-starter`. | [CHANGELOG](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/CHANGELOG.md) |
-| `cycles-ap2-python` | 0.3.0 | 2026-05-13 | AP2 payment-mandate guard (Python 3.10+) | [CHANGELOG](https://github.com/runcycles/cycles-ap2-python/blob/main/CHANGELOG.md) |
+| `langchain-runcycles` | 0.3.1 | 2026-07-27 | LangChain `create_agent` middleware (Python) — `CyclesModelGate` (with `cost_fn` actual-cost extraction, v0.2.0+) + `CyclesToolGate` (with tool-side `cost_fn`, v0.3.0+) + `CyclesFanOutGate` + streaming-path verified (v0.2.1+); settlement HTTP failures honored per `settlement_error_policy` (v0.2.3+) | [CHANGELOG](https://github.com/runcycles/langchain-runcycles/blob/main/CHANGELOG.md) |
+| `cycles-spring-ai-starter` | 0.4.0 | 2026-07-27 | Spring Boot 3.5+, Spring AI 1.0+/1.1+, Java 21 — three extension points added in 0.3.0: **pluggable `SubjectResolver`** for per-call attribution (multi-tenant agents can route the Cycles subject from an authenticated principal, header, or thread-local); **pluggable `PromptTokenEstimator`** with a real BPE impl (`JtokkitPromptTokenEstimator` via `com.knuddels:jtokkit`, opt in with `cycles.spring-ai.token-estimator-encoding=cl100k_base` / `o200k_base`); **`cycles.reservation_id` on chat-client traces** as a high-cardinality `KeyValue` for trace ↔ reservation correlation. End-to-end integration test added. 98.3% instruction / 95.7% branch test coverage at 0.3.0; 0.3.1 is a documentation-only patch (fixed a 10x cost-per-token example) verified at 100% / 100%. No breaking changes vs 0.2.0. Companion to `cycles-spring-boot-starter`. | [CHANGELOG](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/CHANGELOG.md) |
+| `cycles-ap2-python` | 0.3.1 | 2026-07-27 | AP2 payment-mandate guard (Python 3.10+) | [CHANGELOG](https://github.com/runcycles/cycles-ap2-python/blob/main/CHANGELOG.md) |
 
 Each client repo's AUDIT.md records the specific protocol revision that release was validated against (currently v0.1.23 or v0.1.24 for most of the 0.2.x line). Because the wire contract is additive-only within `0.1.x`, clients validated against an earlier revision work unchanged against a newer server — pre-v0.1.25 clients tolerate the v0.1.25 event / webhook / audit additions. See each CHANGELOG for the exact revision.
 
