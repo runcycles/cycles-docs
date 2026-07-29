@@ -1,6 +1,6 @@
 ---
 title: "Client Performance Tuning"
-description: "Tune timeouts, connection pooling, and retry strategies across Python, TypeScript, and Spring Boot Cycles clients for high-throughput workloads."
+description: "Tune timeouts, connection pooling, and retry strategies across Python, TypeScript, Spring Boot, and Rust Cycles clients for high-throughput workloads."
 ---
 
 # Client Performance Tuning
@@ -19,17 +19,21 @@ For server-side benchmarks and baseline expectations, see the [Performance Bench
 
 ## Timeout tuning
 
-All three clients configure two timeouts: connection (TCP handshake) and read (waiting for server response).
+All four clients configure two timeouts: connection (TCP handshake) and read (waiting for server response).
 
 ### Default values
 
-| Setting | Python | TypeScript | Spring Boot |
-|---|---|---|---|
-| Connect timeout | `connect_timeout=2.0` (seconds) | `connectTimeout=2000` (ms) | `cycles.http.connect-timeout=2s` |
-| Read timeout | `read_timeout=5.0` (seconds) | `readTimeout=5000` (ms) | `cycles.http.read-timeout=5s` |
+| Setting | Python | TypeScript | Spring Boot | Rust |
+|---|---|---|---|---|
+| Connect timeout | `connect_timeout=2.0` (seconds) | `connectTimeout=2000` (ms) | `cycles.http.connect-timeout=2s` | `connect_timeout=2s` |
+| Read timeout | `read_timeout=5.0` (seconds) | `readTimeout=5000` (ms) | `cycles.http.read-timeout=5s` | `read_timeout=5s` |
 
 ::: info TypeScript timeout behavior
 Node's built-in `fetch` does not distinguish connection from read timeout. `connectTimeout` and `readTimeout` are summed into a single `AbortSignal.timeout()` value (default: 7000ms total).
+:::
+
+::: warning Heartbeat timeout budget
+Automatic heartbeat reserves two complete request-attempt budgets plus a safety margin inside the remaining lease. Keep the enforced attempt timeout well below half the shortest expected TTL. The current defaults produce a finite 7-second attempt budget in TypeScript, Spring Boot, and Rust, and a 12-second whole-attempt deadline in Python; a 30-second attempt timeout leaves no positive cadence inside the default 60-second lease.
 :::
 
 ### Tuning profiles
@@ -64,6 +68,17 @@ cycles:
   http:
     connect-timeout: 500ms
     read-timeout: 2s
+```
+
+```rust
+// Rust
+use runcycles::CyclesClient;
+use std::time::Duration;
+
+let client = CyclesClient::builder("cyc_live_...", "http://cycles-server:7878")
+    .connect_timeout(Duration::from_millis(500))
+    .read_timeout(Duration::from_secs(2))
+    .build();
 ```
 
 **Cross-region or high-latency network:**
@@ -167,31 +182,33 @@ public WebClient cyclesWebClient(CyclesProperties props) {
 
 ## Retry strategy tuning
 
-The commit retry engine handles transient failures (network errors, 5xx responses) with exponential backoff. Two common profiles:
+The settlement retry engine handles transport failures, 5xx responses, and rate limits with same-key recovery. Known actual usage is also journaled before the first settlement request, so retry tuning changes how quickly the client retries; it does not remove restart durability while journaling remains enabled. Two common profiles:
 
 ### Fast-fail (latency-sensitive paths)
 
-Fail quickly so the caller can degrade. Use when the user is waiting for a response.
+Limit in-process retry work when prolonged recovery is undesirable. In Rust this directly bounds the inline guarded-commit wait; the Python, TypeScript, and Spring lifecycle helpers schedule settlement recovery in the background.
 
-| Setting | Python | TypeScript | Spring Boot |
-|---|---|---|---|
-| Max attempts | `retry_max_attempts=2` | `retryMaxAttempts: 2` | `cycles.retry.max-attempts=2` |
-| Initial delay | `retry_initial_delay=0.1` | `retryInitialDelay: 100` | `cycles.retry.initial-delay=100ms` |
-| Multiplier | `retry_multiplier=1.5` | `retryMultiplier: 1.5` | `cycles.retry.multiplier=1.5` |
-| Max delay | `retry_max_delay=1.0` | `retryMaxDelay: 1000` | `cycles.retry.max-delay=1s` |
-| Total worst-case | ~250ms | ~250ms | ~250ms |
+| Setting | Python | TypeScript | Spring Boot | Rust |
+|---|---|---|---|---|
+| Max attempts | `retry_max_attempts=2` | `retryMaxAttempts: 2` | `cycles.retry.max-attempts=2` | `.retry_max_attempts(2)` |
+| Initial delay | `retry_initial_delay=0.1` | `retryInitialDelay: 100` | `cycles.retry.initial-delay=100ms` | `.retry_initial_delay(Duration::from_millis(100))` |
+| Multiplier | `retry_multiplier=1.5` | `retryMultiplier: 1.5` | `cycles.retry.multiplier=1.5` | `.retry_multiplier(1.5)` |
+| Max delay | `retry_max_delay=1.0` | `retryMaxDelay: 1000` | `cycles.retry.max-delay=1s` | `.retry_max_delay(Duration::from_secs(1))` |
+| Scheduled backoff | ~250ms | ~250ms | ~250ms | ~250ms |
 
-### Durable (must-commit workloads)
+### Aggressive convergence (must-commit workloads)
 
 Retry aggressively because the action already happened and the ledger must reflect it.
 
-| Setting | Python | TypeScript | Spring Boot |
-|---|---|---|---|
-| Max attempts | `retry_max_attempts=10` | `retryMaxAttempts: 10` | `cycles.retry.max-attempts=10` |
-| Initial delay | `retry_initial_delay=0.2` | `retryInitialDelay: 200` | `cycles.retry.initial-delay=200ms` |
-| Multiplier | `retry_multiplier=1.5` | `retryMultiplier: 1.5` | `cycles.retry.multiplier=1.5` |
-| Max delay | `retry_max_delay=60.0` | `retryMaxDelay: 60000` | `cycles.retry.max-delay=60s` |
-| Total worst-case | ~2 minutes | ~2 minutes | ~2 minutes |
+| Setting | Python | TypeScript | Spring Boot | Rust |
+|---|---|---|---|---|
+| Max attempts | `retry_max_attempts=10` | `retryMaxAttempts: 10` | `cycles.retry.max-attempts=10` | `.retry_max_attempts(10)` |
+| Initial delay | `retry_initial_delay=0.2` | `retryInitialDelay: 200` | `cycles.retry.initial-delay=200ms` | `.retry_initial_delay(Duration::from_millis(200))` |
+| Multiplier | `retry_multiplier=1.5` | `retryMultiplier: 1.5` | `cycles.retry.multiplier=1.5` | `.retry_multiplier(1.5)` |
+| Max delay | `retry_max_delay=60.0` | `retryMaxDelay: 60000` | `cycles.retry.max-delay=60s` | `.retry_max_delay(Duration::from_secs(60))` |
+| Scheduled backoff | ~23 seconds | ~23 seconds | ~23 seconds | ~23 seconds |
+
+Scheduled backoff excludes the time spent in the initial request and each retry attempt. A valid server `Retry-After` can also lengthen the schedule according to the SDK's bounded-delay policy.
 
 ### When to disable retry
 
@@ -203,6 +220,8 @@ Disable retry when:
 - You handle retries at a higher level (e.g. job queue with built-in retry)
 - You need deterministic latency with no background work
 - Testing, where retry masks failures
+
+Disabling retry does not disable the durable journal. Pending known-actual settlement remains available for replay on a later client start. Disable journaling only when the higher-level system durably persists the exact settlement body and idempotency key and implements equivalent replay and expiry fallback.
 
 ## Anti-patterns
 

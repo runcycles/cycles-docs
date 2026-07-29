@@ -107,7 +107,7 @@ Three timers interact (coordinate these for your deployment):
 - **Idempotency key retention window** — how long your server retains the key for replay (Stripe and Shopify use 24 hours as an industry-standard reference)
 - **Client retry window** — how long your code will keep retrying
 
-If these don't align, you get stale retries. Example: reservation TTL is 5 minutes, idempotency key retention is 24 hours, client retries for 30 minutes. At minute 10, the reservation has expired. The client retries with the same idempotency key. The server returns the original response, which references a reservation that no longer exists. Your client thinks it has a valid reservation; the budget system already released it.
+If these don't align, you get stale retries. Example: reservation TTL is 5 minutes, idempotency key retention is 24 hours, client retries for 30 minutes. At minute 10, the reservation has expired. The client retries with the same idempotency key. Current servers replay the original create response but recompute its volatile `remaining_ttl_ms` as `0`; clients must not treat that as a live lease. Older or fieldless servers cannot prove the remaining lease to the client.
 
 The defensive pattern:
 

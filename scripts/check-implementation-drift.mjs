@@ -14,7 +14,13 @@ export const COMPONENTS = [
     format: 'yaml-info',
     versionSelection: 'last',
     versionDocs: ['how-to/upgrading-cycles.md'],
-    docs: [{ path: 'protocol/index.md', needle: 'cycles-protocol' }],
+    docs: [
+      { path: 'protocol/index.md', needle: 'cycles-protocol' },
+      {
+        path: 'protocol/reservation-ttl-grace-period-and-extend-in-cycles.md',
+        needle: 'remaining_ttl_ms',
+      },
+    ],
   },
   {
     docsLabel: 'Governance spec (admin)',
@@ -61,31 +67,55 @@ export const COMPONENTS = [
     repo: 'cycles-client-typescript',
     manifest: 'package.json',
     format: 'json',
-    docs: [{ path: 'quickstart/getting-started-with-the-typescript-client.md', needle: '`runcycles`' }],
+    docs: [
+      { path: 'quickstart/getting-started-with-the-typescript-client.md', needle: '`runcycles`' },
+      {
+        path: 'configuration/typescript-client-configuration-reference.md',
+        needle: '`journalEnabled`',
+      },
+    ],
   },
   {
     docsLabel: 'cycles-client-rust',
     repo: 'cycles-client-rust',
     manifest: 'Cargo.toml',
     format: 'toml-package',
-    docs: [{ path: 'quickstart/getting-started-with-the-rust-client.md', needle: '`runcycles`' }],
+    docs: [
+      { path: 'quickstart/getting-started-with-the-rust-client.md', needle: '`runcycles`' },
+      {
+        path: 'configuration/rust-client-configuration-reference.md',
+        needle: '`journal_enabled`',
+      },
+    ],
   },
   {
     docsLabel: 'cycles-client-python',
     repo: 'cycles-client-python',
     manifest: 'pyproject.toml',
     format: 'toml-project',
-    docs: [{ path: 'quickstart/getting-started-with-the-python-client.md', needle: '`runcycles`' }],
+    docs: [
+      { path: 'quickstart/getting-started-with-the-python-client.md', needle: '`runcycles`' },
+      {
+        path: 'configuration/python-client-configuration-reference.md',
+        needle: '`journal_enabled`',
+      },
+    ],
   },
   {
     docsLabel: 'cycles-spring-boot-starter',
     repo: 'cycles-spring-boot-starter',
     manifest: 'cycles-client-java-spring/pom.xml',
     format: 'maven-revision',
-    docs: [{
-      path: 'configuration/client-configuration-reference-for-cycles-spring-boot-starter.md',
-      needle: 'cycles-spring-boot-starter',
-    }],
+    docs: [
+      {
+        path: 'configuration/client-configuration-reference-for-cycles-spring-boot-starter.md',
+        needle: 'cycles-spring-boot-starter',
+      },
+      {
+        path: 'configuration/client-configuration-reference-for-cycles-spring-boot-starter.md',
+        needle: '`cycles.journal.enabled`',
+      },
+    ],
   },
   {
     docsLabel: 'cycles-mcp-server',

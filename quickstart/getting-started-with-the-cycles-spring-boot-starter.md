@@ -24,6 +24,8 @@ The starter wraps any annotated method in a reserve → execute → commit lifec
 3. **After the method returns:** commits actual usage and releases any unused remainder
 4. **If the method throws:** releases the reservation to return budget to the pool
 
+Once actual usage is known, the starter persists settlement before the first commit request. Ambiguous outcomes replay with the same key, and an expired commit is recovered through `POST /v1/events`. The guarantee cannot cover a JVM exit before actual usage is known; see [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
+
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
 - **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
@@ -213,11 +215,11 @@ Add the starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.5</version>
+    <version>0.3.2</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.5'
+implementation 'io.runcycles:cycles-client-java-spring:0.3.2'
 ```
 :::
 
@@ -367,7 +369,7 @@ Supported units: `USD_MICROCENTS` (default), `TOKENS`, `CREDITS`, `RISK_POINTS`.
 @Cycles(value = "1000", ttlMs = 30000, gracePeriodMs = 10000)
 ```
 
-Default TTL is 60 seconds. The starter automatically sends heartbeat extensions at `ttlMs / 2` intervals.
+Default TTL is 60 seconds. When the server returns `remaining_ttl_ms`, the starter schedules from that authoritative lead and reserves enough time for one failed extend, a same-key retry, and margin. Older servers use a best-effort fallback. See [TTL, Grace Period, and Extend](/protocol/reservation-ttl-grace-period-and-extend-in-cycles).
 
 ### Overage policy
 
@@ -595,9 +597,9 @@ public class LlmService {
 
 ## Commit retry
 
-If the commit fails due to a transient error (network issue, 5xx response), the starter can retry automatically.
+Known actual usage is written to the durable journal before the first commit request. Transient and ambiguous outcomes retry with the original idempotency key; retry exhaustion, authentication failure, and unclassifiable 4xx responses remain queued across JVM restart. If the reservation expired, the starter switches the durable record to a direct event before attempting recovery.
 
-The retry engine is configurable and extensible. The default implementation uses exponential backoff based on the retry configuration.
+The retry engine is configurable and extensible. The default `JournaledCommitRetryEngine` uses exponential backoff and drains for a bounded time during Spring shutdown.
 
 Custom retry strategies can be provided by implementing the `CommitRetryEngine` interface.
 
@@ -625,7 +627,7 @@ The Cycles Spring Boot Starter turns budget enforcement into a single annotation
 - Heartbeat extensions keep reservations alive for long-running operations
 - Caps, metrics, and metadata are accessible through `CyclesContextHolder`
 - DENY decisions throw catchable exceptions for degradation handling
-- Commit retry handles transient failures automatically
+- Durable settlement recovery preserves known actual usage across ambiguous outcomes and JVM restarts
 
 This gives Spring applications production-grade budget enforcement with minimal code changes.
 

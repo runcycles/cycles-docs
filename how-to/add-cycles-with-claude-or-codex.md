@@ -245,7 +245,7 @@ public class SummaryService {
 ```
 
 ```rust [Rust]
-// Cargo.toml: runcycles = "0.2"
+// Cargo.toml: runcycles = "0.3"
 // env: CYCLES_BASE_URL, CYCLES_API_KEY, CYCLES_TENANT
 use runcycles::{
     with_cycles, CyclesClient, CyclesConfig, Error, WithCyclesConfig,

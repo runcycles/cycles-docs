@@ -81,14 +81,14 @@ The Cycles Server is stateless. You can run multiple instances behind a load bal
 
 ```yaml
 cycles-server-1:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.58
+  image: ghcr.io/runcycles/cycles-server:0.1.25.59
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
 
 cycles-server-2:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.58
+  image: ghcr.io/runcycles/cycles-server:0.1.25.59
   environment:
     REDIS_HOST: redis-primary
     REDIS_PORT: 6379
@@ -337,41 +337,30 @@ Or use the Spring Boot JSON logging starter for full structured output.
 - Cycles Server restart or Redis outage at commit time
 - Client process crash after the LLM call but before commit
 
-**What the retry engine does:**
+**What the lifecycle helpers do:**
 
-All three clients (Python, TypeScript, Spring Boot) include a commit retry engine enabled by default. When a commit fails with a transport error or 5xx response, the engine retries with exponential backoff (default: 5 attempts over ~30 seconds). This handles most transient failures automatically.
+The current Python, TypeScript, Spring Boot, and Rust lifecycle helpers journal known actual usage before the first settlement request. Transient and ambiguous failures retry with the original idempotency key. Retry exhaustion, authentication failure, unclassifiable 4xx responses, and process restart leave the record on disk. If the reservation expires before commit, replay switches the same durable record to `POST /v1/events`.
 
-**When retry is not enough:**
-
-If all retries are exhausted or the client process crashes entirely, the reservation remains in `ACTIVE` state until it expires (based on TTL + grace period). After expiry, the reserved budget is returned to the pool. The actual cost is unaccounted for — the budget appears more available than it really is.
+This guarantee begins only after the integration knows the actual amount and initiates settlement. A process crash before the provider returns usage cannot be recovered from SDK state alone; applications needing that stronger guarantee must durably checkpoint provider receipts or actual usage.
 
 **Response:**
-1. **Check for expired reservations that were never committed:**
+1. **Inspect the SDK journal and application logs.** Check for journal I/O failures, quarantined records, retained authentication failures, retry exhaustion, and event-fallback failures. The default base directory is `~/.runcycles/commit-journal`.
+2. **Restore connectivity or credentials and restart/drain the client.** Replay uses the stored idempotency key. Configure the tenant explicitly so the journal partition remains discoverable after API-key rotation.
+3. **Confirm ledger convergence:**
    ```bash
-   curl -s "http://localhost:7878/v1/reservations?tenant=acme-corp&status=EXPIRED" \
-     -H "X-Cycles-API-Key: $API_KEY" | jq '.reservations[] | {reservation_id, scope_path, reserved: .reserved.amount, created_at_ms, expires_at_ms}'
-   ```
-2. **Reconcile using events:** For each expired reservation that represents real work, record the actual cost as a standalone event:
-   ```bash
-   curl -s -X POST http://localhost:7878/v1/events \
-     -H "Content-Type: application/json" \
+   curl -s "http://localhost:7979/v1/events" \
      -H "X-Cycles-API-Key: $API_KEY" \
-     -d '{
-       "idempotency_key": "reconcile-<reservation_id>",
-       "subject": { "tenant": "acme-corp" },
-       "action": { "kind": "reconciliation", "name": "commit-failure-recovery" },
-       "actual": { "unit": "USD_MICROCENTS", "amount": <actual_cost> },
-       "overage_policy": "ALLOW_WITH_OVERDRAFT",
-       "metadata": { "original_reservation_id": "<reservation_id>" }
-     }'
+     | jq '.events[] | select(.event_type == "event.applied") | {event_id, data}'
    ```
-3. **Monitor commit failure rates.** A sustained increase in commit failures signals infrastructure issues. Track the ratio of committed vs. expired reservations.
+
+Do not create a second reconciliation event with a fresh key while a journal record is pending: if the original ambiguous request succeeded, that can double-record spend. Manual reconciliation is appropriate only after proving that no durable record or successful same-key settlement exists.
 
 **Prevention:**
-- Keep retry enabled (default) with aggressive settings for critical workloads
-- Use `ALLOW_WITH_OVERDRAFT` overage policy for must-record actions so reconciliation events are always accepted
-- Ensure client processes have graceful shutdown hooks that commit or release active reservations
-- Set up alerts on the expired reservation count (see [Monitoring and Alerting](/how-to/monitoring-and-alerting))
+- Keep journaling enabled and place its directory on a persistent volume rather than an ephemeral container layer
+- Configure a stable tenant identity so pending records survive API-key rotation
+- Keep retry enabled for prompt convergence; disabling retry does not disable journal durability
+- Allow the SDK's bounded shutdown drain to run, and preserve records when the drain times out
+- Alert on pending-record age/count, journal failures, heartbeat stop messages, and expired reservation rate (see [Monitoring and Alerting](/how-to/monitoring-and-alerting))
 
 ### Redis connection loss
 

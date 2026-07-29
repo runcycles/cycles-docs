@@ -44,11 +44,11 @@ The simplest path for Spring AI apps — add the dependency, configure a few `cy
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-spring-ai-starter</artifactId>
-    <version>0.3.1</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-spring-ai-starter:0.3.1'
+implementation 'io.runcycles:cycles-spring-ai-starter:0.4.0'
 ```
 :::
 
@@ -179,11 +179,11 @@ Add the Cycles Spring Boot Starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.2.5</version>
+    <version>0.3.2</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.2.5'
+implementation 'io.runcycles:cycles-client-java-spring:0.3.2'
 ```
 :::
 

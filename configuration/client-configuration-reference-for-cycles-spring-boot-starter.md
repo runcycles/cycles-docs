@@ -133,9 +133,11 @@ cycles:
 
 For long-running operations where the server may take longer to respond (e.g., under heavy load), increase the read timeout.
 
+For automatic heartbeat safety, keep the combined connect and read timeout well below half the smallest expected reservation lease. The heartbeat reserves two complete attempt budgets plus a safety margin; a 30-second attempt budget cannot establish a positive cadence inside the default 60-second TTL.
+
 ## Retry configuration
 
-Controls the commit retry engine for transient failures.
+Controls the durable settlement retry engine.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
@@ -144,10 +146,18 @@ Controls the commit retry engine for transient failures.
 | `cycles.retry.initial-delay` | Duration | `500ms` | Delay before the first retry |
 | `cycles.retry.multiplier` | double | `2.0` | Backoff multiplier between retries |
 | `cycles.retry.max-delay` | Duration | `30s` | Maximum delay between retries |
+| `cycles.retry.flush-timeout` | Duration | `10s` | Bounded wait for in-flight retries during Spring context shutdown |
+
+### Journal configuration
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `cycles.journal.enabled` | boolean | `true` | Persist unresolved known-actual settlement across JVM restarts |
+| `cycles.journal.dir` | String | (none) | Journal base directory; unset uses `~/.runcycles/commit-journal` |
 
 ### How retry works
 
-When a commit fails with a transport error or 5xx response, the retry engine schedules a retry using exponential backoff:
+Known actual usage is journaled before the first commit request. When settlement fails transiently, the engine schedules a same-key retry using exponential backoff:
 
 ```
 Attempt 1: wait 500ms
@@ -157,7 +167,11 @@ Attempt 4: wait 4000ms
 Attempt 5: wait 8000ms (capped at max-delay)
 ```
 
-Non-retryable errors (4xx responses) are not retried.
+HTTP 429 honors a valid `Retry-After` floor and persists it across restart. Authentication failures and unclassifiable 4xx responses stop the current run but retain the record. A genuine, understood rejection removes it.
+
+Only a schema-valid HTTP `200` commit or schema-valid HTTP `201` event proves success. If commit returns HTTP 410 or `RESERVATION_EXPIRED`, the journal switches to event mode before the starter calls `POST /v1/events` with the original idempotency key.
+
+The journal is partitioned by server and principal. Configure `cycles.tenant` so pending records remain discoverable after API-key rotation. Records do not store API keys, but they contain settlement bodies and metadata; protect the directory as sensitive application state.
 
 ### Disabling retry
 
@@ -166,6 +180,8 @@ cycles:
   retry:
     enabled: false
 ```
+
+This disables active retries, not journaling. Failed known-actual settlement remains on disk while `cycles.journal.enabled=true`. Disable both only when the application supplies equivalent durable recovery.
 
 ### Aggressive retry for critical commits
 
@@ -205,6 +221,12 @@ cycles:
     initial-delay: 500ms
     multiplier: 2.0
     max-delay: 30s
+    flush-timeout: 10s
+
+  # Durable settlement journal
+  journal:
+    enabled: true
+    # dir: /var/lib/my-app/cycles-commit-journal
 ```
 
 ## Equivalent application.properties
@@ -224,6 +246,9 @@ cycles.retry.max-attempts=5
 cycles.retry.initial-delay=500ms
 cycles.retry.multiplier=2.0
 cycles.retry.max-delay=30s
+cycles.retry.flush-timeout=10s
+cycles.journal.enabled=true
+# cycles.journal.dir=/var/lib/my-app/cycles-commit-journal
 ```
 
 ## Auto-configured beans
@@ -237,7 +262,7 @@ The starter auto-configures the following beans, all with `@ConditionalOnMissing
 | `evaluator` | `CyclesExpressionEvaluator` | SpEL evaluator |
 | `cyclesRequestBuilderService` | `CyclesRequestBuilderService` | Builds protocol request bodies |
 | `cyclesValueResolutionService` | `CyclesValueResolutionService` | Resolves Subject field values |
-| `retryEngine` | `CommitRetryEngine` | Handles commit retries (`InMemoryCommitRetryEngine`) |
+| `retryEngine` | `CommitRetryEngine` | Handles durable settlement replay (`JournaledCommitRetryEngine`) |
 | `cyclesLifecycleService` | `CyclesLifecycleService` | Orchestrates the full lifecycle |
 | `aspect` | `CyclesAspect` | AOP aspect for `@Cycles` annotation |
 | `cyclesSelfInvocationDetector` | `CyclesSelfInvocationDetector` | Bean post-processor (declared as a `static` `@Bean`) that warns at startup about beans susceptible to the self-invocation pitfall |
@@ -299,10 +324,14 @@ Every property can be set via environment variables using Spring Boot's relaxed 
 | `cycles.tenant` | `CYCLES_TENANT` |
 | `cycles.http.connect-timeout` | `CYCLES_HTTP_CONNECT_TIMEOUT` |
 | `cycles.retry.max-attempts` | `CYCLES_RETRY_MAX_ATTEMPTS` |
+| `cycles.retry.flush-timeout` | `CYCLES_RETRY_FLUSH_TIMEOUT` |
+| `cycles.journal.enabled` | `CYCLES_JOURNAL_ENABLED` |
+| `cycles.journal.dir` | `CYCLES_JOURNAL_DIR` |
 
 ## Next steps
 
 - [Getting Started with the Spring Boot Starter](/quickstart/getting-started-with-the-cycles-spring-boot-starter) — quick start guide
 - [SpEL Expression Reference](/configuration/spel-expression-reference-for-cycles) — expression syntax
 - [Custom Field Resolvers](/how-to/custom-field-resolvers-in-cycles) — dynamic Subject field resolution
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — journal, replay, expiry fallback, and guarantee boundary
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — server-side properties

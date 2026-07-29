@@ -138,9 +138,9 @@ except OverdraftLimitExceededError:
 
 If a function takes longer than the reservation TTL plus grace period, the commit fails with `RESERVATION_EXPIRED`. The decorator handles heartbeat extensions automatically, but network issues can prevent extensions.
 
-With the decorator, a commit-time `RESERVATION_EXPIRED` is **not** raised to your code. The decorator logs a warning (`"Reservation already finalized/expired"` on the `runcycles` logger) and the decorated call returns its result normally — the work succeeded, but the spend was not recorded. Detect these cases through logs or monitoring, and record the usage as an event if the spend must land on the ledger. If you need to observe commit failures directly, use the programmatic client, where `commit_reservation()` returns a `CyclesResponse` whose error code you can inspect (see [Programmatic client error handling](#programmatic-client-error-handling)).
+In `runcycles` 0.5.2+, the decorator and streaming lifecycle helpers persist known actual usage before commit. A commit-time `RESERVATION_EXPIRED` switches the durable record to event mode and records the spend through `POST /v1/events` with the original idempotency key. If event recovery remains ambiguous or unavailable, the record stays journaled for later replay.
 
-`ReservationExpiredError` is raised only when reservation *creation* returns the `RESERVATION_EXPIRED` error code — never from a commit inside the decorator.
+`ReservationExpiredError` can still surface from a low-level operation. Direct `commit_reservation()` calls do not automatically create or persist the event fallback; callers using the low-level client must provide equivalent recovery.
 
 ## Catching all Cycles errors
 
@@ -206,7 +206,7 @@ with CyclesClient(config) as client:
 
 When the HTTP request itself fails (DNS resolution, connection refused, timeout), how it surfaces depends on the API:
 
-- **Decorator:** a transport failure at reserve time raises `CyclesProtocolError` with `status == -1` and `error_code=None`. Transport failures at commit time are retried in the background by the commit retry engine, not raised.
+- **Decorator:** a transport failure at reserve time raises `CyclesProtocolError` with `status == -1` and `error_code=None`. Once actual usage is known, transport failures at commit time retain a durable same-key record and retry in the background.
 - **Programmatic client:** calls never raise for transport failures — they return a `CyclesResponse` with `is_transport_error == True` and `status == -1`.
 
 ```python
@@ -267,7 +267,7 @@ async def cycles_error_handler(request: Request, exc: CyclesProtocolError):
 | `DEBT_OUTSTANDING` (409) | Wait | Requires operator to fund the scope or configure an overdraft limit. Retry after funding. |
 | `OVERDRAFT_LIMIT_EXCEEDED` (409) | Wait | Requires operator intervention. |
 | `MAX_EXTENSIONS_EXCEEDED` (409) | No | Tenant's `max_reservation_extensions` limit reached. Commit or release; use a longer initial `ttl_ms`. |
-| `RESERVATION_EXPIRED` (410) | No | Create a new reservation or record as event. |
+| `RESERVATION_EXPIRED` (410) | No | Lifecycle helpers recover known spend as a same-key event; low-level callers must persist and perform that fallback. |
 | `RESERVATION_FINALIZED` (409) | No | Reservation already settled. No action needed. |
 | `IDEMPOTENCY_MISMATCH` (409) | No | Fix the idempotency key or payload. |
 | `UNIT_MISMATCH` (400) | No | Fix the unit in your request. Inspect `details.expected_units` to see which units are funded at the scope. |
@@ -286,7 +286,7 @@ Use `e.is_retryable()` to check programmatically — it returns `True` for `INTE
 4. **Distinguish between DENY and server errors** — DENY means the system is working correctly, server errors mean something is wrong
 5. **Log `error_code` and `status`** for debugging
 6. **Never swallow errors silently** — at minimum, log them
-7. **Watch for commit-time `RESERVATION_EXPIRED`** in logs/monitoring (the decorator does not raise it) and record usage as an event if the work already completed
+7. **Monitor durable recovery** — alert on journal I/O failures, quarantined records, authentication failures, retry exhaustion, and expired-commit event fallback failures
 8. **Register a global exception handler** in web frameworks for consistent API error responses
 
 ## Next steps

@@ -519,6 +519,7 @@ export default defineConfig({
             { text: 'API Reference (Manual)', link: '/protocol/api-reference-for-the-cycles-protocol' },
             { text: 'API Reference (Interactive)', link: '/api/' },
             { text: 'Reserve / Commit Lifecycle', link: '/protocol/how-reserve-commit-works-in-cycles' },
+            { text: 'SDK Settlement Recovery', link: '/protocol/sdk-settlement-recovery-and-durability' },
             { text: 'Authentication and Tenancy', link: '/protocol/authentication-tenancy-and-api-keys-in-cycles' },
             { text: 'Scope Derivation', link: '/protocol/how-scope-derivation-works-in-cycles' },
             { text: 'Understanding Units', link: '/protocol/understanding-units-in-cycles-usd-microcents-tokens-credits-and-risk-points' },

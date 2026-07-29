@@ -26,10 +26,10 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 
 | SDK / plugin | Version | Release date | Runtime | Release notes |
 |---|---|---|---|---|
-| `cycles-client-typescript` | 0.4.1 | 2026-07-28 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
-| `cycles-client-rust` | 0.3.1 | 2026-07-28 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
-| `cycles-client-python` | 0.5.1 | 2026-07-28 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
-| `cycles-spring-boot-starter` | 0.3.1 | 2026-07-28 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
+| `cycles-client-typescript` | 0.4.2 | 2026-07-28 | Node 20+ (native fetch) | [CHANGELOG](https://github.com/runcycles/cycles-client-typescript/blob/main/CHANGELOG.md) |
+| `cycles-client-rust` | 0.3.2 | 2026-07-28 | Rust 1.88+ MSRV | [CHANGELOG](https://github.com/runcycles/cycles-client-rust/blob/main/CHANGELOG.md) |
+| `cycles-client-python` | 0.5.2 | 2026-07-29 | Python 3.10+ (httpx, Pydantic v2) | [CHANGELOG](https://github.com/runcycles/cycles-client-python/blob/main/CHANGELOG.md) |
+| `cycles-spring-boot-starter` | 0.3.2 | 2026-07-29 | Spring Boot 3.5+, Java 21 | [CHANGELOG](https://github.com/runcycles/cycles-spring-boot-starter/blob/main/CHANGELOG.md) |
 | `cycles-mcp-server` | 0.6.1 | 2026-07-27 | Node 20+, MCP protocol, Claude Desktop `.mcpb` | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
 | `cycles-openai-agents` | 0.3.0 | 2026-07-27 | OpenAI Agents SDK (Python) | [CHANGELOG](https://github.com/runcycles/cycles-openai-agents/blob/main/CHANGELOG.md) |
 | `cycles-openclaw-budget-guard` | 0.9.0 | 2026-07-27 | OpenClaw plugin (Node) | [CHANGELOG](https://github.com/runcycles/cycles-openclaw-budget-guard/blob/main/CHANGELOG.md) |
@@ -38,10 +38,12 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | `cycles-spring-ai-starter` | 0.4.0 | 2026-07-27 | Spring Boot 3.5+, Spring AI 1.0+/1.1+, Java 21 — three extension points added in 0.3.0: **pluggable `SubjectResolver`** for per-call attribution (multi-tenant agents can route the Cycles subject from an authenticated principal, header, or thread-local); **pluggable `PromptTokenEstimator`** with a real BPE impl (`JtokkitPromptTokenEstimator` via `com.knuddels:jtokkit`, opt in with `cycles.spring-ai.token-estimator-encoding=cl100k_base` / `o200k_base`); **`cycles.reservation_id` on chat-client traces** as a high-cardinality `KeyValue` for trace ↔ reservation correlation. End-to-end integration test added. 98.3% instruction / 95.7% branch test coverage at 0.3.0; 0.3.1 is a documentation-only patch (fixed a 10x cost-per-token example) verified at 100% / 100%. No breaking changes vs 0.2.0. Companion to `cycles-spring-boot-starter`. | [CHANGELOG](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/CHANGELOG.md) |
 | `cycles-ap2-python` | 0.3.1 | 2026-07-27 | AP2 payment-mandate guard (Python 3.10+) | [CHANGELOG](https://github.com/runcycles/cycles-ap2-python/blob/main/CHANGELOG.md) |
 
-Each client repo's AUDIT.md records the specific protocol revision that release was validated against (currently v0.1.23 or v0.1.24 for most of the 0.2.x line). Because the wire contract is additive-only within `0.1.x`, clients validated against an earlier revision work unchanged against a newer server — pre-v0.1.25 clients tolerate the v0.1.25 event / webhook / audit additions. See each CHANGELOG for the exact revision.
+The four current language SDKs are validated against runtime spec revision 0.1.25.16 and the separately versioned SDK recovery profile 0.3. Older clients remain wire-compatible with additive 0.1.x server changes, but only the current releases above provide the shared durable known-actual recovery guarantee.
 
 ### Protocol spec suite (v0.1.26)
 
+- **SDK recovery profile v0.3** (2026-07-29) — defines and executes the client-side failure choreography outside server conformance: persist known actual usage before the first settlement request; same-key recovery for ambiguous results; exact schema-valid 200/201 settlement success; expired-commit fallback through `/v1/events`; restart-safe rate-limit floors, credential rotation, quarantine, collision-resistant filenames, and concurrent replay; observable non-fatal heartbeat failures; and the explicit boundary before actual usage is known. All four official SDK releases in the current-version table bind every claimed scenario to exact native tests in CI.
+- **Runtime spec document revision v0.1.25.16** (2026-07-28) — adds optional server-authoritative `remaining_ttl_ms` to successful live create/extend responses and makes it the normative heartbeat scheduling input. Same-key create/extend replays recompute the volatile field fresh while replaying every other field verbatim; CyclesEvidence excludes it. The heartbeat guidance defines per-attempt RTT accounting, timeout-derived retry reserves, repeated same-key recovery inside a shrinking safe window, bounded 429 handling, a two-zero-delay stop guard, and an explicitly best-effort fieldless fallback.
 - **Runtime spec document revision v0.1.25.15** (2026-07-13) — adds the normative payment-rail boundary: reserving holds budget authority, committing records economic exposure, and releasing returns unused authority. None of those Cycles operations proves that a card, bank, blockchain, or other payment rail authorized, captured, charged, settled, voided, or refunded funds.
 - **Runtime spec document revision v0.1.25.14** (2026-07-11) — extends the closed-tenant binding to the persisting `POST /v1/events` surface. A fresh event for a closed tenant returns `409 TENANT_CLOSED`; an exact replay of a pre-close keyed event still returns its stored response.
 - **Runtime spec document revision v0.1.25.13** (2026-07-10) — adds `TENANT_CLOSED` to the runtime `ErrorCode` enum with a normative closed-tenant binding in §ERROR SEMANTICS: persisting reservation create/commit/release/extend MUST return `409 TENANT_CLOSED` on a closed owning tenant (taking precedence over reservation-state errors for non-replay attempts), while fresh `dry_run=true` / `/v1/decide` evaluations MUST return `200 decision=DENY reason_code=TENANT_CLOSED` (new `DecisionReasonCode` known value); present-but-malformed tenant records fail closed with `500 INTERNAL_ERROR`. Companion revisions: evidence spec 0.2.1 (declares `TENANT_CLOSED` in the evidence ErrorResponseMirror), protocol-extensions 0.1.27, governance 0.1.25.37 (adds `TENANT_CLOSED` to the `reservation.denied` event's documented `reason_code` values). Implemented by `cycles-server` 0.1.25.47.
@@ -51,6 +53,7 @@ Each client repo's AUDIT.md records the specific protocol revision that release 
 
 ### Runtime server (`cycles-server`)
 
+- **v0.1.25.59** (2026-07-28) — emits server-authoritative `remaining_ttl_ms` on successful live reserve and extend responses. Both create and extend same-key replays recompute it from current Redis time (returning `0` once inactive); all other replay fields remain verbatim, and the volatile field is excluded from CyclesEvidence.
 - **v0.1.25.58** (2026-07-14) — Successful keyed direct-event replays now increment `cycles_events_total{decision="APPLIED",reason="IDEMPOTENT_REPLAY"}`. Mutation-only overdraft telemetry remains exactly-once.
 - **v0.1.25.57** (2026-07-14) — Test-and-documentation release adding deterministic lost-response recovery coverage and frozen rolling-upgrade Redis fixtures. No production behavior or wire change.
 - **v0.1.25.56** (2026-07-14) — Scheduled expiry, retention, and reservation-index maintenance now use owner-fenced, renewable Redis leases across replicas, with fixed-cardinality run and duration metrics.
@@ -336,14 +339,14 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 
 | SDK / Component | Version | Compatible server |
 |---|---|---|
-| `runcycles` (Python) | 0.4.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `runcycles` (TypeScript) | 0.3.3 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `runcycles` (Rust) | 0.2.7 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `cycles-client-java-spring` | 0.2.5 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `@runcycles/mcp-server` | 0.6.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| `@runcycles/openclaw-budget-guard` | 0.8.4 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `runcycles` (Python) | 0.5.2 | v0.1.23+, v0.1.24+, v0.1.25+; server-authoritative heartbeat on runtime 0.1.25.59+ |
+| `runcycles` (TypeScript) | 0.4.2 | v0.1.23+, v0.1.24+, v0.1.25+; server-authoritative heartbeat on runtime 0.1.25.59+ |
+| `runcycles` (Rust) | 0.3.2 | v0.1.23+, v0.1.24+, v0.1.25+; server-authoritative heartbeat on runtime 0.1.25.59+ |
+| `cycles-client-java-spring` | 0.3.2 | v0.1.23+, v0.1.24+, v0.1.25+; server-authoritative heartbeat on runtime 0.1.25.59+ |
+| `@runcycles/mcp-server` | 0.6.1 | v0.1.23+, v0.1.24+, v0.1.25+ |
+| `@runcycles/openclaw-budget-guard` | 0.9.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Budget Guard for Claude Code | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.0 |
-| Cycles Server (runtime) | v0.1.25.58 | Protocol v0.1.25 (runtime revision v0.1.25.15) plus CyclesEvidence v0.2 signer-authority layer |
+| Cycles Server (runtime) | v0.1.25.59 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
 | Cycles Admin Server | v0.1.25.55 | Governance spec v0.1.25.42 |
 | Cycles Events Service | v0.1.25.25 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.85 | Admin v0.1.25.42 for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
@@ -354,6 +357,8 @@ The four language-client versions in the compatibility table are backward-compat
 
 | Feature | Minimum component |
 |---|---|
+| Server-authoritative `remaining_ttl_ms` heartbeat scheduling | `cycles-server` v0.1.25.59 (runtime spec revision v0.1.25.16); Python 0.5.2, TypeScript 0.4.2, Rust 0.3.2, or Spring Boot starter 0.3.2 |
+| Durable known-actual settlement recovery profile 0.3 | Python 0.5.2, TypeScript 0.4.2, Rust 0.3.2, or Spring Boot starter 0.3.2 |
 | Dashboard Evidence viewer and reservation "View evidence" links | `cycles-dashboard` v0.1.25.63+; `cycles-server` v0.1.25.37+ for `include=evidence`; `cycles-server-events` v0.1.25.14+ to sign envelopes |
 | Unconfigured CyclesEvidence disabled mode (no queueing or dead-lettering when identity is blank) | `cycles-server` v0.1.25.38, `cycles-server-events` v0.1.25.15 |
 | Tenant-close cascade + `TENANT_CLOSED` (409) on the admin plane + 4 `_via_tenant_cascade` event kinds | `cycles-server-admin` v0.1.25.35 (initial Mode B cascade) / v0.1.25.36 (full Rule 2 guard coverage); `cycles-dashboard` v0.1.25.43 (tombstone + cascade preview UI); governance-admin spec v0.1.25.29 / .30 / .31 |

@@ -64,8 +64,9 @@ The `remaining` field shows available budget after accounting for active reserva
 **Fixes:**
 
 - **Increase TTL** when creating reservations. The default is 60 seconds (`ttl_ms: 60000`). For long-running operations, use 120 seconds or more.
-- **Use automatic heartbeat.** The SDK clients (Python `@cycles`, TypeScript `withCycles`, Java `@Cycles`) automatically extend the reservation TTL while the operation is running. Ensure you're using the decorator/HOF pattern rather than raw HTTP.
-- **For raw HTTP users:** call `POST /v1/reservations/{id}/extend` periodically before the TTL expires.
+- **Use automatic heartbeat.** Python `@cycles`, TypeScript `withCycles`, Java `@Cycles`, and Rust `ReservationGuard` schedule from server-authoritative remaining lifetime when available. Ensure you're using a lifecycle helper rather than raw HTTP.
+- **For raw HTTP users:** implement the [remaining-lifetime schedule and same-key recovery rules](/protocol/reservation-ttl-grace-period-and-extend-in-cycles), not a blind fixed interval.
+- **Recover known spend.** Current lifecycle helpers persist the commit and fall back to a same-key `/v1/events` debit when the reservation has already expired. Low-level callers must persist and perform that recovery themselves.
 
 ### DEBT_OUTSTANDING blocking new reservations
 

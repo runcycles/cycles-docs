@@ -23,7 +23,7 @@ In Docker Compose:
 
 ```yaml
 cycles-server:
-  image: ghcr.io/runcycles/cycles-server:0.1.25.58
+  image: ghcr.io/runcycles/cycles-server:0.1.25.59
   environment:
     REDIS_HOST: redis
     REDIS_PORT: 6379
@@ -407,11 +407,14 @@ management.datadog.metrics.export.uri=https://api.datadoghq.com
 
 ### Logging
 
-All three clients log the reservation lifecycle at DEBUG level:
+All four clients expose lifecycle and recovery diagnostics through their language's logging surface:
 
 - **Python**: Set `logging.getLogger("runcycles").setLevel(logging.DEBUG)`
-- **TypeScript**: The client logs transport errors via `console.error`
+- **TypeScript**: The client reports heartbeat and retained-settlement warnings via `console.warn`
 - **Spring Boot**: Set `logging.level.io.runcycles=DEBUG` in `application.yml`
+- **Rust**: Install a `tracing` subscriber and enable the `runcycles` target
+
+Collect warnings for journal I/O failures, quarantined records, retry exhaustion, authentication failures, expired-commit event fallback, and heartbeat stop dispositions. See [Monitoring and Alerting](/how-to/monitoring-and-alerting#client-recovery-signals).
 
 ### Custom instrumentation with OpenTelemetry
 

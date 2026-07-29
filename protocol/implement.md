@@ -67,6 +67,21 @@ Well-rounded servers also implement these (from `cycles-protocol-v0.yaml`):
 
 You can ship without these and still claim conformance against the current target, but most clients expect them.
 
+## Client recovery conformance
+
+Server conformance is only one half of failure-safe settlement. SDK lifecycle helpers also need a shared contract for what happens when connectivity is lost after an action, the process restarts, a reservation expires before commit, or a heartbeat cannot be extended.
+
+The authoritative [`client-recovery/PROFILE.md`](https://github.com/runcycles/cycles-protocol/blob/main/client-recovery/PROFILE.md) defines that client-side guarantee independently from the wire protocol. A durable-conformant SDK:
+
+- persists known-actual settlement before the first request;
+- reuses the same idempotency key after ambiguous outcomes;
+- retains unresolved records across retry exhaustion, authentication failure, and restart;
+- converts an expired commit into a same-key `POST /v1/events` settlement;
+- exposes a bounded flush/drain operation; and
+- makes heartbeat failure observable without suppressing final settlement.
+
+The shared [`client-recovery/scenarios.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/client-recovery/scenarios.yaml) catalog is executable. SDKs claiming durable recovery must bind every applicable scenario to native behavior tests and run the profile runner in CI. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) for the operational guarantee and configuration of the four official SDKs.
+
 ## The four core invariants
 
 Spec compliance isn't just endpoint coverage — it's behavior under the hood. Per `CONFORMANCE.md`:
@@ -116,6 +131,8 @@ When you're stuck on a spec question, these are the canonical sources:
 - **[`CONFORMANCE.md`](https://github.com/runcycles/cycles-protocol/blob/main/CONFORMANCE.md)** — the authoritative MUST / SHOULD / MAY document
 - **[`cycles-protocol-v0.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-protocol-v0.yaml)** — runtime base spec
 - **[`cycles-spec-index.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/cycles-spec-index.yaml)** — index of all spec files with conformance metadata
+- **[`client-recovery/PROFILE.md`](https://github.com/runcycles/cycles-protocol/blob/main/client-recovery/PROFILE.md)** — client-side durable settlement and heartbeat-failure requirements
+- **[`client-recovery/scenarios.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/client-recovery/scenarios.yaml)** — executable recovery behavior catalog
 - **[Reference server source](https://github.com/runcycles/cycles-server)** — the Java/Spring Boot reference implementation. Read it for "how does the reference handle X edge case?"
 - **[Protocol reference pages](/protocol/api-reference-for-the-cycles-protocol)** — narrative documentation of the same surface, useful for understanding the design intent behind each operation
 - **[`.spectral.yaml`](https://github.com/runcycles/cycles-protocol/blob/main/.spectral.yaml)** — OpenAPI linting config for keeping spec changes consistent

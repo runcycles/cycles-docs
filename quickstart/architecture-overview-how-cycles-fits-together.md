@@ -225,7 +225,7 @@ A client library that integrates Cycles into Spring Boot applications. It provid
 | `CyclesContextHolder` | ThreadLocal access to reservation state mid-execution |
 | `CyclesExpressionEvaluator` | SpEL evaluation for dynamic estimates and actuals |
 | `CyclesFieldResolver` | Interface for dynamic Subject field resolution |
-| `CommitRetryEngine` | Retry engine for transient commit failures |
+| `CommitRetryEngine` | Same-key settlement retry, durable journal replay, and expired-commit event fallback |
 | `CyclesProperties` | Spring Boot configuration properties |
 
 ## Request flow
@@ -262,7 +262,7 @@ If allowed, the starter runs the annotated method. During execution:
 
 ### 6. Commit
 
-After the method returns, the starter evaluates the `actual` expression and sends `POST /v1/reservations/{id}/commit`. The server executes `commit.lua` to record actual spend and release the unused remainder.
+After the method returns, the starter evaluates the `actual` expression, durably journals the settlement, and sends `POST /v1/reservations/{id}/commit`. The server executes `commit.lua` to record actual spend and release the unused remainder. Ambiguous outcomes retain the same-key record for replay; an expired commit switches to a direct event.
 
 ### 7. Error path
 

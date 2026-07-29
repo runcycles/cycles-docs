@@ -18,7 +18,7 @@ Same protocol as the Python, TypeScript, and Spring Boot clients, so the same Cy
 ```toml
 # Cargo.toml
 [dependencies]
-runcycles = "0.2"
+runcycles = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -317,7 +317,7 @@ Enable with:
 
 ```toml
 [dependencies]
-runcycles = { version = "0.2", features = ["blocking"] }
+runcycles = { version = "0.3", features = ["blocking"] }
 ```
 
 ## Error handling

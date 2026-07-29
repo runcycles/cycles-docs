@@ -94,6 +94,7 @@ What happens under the hood:
 4. On success, it commits 420 tokens (the actual usage)
 5. On error, it releases the reservation — budget is returned to the pool
 6. A background heartbeat extends the reservation TTL while the closure runs
+7. Before commit, known actual usage is journaled for same-key recovery across ambiguous responses and process restart
 
 The closure receives a `GuardContext` with the budget decision and any caps:
 
@@ -154,8 +155,9 @@ guard.commit(
 
 Key safety properties:
 
-- The guard starts a background heartbeat that extends the reservation TTL at half the TTL interval — your stream won't expire mid-response
+- The guard schedules heartbeat extensions from server-authoritative `remaining_ttl_ms` when available, reserving time for a failed attempt and same-key recovery
 - `guard.commit(self)` takes ownership — you can't accidentally commit twice (it's a compile error)
+- Known actual usage is journaled before commit; an expired commit falls back to a durable `POST /v1/events` settlement
 - If a panic occurs and the guard is dropped, `Drop` spawns a best-effort release so budget isn't leaked
 
 ## Example 3: Multi-agent workflows
@@ -364,6 +366,7 @@ match resp.decision {
 | **Double-commit prevention** | Compile error (`self` consumed) | Runtime check | Runtime check (`finalized` flag) |
 | **Forgotten reservation** | Compiler warning (`#[must_use]`) | Silent (GC cleans up) | Silent (GC cleans up) |
 | **Drop cleanup** | Best-effort release via `tokio::spawn` | N/A | N/A |
+| **Known-actual durability** | Journal + expiry event fallback | Journal + expiry event fallback | Journal + expiry event fallback |
 | **Context access** | `GuardContext` (owned, no lifetimes) | `get_cycles_context()` (contextvars) | `getCyclesContext()` (AsyncLocalStorage) |
 | **Async** | Native async/await | sync + async variants | async only |
 | **Zero dependencies** | No (reqwest, serde, tokio) | No (httpx, pydantic) | Yes (built-in fetch) |

@@ -47,7 +47,7 @@ Each word carries weight:
 - **Accumulate actual usage** — update a mutable counter from each chunk that carries usage info (final-chunk-only via `stream_options.include_usage` for OpenAI; one-or-more `message_delta` events for Anthropic).
 - **Commit actual on clean exit** — the context manager's `__exit__` path when no exception was raised.
 - **Release on exception** — the `__exit__` path when the stream was interrupted. Release returns the reservation to the available pool and records the reason.
-- **Heartbeat-extend** — a background task calling `POST /v1/reservations/:id/extend` every `ttl_ms/2` so the reservation outlives a long stream.
+- **Heartbeat-extend** — a background task scheduling `POST /v1/reservations/:id/extend` from the server-authoritative remaining lease, with enough time reserved for a failed attempt and same-key recovery.
 - **Stable idempotency key on commit** — the commit body carries an `idempotency_key`. Per the [Cycles protocol](/protocol/api-reference-for-the-cycles-protocol), retrying with the same key and same payload returns the original successful response; the operation is not applied again. That's the happy-path retry semantics — not an error code branch.
 
 ## The actual Python code
@@ -117,16 +117,16 @@ The pattern stays readable because the context manager absorbs the ceremony. The
 
 **Final usage in the last chunk.** The `cost_fn` runs *inside* `__exit__`, after the stream has drained. By then, the final `chunk.usage` has written into `reservation.usage.tokens_input` and `tokens_output`, and `cost_fn` converts to the unit the reservation was made in (USD microcents, in the example above). A single commit fires with the actual — not the estimate. The [`_resolve_actual_cost`](https://github.com/runcycles/cycles-client-python/blob/main/runcycles/streaming.py) helper uses this order: explicit `actual_cost`, then `cost_fn`, then the reserved estimate if no `cost_fn` exists or the function raises. A cleanly ended stream with no final usage does **not** automatically select the estimate when `cost_fn` returns a value; the example function would return zero from zero token counters. Make the function detect incomplete usage and raise or return an intentional fallback. If the missing final chunk raises an exception, the context manager releases instead of committing.
 
-**Stream outlives TTL.** The `_start_heartbeat` method spawns a background thread (or asyncio task in the async variant) that calls `extend_reservation` every `max(ttl_ms/2, 1000ms)`. On success, it updates the cached `expires_at_ms` so the caller's view stays consistent. On heartbeat failure, it logs — the commit will still try on exit, and if the reservation did expire, the `RESERVATION_EXPIRED` branch below handles it. The current client surfaces heartbeat failures in logs, not a dedicated client metric.
+**Stream outlives TTL.** The `_start_heartbeat` method spawns a background thread (or asyncio task in the async variant). On servers that return `remaining_ttl_ms`, it schedules from that remaining lease after subtracting request time, two complete HTTP-attempt budgets, and a safety margin. A recoverable extend failure keeps the same idempotency key and retries only while the recomputed window remains safe. Older fieldless servers use a documented best-effort fallback. On success, the client updates the cached `expires_at_ms`; on failure, it logs the reservation ID and whether the heartbeat will retry or stop. Heartbeat failure does not cancel the stream or suppress final settlement.
 
 **Client disconnect.** The context manager's `__exit__` receives the exception on the way out. `exc_type is not None` routes to `_handle_release`, which calls `POST /v1/reservations/:id/release` with a `reason` payload (e.g., `"stream_failed"`). The reservation transitions to `RELEASED` with the reason recorded in the release event. Setting `reservation.usage.actual_cost` and then re-raising inside the `with` block does not change that branch: exceptions always release. If the provider billed partial generation, either catch the stream error inside the block, set the actual cost, let the block exit cleanly so it commits, and re-raise afterward, or manage reserve/commit/release explicitly.
 
-**Retry double-commit.** The primary safety mechanism is idempotent replay. A commit retry that uses the same `idempotency_key` and same body returns the server's original successful response — the operation isn't applied twice. The agent framework's retry logic doesn't need to know about Cycles; the protocol handles the happy path.
+**Retry double-commit.** The primary safety mechanism is durable, idempotent replay. Before the first commit request, the client journals the known actual amount and original `idempotency_key`. A retry that uses the same key and body returns the server's original successful response — the operation isn't applied twice — and unresolved records survive retry exhaustion or process restart.
 
 Three error codes cover the edge cases where replay isn't what's happening:
 
 - `RESERVATION_FINALIZED` — the reservation is already in a terminal state but the current request is not a same-key replay (e.g., a second client trying to commit against an already-committed reservation). The retry handler logs it and treats it as finalised — no double-debit.
-- `RESERVATION_EXPIRED` — the late commit returns `410 RESERVATION_EXPIRED`. Whatever the expiry path already did governs the ledger; the commit itself doesn't retro-apply. The operator sees the expiry event; the retry handler logs and moves on.
+- `RESERVATION_EXPIRED` — the late commit returns `410 RESERVATION_EXPIRED`. The client switches the durable record to event mode and calls `POST /v1/events` with the original subject, action, actual usage, metrics, metadata, and idempotency key. If that request is still unresolved, the record remains journaled for later replay.
 - `IDEMPOTENCY_MISMATCH` — the retry sent the same key with a different payload. The handler logs explicitly and does *not* release, because releasing would double-account.
 
 ## Reserve in USD, not tokens: the unit mistake in streaming LLM budgets
@@ -153,7 +153,7 @@ One backpressure note while we're here: if the caller doesn't drain chunks fast 
 
 Three trade-offs worth naming explicitly.
 
-**The heartbeat adds one extend call per `ttl_ms/2`.** At a 60s TTL, that's one extra Cycles API call every 30 seconds the stream is open. Measurably cheap (~5ms per call at [current benchmark numbers](/blog/cycles-server-performance-benchmarks)), but it's not zero. If your streams are reliably under 60s, raise the TTL so the heartbeat never runs.
+**The heartbeat adds extend traffic based on the safe lease window.** With the default timeouts, a healthy 60-second lease normally needs far less than one request per second, but the exact cadence depends on returned `remaining_ttl_ms` and observed round-trip time rather than a fixed half-TTL interval. The calls are measurably cheap (~5ms at [current benchmark numbers](/blog/cycles-server-performance-benchmarks)), but not free. Keep the enforced per-attempt timeout well below half the shortest lease; increasing that timeout reduces or can eliminate the provably safe heartbeat window.
 
 **The estimate is reserved, not free.** A generous estimate means that budget is unavailable for other reservations during the stream. If a single agent reserves 50,000 tokens' worth at the start of every stream and actually uses 3,000, concurrent agents on the same scope see the full 50,000 as reserved. The fix is to right-size the estimate — not "generous" as in "3× actual," but "generous" as in "p95 of actual + margin."
 
@@ -161,7 +161,7 @@ Three trade-offs worth naming explicitly.
 
 ## Bottom line
 
-Streaming breaks four things: the timing of `usage` arrival, the TTL window, the disconnect path, and the retry semantics. Each one has a naive wrapper that silently corrupts budget accounting; each one has a concrete fix in the pattern above. The Python `StreamReservation` context manager is that pattern codified — reserve-on-enter, heartbeat during, commit-or-release on exit, idempotent retry — so the caller gets streaming budget enforcement without having to get any of the four details right on their own.
+Streaming breaks four things: the timing of `usage` arrival, the TTL window, the disconnect path, and the retry semantics. Each one has a naive wrapper that silently corrupts budget accounting; each one has a concrete fix in the pattern above. The Python `StreamReservation` context manager is that pattern codified — reserve-on-enter, heartbeat during, commit-or-release on exit, durable same-key recovery — so the caller gets streaming budget enforcement without having to get any of the four details right on their own.
 
 The code is in the client today; the four failure modes above are what each line is there to close.
 

@@ -79,6 +79,21 @@ Track reservation lifecycle events:
 | **Average reservation duration** | Time from reserve to commit. Growing duration may indicate slow downstream services. |
 | **Active reservation count** | Current in-flight reservations. Sustained growth suggests commit/release failures. |
 
+### Client recovery signals
+
+The official Python, TypeScript, Spring Boot, and Rust lifecycle helpers durably journal known-actual settlement. Monitor the application processes that run those SDKs, not only the Cycles server:
+
+| Signal | Why it matters |
+|---|---|
+| Journal write or permission failure | The synchronous settlement may still succeed, but restart recovery is not guaranteed for a record that could not be persisted. |
+| Quarantined record | A malformed or unsupported journal record was isolated; other records continue replaying, but this one needs investigation. |
+| Retry exhaustion or retained authentication failure | Actual usage is known and safely retained, but the ledger has not converged yet. |
+| Expired-commit event fallback failure | The reservation can no longer be committed; the durable event settlement is still pending. |
+| Heartbeat stop disposition | The guarded operation continues, but its lease may expire before final settlement. |
+| Oldest pending record age and pending count | Sustained growth indicates a server, credential, filesystem, or replay-worker problem. |
+
+Put `~/.runcycles/commit-journal`—or the configured journal directory—on persistent storage and collect SDK warnings from application logs. A graceful shutdown should invoke or allow the SDK's bounded drain; a timed-out drain must leave records intact for the next start.
+
 ### Server health metrics
 
 All three Cycles services expose Spring Boot Actuator. The exposed endpoints are `health`, `info`, and `prometheus`. On the runtime and admin servers (since `cycles-server` 0.1.25.45 and the matching admin release), the aggregate `/actuator/health` and `/actuator/prometheus` endpoints require the `X-Admin-API-Key` header; only the liveness/readiness probe sub-paths stay public for orchestrators:
@@ -308,7 +323,7 @@ docker compose logs -f cycles-events | grep "Webhook subscription auto-disabled"
 docker compose logs -f cycles-server cycles-admin cycles-events | grep "ERROR"
 ```
 
-For structured logging, pipe to your log aggregation system (ELK, Datadog, CloudWatch) and create alerts on log patterns.
+For structured logging, pipe server and SDK application logs to your log aggregation system (ELK, Datadog, CloudWatch). Create alerts for the client recovery signals above as well as server-side errors.
 
 ## Next steps
 

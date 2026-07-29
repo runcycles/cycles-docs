@@ -67,8 +67,8 @@ def stream_with_budget(prompt: str, max_tokens: int = 1024) -> str:
 The context manager handles the full lifecycle:
 
 - **On enter** — creates the reservation (default `ttl_ms=120_000`). A DENY or protocol error raises `CyclesProtocolError` (or a subclass such as `BudgetExceededError`), so the stream never starts without budget.
-- **During the stream** — a background heartbeat extends the TTL at half-TTL intervals automatically (background thread; asyncio task in the async variant). Update `reservation.usage` (`tokens_input`, `tokens_output`, or `set_actual_cost()`) as chunks arrive.
-- **On exit** — commits the actual cost: an explicit `set_actual_cost()` value wins, then `cost_fn(usage)`, then the estimate as fallback. If the body raised, the reservation is released instead.
+- **During the stream** — a background heartbeat schedules from server-authoritative `remaining_ttl_ms` when present and uses a best-effort fallback for older servers (background thread; asyncio task in the async variant). Update `reservation.usage` (`tokens_input`, `tokens_output`, or `set_actual_cost()`) as chunks arrive.
+- **On exit** — commits the actual cost: an explicit `set_actual_cost()` value wins, then `cost_fn(usage)`, then the estimate as fallback. If the body raised, the reservation is released instead; see the partial-usage warning below.
 
 The subject defaults to the `CyclesConfig` subject fields; pass `subject=Subject(...)` to override. With `AsyncCyclesClient`, the same call returns an async context manager: `async with client.stream_reservation(...) as reservation:`.
 
@@ -244,7 +244,7 @@ Streaming responses can take significantly longer than non-streaming calls. Set 
 | Medium (500–2000 tokens) | 60,000 ms |
 | Long (> 2000 tokens) | 120,000 ms |
 
-`stream_reservation` extends the TTL automatically via a half-TTL heartbeat, the same way the decorator does. Manual extension is only needed when you drive raw `create_reservation` calls yourself — call `client.extend_reservation()` periodically during long streams:
+`stream_reservation` schedules extensions automatically from the server's remaining-lifetime field when available, the same way the decorator does. Manual extension is only needed when you drive raw `create_reservation` calls yourself:
 
 ```python
 from runcycles import ReservationExtendRequest
@@ -259,9 +259,11 @@ client.extend_reservation(
 )
 ```
 
+Raw clients must implement the [normative heartbeat schedule and same-key recovery rules](/protocol/reservation-ttl-grace-period-and-extend-in-cycles), not a blind half-TTL interval. Generate a fresh key for a new logical extension and reuse that key while recovering an ambiguous result.
+
 ## Release on failure
 
-Always release the reservation if streaming fails. This frees held budget immediately rather than waiting for TTL expiry. `stream_reservation` does this automatically when the body raises; in the manual pattern:
+Release the reservation if streaming fails before any billable usage occurs. This frees held budget immediately rather than waiting for TTL expiry. In a manual lifecycle where the provider never began work:
 
 ```python
 try:
@@ -273,6 +275,10 @@ except Exception:
     )
     raise
 ```
+
+::: warning Partial provider usage
+If the provider billed tokens before the stream failed, releasing would return budget for real spend. Capture the best-known actual amount and settle it instead. Python `stream_reservation` releases whenever an exception escapes its body, so catch the provider error inside the context, set the actual cost, let the context exit cleanly to commit, then re-raise the saved error afterward. The SDK cannot recover an amount it never receives; applications needing crash/failure convergence must durably checkpoint provider receipts or usage before acknowledging the stream.
+:::
 
 ## Respecting caps
 
@@ -294,9 +300,10 @@ For streaming, a good estimate is `max_tokens × output_price`, since output tok
 
 - **Use `stream_reservation`**, not the decorator, for streaming in Python — it handles reserve, heartbeat, commit, and release for you.
 - **Set a longer TTL** to cover the full stream duration.
-- **Always release on failure** to free held budget (automatic with `stream_reservation`).
+- **Release only unused reservations**; settle best-known actual usage when the provider already billed part of a failed stream.
 - **Commit the actual cost** after the stream completes using usage data from the final chunk.
 - **The estimate holds budget** — the difference between estimate and actual is freed at commit time.
+- **Known-actual settlement is durable** in current lifecycle helpers; see [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
 
 ## Full example
 
