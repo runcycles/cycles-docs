@@ -69,6 +69,7 @@ export const COMPONENTS = [
     format: 'json',
     docs: [
       { path: 'quickstart/getting-started-with-the-typescript-client.md', needle: '`runcycles`' },
+      { path: 'protocol/sdk-recovery-conformance.md', needle: 'TypeScript' },
       {
         path: 'configuration/typescript-client-configuration-reference.md',
         needle: '`journalEnabled`',
@@ -82,6 +83,7 @@ export const COMPONENTS = [
     format: 'toml-package',
     docs: [
       { path: 'quickstart/getting-started-with-the-rust-client.md', needle: '`runcycles`' },
+      { path: 'protocol/sdk-recovery-conformance.md', needle: 'Rust' },
       {
         path: 'configuration/rust-client-configuration-reference.md',
         needle: '`journal_enabled`',
@@ -95,6 +97,7 @@ export const COMPONENTS = [
     format: 'toml-project',
     docs: [
       { path: 'quickstart/getting-started-with-the-python-client.md', needle: '`runcycles`' },
+      { path: 'protocol/sdk-recovery-conformance.md', needle: 'Python' },
       {
         path: 'configuration/python-client-configuration-reference.md',
         needle: '`journal_enabled`',
@@ -107,6 +110,7 @@ export const COMPONENTS = [
     manifest: 'cycles-client-java-spring/pom.xml',
     format: 'maven-revision',
     docs: [
+      { path: 'protocol/sdk-recovery-conformance.md', needle: 'Spring / Java' },
       {
         path: 'configuration/client-configuration-reference-for-cycles-spring-boot-starter.md',
         needle: 'cycles-spring-boot-starter',

@@ -1,0 +1,149 @@
+{
+  "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T12:09:00Z",
+  "profile": {
+    "name": "cycles-sdk-recovery",
+    "version": "0.3",
+    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
+    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+  },
+  "claim": "durable",
+  "implementation": {
+    "id": "runcycles/cycles-spring-boot-starter",
+    "commit": "bcc488e2e2d3eb62089ab1377e3f80e1da04e382",
+    "version": "0.3.2"
+  },
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "scenarios": [
+    {
+      "id": "CR-CORE-001",
+      "level": "core",
+      "name": "lost commit response reuses the same key",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldJournalBeforeRetryAndDiscardOnSuccess"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-CORE-002",
+      "level": "core",
+      "name": "expired commit falls back to an event",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldPersistEventModeBeforeDeliveringExpiredFallback"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-CORE-003",
+      "level": "core",
+      "name": "heartbeat transport failure is observable and non-fatal",
+      "passed": true,
+      "native_tests": [
+        "CyclesLifecycleServiceTest#shouldHandleExtendExceptionGracefully"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-CORE-004",
+      "level": "core",
+      "name": "protocol-invalid settlement success remains ambiguous",
+      "passed": true,
+      "native_tests": [
+        "CyclesLifecycleServiceTest#shouldTreatProtocolInvalidCommit2xxAsAmbiguous"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-001",
+      "level": "durable",
+      "name": "first commit is journaled before it leaves the process",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldJournalBeforeRetryAndDiscardOnSuccess",
+        "CyclesLifecycleServiceTest#shouldExecuteFullLifecycle",
+        "JournaledCommitRetryEngineTest#shouldReplayJournaledCommitOnConstruction"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-002",
+      "level": "durable",
+      "name": "replayed expired commit switches durably to event mode",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldPersistEventModeBeforeDeliveringExpiredFallback",
+        "JournaledCommitRetryEngineTest#shouldReplayEventModeRecord"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-003",
+      "level": "durable",
+      "name": "rate-limit floor survives restart",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldTreat429AsTransientHonorRetryAfterFloorAndPersistNotBefore",
+        "JournaledCommitRetryEngineTest#shouldHonorFutureNotBeforeFloorOnReplay"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-004",
+      "level": "durable",
+      "name": "tenant journal survives API-key rotation",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldSurviveApiKeyRotationWhenTenantScoped"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-005",
+      "level": "durable",
+      "name": "corrupt or unsupported journal record is quarantined",
+      "passed": true,
+      "native_tests": [
+        "CommitJournalTest#shouldQuarantineCorruptAndUnsupportedRecordsWithoutBlockingValidReplay"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-006",
+      "level": "durable",
+      "name": "concurrent replay remains exactly once",
+      "passed": true,
+      "native_tests": [
+        "JournaledCommitRetryEngineTest#shouldReplayConcurrentlyWithSameKeyAndRemoveRecord"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-007",
+      "level": "durable",
+      "name": "journal filenames preserve distinct arbitrary reservation identifiers",
+      "passed": true,
+      "native_tests": [
+        "CommitJournalTest#shouldKeepCollidingLegacyIdsDistinctAndMigrateSafely"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    },
+    {
+      "id": "CR-BOUNDARY-001",
+      "level": "boundary",
+      "name": "missing actual is surfaced without settlement",
+      "passed": true,
+      "native_tests": [
+        "CyclesLifecycleServiceTest#shouldThrowWhenActualRequiredButNotProvided"
+      ],
+      "diagnostic": "native Maven test exit code 0"
+    }
+  ],
+  "evidence_url": "https://github.com/runcycles/cycles-spring-boot-starter/actions/runs/30459026303"
+}

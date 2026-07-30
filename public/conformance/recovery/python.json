@@ -1,0 +1,150 @@
+{
+  "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T12:07:41Z",
+  "profile": {
+    "name": "cycles-sdk-recovery",
+    "version": "0.3",
+    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
+    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+  },
+  "claim": "durable",
+  "implementation": {
+    "id": "runcycles/cycles-client-python",
+    "commit": "e749fd3e0c5d0a78f797617ff9cbdfd21ddcab52",
+    "version": "0.5.2"
+  },
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "scenarios": [
+    {
+      "id": "CR-CORE-001",
+      "level": "core",
+      "name": "lost commit response reuses the same key",
+      "passed": true,
+      "native_tests": [
+        "tests/test_retry.py::TestCommitRetryEngine::test_retries_until_success"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-CORE-002",
+      "level": "core",
+      "name": "expired commit falls back to an event",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestLifecycleEventFallbackWiring::test_expired_commit_schedules_event"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-CORE-003",
+      "level": "core",
+      "name": "heartbeat transport failure is observable and non-fatal",
+      "passed": true,
+      "native_tests": [
+        "tests/test_lifecycle.py::TestSyncLifecycleExecution::test_heartbeat_exception_does_not_crash"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-CORE-004",
+      "level": "core",
+      "name": "protocol-invalid settlement success remains ambiguous",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestLifecycleEventFallbackWiring::test_protocol_invalid_2xx_is_ambiguous_and_keeps_same_key"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-001",
+      "level": "durable",
+      "name": "first commit is journaled before it leaves the process",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestLifecycleEventFallbackWiring::test_journal_write_precedes_first_commit_and_success_discards",
+        "tests/test_journal.py::TestSyncReplay::test_replays_pending_commit_on_set_client",
+        "tests/test_retry.py::TestCommitRetryEngine::test_retries_until_success"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-002",
+      "level": "durable",
+      "name": "replayed expired commit switches durably to event mode",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestSyncEngineDurability::test_expired_then_event_transient_continues_in_event_mode",
+        "tests/test_journal.py::TestSyncReplay::test_replays_event_mode_entry"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-003",
+      "level": "durable",
+      "name": "rate-limit floor survives restart",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestRateLimitedRetry::test_429_commit_is_transient_and_honors_retry_after",
+        "tests/test_journal.py::TestRateLimitedRetry::test_replay_restores_future_retry_after_floor",
+        "tests/test_journal.py::TestRateLimitedRetry::test_429_then_success_discards_journal"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-004",
+      "level": "durable",
+      "name": "tenant journal survives API-key rotation",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestAuthFailureRetention::test_replay_survives_api_key_rotation_with_tenant"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-005",
+      "level": "durable",
+      "name": "corrupt or unsupported journal record is quarantined",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestCommitJournal::test_corrupt_and_unsupported_records_are_quarantined_without_blocking_valid"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-006",
+      "level": "durable",
+      "name": "concurrent replay remains exactly once",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestSyncReplay::test_concurrent_replay_workers_reuse_one_key_and_remove_record"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-007",
+      "level": "durable",
+      "name": "journal filenames preserve distinct arbitrary reservation identifiers",
+      "passed": true,
+      "native_tests": [
+        "tests/test_journal.py::TestCommitJournal::test_colliding_legacy_ids_are_distinct_and_migrate_safely"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    },
+    {
+      "id": "CR-BOUNDARY-001",
+      "level": "boundary",
+      "name": "missing actual is surfaced without settlement",
+      "passed": true,
+      "native_tests": [
+        "tests/test_lifecycle.py::TestSyncLifecycleExecution::test_missing_actual_surfaces_without_settlement"
+      ],
+      "diagnostic": "native pytest exit code 0"
+    }
+  ],
+  "evidence_url": "https://github.com/runcycles/cycles-client-python/actions/runs/30459004359"
+}

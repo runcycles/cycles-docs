@@ -67,6 +67,28 @@ If journal I/O fails, the SDK reports the durability failure and may still attem
 
 Disabling inline/background retry does not disable persistence. To opt out of recovery durability, the journal must also be disabled. Do that only when the application supplies an equivalent durable settlement mechanism.
 
+## Availability behavior
+
+Official lifecycle helpers fail closed before execution. If reservation
+creation cannot produce a schema-valid `ALLOW` or `ALLOW_WITH_CAPS` response
+after its bounded same-key recovery, the helper surfaces an error and does not
+invoke the guarded function. An explicit denial, authentication failure, or
+malformed response is never converted into permission to run.
+
+This is a phase-specific policy rather than one blanket outage switch:
+
+- **Before authorization:** no proven allow means no guarded action.
+- **After authorization:** heartbeat failure is observable but does not cancel
+  work under the baseline warning policy.
+- **After actual usage is known:** settlement is durably retained and replayed
+  instead of being discarded during an outage.
+
+Low-level clients return the protocol primitives and leave application control
+flow to the caller. The official lifecycle helpers do not expose a generic
+`fail_open` option. Applications that deliberately execute without a
+reservation are outside the pre-execution authority guarantee and must make
+that unmetered path explicit in their own policy and telemetry.
+
 ## Heartbeat failures do not erase settlement
 
 Heartbeat extension protects the lease while work runs; it is not settlement. Under the official SDKs' warning policy:
@@ -89,6 +111,7 @@ A stopped heartbeat can cause commit to arrive after expiry. The durable event f
 
 ## Next steps
 
+- [SDK Recovery Conformance Matrix](/protocol/sdk-recovery-conformance)
 - [How Reserve → Commit Works](/protocol/how-reserve-commit-works-in-cycles)
 - [Reservation TTL, Grace Period, and Extend](/protocol/reservation-ttl-grace-period-and-extend-in-cycles)
 - [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code)

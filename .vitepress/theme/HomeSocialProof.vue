@@ -38,9 +38,18 @@ const showInstalls = computed(() => installs.value > 0)
       </svg>
       <span class="stat-text">{{ formatted.format(installs) }}+ package installs</span>
     </span>
-    <span class="stat">
-      <span class="stat-text">Apache 2.0 &#183; self-hosted &#183; no prompt storage</span>
-    </span>
+    <a class="stat proof-link" href="/protocol/sdk-recovery-conformance">
+      <span class="stat-text">4 SDKs &#183; durable recovery &#183; 12/12 scenarios</span>
+    </a>
+    <a
+      class="stat proof-link"
+      href="/protocol/sdk-settlement-recovery-and-durability#availability-behavior"
+    >
+      <span class="stat-text">Reserve-time outage: fail closed</span>
+    </a>
+    <a class="stat proof-link" href="/blog/cycles-server-performance-benchmarks">
+      <span class="stat-text">200-client shared reserve p99: 532ms</span>
+    </a>
   </p>
 </template>
 
@@ -75,4 +84,28 @@ const showInstalls = computed(() => installs.value > 0)
 
 .stat-icon { flex-shrink: 0; }
 .stat-text { font-variant-numeric: tabular-nums; }
+
+.proof-link {
+  color: var(--vp-c-text-2);
+  text-decoration: none;
+}
+
+.proof-link:hover {
+  color: var(--vp-c-brand-1);
+}
+
+@media (max-width: 640px) {
+  .social-proof {
+    gap: 7px;
+  }
+
+  .stat {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+
+  .stat + .stat::before {
+    display: none;
+  }
+}
 </style>

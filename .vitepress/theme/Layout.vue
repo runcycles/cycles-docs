@@ -27,8 +27,8 @@ const { frontmatter } = useData()
   <StandaloneLayout v-else-if="frontmatter.layout === 'standalone'" />
   <Layout v-else>
     <template #home-features-before>
-      <HomeDemo v-if="frontmatter.layout === 'home'" />
       <HomeSocialProof v-if="frontmatter.layout === 'home'" />
+      <HomeDemo v-if="frontmatter.layout === 'home'" />
       <HomeProblems v-if="frontmatter.layout === 'home'" />
       <HomeIntegrations v-if="frontmatter.layout === 'home'" />
       <HomeCodeSnippet v-if="frontmatter.layout === 'home'" />
