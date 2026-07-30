@@ -2,8 +2,9 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 // Both demos appear on the homepage and on /demos/.
-// Runaway-cost goes first — universally visceral "money on fire" hook.
-// Action-authority goes second — the natural "and the same for actions" follow-on.
+// Action authority goes first because it is the product's clearest
+// differentiator: staying under budget does not make an action safe.
+// Cost runaway follows as the familiar spend-enforcement case.
 // CTAs deep-link to the corresponding H2 anchors on /demos/ for run instructions.
 //
 // Video sources in order: MP4/H.264 first (universally supported, and our
@@ -13,21 +14,6 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 // loads and during prefers-reduced-motion (most browsers respect that for
 // autoplay video).
 const demos = [
-  {
-    key: 'runaway',
-    label: 'Cost runaway',
-    poster: '/demo-runaway-poster.png',
-    mp4: '/demo-runaway.mp4',
-    webm: '/demo-runaway.webm',
-    gifFallback: '/demo-runaway.gif',
-    alt: 'Cycles demo: an agent burns ~$10 in 12 seconds without enforcement; with Cycles, the same agent stops cleanly at $1.',
-    intro: 'Same agent. Same bug.',
-    captionWithout: '~$10 in 12s — the pace behind $4,200 incidents.',
-    captionWith: '$1 cap, before the next action ran.',
-    mechanism: 'reserve → deny → no downstream call',
-    ctaText: 'Run the runaway demo',
-    ctaLink: '/demos/#runaway-agent-demo',
-  },
   {
     key: 'action-authority',
     label: 'Blast radius',
@@ -42,6 +28,21 @@ const demos = [
     mechanism: 'decide → DENY → no email send',
     ctaText: 'Run the action-authority demo',
     ctaLink: '/demos/#action-authority-demo',
+  },
+  {
+    key: 'runaway',
+    label: 'Cost runaway',
+    poster: '/demo-runaway-poster.png',
+    mp4: '/demo-runaway.mp4',
+    webm: '/demo-runaway.webm',
+    gifFallback: '/demo-runaway.gif',
+    alt: 'Cycles demo: an agent burns ~$10 in 12 seconds without enforcement; with Cycles, the same agent stops cleanly at $1.',
+    intro: 'Same agent. Same bug.',
+    captionWithout: '~$10 in 12s — the pace behind $4,200 incidents.',
+    captionWith: '$1 cap, before the next action ran.',
+    mechanism: 'reserve → deny → no downstream call',
+    ctaText: 'Run the runaway demo',
+    ctaLink: '/demos/#runaway-agent-demo',
   },
 ]
 

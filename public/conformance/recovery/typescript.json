@@ -1,0 +1,149 @@
+{
+  "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T12:44:24Z",
+  "profile": {
+    "name": "cycles-sdk-recovery",
+    "version": "0.3",
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
+  },
+  "claim": "durable",
+  "implementation": {
+    "id": "runcycles/cycles-client-typescript",
+    "commit": "110c756b1bc950910650c6446de9a1cd8d5e6fbb",
+    "version": "0.4.2"
+  },
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "scenarios": [
+    {
+      "id": "CR-CORE-001",
+      "level": "core",
+      "name": "lost commit response reuses the same key",
+      "passed": true,
+      "native_tests": [
+        "tests/retry.test.ts > retries on failure then succeeds"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-CORE-002",
+      "level": "core",
+      "name": "expired commit falls back to an event",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > recovers spend via scheduleEvent on an expired first commit"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-CORE-003",
+      "level": "core",
+      "name": "heartbeat transport failure is observable and non-fatal",
+      "passed": true,
+      "native_tests": [
+        "tests/lifecycle.test.ts > heartbeat logs thrown transport failures and keeps the action alive"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-CORE-004",
+      "level": "core",
+      "name": "protocol-invalid settlement success remains ambiguous",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > treats a protocol-invalid 2xx as ambiguous and preserves the key"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-001",
+      "level": "durable",
+      "name": "first commit is journaled before it leaves the process",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > journals before the first commit request and discards valid success",
+        "tests/journal.test.ts > replays pending commits when the first engine appears",
+        "tests/retry.test.ts > retries on failure then succeeds"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-002",
+      "level": "durable",
+      "name": "replayed expired commit switches durably to event mode",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > falls back to POST /v1/events when the reservation expired",
+        "tests/journal.test.ts > replays event-mode entries via createEvent"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-003",
+      "level": "durable",
+      "name": "rate-limit floor survives restart",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > treats 429 as transient, honors Retry-After, and persists the floor",
+        "tests/journal.test.ts > restores a future Retry-After floor and ignores a past one"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-004",
+      "level": "durable",
+      "name": "tenant journal survives API-key rotation",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > survives API-key rotation when a tenant is configured"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-005",
+      "level": "durable",
+      "name": "corrupt or unsupported journal record is quarantined",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > quarantines corrupt and unsupported records without blocking valid replay"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-006",
+      "level": "durable",
+      "name": "concurrent replay remains exactly once",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > concurrent replay workers reuse one key and remove the record"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-007",
+      "level": "durable",
+      "name": "journal filenames preserve distinct arbitrary reservation identifiers",
+      "passed": true,
+      "native_tests": [
+        "tests/journal.test.ts > uses cross-SDK digest names and safely migrates colliding legacy names"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    },
+    {
+      "id": "CR-BOUNDARY-001",
+      "level": "boundary",
+      "name": "missing actual is surfaced without settlement",
+      "passed": true,
+      "native_tests": [
+        "tests/lifecycle.test.ts > throws when actual is undefined and useEstimateIfActualNotProvided is false"
+      ],
+      "diagnostic": "native vitest exit code 0"
+    }
+  ],
+  "evidence_url": "https://github.com/runcycles/cycles-client-typescript/actions/runs/30543732858"
+}

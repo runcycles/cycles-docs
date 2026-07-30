@@ -97,6 +97,33 @@ Single-threaded latency doesn't tell you how the system behaves when 32 agents h
 
 **2,873 complete lifecycles per second** at 32 threads means each thread completes a full reserve-commit cycle (two HTTP calls, two Lua script executions, two auth checks) in ~11ms average.
 
+## 200-Client Reserve Fan-Out
+
+The server's v0.1.25.59 benchmark suite adds a reserve-only test at 200
+simultaneous clients. We ran three fresh-process trials on the same
+Threadripper reference host described above, with Java 21, Spring Boot 3.5.16,
+Redis 7 Alpine in Testcontainers, Docker Desktop 29.6.1, and localhost
+networking. Each trial used 50 warmups followed by a five-second measured
+window per shape.
+
+| Budget shape | Reserve p99 median (range) | Throughput median (range) | Errors | Ledger mismatches |
+|---|---:|---:|---:|---:|
+| Shared tenant budget | 531.7ms (524.8–532.3ms) | 1,328.6 reserves/s (1,295.0–1,354.6) | 0 | 0 |
+| Independent agent leaf budgets | 446.8ms (438.8–455.7ms) | 1,683.4 reserves/s (1,655.8–1,687.0) | 0 | 0 |
+
+The shared shape sends all 200 clients through one tenant ledger. The isolated
+shape removes that parent budget and assigns each client an independent
+agent-level leaf ledger. Across all six measured windows, 45,022 successful
+reservations completed with zero request errors and zero mismatches between
+successful responses and Redis `reserved` totals.
+
+The p99 is much higher than the single-client result because 200 callers
+simultaneously queue through one application instance, its HTTP/Redis
+connection capacity, and—in the shared shape—the same atomic ledger. This is
+the saturation evidence platform teams should size against, not a latency SLO.
+Deployment topology, server replicas, client pooling, and Redis placement can
+materially change the result; rerun the suite in the target environment.
+
 ## Runaway Agent Demo: v0.1.23 vs v0.1.24
 
 Synthetic benchmarks show per-operation overhead. But what does budget enforcement look like when a real agent runs away? We ran the same demo against both v0.1.23.3 and v0.1.24.1 — an agent making LLM calls in a tight loop, first unguarded (no budget), then guarded (with a $1.00 budget).

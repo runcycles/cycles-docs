@@ -26,6 +26,7 @@ import CostCalculator from './CostCalculator.vue'
 import BlastRadiusCalculator from './BlastRadiusCalculator.vue'
 import Pricing from './Pricing.vue'
 import HomeContact from './HomeContact.vue'
+import RecoveryConformanceMatrix from './RecoveryConformanceMatrix.vue'
 
 export default {
   extends: DefaultTheme,
@@ -51,6 +52,7 @@ export default {
     app.component('BlastRadiusCalculator', BlastRadiusCalculator)
     app.component('Pricing', Pricing)
     app.component('HomeContact', HomeContact)
+    app.component('RecoveryConformanceMatrix', RecoveryConformanceMatrix)
   },
   setup() {
     const route = useRoute()

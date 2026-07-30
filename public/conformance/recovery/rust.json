@@ -1,0 +1,146 @@
+{
+  "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
+  "schema_version": "1.0",
+  "generated_at": "2026-07-30T12:45:33Z",
+  "profile": {
+    "name": "cycles-sdk-recovery",
+    "version": "0.3",
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
+  },
+  "claim": "durable",
+  "implementation": {
+    "id": "runcycles/cycles-client-rust",
+    "commit": "4d14f461bf8f50740556cb60a516b9310105f0d4",
+    "version": "0.3.2"
+  },
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "scenarios": [
+    {
+      "id": "CR-CORE-001",
+      "level": "core",
+      "name": "lost commit response reuses the same key",
+      "passed": true,
+      "native_tests": [
+        "transient_commit_is_journaled_and_replayed_after_key_rotation"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-CORE-002",
+      "level": "core",
+      "name": "expired commit falls back to an event",
+      "passed": true,
+      "native_tests": [
+        "expired_commit_recovers_via_event"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-CORE-003",
+      "level": "core",
+      "name": "heartbeat transport failure is observable and non-fatal",
+      "passed": true,
+      "native_tests": [
+        "heartbeat_transport_timeout_is_observable_nonfatal_and_same_key",
+        "heartbeat::tests::fallback_retry_warning_includes_reservation_and_disposition"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-CORE-004",
+      "level": "core",
+      "name": "protocol-invalid settlement success remains ambiguous",
+      "passed": true,
+      "native_tests": [
+        "protocol_invalid_2xx_settlement_responses_remain_durably_ambiguous"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-001",
+      "level": "durable",
+      "name": "first commit is journaled before it leaves the process",
+      "passed": true,
+      "native_tests": [
+        "transient_commit_is_journaled_and_replayed_after_key_rotation"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-002",
+      "level": "durable",
+      "name": "replayed expired commit switches durably to event mode",
+      "passed": true,
+      "native_tests": [
+        "expired_commit_persists_event_mode_before_restart_replay"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-003",
+      "level": "durable",
+      "name": "rate-limit floor survives restart",
+      "passed": true,
+      "native_tests": [
+        "rate_limit_retry_floor_is_persisted"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-004",
+      "level": "durable",
+      "name": "tenant journal survives API-key rotation",
+      "passed": true,
+      "native_tests": [
+        "transient_commit_is_journaled_and_replayed_after_key_rotation"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-005",
+      "level": "durable",
+      "name": "corrupt or unsupported journal record is quarantined",
+      "passed": true,
+      "native_tests": [
+        "journal::tests::corrupt_and_unsupported_records_are_quarantined_without_blocking_valid_records"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-006",
+      "level": "durable",
+      "name": "concurrent replay remains exactly once",
+      "passed": true,
+      "native_tests": [
+        "concurrent_replay_workers_reuse_one_key_and_remove_record"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-DURABLE-007",
+      "level": "durable",
+      "name": "journal filenames preserve distinct arbitrary reservation identifiers",
+      "passed": true,
+      "native_tests": [
+        "journal::tests::digest_names_do_not_collide_and_legacy_discard_checks_record_identity"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    },
+    {
+      "id": "CR-BOUNDARY-001",
+      "level": "boundary",
+      "name": "missing actual is surfaced without settlement",
+      "passed": true,
+      "native_tests": [
+        "with_cycles_error_releases_automatically"
+      ],
+      "diagnostic": "native cargo test exit code 0"
+    }
+  ],
+  "evidence_url": "https://github.com/runcycles/cycles-client-rust/actions/runs/30543736995"
+}
