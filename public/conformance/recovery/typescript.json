@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
   "schema_version": "1.0",
-  "generated_at": "2026-07-30T12:07:50Z",
+  "generated_at": "2026-07-30T12:44:24Z",
   "profile": {
     "name": "cycles-sdk-recovery",
     "version": "0.3",
-    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
-    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
   },
   "claim": "durable",
   "implementation": {
     "id": "runcycles/cycles-client-typescript",
-    "commit": "e5914ca4218bbe454a4504492cfd0a8c74f02b4b",
+    "commit": "110c756b1bc950910650c6446de9a1cd8d5e6fbb",
     "version": "0.4.2"
   },
   "summary": {
@@ -145,5 +145,5 @@
       "diagnostic": "native vitest exit code 0"
     }
   ],
-  "evidence_url": "https://github.com/runcycles/cycles-client-typescript/actions/runs/30459013503"
+  "evidence_url": "https://github.com/runcycles/cycles-client-typescript/actions/runs/30543732858"
 }

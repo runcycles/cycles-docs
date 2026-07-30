@@ -40,7 +40,10 @@ function shortCommit(commit: string) {
           </span>
         </div>
         <p>
-          v{{ sdk.report.implementation.version }} · verified at
+          <template v-if="sdk.report.implementation.version">
+            v{{ sdk.report.implementation.version }} ·
+          </template>
+          verified at
           <a :href="commitUrl(sdk)"><code>{{ shortCommit(sdk.report.implementation.commit) }}</code></a>
         </p>
         <p class="evidence-links">

@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
   "schema_version": "1.0",
-  "generated_at": "2026-07-30T12:09:00Z",
+  "generated_at": "2026-07-30T12:44:56Z",
   "profile": {
     "name": "cycles-sdk-recovery",
     "version": "0.3",
-    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
-    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
   },
   "claim": "durable",
   "implementation": {
     "id": "runcycles/cycles-spring-boot-starter",
-    "commit": "bcc488e2e2d3eb62089ab1377e3f80e1da04e382",
+    "commit": "b221f2d047244c49155cb385a80b023535c6824d",
     "version": "0.3.2"
   },
   "summary": {
@@ -145,5 +145,5 @@
       "diagnostic": "native Maven test exit code 0"
     }
   ],
-  "evidence_url": "https://github.com/runcycles/cycles-spring-boot-starter/actions/runs/30459026303"
+  "evidence_url": "https://github.com/runcycles/cycles-spring-boot-starter/actions/runs/30543729380"
 }

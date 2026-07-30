@@ -105,9 +105,12 @@ export function validateRecoveryReports(sdks: RecoverySdk[]): void {
     }
     if (
       report.profile.version !== first.profile.version
+      || report.profile.commit !== first.profile.commit
       || report.profile.catalog_sha256 !== first.profile.catalog_sha256
     ) {
-      throw new Error(`${sdk.name}: profile version or catalog digest differs`)
+      throw new Error(
+        `${sdk.name}: profile commit, version, or catalog digest differs`,
+      )
     }
     if (report.implementation.id !== sdk.repository) {
       throw new Error(
@@ -117,6 +120,18 @@ export function validateRecoveryReports(sdks: RecoverySdk[]): void {
     }
     if (report.claim !== 'durable') {
       throw new Error(`${sdk.name}: expected durable claim, found ${report.claim}`)
+    }
+    if (!/^[0-9a-f]{40}$/.test(report.profile.commit)) {
+      throw new Error(`${sdk.name}: profile commit is not a full Git SHA`)
+    }
+    if (!/^[0-9a-f]{40}$/.test(report.implementation.commit)) {
+      throw new Error(`${sdk.name}: implementation commit is not a full Git SHA`)
+    }
+    if (!report.implementation.version) {
+      throw new Error(`${sdk.name}: published evidence must include an SDK version`)
+    }
+    if (!report.evidence_url) {
+      throw new Error(`${sdk.name}: published evidence must link its CI run`)
     }
     const ids = report.scenarios.map(scenario => scenario.id)
     if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {

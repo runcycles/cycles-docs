@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
   "schema_version": "1.0",
-  "generated_at": "2026-07-30T12:07:41Z",
+  "generated_at": "2026-07-30T12:43:45Z",
   "profile": {
     "name": "cycles-sdk-recovery",
     "version": "0.3",
-    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
-    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
   },
   "claim": "durable",
   "implementation": {
     "id": "runcycles/cycles-client-python",
-    "commit": "e749fd3e0c5d0a78f797617ff9cbdfd21ddcab52",
+    "commit": "a0225800abc125d5de351c2470685b573ff5bd44",
     "version": "0.5.2"
   },
   "summary": {
@@ -146,5 +146,5 @@
       "diagnostic": "native pytest exit code 0"
     }
   ],
-  "evidence_url": "https://github.com/runcycles/cycles-client-python/actions/runs/30459004359"
+  "evidence_url": "https://github.com/runcycles/cycles-client-python/actions/runs/30543724786"
 }

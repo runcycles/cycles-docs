@@ -1,17 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/runcycles/cycles-protocol/main/client-recovery/report.schema.json",
   "schema_version": "1.0",
-  "generated_at": "2026-07-30T12:08:13Z",
+  "generated_at": "2026-07-30T12:45:33Z",
   "profile": {
     "name": "cycles-sdk-recovery",
     "version": "0.3",
-    "commit": "b27d7cb38a8f2bd915dea64e4369a2b91f31008c",
-    "catalog_sha256": "9efc42c916b35809a97f6ad4317d080fa2443bc41a670910987ad6aa02835f87"
+    "commit": "bc12e1fc4b17e272614b63d5e3cb0bea408885af",
+    "catalog_sha256": "28792ca09104ba04d0a9bd6ae922e6d9581af94d14807eab2b5ad2e50ba5bd72"
   },
   "claim": "durable",
   "implementation": {
     "id": "runcycles/cycles-client-rust",
-    "commit": "8f4d8d47ece2bd837e288aa07a39440441ef0217",
+    "commit": "4d14f461bf8f50740556cb60a516b9310105f0d4",
     "version": "0.3.2"
   },
   "summary": {
@@ -142,5 +142,5 @@
       "diagnostic": "native cargo test exit code 0"
     }
   ],
-  "evidence_url": "https://github.com/runcycles/cycles-client-rust/actions/runs/30459028534"
+  "evidence_url": "https://github.com/runcycles/cycles-client-rust/actions/runs/30543736995"
 }
