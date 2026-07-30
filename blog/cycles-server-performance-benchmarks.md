@@ -97,30 +97,47 @@ Single-threaded latency doesn't tell you how the system behaves when 32 agents h
 
 **2,873 complete lifecycles per second** at 32 threads means each thread completes a full reserve-commit cycle (two HTTP calls, two Lua script executions, two auth checks) in ~11ms average.
 
-## 200-Client Reserve Fan-Out
+## Reserve Fan-Out: 1 to 200 Clients
 
-The server's v0.1.25.59 benchmark suite adds a reserve-only test at 200
-simultaneous clients. We ran three fresh-process trials on the same
-Threadripper reference host described above, with Java 21, Spring Boot 3.5.16,
-Redis 7 Alpine in Testcontainers, Docker Desktop 29.6.1, and localhost
-networking. Each trial used 50 warmups followed by a five-second measured
-window per shape.
+The server's v0.1.25.59 benchmark suite measures reserve-only latency at 1, 10,
+50, and 200 simultaneous clients. We ran every table cell in three separate
+Maven, Spring, and Testcontainers processes on the same Threadripper reference
+host described above, with Java 21, Spring Boot 3.5.16, Redis 7 Alpine,
+Docker Desktop 29.6.1, and localhost networking.
 
-| Budget shape | Reserve p99 median (range) | Throughput median (range) | Errors | Ledger mismatches |
-|---|---:|---:|---:|---:|
-| Shared tenant budget | 531.7ms (524.8–532.3ms) | 1,328.6 reserves/s (1,295.0–1,354.6) | 0 | 0 |
-| Independent agent leaf budgets | 446.8ms (438.8–455.7ms) | 1,683.4 reserves/s (1,655.8–1,687.0) | 0 | 0 |
+Each trial performs at least 50 warmup requests and reaches every logical
+client, with warmup concurrency capped at 50. It then resets the Redis ledger
+before a five-second measured window. Isolating every cell this way prevents a
+low-concurrency result from warming the next level and keeps the comparison
+independent of test-suite order.
 
-The shared shape sends all 200 clients through one tenant ledger. The isolated
+| Clients | Budget shape | Reserve p99 median (range) | Throughput median (range) | Errors | Ledger mismatches |
+|---:|---|---:|---:|---:|---:|
+| 1 | Shared tenant budget | 32.4ms (30.8–34.5ms) | 49.6 reserves/s (46.6–58.0) | 0 | 0 |
+| 1 | Independent agent leaf budgets | 32.8ms (26.4–40.7ms) | 56.2 reserves/s (52.0–60.4) | 0 | 0 |
+| 10 | Shared tenant budget | 40.6ms (40.1–46.4ms) | 430.0 reserves/s (424.8–435.8) | 0 | 0 |
+| 10 | Independent agent leaf budgets | 42.6ms (37.9–43.2ms) | 426.0 reserves/s (426.0–434.6) | 0 | 0 |
+| 50 | Shared tenant budget | 113.8ms (100.1–126.5ms) | 998.8 reserves/s (994.8–1,022.4) | 0 | 0 |
+| 50 | Independent agent leaf budgets | 117.0ms (115.4–165.6ms) | 986.0 reserves/s (817.6–990.6) | 0 | 0 |
+| 200 | Shared tenant budget | 1,325.9ms (1,131.0–1,738.1ms) | 927.8 reserves/s (886.8–954.2) | 0 | 0 |
+| 200 | Independent agent leaf budgets | 929.1ms (651.8–1,040.6ms) | 833.0 reserves/s (832.6–864.6) | 0 | 0 |
+
+The shared shape sends every client through one tenant ledger. The isolated
 shape removes that parent budget and assigns each client an independent
-agent-level leaf ledger. Across all six measured windows, 45,022 successful
+agent-level leaf ledger. Across all 24 measured windows, 70,046 successful
 reservations completed with zero request errors and zero mismatches between
 successful responses and Redis `reserved` totals.
 
-The p99 is much higher than the single-client result because 200 callers
-simultaneously queue through one application instance, its HTTP/Redis
-connection capacity, and—in the shared shape—the same atomic ledger. This is
-the saturation evidence platform teams should size against, not a latency SLO.
+At 1 and 10 clients, shared-ledger p99 remained 32–41ms in this fresh-process
+test. At 50 clients it reached 114ms. At 200 clients, both shapes saturated the
+single application instance and its HTTP/Redis capacity; the shared atomic
+ledger raised median p99 from 929ms to 1.326s, but it was not the only source
+of queueing.
+
+These are burst-saturation measurements, not typical per-action latency or a
+latency SLO. The previous 532ms homepage figure is superseded: review found
+that its 200-client cell inherited warm state from preceding suite tests and
+used sequential warmups that did not control wide-fan-out connection state.
 Deployment topology, server replicas, client pooling, and Redis placement can
 materially change the result; rerun the suite in the target environment.
 

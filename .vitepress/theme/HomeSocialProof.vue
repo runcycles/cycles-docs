@@ -39,7 +39,7 @@ const showInstalls = computed(() => installs.value > 0)
       <span class="stat-text">{{ formatted.format(installs) }}+ package installs</span>
     </span>
     <a class="stat proof-link" href="/protocol/sdk-recovery-conformance">
-      <span class="stat-text">4 SDKs &#183; durable recovery &#183; 12/12 scenarios</span>
+      <span class="stat-text">4 SDKs &#183; durable recovery &#183; 12/12 each</span>
     </a>
     <a
       class="stat proof-link"
@@ -47,8 +47,13 @@ const showInstalls = computed(() => installs.value > 0)
     >
       <span class="stat-text">Reserve-time outage: fail closed</span>
     </a>
-    <a class="stat proof-link" href="/blog/cycles-server-performance-benchmarks">
-      <span class="stat-text">200-client shared reserve p99: 532ms</span>
+    <a
+      class="stat proof-link performance-proof"
+      href="/blog/cycles-server-performance-benchmarks"
+    >
+      <span class="stat-text">
+        Shared reserve p99: 32ms (1 client) &#183; 1.33s (200-client saturation)
+      </span>
     </a>
   </p>
 </template>
@@ -90,8 +95,38 @@ const showInstalls = computed(() => installs.value > 0)
   text-decoration: none;
 }
 
-.proof-link:hover {
+.proof-link .stat-text {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.proof-link:hover,
+.proof-link:focus-visible {
   color: var(--vp-c-brand-1);
+}
+
+.proof-link:hover .stat-text,
+.proof-link:focus-visible .stat-text {
+  text-decoration-style: solid;
+}
+
+.proof-link:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+
+.performance-proof {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (min-width: 641px) {
+  .performance-proof {
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 640px) {
