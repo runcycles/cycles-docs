@@ -99,13 +99,13 @@ Single-threaded latency doesn't tell you how the system behaves when 32 agents h
 
 ## Reserve Fan-Out: 1 to 200 Clients
 
-::: info Why 7.9ms above and 32.4ms below differ
+::: info Why 7.9ms above and 34.4ms below differ
 The 7.9ms p99 is a historical v0.1.25.3 result from 200 fixed, sequential
-iterations after warmup. The 32.4ms figure is the median p99 from three
-v0.1.25.59 fresh-process trials, each running the one-client fan-out harness
-continuously for five seconds. These are different releases and sampling
-methods, not an A/B comparison. The one-client shared and isolated fan-out
-medians were 32.4ms and 32.8ms, so this evidence does not attribute the
+iterations after warmup. The current 34.4ms figure is the median p99 from
+three v0.1.25.59 fresh-process stability trials, each running the one-client
+fan-out harness continuously for five seconds. An earlier campaign measured
+32.4ms with that harness. These are different releases and sampling methods,
+not an A/B comparison, and the one-client evidence does not attribute the
 difference to scope hierarchy.
 :::
 
@@ -140,9 +140,48 @@ successful responses and Redis `reserved` totals.
 
 At 1 and 10 clients, shared-ledger p99 remained 32–41ms in this fresh-process
 test. At 50 clients it reached 114ms. At 200 clients, both shapes saturated the
-single application instance and its HTTP/Redis capacity; the shared atomic
-ledger raised median p99 from 929ms to 1.326s, but it was not the only source
-of queueing.
+single application instance and its HTTP/Redis capacity. The shared p99 was
+higher than the isolated p99 in this three-trial campaign, but the stability
+rerun below reversed that ordering. The data does not support attributing the
+difference to the shared ledger.
+
+### 200-client stability rerun
+
+Because 1.326s was unexpectedly high, we reran the exact merged server commit
+(`c74f510b1699704a0b7b3739143c3804710aa060`) with the same fresh-process
+harness. The follow-up used seven shared-ledger 200-client trials, three
+isolated-ledger 200-client trials, and three shared-ledger one-client trials.
+
+| Scenario | Trials | Reserve p95 median (range) | Reserve p99 median (range) | Throughput median (range) | Successes | Errors | Ledger mismatches |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 client, shared tenant budget | 3 | 24.6ms (23.8–27.6ms) | 34.4ms (32.7–35.4ms) | 50.6 reserves/s (46.4–51.8) | 744 | 0 | 0 |
+| 200 clients, shared tenant budget | 7 | 376.5ms (364.5–404.0ms) | 831.1ms (467.7–2,558.0ms) | 890.8 reserves/s (879.6–979.2) | 31,786 | 0 | 0 |
+| 200 clients, independent agent leaf budgets | 3 | 394.4ms (393.7–406.7ms) | 962.9ms (602.2–1,848.5ms) | 898.6 reserves/s (838.6–925.2) | 13,312 | 0 | 0 |
+
+The full shared-ledger 200-client distribution makes the tail variance
+visible:
+
+| Trial | Successes | Throughput | p50 | p95 | p99 |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 4,443 | 888.6 reserves/s | 222.2ms | 372.7ms | 467.7ms |
+| 2 | 4,616 | 923.2 reserves/s | 198.1ms | 395.2ms | 640.5ms |
+| 3 | 4,454 | 890.8 reserves/s | 188.3ms | 404.0ms | 1,157.0ms |
+| 4 | 4,407 | 881.4 reserves/s | 175.2ms | 376.5ms | 2,558.0ms |
+| 5 | 4,398 | 879.6 reserves/s | 201.4ms | 390.4ms | 831.1ms |
+| 6 | 4,896 | 979.2 reserves/s | 167.2ms | 364.5ms | 1,607.9ms |
+| 7 | 4,572 | 914.4 reserves/s | 197.5ms | 367.9ms | 717.3ms |
+
+The follow-up completed 45,842 measured reservations with zero request errors
+and zero ledger mismatches. Shared 200-client median p99 improved 37.3% from
+the first campaign, but individual p99 results still spanned 5.47×. Shared
+p95 and throughput each spanned only 1.11×, and the isolated trials also
+included a 1,848.5ms p99 spike. A single wide-fan-out p99 is therefore not
+stable enough for a homepage headline.
+
+The homepage uses the steadier, directly checkable summary: **34ms p99 at one
+client and 891 reserves/s at 200 clients, with zero errors**. The complete p99
+distribution remains here so readers can evaluate the saturation behavior
+rather than infer typical latency from one tail number.
 
 These are burst-saturation measurements, not typical per-action latency or a
 latency SLO. The previous 532ms homepage figure is superseded: review found
