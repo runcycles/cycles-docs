@@ -49,10 +49,10 @@ const showInstalls = computed(() => installs.value > 0)
     </a>
     <a
       class="stat proof-link performance-proof"
-      href="/blog/cycles-server-performance-benchmarks"
+      href="/blog/cycles-server-performance-benchmarks#reserve-fan-out-1-to-200-clients"
     >
       <span class="stat-text">
-        Shared reserve p99: 32ms (1 client) &#183; 1.33s (200-client saturation)
+        Shared reserve fan-out p99: 32ms (1 client) &#183; 1.33s (200-client saturation)
       </span>
     </a>
   </p>

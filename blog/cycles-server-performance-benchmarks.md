@@ -99,6 +99,16 @@ Single-threaded latency doesn't tell you how the system behaves when 32 agents h
 
 ## Reserve Fan-Out: 1 to 200 Clients
 
+::: info Why 7.9ms above and 32.4ms below differ
+The 7.9ms p99 is a historical v0.1.25.3 result from 200 fixed, sequential
+iterations after warmup. The 32.4ms figure is the median p99 from three
+v0.1.25.59 fresh-process trials, each running the one-client fan-out harness
+continuously for five seconds. These are different releases and sampling
+methods, not an A/B comparison. The one-client shared and isolated fan-out
+medians were 32.4ms and 32.8ms, so this evidence does not attribute the
+difference to scope hierarchy.
+:::
+
 The server's v0.1.25.59 benchmark suite measures reserve-only latency at 1, 10,
 50, and 200 simultaneous clients. We ran every table cell in three separate
 Maven, Spring, and Testcontainers processes on the same Threadripper reference
