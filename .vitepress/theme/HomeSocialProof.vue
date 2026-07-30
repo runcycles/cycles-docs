@@ -52,7 +52,7 @@ const showInstalls = computed(() => installs.value > 0)
       href="/blog/cycles-server-performance-benchmarks#reserve-fan-out-1-to-200-clients"
     >
       <span class="stat-text">
-        Shared reserve fan-out p99: 32ms (1 client) &#183; 1.33s (200-client saturation)
+        Shared reserve: 34ms p99 (1 client) &#183; 891 reserves/s (200 clients, 0 errors)
       </span>
     </a>
   </p>
