@@ -1,6 +1,6 @@
 ---
 title: "TypeScript Client Configuration Reference"
-description: "Complete reference for all configuration options in the runcycles TypeScript client, including connection, retry, and timeout settings."
+description: "Complete reference for all configuration options in the runcycles TypeScript client, including connection, durable settlement recovery, retry, and timeout settings."
 ---
 
 # TypeScript Client Configuration Reference
@@ -44,7 +44,7 @@ Node's built-in `fetch` does not distinguish connection timeout from read timeou
 
 ### Retry configuration
 
-Controls the commit retry engine for transient failures.
+Controls the commit retry engine and bounded drain.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -53,10 +53,11 @@ Controls the commit retry engine for transient failures.
 | `retryInitialDelay` | `number` | `500` | Delay before the first retry (milliseconds) |
 | `retryMultiplier` | `number` | `2.0` | Backoff multiplier between retries |
 | `retryMaxDelay` | `number` | `30000` | Maximum delay between retries (milliseconds) |
+| `retryFlushTimeout` | `number` | `10000` | Default bound used by `flushPendingCommits()` (milliseconds); `0` disables waiting |
 
 #### How retry works
 
-When a commit fails with a transport error or 5xx response, the retry engine schedules a retry using exponential backoff:
+When settlement fails transiently, the retry engine schedules a same-key retry using exponential backoff:
 
 ```
 Attempt 1: wait 500ms
@@ -66,9 +67,24 @@ Attempt 4: wait 4000ms
 Attempt 5: wait 8000ms
 ```
 
-With the default settings the backoff never reaches the cap; `retryMaxDelay` only kicks in once the exponential delay would exceed 30000ms (e.g. with a higher `retryMaxAttempts`).
+With the default settings the backoff never reaches the cap; `retryMaxDelay` only kicks in once the exponential delay would exceed 30000ms (for example, with a higher `retryMaxAttempts`).
 
-Non-retryable errors (4xx responses) are not retried. Retries are fire-and-forget — the guarded function returns immediately while the commit is retried in the background.
+HTTP 429 honors a valid `Retry-After` floor, capped by the SDK's bounded-delay policy. Authentication failures and unclassifiable 4xx responses stop the current retry run but retain the durable record. A genuine, understood client rejection stops retrying and removes the record.
+
+Retries run in the background, but they are not memory-only: known actual usage is journaled before the first settlement request.
+
+### Durable journal
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `journalEnabled` | `boolean` | `true` | Persist unresolved known-actual settlement across process restarts |
+| `journalDir` | `string \| undefined` | `undefined` | Journal base directory; `undefined` uses `~/.runcycles/commit-journal` |
+
+A schema-valid HTTP `200` commit or schema-valid HTTP `201` event proves success. Ambiguous outcomes, retry exhaustion, authentication failures, and unclassifiable 4xx responses remain journaled for replay. An expired commit switches to `POST /v1/events` with the original idempotency key.
+
+The journal is partitioned by server and principal. Configure `tenant` so pending records remain discoverable after API-key rotation. Journal records do not store API keys, but they contain settlement bodies and metadata; protect the directory as sensitive application state.
+
+Call `flushPendingCommits(timeoutMs?)` during graceful shutdown. The timeout is process-wide across registered retry engines; unfinished records stay on disk for the next run.
 
 ## Programmatic configuration
 
@@ -95,6 +111,11 @@ const config = new CyclesConfig({
   retryInitialDelay: 500,
   retryMultiplier: 2.0,
   retryMaxDelay: 30000,
+  retryFlushTimeout: 10000,
+
+  // Durable settlement journal
+  journalEnabled: true,
+  journalDir: undefined, // ~/.runcycles/commit-journal
 });
 ```
 
@@ -123,6 +144,9 @@ const config = CyclesConfig.fromEnv();
 | `CYCLES_RETRY_INITIAL_DELAY` | `retryInitialDelay` | No |
 | `CYCLES_RETRY_MULTIPLIER` | `retryMultiplier` | No |
 | `CYCLES_RETRY_MAX_DELAY` | `retryMaxDelay` | No |
+| `CYCLES_RETRY_FLUSH_TIMEOUT` | `retryFlushTimeout` | No |
+| `CYCLES_JOURNAL_ENABLED` | `journalEnabled` | No |
+| `CYCLES_JOURNAL_DIR` | `journalDir` | No |
 
 A custom prefix can be passed: `CyclesConfig.fromEnv("MY_PREFIX_")` reads `MY_PREFIX_BASE_URL`, `MY_PREFIX_API_KEY`, etc.
 
@@ -196,6 +220,8 @@ const config = new CyclesConfig({
 });
 ```
 
+This disables active background retries, not durability. Failed known-actual settlement remains journaled for replay on a later run while `journalEnabled` is `true`. Disable both only when the application supplies equivalent durable settlement recovery.
+
 ## Aggressive retry for critical commits
 
 ```typescript
@@ -214,4 +240,5 @@ const config = new CyclesConfig({
 - [Getting Started with the TypeScript Client](/quickstart/getting-started-with-the-typescript-client) — quick start guide
 - [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) — error handling patterns
 - [Using the Client Programmatically](/how-to/using-the-cycles-client-programmatically) — direct client usage
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — journal, replay, expiry fallback, and guarantee boundary
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — server-side properties

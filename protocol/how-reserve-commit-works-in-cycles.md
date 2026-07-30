@@ -92,7 +92,7 @@ If the actual amount is lower than the reserved amount, the unused portion is re
 If work is canceled or fails before any usage occurs, the runtime releases the reservation explicitly, returning the full reserved amount to the budget pool.
 
 ::: tip SDK behavior
-All official Cycles SDKs — Spring [`@Cycles`](https://github.com/runcycles/cycles-spring-boot-starter), TypeScript [`withCycles`](https://github.com/runcycles/cycles-client-typescript), and Python [`@cycles`](https://github.com/runcycles/cycles-client-python) — implement this lifecycle automatically: commit on success, release on any exception, and retry on transient commit failures. See each SDK's README for the complete budget-outcome-by-scenario table.
+The official Python `@cycles`, TypeScript `withCycles`, Spring `@Cycles`, and Rust `ReservationGuard` helpers automate this lifecycle. When actual usage is known, current releases persist settlement before the first commit request, reuse the same idempotency key after ambiguous outcomes, and recover an expired commit through `POST /v1/events`. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
 :::
 
 ## A simple example
@@ -143,7 +143,7 @@ That causes two problems:
 - budgets appear tighter than they really are
 - future work is denied unnecessarily
 
-When actual usage is committed, the protocol automatically releases the unused remainder. But when work is canceled or fails before committing, the runtime must explicitly release the reservation.
+When actual usage is committed, the protocol automatically releases the unused remainder. When work is canceled or fails before any usage occurs, the runtime must explicitly release the reservation.
 
 Explicit release is especially important for:
 
@@ -285,7 +285,9 @@ A usable budget system has to handle these cases explicitly.
 
 That is why Cycles treats reserve, commit, and release as separate lifecycle events rather than assuming execution is always clean and synchronous.
 
-This lets runtimes manage incomplete work more safely and reconcile state intentionally.
+Current SDK lifecycle helpers durably preserve settlement once actual usage is known. They write the unresolved settlement before its first commit request, replay ambiguous outcomes with the original idempotency key, and use a direct event if the reservation expires before commit can land.
+
+That guarantee has a hard boundary: if the process dies before the downstream operation returns an actual amount, the SDK has no amount to recover. Applications that require convergence across that boundary must durably checkpoint provider receipts or actual usage before acknowledging the downstream operation.
 
 ## Mental model
 

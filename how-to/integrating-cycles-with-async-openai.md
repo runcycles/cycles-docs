@@ -26,7 +26,7 @@ The same lifecycle composes against other Rust LLM clients (Anthropic, Bedrock, 
 
 ```toml
 [dependencies]
-runcycles = "0.2"
+runcycles = "0.3"
 async-openai = { version = "0.38", default-features = false, features = ["chat-completion", "rustls"] }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"                # for stream consumption

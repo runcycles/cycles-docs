@@ -16,6 +16,8 @@ The `withCycles` HOF wraps any async function in a reserve → execute → commi
 3. **After the function returns:** commits actual usage and releases any unused remainder
 4. **If the function throws:** releases the reservation to return budget to the pool
 
+Once actual usage is known, the current client persists settlement before the first commit request. Ambiguous outcomes replay with the same key, and an expired commit is recovered through `POST /v1/events`. The guarantee cannot cover a process death before actual usage is known; see [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
+
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
 - **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
@@ -562,12 +564,13 @@ For each `withCycles`-guarded function call:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: exception is thrown, function does not run
-5. Heartbeat extension is scheduled (background, at half the TTL interval, minimum 1s)
+5. Heartbeat extension is scheduled from server-authoritative `remaining_ttl_ms` when available, with a bounded fallback for older servers
 6. Function executes
 7. Actual usage is evaluated (function, fixed value, or estimate)
-8. Commit is sent with actual amount and optional metrics
+8. Known actual usage is durably journaled, then commit is sent with the original idempotency key and optional metrics
 9. Heartbeat is stopped
-10. If function threw: reservation is released instead of committed
+10. If commit remains ambiguous, the record stays queued for same-key replay; if the reservation expired, recovery switches to `POST /v1/events`
+11. If function threw: reservation is released instead of committed
 
 ## Next steps
 

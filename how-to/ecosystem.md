@@ -224,7 +224,7 @@ The official Cycles TypeScript client for Node.js and browser environments.
 
 [![crates.io](https://img.shields.io/crates/v/runcycles?label=crates.io&color=555&style=flat-square)](https://crates.io/crates/runcycles)
 
-The official Cycles Rust client (currently 0.2.7). Async-first, built for budget-aware agents and services in Rust.
+The official Cycles Rust client (currently 0.3.2). Async-first, built for budget-aware agents and services in Rust.
 
 - [runcycles on crates.io](https://crates.io/crates/runcycles)
 - [Rust quickstart](/quickstart/getting-started-with-the-rust-client)

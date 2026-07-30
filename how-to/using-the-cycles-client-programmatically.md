@@ -9,6 +9,10 @@ The decorator / annotation handles most use cases automatically. But sometimes y
 
 The Python `CyclesClient`, Java `CyclesClient`, and TypeScript `CyclesClient` provide the core runtime operations: decide; reserve, commit, release, and extend; reservation list/get; balances; and usage events. They do not expose helpers for every public or preview endpoint, such as evidence retrieval and JWKS discovery; use direct HTTP for an endpoint your client's current API does not cover.
 
+::: warning Low-level clients own settlement durability
+Programmatic reserve/commit calls do not give the SDK lifecycle helper enough context to persist an application-owned settlement before its first request. Once your operation knows its actual usage, durably store the exact commit or event body and idempotency key before sending it. Reuse that key after ambiguous outcomes, and switch an expired commit to `POST /v1/events`. The Python decorator/stream helper, TypeScript `withCycles`/stream handle, Spring `@Cycles`, and async Rust `ReservationGuard` implement this recovery profile automatically.
+:::
+
 ## Getting the client
 
 In Java (Spring Boot Starter), `CyclesClient` is auto-configured and available for injection.
@@ -655,3 +659,4 @@ async with AsyncCyclesClient(config) as client:
 - [Error Handling in TypeScript](/how-to/error-handling-patterns-in-typescript) — TypeScript exception hierarchy and patterns
 - [Error Handling in Python](/how-to/error-handling-patterns-in-python) — Python exception hierarchy and patterns
 - [Error Handling Patterns](/how-to/error-handling-patterns-in-cycles-client-code) — general error handling patterns
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — durable lifecycle-helper guarantees and the low-level-client boundary

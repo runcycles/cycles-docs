@@ -166,7 +166,7 @@ result = run_agent_with_budget(
 ```
 
 ::: info Crash safety
-If the agent crashes before committing or releasing, the reservation expires automatically after `ttl_ms` and the held budget returns to the pool. See [TTL, Grace Period, and Extend](/protocol/reservation-ttl-grace-period-and-extend-in-cycles).
+If the agent crashes before committing or releasing, the reservation expires automatically after `ttl_ms` and the held budget returns to the pool. That protects availability; it does not record provider spend that already occurred. This example uses low-level client calls, so persist the exact known-actual settlement and idempotency key before sending commit, then replay it or use the expired-commit event fallback. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
 :::
 
 ## Adding tool-level budget checks
@@ -263,7 +263,7 @@ With this pattern in place:
 - **Per-tenant isolation** — `Subject(tenant="acme")` means each customer's budget is tracked and enforced independently
 - **Graceful degradation** — `ALLOW_WITH_CAPS` lets agents downgrade instead of stopping cold
 - **Automatic reconciliation** — committing less than the reserved amount releases the difference back to the pool
-- **Crash safety** — if the agent crashes before committing, the reservation expires automatically and budget is released
+- **Reservation crash safety** — an abandoned hold expires automatically; application-owned durable settlement is still required for actual usage known before the crash
 
 ## Next steps
 

@@ -65,7 +65,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.58
+    image: ghcr.io/runcycles/cycles-server:0.1.25.59
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis
@@ -237,7 +237,7 @@ services:
         condition: service_healthy
 
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.58
+    image: ghcr.io/runcycles/cycles-server:0.1.25.59
     ports:
       - "7878:7878"
     environment:
@@ -286,7 +286,7 @@ docker compose up -d
 ```
 
 ::: tip Version pinning
-The examples above pin the current compatible images: admin `0.1.25.55`, server `0.1.25.58`, and events `0.1.25.25`. Check the [current version matrix](/changelog#current-versions) before deploying. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
+The examples above pin the current compatible images: admin `0.1.25.55`, server `0.1.25.59`, and events `0.1.25.25`. Check the [current version matrix](/changelog#current-versions) before deploying. Admin, runtime, and events ship on independent release cadences — bumping one does not require bumping the others.
 :::
 
 Verify all services are healthy:
@@ -532,7 +532,7 @@ Add the dependency:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.1.1</version>
+    <version>0.3.2</version>
 </dependency>
 ```
 

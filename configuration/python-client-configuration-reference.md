@@ -1,6 +1,6 @@
 ---
 title: "Python Client Configuration Reference"
-description: "Complete reference for all configuration options in the runcycles Python client, including connection, retry, and timeout settings."
+description: "Complete reference for all configuration options in the runcycles Python client, including connection, durable settlement recovery, retry, and timeout settings."
 ---
 
 # Python Client Configuration Reference
@@ -40,7 +40,7 @@ These fields set default values for the Subject used in `@cycles` decorators. Th
 
 ### Retry configuration
 
-Controls the commit retry engine for transient failures.
+Controls the commit retry engine and its bounded process-exit drain.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -49,10 +49,11 @@ Controls the commit retry engine for transient failures.
 | `retry_initial_delay` | `float` | `0.5` | Delay before the first retry (seconds) |
 | `retry_multiplier` | `float` | `2.0` | Backoff multiplier between retries |
 | `retry_max_delay` | `float` | `30.0` | Maximum delay between retries (seconds) |
+| `retry_flush_timeout` | `float` | `10.0` | Process-wide wait at interpreter exit for in-flight settlement retries (seconds); `0` disables the wait |
 
 #### How retry works
 
-When a commit fails with a transport error or 5xx response, the retry engine schedules a retry using exponential backoff:
+When settlement fails transiently, the retry engine schedules a same-key retry using exponential backoff:
 
 ```
 Attempt 1: wait 0.5s
@@ -62,7 +63,20 @@ Attempt 4: wait 4.0s
 Attempt 5: wait 8.0s (capped at max_delay)
 ```
 
-Non-retryable errors (4xx responses) are not retried.
+HTTP 429 honors a valid `Retry-After` floor, capped by the SDK's bounded-delay policy. Authentication failures and unclassifiable 4xx responses stop the current retry run but retain the durable record. A genuine, understood client rejection stops retrying and removes the record.
+
+### Durable journal
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `journal_enabled` | `bool` | `True` | Persist unresolved known-actual settlement across process restarts |
+| `journal_dir` | `str \| None` | `None` | Journal base directory; `None` uses `~/.runcycles/commit-journal` |
+
+The lifecycle helpers persist known actual usage before the first commit request. A schema-valid HTTP `200` commit or schema-valid HTTP `201` event proves success; ambiguous outcomes, retry exhaustion, authentication failures, and unclassifiable 4xx responses remain journaled for replay. An expired commit switches to `POST /v1/events` with the original idempotency key.
+
+The journal is partitioned by server and principal. Configure `tenant` so pending records remain discoverable after API-key rotation. Journal records do not store API keys, but they do contain settlement bodies and metadata; protect the directory as sensitive application state.
+
+See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) for the guarantee boundary and recovery choreography.
 
 ## Programmatic configuration
 
@@ -89,6 +103,11 @@ config = CyclesConfig(
     retry_initial_delay=0.5,
     retry_multiplier=2.0,
     retry_max_delay=30.0,
+    retry_flush_timeout=10.0,
+
+    # Durable settlement journal
+    journal_enabled=True,
+    journal_dir=None,  # ~/.runcycles/commit-journal
 )
 ```
 
@@ -117,6 +136,9 @@ config = CyclesConfig.from_env()
 | `CYCLES_RETRY_INITIAL_DELAY` | `retry_initial_delay` | No |
 | `CYCLES_RETRY_MULTIPLIER` | `retry_multiplier` | No |
 | `CYCLES_RETRY_MAX_DELAY` | `retry_max_delay` | No |
+| `CYCLES_RETRY_FLUSH_TIMEOUT` | `retry_flush_timeout` | No |
+| `CYCLES_JOURNAL_ENABLED` | `journal_enabled` | No |
+| `CYCLES_JOURNAL_DIR` | `journal_dir` | No |
 
 A custom prefix can be passed: `CyclesConfig.from_env(prefix="MY_PREFIX_")`.
 
@@ -187,6 +209,8 @@ config = CyclesConfig(
 )
 ```
 
+This disables active background retries, not durability. Failed known-actual settlement remains journaled for replay on a later run while `journal_enabled=True`. Disable both only when the application supplies equivalent durable settlement recovery.
+
 ## Aggressive retry for critical commits
 
 ```python
@@ -205,4 +229,5 @@ config = CyclesConfig(
 - [Getting Started with the Python Client](/quickstart/getting-started-with-the-python-client) — quick start guide
 - [Error Handling in Python](/how-to/error-handling-patterns-in-python) — exception handling patterns
 - [Using the Client Programmatically](/how-to/using-the-cycles-client-programmatically) — direct client usage
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — journal, replay, expiry fallback, and guarantee boundary
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — server-side properties

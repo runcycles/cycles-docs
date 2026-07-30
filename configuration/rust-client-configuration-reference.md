@@ -9,7 +9,7 @@ head:
 
 # Rust Client Configuration Reference
 
-Complete reference for all configuration options in the `runcycles` Rust client. Targets `runcycles >= 0.2.0`. The async client is the default; the blocking variant is available behind a feature flag.
+Complete reference for all configuration options in the `runcycles` Rust client. Targets `runcycles >= 0.3.2`. The async client is the default; the blocking variant is available behind a feature flag.
 
 For the introductory walkthrough, see the [Rust Client Quickstart](/quickstart/getting-started-with-the-rust-client). For runtime error patterns, see [Error Handling in Rust](/how-to/error-handling-patterns-in-rust).
 
@@ -26,7 +26,7 @@ The `CyclesConfig` struct holds all client configuration. It can be constructed 
 
 ### Subject defaults
 
-These fields hold subject values that are stored on the config and available via `client.config()`. **They are not auto-applied to per-request subjects in 0.2.x** — see [Subject defaults: what they do (and don't)](#subject-defaults-what-they-do-and-don-t) below for the actual behavior.
+These fields hold subject values that are stored on the config and available via `client.config()`. **They are not auto-applied to per-request subjects in 0.3.x** — see [Subject defaults: what they do (and don't)](#subject-defaults-what-they-do-and-don-t) below for the actual behavior.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -48,7 +48,7 @@ These fields hold subject values that are stored on the config and available via
 
 ### Retry configuration
 
-In `runcycles` 0.2.7+, `ReservationGuard::commit()` retries retryable failures inline: transport errors, 5xx responses, and API error codes that `Error::is_retryable()` classifies as transient. Retries reuse the original `CommitRequest` and idempotency key, while the heartbeat keeps the reservation alive until the final outcome. No retry continues after `commit()` returns.
+`ReservationGuard::commit()` retries transient failures inline and reuses the original `CommitRequest` and idempotency key. HTTP 429 honors `Retry-After`. The heartbeat remains active while inline retries run.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -58,7 +58,20 @@ In `runcycles` 0.2.7+, `ReservationGuard::commit()` retries retryable failures i
 | `retry_multiplier` | `f64` | `2.0` | Exponential backoff multiplier between retries |
 | `retry_max_delay` | `Duration` | `30_000 ms` | Maximum delay between retries |
 
-Under a persistent outage, `commit()` waits for the configured backoff schedule before returning the final error. Reduce the retry limits or set `retry_enabled(false)` for fail-fast, single-attempt commits. Use `Error::is_retryable()` and `retry_after()` when deciding how to handle the final result or errors from operations other than guarded commit. See [Error Handling in Rust](/how-to/error-handling-patterns-in-rust).
+Known actual usage is durably journaled before the first commit request. If the retry schedule is exhausted, authentication fails, or a client response remains ambiguous, `commit()` returns `Error::CommitPending` and leaves the record queued for same-key replay. Do not compensate with a different key.
+
+### Durable journal
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `journal_enabled` | `bool` | `true` | Persist unresolved known-actual settlement across process restarts |
+| `journal_dir` | `Option<PathBuf>` | `None` | Journal base directory; `None` uses `~/.runcycles/commit-journal` |
+
+Only a schema-valid HTTP `200` commit or schema-valid HTTP `201` event proves success. If commit returns HTTP 410 or `RESERVATION_EXPIRED`, the guard switches the journal to event mode before calling `POST /v1/events` with the original key. Unresolved records replay automatically when a client is created inside a Tokio runtime.
+
+Use `flush_pending_commits_with_timeout(...)` for a bounded startup or graceful-shutdown drain. The blocking client exposes the same operation. Timed-out or failed records remain on disk.
+
+The journal is partitioned by server and principal. Configure `tenant` so pending records remain discoverable after API-key rotation. API keys are not stored in records, but settlement bodies and metadata are; protect the directory as sensitive application state.
 
 ## Programmatic configuration
 
@@ -82,6 +95,8 @@ let client = CyclesClient::builder(
 .retry_initial_delay(Duration::from_millis(500))
 .retry_multiplier(2.0)
 .retry_max_delay(Duration::from_secs(30))
+.journal_enabled(true)
+.journal_dir("/var/lib/my-app/cycles-commit-journal")
 .build();
 ```
 
@@ -107,6 +122,8 @@ let config = CyclesConfig {
     retry_initial_delay: Duration::from_millis(500),
     retry_multiplier: 2.0,
     retry_max_delay: Duration::from_secs(30),
+    journal_enabled: true,
+    journal_dir: None,
 };
 
 let client = CyclesClient::new(config);
@@ -141,6 +158,8 @@ let config = CyclesConfig::from_env().expect("missing required CYCLES_* env vars
 | `CYCLES_RETRY_INITIAL_DELAY` | `retry_initial_delay` | milliseconds (integer) | No |
 | `CYCLES_RETRY_MULTIPLIER` | `retry_multiplier` | float | No |
 | `CYCLES_RETRY_MAX_DELAY` | `retry_max_delay` | milliseconds (integer) | No |
+| `CYCLES_JOURNAL_ENABLED` | `journal_enabled` | `true` / `false` | No |
+| `CYCLES_JOURNAL_DIR` | `journal_dir` | filesystem path | No |
 
 ::: tip Custom env var prefix
 The Rust client supports loading from a custom prefix, which is useful when a single process holds connections to multiple Cycles instances:
@@ -155,7 +174,7 @@ The default `from_env()` is equivalent to `from_env_with_prefix("CYCLES_")`.
 
 ## Subject defaults: what they do (and don't)
 
-The subject fields on `CyclesConfig` (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) are stored on the config and accessible via `client.config()`, but the high-level helpers in `runcycles` 0.2.x **do not automatically apply them** to the per-request `Subject`. Each `with_cycles()` / `client.reserve()` / `client.create_reservation()` call uses the `Subject` you pass in explicitly (or `Subject::default()` if you pass none).
+The subject fields on `CyclesConfig` (`tenant`, `workspace`, `app`, `workflow`, `agent`, `toolset`) are stored on the config and accessible via `client.config()`, but the high-level helpers in `runcycles` 0.3.x **do not automatically apply them** to the per-request `Subject`. Each `with_cycles()` / `client.reserve()` / `client.create_reservation()` call uses the `Subject` you pass in explicitly (or `Subject::default()` if you pass none).
 
 If you want a single tenant applied to every request, build the subject once and reuse it:
 
@@ -208,7 +227,7 @@ For applications running in synchronous contexts (CLI tools, sync HTTP framework
 ```toml
 # Cargo.toml
 [dependencies]
-runcycles = { version = "0.2", features = ["blocking"] }
+runcycles = { version = "0.3", features = ["blocking"] }
 ```
 
 ```rust
@@ -221,7 +240,7 @@ let resp = client.get_balances(&BalanceParams {
 })?;
 ```
 
-The blocking client exposes the low-level protocol methods only — `create_reservation`, `create_reservation_with_metadata`, `commit_reservation`, `release_reservation`, `extend_reservation`, `decide`, `create_event`, `list_reservations`, `get_reservation`, `get_balances` — plus a `config()` accessor. The high-level `with_cycles()` helper and the `ReservationGuard` RAII pattern are **async-only** in 0.2.x; blocking callers compose the reserve / commit / release sequence themselves.
+The blocking client exposes the low-level protocol methods — `create_reservation`, `create_reservation_with_metadata`, `commit_reservation`, `release_reservation`, `extend_reservation`, `decide`, `create_event`, `list_reservations`, `get_reservation`, `get_balances` — plus `config()` and pending-journal flush operations. The high-level `with_cycles()` helper and `ReservationGuard` RAII pattern are async-only in 0.3.x; blocking callers compose the reserve / commit / release sequence and must persist their application-owned settlement requests themselves.
 
 ::: warning Don't mix runtimes
 The blocking client must not be called from inside a Tokio runtime (it will block the executor). For most applications using `tokio::main`, the async client is correct. The blocking variant is for genuinely synchronous contexts.
@@ -245,6 +264,8 @@ The blocking client must not be called from inside a Tokio runtime (it will bloc
 | `.retry_initial_delay(d)` | commit retry | Sets the delay before the first retry |
 | `.retry_multiplier(n)` | commit retry | Sets the exponential backoff multiplier |
 | `.retry_max_delay(d)` | commit retry | Caps the delay between retries |
+| `.journal_enabled(b)` | durability | Enables or disables the pending-settlement journal |
+| `.journal_dir(path)` | durability | Sets the journal base directory |
 | `.http_client(c)` | HTTP | Provide a custom `reqwest::Client`; overrides timeouts |
 | `.build()` | finalizes | Returns `CyclesClient` (async) |
 | `.build_blocking()` | finalizes | Returns `Result<BlockingCyclesClient, Error>`; requires the `blocking` feature |
@@ -254,5 +275,6 @@ The blocking client must not be called from inside a Tokio runtime (it will bloc
 - [Rust Client Quickstart](/quickstart/getting-started-with-the-rust-client) — installation and first [reservation](/glossary#reservation)
 - [Error Handling in Rust](/how-to/error-handling-patterns-in-rust) — retry, recovery, and [graceful degradation](/glossary#graceful-degradation)
 - [Integrating Cycles with Rust](/how-to/integrating-cycles-with-rust) — multi-step flows, streaming, framework integration
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — journal, replay, expiry fallback, and guarantee boundary
 - [Server Configuration Reference](/configuration/server-configuration-reference-for-cycles) — server-side properties
 - [How Reserve-Commit Works](/protocol/how-reserve-commit-works-in-cycles) — the underlying lifecycle

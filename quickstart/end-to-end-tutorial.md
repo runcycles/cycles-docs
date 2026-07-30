@@ -90,7 +90,7 @@ services:
     depends_on:
       redis: { condition: service_healthy }
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.58
+    image: ghcr.io/runcycles/cycles-server:0.1.25.59
     ports: ["7878:7878"]
     environment:
       REDIS_HOST: redis

@@ -27,7 +27,7 @@ The `runcycles` crate provides three levels of budget enforcement for any async 
 2. **`ReservationGuard`** — RAII guard for manual control (streaming, multi-step workflows)
 3. **`CyclesClient`** — low-level programmatic API for full control
 
-All three share the same lifecycle:
+The two high-level integrations own this lifecycle; the low-level client exposes the same protocol operations for you to compose:
 
 1. **Before the operation:** evaluates the estimate, creates a reservation, and checks the decision
 2. **While the operation runs:** maintains the reservation with automatic heartbeat extensions
@@ -86,11 +86,13 @@ Or add to `Cargo.toml`:
 
 ```toml
 [dependencies]
-runcycles = "0.2"
+runcycles = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
 Requires Rust 1.88+. Dependencies (`reqwest`, `serde`, `tokio`) are installed automatically.
+
+`ReservationGuard::commit()` persists known actual usage before its first settlement request. Ambiguous outcomes remain queued with the original idempotency key, and expired commits recover through `POST /v1/events`. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
 
 ## Configuration
 
@@ -428,9 +430,9 @@ For each `with_cycles()` call or `ReservationGuard`:
 2. Reservation is created on the Cycles server
 3. Decision is checked (ALLOW / ALLOW_WITH_CAPS / DENY)
 4. If DENY: `Error::BudgetExceeded` is returned, operation does not run
-5. Heartbeat extension is scheduled (background tokio task at TTL/2, minimum 1s)
+5. Heartbeat extension is scheduled from server-authoritative `remaining_ttl_ms` when present, with a best-effort fallback for older servers
 6. Operation executes
-7. On success: commit is sent with actual amount and optional metrics
+7. On success: known actual usage is journaled, then commit is sent with optional metrics
 8. On error: reservation is released to return budget
 9. Heartbeat is cancelled
 10. If guard is dropped without commit/release: best-effort release via `tokio::spawn`

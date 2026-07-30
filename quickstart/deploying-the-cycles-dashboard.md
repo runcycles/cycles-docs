@@ -123,7 +123,7 @@ services:
   # Its ADMIN_API_KEY must match cycles-admin's so admin-on-behalf-of calls
   # authenticate on both sides.
   cycles-server:
-    image: ghcr.io/runcycles/cycles-server:0.1.25.58
+    image: ghcr.io/runcycles/cycles-server:0.1.25.59
     restart: unless-stopped
     environment:
       REDIS_HOST: redis

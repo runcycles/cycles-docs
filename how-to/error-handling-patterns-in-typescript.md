@@ -88,6 +88,8 @@ if (response.isTransportError) {
 
 `withCycles` wraps a function with the full reserve → execute → commit lifecycle. If the reservation is denied, it throws before your function runs:
 
+In `runcycles` 0.4.2+, known actual usage is journaled before the first commit request. Ambiguous settlement, authentication failure, and retry exhaustion retain the same-key record for replay; an expired commit switches to a durable `/v1/events` fallback. These commit-time recovery paths are reported operationally rather than converted into a second execution of the guarded function.
+
 ```typescript
 import { withCycles, BudgetExceededError, CyclesProtocolError } from "runcycles";
 
@@ -306,3 +308,4 @@ try {
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — strategies for handling budget constraints
 - [Getting Started with the TypeScript Client](/quickstart/getting-started-with-the-typescript-client) — TypeScript client setup
 - [Testing with Cycles](/how-to/testing-with-cycles) — testing patterns for Cycles-governed code
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — durable replay, expiry fallback, and guarantee boundary

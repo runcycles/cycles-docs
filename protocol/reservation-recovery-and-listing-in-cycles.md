@@ -203,16 +203,16 @@ This shows all committed reservations for that workflow, which helps trace what 
 
 ### Client crash recovery
 
-When a client restarts after a crash:
+Current official SDK lifecycle helpers replay known-actual settlement from their durable journal automatically. The manual sequence below applies to raw clients and application-owned lifecycles:
 
-1. Check local state for any in-progress reservation IDs
-2. For any missing IDs, query by the idempotency key that was generated before the reservation
+1. Check durable local state for in-progress reservation IDs, exact settlement bodies, and idempotency keys
+2. For any missing reservation IDs, query by the idempotency key that was generated before the reservation
 3. For each recovered reservation, check its status:
    - **ACTIVE**: commit or release depending on whether work completed
-   - **EXPIRED**: the budget was already returned; create a new reservation if work needs to continue
+   - **EXPIRED**: if work already completed and actual usage is known, record it through `POST /v1/events` with the stored settlement key; if work did not run, no settlement is due; create a new reservation only before starting new work
    - **COMMITTED** or **RELEASED**: no action needed
 
-This recovery pattern depends on the client generating and persisting idempotency keys before creating reservations.
+This recovery pattern depends on persisting idempotency keys before creating reservations and persisting known-actual settlement before its first request. Never compensate with a fresh key while an original request remains ambiguous.
 
 ## Error conditions
 
@@ -250,3 +250,4 @@ To explore the Cycles stack:
 - Integrate with Python using the [Python Client](/quickstart/getting-started-with-the-python-client)
 - Integrate with TypeScript using the [TypeScript Client](/quickstart/getting-started-with-the-typescript-client)
 - Integrate with Spring Boot or Spring AI using the [Spring Boot starter](https://github.com/runcycles/cycles-spring-boot-starter) or the [Spring AI starter](https://github.com/runcycles/cycles-spring-ai-starter)
+- Review [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability)

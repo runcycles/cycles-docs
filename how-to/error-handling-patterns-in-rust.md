@@ -24,6 +24,8 @@ Error
 ├── Transport(reqwest::Error)        — network failure, timeout, DNS
 ├── Api { status, code, message, … } — server returned an error response
 ├── BudgetExceeded { message, … }    — budget insufficient (HTTP 409)
+├── CommitPending { reservation_id, last_error } — settlement is durably queued
+├── CommitRecoveryFailed { … }       — fallback failed without durable journaling
 ├── Deserialization(serde_json::Error) — response body parse failure
 ├── Config(String)                    — invalid client configuration
 └── Validation(String)                — invalid request (caught before sending)
@@ -180,6 +182,8 @@ guard.commit(commit_req).await?;
 ## Handling API errors
 
 `Error::Api` covers all non-budget server errors:
+
+`ReservationGuard::commit()` handles an expired commit itself: it switches the durable record to event mode and calls `POST /v1/events`. The HTTP 410 arm below therefore applies to low-level client calls, where the application owns persistence and event construction.
 
 ```rust
 match result {
@@ -338,7 +342,8 @@ impl From<Error> for AppError {
 | `BudgetExceeded` (409) | Maybe | Budget may free up. Check `retry_after`. Retry or degrade. |
 | `BudgetExceeded` carrying a debt message (409 `DEBT_OUTSTANDING`) | Wait | Requires operator to fund the scope; the client collapses this code into `BudgetExceeded`. |
 | `BudgetExceeded` carrying an overdraft message (409 `OVERDRAFT_LIMIT_EXCEEDED`) | Wait | Requires operator intervention; also collapsed into `BudgetExceeded`. |
-| `Api` with `ReservationExpired` (410) | No | Create a new reservation or record as event. |
+| `CommitPending` | Replay queued | Do not compensate with a new key; drain or allow startup replay. |
+| `Api` with `ReservationExpired` (410) | No | Guard commit recovers automatically; low-level callers persist and record the known spend as a same-key event. |
 | `Api` with `ReservationFinalized` (409) | No | Already settled. No action needed. |
 | `Api` with 5xx | Yes | Retry with exponential backoff. |
 | `Transport` | Yes | Retry with exponential backoff. |
@@ -366,12 +371,14 @@ Use `error.is_retryable()` to check programmatically.
 4. **Check `error.is_retryable()`** before implementing retry logic
 5. **Check `error.retry_after()`** before choosing your own delay
 6. **Log `error.request_id()`** for debugging server-side issues
-7. **Handle reservation expiry** by recording usage as an event if work already completed
-8. **Implement `IntoResponse`** in web frameworks for consistent API error responses
+7. **Treat `Error::CommitPending` as queued, not rejected** — never compensate with a different key
+8. **Handle low-level reservation expiry** by durably recording known usage as a same-key event; guarded commit does this automatically
+9. **Implement `IntoResponse`** in web frameworks for consistent API error responses
 
 ## Next steps
 
 - [Getting Started with the Rust Client](/quickstart/getting-started-with-the-rust-client) — `with_cycles()`, `ReservationGuard`, and `CyclesClient` setup
 - [Error Codes and Error Handling](/protocol/error-codes-and-error-handling-in-cycles) — protocol error code reference
 - [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — strategies for handling budget constraints
+- [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) — journal, replay, expiry fallback, and guarantee boundary
 - [How to Add Budget and Action Guardrails to Rust AI Agents](/blog/how-to-add-budget-and-action-guardrails-to-rust-ai-agents-with-cycles) — end-to-end Rust agent example

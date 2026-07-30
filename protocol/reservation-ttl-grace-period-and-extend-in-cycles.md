@@ -100,41 +100,76 @@ Tenant administrators can set `max_reservation_extensions` via the Admin API to 
 
 ## The heartbeat pattern
 
-For long-running workflows, the recommended approach is:
+For long-running workflows:
 
-1. Create a reservation with a short TTL (10–30 seconds)
-2. Start a background heartbeat that calls extend at regular intervals (typically TTL / 2)
+1. Create a reservation with a bounded TTL
+2. Schedule heartbeat extensions from the server's returned remaining lifetime
 3. When work completes, commit actual usage
 4. If the heartbeat stops (crash, timeout), the reservation expires naturally and budget is returned
 
 This pattern keeps budget locked only while the client is actively running. If the client crashes, the reservation expires quickly and budget is freed.
 
-### Example timing
+### Server-authoritative scheduling
 
-- TTL: 20 seconds
-- Heartbeat interval: 10 seconds (TTL / 2)
-- Extension per heartbeat: `extend_by_ms: 10000`
-- Grace period: 5 seconds
+Since runtime spec revision 0.1.25.16, successful create and extend responses can carry `remaining_ttl_ms`. It is computed from the authoritative server clock and is the normative scheduling input whenever present.
 
-The client creates a reservation at T=0, expiring at T=20.
+Recompute the schedule from every exact, schema-valid HTTP `200` create or extend response:
 
-At T=10, T=20, T=30, etc., the client calls extend. Each extension adds 10 seconds to the current `expires_at_ms`, not to the time of the request: the heartbeat at T=10 moves expiry from T=20 to T=30, and the heartbeat at T=20 moves it from T=30 to T=40. The expiry stays a constant 20 seconds (the original TTL) ahead of the clock.
+```text
+rtt = monotonic receive time - monotonic send time
+lead_floor = max(0, remaining_ttl_ms - rtt)
+attempt_budget = max(enforced request timeout, 1000ms, 2 × max observed rtt)
+safety_margin = max(1000ms, 2 × max observed rtt)
+retry_reserve = 2 × attempt_budget + safety_margin
+next_delay = max(0, lead_floor - retry_reserve)
+```
 
-If the client crashes at T=25, the last successful heartbeat (at T=20) left the expiry at T=40. The reservation expires at T=40; in-flight commits and releases are still accepted through the grace period, until T=45. At T=45, the reservation is marked `EXPIRED` and budget is released.
+The reserve leaves room for one failed attempt, a same-key recovery attempt, and scheduling/network margin. For example, a returned 60-second lead, 10-second request timeout, and 1.5-second maximum observed RTT produce a 23-second retry reserve and a cadence of about 37 seconds.
 
-Total lockout after crash: ~20 seconds.
+::: warning Keep extend timeouts well below the lease
+The default 60-second TTL cannot support a safe positive delay if one extend attempt may consume 30 seconds: the retry reserve is at least 61 seconds. Configure the enforced per-extend timeout well below half the smallest expected lease. Current official SDK defaults use finite 7–12 second attempt budgets.
+:::
 
-Compare this to a single 10-minute TTL, where a crash at T=1 would lock budget for roughly the full 10 minutes plus grace period.
+After a timeout, connection failure, 5xx, 429, or malformed/other 2xx response, the client keeps the same idempotency key and recomputes the retry window from the last valid server response:
+
+```text
+current_lead = max(0, last lead_floor - monotonic elapsed time)
+retry_window = current_lead - attempt_budget - safety_margin
+```
+
+For a timeout, connection error, 5xx, or ambiguous 2xx, the recovery delay is:
+
+```text
+retry_delay = min(30000ms, current_lead / 4, retry_window)
+```
+
+The client may keep retrying while the freshly recomputed window is positive. A zero window permits one immediate same-key recovery attempt; if that also fails before an intervening success, the client stops. A negative window proves that no complete attempt plus margin fits. The client also stops if neither monotonic elapsed time nor the window decreases between consecutive failures, which prevents a coarse-clock zero-time loop.
+
+A 429 delay is honored only when a valid non-negative delta-seconds `Retry-After` fits inside the window; the heartbeat does not accept the HTTP-date form or invent an earlier retry. Any other 4xx stops and surfaces without rotating the key.
+
+If the initial create is ambiguous, no valid lead exists yet. The client makes at most one immediate retry with the same create key, then stops and surfaces if that retry is also ambiguous.
+
+If a valid response produces zero delay, one immediate extension with a fresh key is allowed. A second consecutive zero-delay success stops the heartbeat instead of burning the server's extension limit in a tight loop. Missing or unreliable monotonic timing also produces zero delay and therefore reaches this guard.
+
+### Same-key replay and `remaining_ttl_ms`
+
+A successful create or extend replay returns the original response except for `remaining_ttl_ms`, which the server recomputes when constructing the replay. The value is `0` when the reservation is no longer active and may conservatively understate lead if a later, separately keyed extension moved expiry farther out.
+
+This field is volatile transport metadata. It is deliberately excluded from the CyclesEvidence payload, so recomputing it does not change the original evidence identity.
+
+### Older servers without the field
+
+When `remaining_ttl_ms` is absent, a client cannot reliably infer the true lease from `expires_at_ms`: server policy may cap either each extension grant or the maximum lead beyond server time. The official SDKs retain a bounded measured-grant heuristic as a non-normative, best-effort fallback. The exact schema-valid HTTP `200` success rule still applies; only scheduling changes.
+
+The fallback intentionally prefers over-beating and possible extension-budget exhaustion over an unobservable lease lapse. This differs from the field-bearing path, which has enough information to prove when no safe retry fits and stop. Do not use the fallback merely because local monotonic timing is unavailable; a field-bearing response still requires the primary algorithm.
 
 ## The clients handle this automatically
 
-The Cycles clients schedule heartbeat extensions for you: the `@cycles` decorator (Python), the TypeScript client, the `@Cycles` annotation (Java, Spring Boot starter), and the Rust client's reservation guard all do this out of the box:
+Python `@cycles`, TypeScript `withCycles`, Spring `@Cycles`, and Rust `ReservationGuard` schedule extensions in the background and stop the heartbeat when the lifecycle closes.
 
-- The heartbeat interval is `ttl_ms / 2` (minimum 1 second)
-- Extensions run in the background (a thread or asyncio task in Python, a thread pool in Java, a tokio task in Rust)
-- The heartbeat stops when the function/method returns (commit or release)
+Heartbeat failures use a warning policy: each failure reports the reservation ID and retry/stop disposition, but it does not cancel the guarded work or suppress final settlement. Recoverable failures retry with the same key. Permanent conditions — `RESERVATION_EXPIRED`, `RESERVATION_FINALIZED`, `MAX_EXTENSIONS_EXCEEDED`, `TENANT_CLOSED`, and `NOT_FOUND` — stop the heartbeat.
 
-This means most users do not need to implement extend logic manually.
+If known spend reaches commit after the reservation expires, current SDK lifecycle helpers recover it through a durable `POST /v1/events` fallback. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
 
 ## Choosing TTL values
 
@@ -198,7 +233,7 @@ The grace period is a safety net, not a design tool. If commits routinely arrive
 
 ### Mistake 3: Forgetting to handle RESERVATION_EXPIRED
 
-If a commit arrives after the grace period, it will be rejected. The system should handle this gracefully — retry with a new reservation if the work succeeded, or accept the loss.
+If a commit arrives after the grace period, it is rejected. Do not create a new reservation after the work already ran; that would treat completed work as new authorization. Recover known spend as an idempotent direct event. Current official SDK lifecycle helpers do this automatically and persist the recovery across restart.
 
 ### Mistake 4: Extending after TTL expires
 
@@ -214,10 +249,11 @@ Reservations in Cycles are time-bounded by design:
 
 The recommended pattern for most systems:
 
-- Keep TTL short (10–30 seconds)
-- Use extend as a heartbeat (interval = TTL / 2)
+- Keep TTL bounded and choose an enforced request timeout that leaves room for the retry reserve
+- Schedule from `remaining_ttl_ms` whenever the server supplies it
+- Reuse the same idempotency key for ambiguous extend recovery
 - Set grace period to 5–10 seconds
-- Handle RESERVATION_EXPIRED gracefully
+- Recover known spend through an idempotent event if commit reaches an expired reservation
 
 This keeps budget locked only while work is actively running, and recovers quickly when clients crash.
 

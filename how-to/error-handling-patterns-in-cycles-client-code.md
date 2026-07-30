@@ -264,52 +264,11 @@ try {
 
 ## Handling expired reservations
 
-If a function takes longer than the reservation TTL plus grace period, the commit will fail with `RESERVATION_EXPIRED`. Both clients handle heartbeat extensions automatically, but network issues can prevent extensions.
+If work outlives TTL plus grace, commit returns `RESERVATION_EXPIRED`. Current Python 0.5.2+, TypeScript 0.4.2+, Java/Spring 0.3.2+, and Rust 0.3.2+ lifecycle helpers recover known spend through `POST /v1/events`, reusing the original idempotency key. They persist the event-mode transition so a restart does not resume a commit that is already known to be impossible.
 
-::: code-group
-```python [Python]
-from runcycles import ReservationExpiredError
+Do not create a new reservation after the work has completed, and do not release merely to restore budget. For low-level clients, construct a direct event from the original subject, action, actual amount, metrics, metadata, and key, and persist that recovery before sending it.
 
-try:
-    result = long_running_process(data)
-except ReservationExpiredError:
-    logger.warning(
-        "Reservation expired during processing. "
-        "Consider increasing ttl_ms or checking network connectivity."
-    )
-    record_as_event(data)
-```
-```java [Java]
-try {
-    return longRunningService.process(data);
-} catch (CyclesProtocolException e) {
-    if (e.isReservationExpired()) {
-        log.warn("Reservation expired during processing. "
-            + "Consider increasing ttlMs or checking network connectivity.");
-        recordAsEvent(data);
-        return result;
-    }
-    throw e;
-}
-```
-```typescript [TypeScript]
-import { ReservationExpiredError } from "runcycles";
-
-try {
-  result = await longRunningProcess(data);
-} catch (err) {
-  if (err instanceof ReservationExpiredError) {
-    console.warn(
-      "Reservation expired during processing. " +
-      "Consider increasing ttlMs or checking network connectivity.",
-    );
-    await recordAsEvent(data);
-  } else {
-    throw err;
-  }
-}
-```
-:::
+See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability) for the lifecycle-helper boundary and journal behavior.
 
 ## Catching all Cycles errors
 
@@ -339,9 +298,8 @@ except CyclesProtocolError as e:
         logger.error("Protocol error: %s (code=%s, status=%d)", e, e.error_code, e.status)
     raise
 
-# Note: commit-time RESERVATION_EXPIRED is logged and swallowed by the
-# decorator (the function result is returned; spend is not recorded) —
-# see the Python error-handling guide for detection options.
+# Commit-time settlement recovery is durable once actual usage is known.
+# Monitor retained/quarantined journal records and recovery warnings.
 ```
 ```java [Java]
 try {
@@ -354,9 +312,6 @@ try {
         return "Service paused";
     } else if (e.isOverdraftLimitExceeded()) {
         return "Budget limit reached";
-    } else if (e.isReservationExpired()) {
-        recordAsEvent(data);
-        return result;
     } else {
         log.error("Protocol error: code={}, status={}", e.getReasonCode(), e.getHttpStatus());
         throw e;
@@ -587,7 +542,7 @@ if (response.isSuccess) {
 | `BUDGET_EXCEEDED` (409) | Maybe | Budget may free up after other reservations commit. Retry with backoff or degrade. |
 | `DEBT_OUTSTANDING` (409) | Wait | Requires operator to fund the scope or configure an overdraft limit. Retry after funding. |
 | `OVERDRAFT_LIMIT_EXCEEDED` (409) | Wait | Requires operator intervention. |
-| `RESERVATION_EXPIRED` (410) | No | Create a new reservation or record as event. |
+| `RESERVATION_EXPIRED` (410) | No | Lifecycle helpers recover known spend as a same-key event; low-level callers must persist and perform that fallback. |
 | `RESERVATION_FINALIZED` (409) | No | Reservation already settled. No action needed. |
 | `IDEMPOTENCY_MISMATCH` (409) | No | Fix the idempotency key or payload. |
 | `UNIT_MISMATCH` (400) | No | Fix the unit in your request. Inspect `details.expected_units` to see which units are funded at the scope. |
@@ -608,7 +563,7 @@ In Python and TypeScript, use `e.is_retryable()` / `e.isRetryable()` to check pr
 4. **Distinguish between DENY and server errors** — DENY means the system is working correctly, server errors mean something is wrong
 5. **Log `error_code` and `status`** for debugging
 6. **Never swallow errors silently** — at minimum, log them
-7. **Handle `RESERVATION_EXPIRED`** by recording usage as an event if the work already completed
+7. **Handle `RESERVATION_EXPIRED` correctly** — lifecycle helpers recover known usage automatically; low-level clients must persist and send the same-key event fallback
 8. **Register a global exception handler** in web frameworks for consistent API error responses
 9. **Avoid nested budget guards** — Spring throws `IllegalStateException`; TypeScript/Python silently double-count. Place `@Cycles` / `withCycles` / `@cycles` at the outermost call site only (see [Troubleshooting](/how-to/troubleshooting-and-faq#spring-boot-illegalstateexception-nested-cycles))
 

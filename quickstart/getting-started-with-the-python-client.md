@@ -16,6 +16,8 @@ The decorator wraps any function in a reserve → execute → commit lifecycle:
 3. **After the function returns:** commits actual usage and releases any unused remainder
 4. **If the function raises:** releases the reservation to return budget to the pool
 
+Once actual usage is known, the current client persists settlement before the first commit request. Ambiguous outcomes replay with the same key, and an expired commit is recovered through `POST /v1/events`. The guarantee cannot cover a process death before actual usage is known; see [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
+
 ::: tip Cycles provides three runtime-authority pillars
 - **Spend** — reserve-commit budget enforcement before instrumented LLM calls and tool actions
 - **Risky actions** — callers can budget assigned `RISK_POINTS`; applications must apply preflight decisions and any configured caps
