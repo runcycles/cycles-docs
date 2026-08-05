@@ -1,88 +1,88 @@
 {
-  "npm": 8651,
+  "npm": 8670,
   "pypi": 6876,
   "crates": 153,
-  "clones": 142055,
+  "clones": 142384,
   "clonesByRepo": {
     ".github": {
-      "count": 1799,
-      "lastSeenDay": "2026-08-03"
+      "count": 1808,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-server-admin": {
-      "count": 19780,
-      "lastSeenDay": "2026-08-03"
+      "count": 19788,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-server": {
-      "count": 17285,
-      "lastSeenDay": "2026-08-03"
+      "count": 17298,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-protocol": {
-      "count": 11051,
-      "lastSeenDay": "2026-08-03"
+      "count": 11061,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-client-python": {
-      "count": 2198,
-      "lastSeenDay": "2026-08-03"
+      "count": 2207,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-spring-boot-starter": {
-      "count": 2716,
-      "lastSeenDay": "2026-07-31"
+      "count": 2765,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-agent-action-authority-demo": {
       "count": 788,
-      "lastSeenDay": "2026-08-03"
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-dashboard": {
-      "count": 26423,
-      "lastSeenDay": "2026-08-03"
+      "count": 26431,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-server-events": {
       "count": 5212,
       "lastSeenDay": "2026-08-03"
     },
     "cycles-runaway-demo": {
-      "count": 1256,
-      "lastSeenDay": "2026-08-03"
+      "count": 1257,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-client-typescript": {
-      "count": 3742,
-      "lastSeenDay": "2026-08-03"
+      "count": 3759,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-docs": {
-      "count": 24515,
-      "lastSeenDay": "2026-08-03"
+      "count": 24627,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-openai-agents": {
-      "count": 1263,
-      "lastSeenDay": "2026-08-03"
+      "count": 1264,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-openclaw-budget-guard": {
-      "count": 2939,
-      "lastSeenDay": "2026-08-03"
+      "count": 2941,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-client-rust": {
-      "count": 2443,
-      "lastSeenDay": "2026-08-03"
+      "count": 2447,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-mcp-server": {
-      "count": 6476,
-      "lastSeenDay": "2026-08-03"
+      "count": 6537,
+      "lastSeenDay": "2026-08-04"
     },
     "langchain-runcycles": {
-      "count": 2740,
-      "lastSeenDay": "2026-08-03"
+      "count": 2741,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-spring-ai-starter": {
-      "count": 8197,
-      "lastSeenDay": "2026-08-03"
+      "count": 8212,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-ap2-python": {
-      "count": 870,
-      "lastSeenDay": "2026-08-01"
+      "count": 877,
+      "lastSeenDay": "2026-08-04"
     },
     "cycles-claude-plugin": {
-      "count": 362,
-      "lastSeenDay": "2026-08-03"
+      "count": 364,
+      "lastSeenDay": "2026-08-04"
     }
   },
   "releases": 0,
@@ -110,12 +110,12 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 20116,
-  "fetchedAt": "2026-08-04T08:20:48.423Z",
+  "total": 20135,
+  "fetchedAt": "2026-08-05T08:17:16.145Z",
   "npmByPackage": {
-    "runcycles": 2702,
-    "@runcycles/mcp-server": 2508,
-    "@runcycles/openclaw-budget-guard": 3441
+    "runcycles": 2710,
+    "@runcycles/mcp-server": 2518,
+    "@runcycles/openclaw-budget-guard": 3442
   },
   "pypiByPackage": {
     "runcycles": 3615,
