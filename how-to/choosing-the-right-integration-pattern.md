@@ -57,7 +57,7 @@ For agent frameworks that expose lifecycle hooks, a plugin implements the framew
 |---|---|---|
 | OpenAI Agents SDK | `runcycles_openai_agents.CyclesRunHooks` | `RunHooks` interface |
 | OpenClaw | Plugin hooks | `before_model_resolve`, `before_tool_call`, etc. |
-| **LangChain 1.x** (`langchain.agents.create_agent`) | [**`langchain-runcycles`**](https://pypi.org/project/langchain-runcycles/) — `CyclesToolGate`, `CyclesFanOutGate` | `wrap_tool_call`, `before_model` (`AgentMiddleware` API) |
+| **LangChain 1.x** (`langchain.agents.create_agent`) | [**`langchain-runcycles`**](https://pypi.org/project/langchain-runcycles/) — `CyclesModelGate`, `CyclesToolGate`, `CyclesFanOutGate` | `wrap_model_call`, `wrap_tool_call`, `before_model` (`AgentMiddleware` API) |
 
 ```python
 # LangChain 1.x agent middleware
@@ -223,7 +223,8 @@ See [Integrating Cycles with Express](/how-to/integrating-cycles-with-express) f
 
 **Use when:**
 - Budget enforcement should apply to every request on a route
-- You want to return HTTP 402 when budget is exhausted
+- You want your application to translate Cycles' HTTP 409 `BUDGET_EXCEEDED`
+  response into an HTTP 402 response for callers
 - Budget should be scoped per-request (e.g., per-tenant)
 
 **Don't use when:**

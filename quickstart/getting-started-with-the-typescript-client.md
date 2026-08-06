@@ -265,6 +265,8 @@ try {
 For LLM streaming where usage is only known after the stream finishes, use `reserveForStream`:
 
 ```typescript :line-numbers
+import { openai } from "@ai-sdk/openai";
+import { consumeStream, streamText } from "ai";
 import { CyclesClient, CyclesConfig, reserveForStream } from "runcycles";
 
 const config = new CyclesConfig({
@@ -274,40 +276,72 @@ const config = new CyclesConfig({
 });
 const client = new CyclesClient(config);
 
-let handle;
-try {
-  handle = await reserveForStream({ // [!code focus]
+export async function POST(request: Request) {
+  const { messages } = await request.json();
+  const estimate = 5000;
+  const handle = await reserveForStream({ // [!code focus]
     client,
-    estimate: 5000,
+    estimate,
     actionKind: "llm.completion",
     actionName: "gpt-4o",
   });
-} catch (err) {
-  // Reservation denied — no cleanup needed
-  throw err;
-}
 
-try {
-  const stream = streamText({
-    model: openai("gpt-4o"),
-    messages,
-    onFinish: async ({ usage }) => {
-      const actualCost = (usage.promptTokens + usage.completionTokens) * 3;
-      await handle.commit(actualCost, { // [!code focus]
-        tokensInput: usage.promptTokens,
-        tokensOutput: usage.completionTokens,
+  const settleEstimate = async (reason: string) => {
+    if (handle.finalized) return;
+    try {
+      await handle.commit(estimate, undefined, {
+        actual_source: "estimate",
+        recovery_reason: reason,
       });
-    },
-  });
+    } catch (settlementError) {
+      console.error("Cycles settlement failed", settlementError);
+    }
+  };
 
-  return stream.toDataStreamResponse();
-} catch (err) {
-  await handle.release("stream_error");
-  throw err;
+  let result;
+  try {
+    result = streamText({
+      model: openai("gpt-4o"),
+      messages,
+      abortSignal: request.signal,
+      onFinish: async ({ totalUsage }) => {
+        const input = totalUsage.inputTokens ?? 0;
+        const output = totalUsage.outputTokens ?? 0;
+        try {
+          await handle.commit((input + output) * 3, { // [!code focus]
+            tokensInput: input,
+            tokensOutput: output,
+          });
+        } catch (settlementError) {
+          // Known spend is already journaled before a strict commit error surfaces.
+          console.error("Cycles settlement failed", settlementError);
+        }
+      },
+      onError: async ({ error }) => {
+        console.error(error);
+        await settleEstimate("stream_error");
+      },
+      onAbort: async () => settleEstimate("stream_aborted"),
+    });
+  } catch (error) {
+    // Synchronous setup failed before streamText dispatched the provider call.
+    await handle.release("stream_startup_failed");
+    throw error;
+  }
+
+  return result.toUIMessageStreamResponse({ consumeSseStream: consumeStream });
 }
 ```
 
-The handle is once-only and race-safe: `commit()` throws if already finalized (so bugs are never silently hidden), while `release()` is a silent no-op if already finalized (best-effort by design).
+The handle is once-only and race-safe: `commit()` throws if already finalized
+(so bugs are never silently hidden), while `release()` is a silent no-op if
+already finalized. `onError` and `onAbort` conservatively commit the estimate
+because the provider may already have produced billable partial output; release
+is limited to synchronous setup failure before dispatch. Pass `consumeStream`
+to preserve the AI SDK's abort callback path. In v0.4.3+, invalid actuals fall
+back to the estimate with `metadata.actual_source=estimate`, and a recognized
+terminal commit rejection leaves the handle finalized so broad cleanup cannot
+return known-spend budget.
 
 ### Which pattern to use?
 

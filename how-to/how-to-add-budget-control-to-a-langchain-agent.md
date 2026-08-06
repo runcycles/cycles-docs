@@ -1,273 +1,127 @@
 ---
 title: "How to Add Budget Control to a LangChain Agent"
-description: "Wrap a LangChain create_agent run with per-run budget limits using Cycles reservations — without rewriting agent logic. Python examples with the @cycles decorator."
+description: "A production-safe LangChain 1.x setup using Cycles model, tool, and fan-out middleware."
 ---
 
 # How to Add Budget Control to a LangChain Agent
 
-LangChain makes it easy to build agents that call LLMs, search the web, execute code, and chain tool calls together. What it doesn't give you is any way to cap how much a single agent run is allowed to spend.
+This walkthrough gates a LangChain 1.x agent at all three execution boundaries:
+model calls, tool side effects, and repeated model turns.
 
-That's fine when you're experimenting. It's a real problem when you're running agents in production — especially across multiple users or tenants. A single misbehaving agent loop can burn through hundreds of dollars before anyone notices.
-
-This guide shows how to add per-run budget control to a LangChain agent using [Cycles](https://runcycles.io) — without rewriting your agent logic.
-
-::: tip Pick the right pattern for your shape
-
-Three patterns, three different scopes — pick based on what you actually want to budget.
-
-- **Building with `create_agent` (LangChain 1.x agents)?** Use [`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/) middleware. `CyclesToolGate` gates tool calls *before* they execute (denial returns a `ToolMessage` so the agent recovers); `CyclesFanOutGate` caps model turns. See [the agent middleware section](/how-to/integrating-cycles-with-langchain#agent-middleware-via-langchain-runcycles).
-- **Want per-LLM-call tracking** (reservation around every model invocation)? Install [`CyclesBudgetHandler`](/how-to/integrating-cycles-with-langchain#callback-handler-for-non-agent-runnables) — works on any LangChain runnable.
-- **This page** covers a third pattern: a **single reservation around the entire agent run**, plus optional tool-level checks. Best when you want one cap per run regardless of how many LLM/tool calls happen inside.
-:::
-
-## The problem
-
-Here's a typical LangChain agent loop:
-
-```python
-from langchain.agents import create_agent
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-
-@tool
-def search_web(query: str) -> str:
-    """Search the web for information."""
-    return your_search_implementation(query)
-
-agent = create_agent(
-    model=ChatOpenAI(model="gpt-4o"),
-    tools=[search_web],
-    system_prompt="You are a research assistant.",
-)
-
-result = agent.invoke(
-    {"messages": [{"role": "user", "content": "Research the top 10 competitors..."}]}
-)
-```
-
-This works. But there's no limit on how many LLM calls the agent makes, how many tool invocations it triggers, or what it costs. If the agent gets stuck in a loop, retries a failing tool, or expands scope unexpectedly, it keeps running — and spending — until it either finishes or hits the provider's rate limits.
-
-## The fix: reserve before, commit after
-
-The pattern Cycles uses is borrowed from database transactions:
-
-1. **Reserve** budget before the agent run starts
-2. **Execute** the agent if the reservation is granted
-3. **Commit** actual usage after — releases unused budget back to the pool
-4. **Release** the full reservation if the run fails
-
-This gives you hard limits that are enforced *before* spend happens — not discovered afterward on your bill.
-
-## Prerequisites
+## 1. Install and configure
 
 ```bash
-pip install runcycles langchain langchain-openai
-```
+pip install "langchain-runcycles>=0.4.0" langchain-openai
 
-```bash
 export CYCLES_BASE_URL="http://localhost:7878"
 export CYCLES_API_KEY="your-api-key"
+export CYCLES_TENANT="acme"
 export OPENAI_API_KEY="sk-..."
 ```
 
-> **Need an API key?** Create one via the Admin Server — see [Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack#step-3-create-an-api-key) or [API Key Management](/how-to/api-key-management-in-cycles).
+Create the tenant budget and API key before running the agent. See
+[Deploy the Full Stack](/quickstart/deploying-the-full-cycles-stack) for a local
+server setup.
 
-## Per-run budget wrapper
-
-Wrap your agent invocation in a single Cycles reservation:
+## 2. Build the gated agent
 
 ```python
-import uuid
 from langchain.agents import create_agent
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from runcycles import (
-    CyclesClient, CyclesConfig, ReservationCreateRequest,
-    CommitRequest, ReleaseRequest, Subject, Action, Amount,
-    Unit, BudgetExceededError, CyclesProtocolError,
-)
+from langchain.tools import tool
+from langchain_runcycles import CyclesFanOutGate, CyclesModelGate, CyclesToolGate
+from langchain_runcycles.extractors import openai_cost
+from runcycles import Action, Amount, CyclesClient, CyclesConfig, Subject, Unit
 
 client = CyclesClient(CyclesConfig.from_env())
+subject = Subject(tenant="acme", workflow="collections", agent="notifier")
 
 @tool
-def search_web(query: str) -> str:
-    """Search the web for information."""
-    return your_search_implementation(query)
+def send_notice(account_id: str, body: str) -> str:
+    """Send one collections notice."""
+    return f"sent:{account_id}"
 
-def run_agent_with_budget(
-    user_input: str,
-    tenant: str,
-    budget_microcents: int,
-) -> dict:
-    key = str(uuid.uuid4())
-
-    # 1. Reserve budget for the entire run
-    res = client.create_reservation(ReservationCreateRequest(
-        idempotency_key=key,
-        subject=Subject(tenant=tenant, workflow="research"),
-        action=Action(kind="agent.run", name="research-task"),
-        estimate=Amount(unit=Unit.USD_MICROCENTS, amount=budget_microcents),  # 1 USD = 100_000_000 microcents
-        ttl_ms=120_000,
-    ))
-
-    if not res.is_success:
-        error = res.get_error_response()
-        if error and error.error == "BUDGET_EXCEEDED":
-            raise BudgetExceededError(
-                error.message, status=res.status,
-                error_code=error.error, request_id=error.request_id,
-            )
-        msg = error.message if error else (res.error_message or "Reservation failed")
-        raise CyclesProtocolError(msg, status=res.status)
-
-    reservation_id = res.get_body_attribute("reservation_id")
-    decision = res.get_body_attribute("decision")
-
-    # 2. Execute the agent — apply any configured caps
-    try:
-        if decision == "ALLOW_WITH_CAPS":
-            llm = ChatOpenAI(model="gpt-4o-mini")
-        else:
-            llm = ChatOpenAI(model="gpt-4o")
-        agent = create_agent(
-            model=llm,
-            tools=[search_web],
-            system_prompt="You are a research assistant.",
-        )
-
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": user_input}]}
-        )
-
-        # 3. Commit actual usage
-        client.commit_reservation(reservation_id, CommitRequest(
-            idempotency_key=f"commit-{key}",
-            actual=Amount(
-                unit=Unit.USD_MICROCENTS,
-                amount=budget_microcents // 2,  # replace with real tracking
+agent = create_agent(
+    model="gpt-4o",
+    tools=[send_notice],
+    middleware=[
+        CyclesFanOutGate(
+            max_turns=12,
+            client=client,
+            subject=subject,
+            action=Action(kind="model.turn", name="collections"),
+        ),
+        CyclesModelGate(
+            client,
+            subject=subject,
+            action=Action(kind="llm.completion", name="gpt-4o"),
+            mode="decide+reserve",
+            estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),
+            cost_fn=openai_cost(
+                prompt_per_million_usd=2.50,
+                cached_prompt_per_million_usd=1.25,
+                completion_per_million_usd=10.00,
             ),
-        ))
-        return result
-
-    except Exception:
-        # 4. Release on failure — budget returns to the pool
-        client.release_reservation(
-            reservation_id,
-            ReleaseRequest(idempotency_key=f"release-{key}"),
-        )
-        raise
-
-# Run it
-result = run_agent_with_budget(
-    user_input="Research the top 10 competitors in the CRM space",
-    tenant="acme",
-    budget_microcents=5_000_000_000,  # $50.00
+        ),
+        CyclesToolGate(
+            client,
+            subject=subject,
+            action={"send_notice": Action(kind="tool.call", name="send_notice")},
+            mode="decide+reserve",
+            estimate=Amount(unit=Unit.RISK_POINTS, amount=1),
+            idempotency_namespace="collections-run-123",
+            settlement_error_policy="log",
+        ),
+    ],
 )
 ```
 
-::: info Crash safety
-If the agent crashes before committing or releasing, the reservation expires automatically after `ttl_ms` and the held budget returns to the pool. That protects availability; it does not record provider spend that already occurred. This example uses low-level client calls, so persist the exact known-actual settlement and idempotency key before sending commit, then replay it or use the expired-commit event fallback. See [SDK Settlement Recovery and Durability](/protocol/sdk-settlement-recovery-and-durability).
-:::
+The model reservation limits cost. The tool reservation uses `RISK_POINTS` so
+operators can independently cap side-effect exposure. `settlement_error_policy`
+is `"log"` for the notice because an agent retry must not send it twice; durable
+settlement recovery still remains queued.
 
-## Adding tool-level budget checks
-
-Individual tools can also reserve budget before costly operations. If the tool's reservation is denied, it returns a skip message instead of failing:
-
-```python
-@tool
-def search_web(query: str) -> str:
-    """Search the web for information."""
-    tool_key = str(uuid.uuid4())
-
-    # Reserve before the tool call
-    res = client.create_reservation(ReservationCreateRequest(
-        idempotency_key=tool_key,
-        subject=Subject(tenant="acme", toolset="web-search"),
-        action=Action(kind="tool.call", name="search-web"),
-        estimate=Amount(unit=Unit.USD_MICROCENTS, amount=100_000_000),  # $1.00
-        ttl_ms=30_000,
-    ))
-
-    if not res.is_success:
-        return "Budget exhausted — skipping web search."
-
-    tool_reservation_id = res.get_body_attribute("reservation_id")
-
-    # Execute the tool
-    results = your_search_implementation(query)
-
-    # Commit actual usage
-    client.commit_reservation(tool_reservation_id, CommitRequest(
-        idempotency_key=f"commit-{tool_key}",
-        actual=Amount(unit=Unit.USD_MICROCENTS, amount=40_000_000),  # $0.40
-    ))
-
-    return results
-```
-
-## Multi-tenant scoping
-
-Use the `Subject` hierarchy to give each customer their own budget scope:
+## 3. Invoke and handle denials
 
 ```python
-def run_for_customer(customer_id: str, user_input: str):
-    return run_agent_with_budget(
-        user_input=user_input,
-        tenant=customer_id,
-        budget_microcents=10_000_000_000,  # $100.00, or pull from the customer's plan
-    )
+result = agent.invoke({
+    "messages": [{"role": "user", "content": "Send the approved notice."}],
+    "run_id": "collections-run-123",
+})
 ```
 
-Each customer's spend is tracked independently. One customer burning through their budget doesn't affect others.
+When a model reservation is denied, the middleware returns a terminal
+`ModelResponse`. When the tool is denied, the model receives a correlated
+`ToolMessage`, and `send_notice` never runs. `ALLOW_WITH_CAPS` is also an allowed
+decision; apply relevant caps in your host or model configuration.
 
-## Graceful degradation with ALLOW_WITH_CAPS
+At the raw API boundary, insufficient reserve returns HTTP 409
+`BUDGET_EXCEEDED`. The middleware converts it to the LangChain denial result;
+do not write low-level code that treats only 2xx responses as possible denials.
 
-When the deepest matching budget has caps configured, Cycles can return `ALLOW_WITH_CAPS`. Use the returned caps to switch to a cheaper model or limit tool access. This is configuration-driven, not an automatic low-balance transition:
+## 4. Understand the failure behavior
 
-```python
-res = client.create_reservation(ReservationCreateRequest(
-    idempotency_key=key,
-    subject=Subject(tenant=tenant, workflow="research"),
-    action=Action(kind="agent.run", name="research-task"),
-    estimate=Amount(unit=Unit.USD_MICROCENTS, amount=5_000_000_000),  # $50.00
-    ttl_ms=120_000,
-))
+Reserve mode is not a three-call teaching snippet. While the handler runs, the
+Python SDK heartbeats the lease. After success it journals the exact commit
+before the first network attempt. Transient failure survives process restart,
+and an expired reservation transitions to an idempotent `/v1/events` recovery.
 
-if not res.is_success:
-    # Budget denial arrives as a 409 BUDGET_EXCEEDED error — handle it here
-    error = res.get_error_response()
-    if error and error.error == "BUDGET_EXCEEDED":
-        raise BudgetExceededError(
-            error.message, status=res.status,
-            error_code=error.error, request_id=error.request_id,
-        )
-    raise CyclesProtocolError(...)
+Only handler failure before an actual is recorded uses release. A commit error
+after the action ran never releases known spend.
 
-# On success, decision is ALLOW or ALLOW_WITH_CAPS
-decision = res.get_body_attribute("decision")
+For completed model streams, LangChain supplies final aggregated normalized
+usage and the same settlement path applies. A cancelled partial stream has no
+final usage object; reconcile any provider charge from provider telemetry.
 
-if decision == "ALLOW_WITH_CAPS":
-    # This example maps the configured caps policy to a cheaper model.
-    llm = ChatOpenAI(model="gpt-4o-mini")
-else:
-    # ALLOW — full capacity
-    llm = ChatOpenAI(model="gpt-4o")
-```
+## 5. Validate before production
 
-See [Caps and Three-Way Decisions](/protocol/caps-and-the-three-way-decision-model-in-cycles) for more on how `ALLOW_WITH_CAPS` works and what cap fields are available.
-
-## What you get
-
-With this pattern in place:
-
-- **Per-tenant isolation** — `Subject(tenant="acme")` means each customer's budget is tracked and enforced independently
-- **Graceful degradation** — `ALLOW_WITH_CAPS` lets agents downgrade instead of stopping cold
-- **Automatic reconciliation** — committing less than the reserved amount releases the difference back to the pool
-- **Reservation crash safety** — an abandoned hold expires automatically; application-owned durable settlement is still required for actual usage known before the crash
+- Use a run-scoped `idempotency_namespace`; do not hard-code one across all runs.
+- Keep tool side effects idempotent even when the Cycles reservation key is stable.
+- Verify the price rates for the exact model and cache tier you deploy.
+- Exercise deny, timeout, process-restart, expired-reservation, and stream-cancel paths.
+- Monitor the SDK commit journal and settlement warnings.
 
 ## Next steps
 
-- [Integrating Cycles with LangChain](/how-to/integrating-cycles-with-langchain) — per-LLM-call callback handler pattern
-- [Reserve / Commit Lifecycle](/protocol/how-reserve-commit-works-in-cycles) — protocol deep-dive
-- [Degradation Paths](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) — strategies for deny, downgrade, disable, or defer
-- [Add to a Python App](/quickstart/getting-started-with-the-python-client) — Python client quickstart
+- [Full LangChain integration guide](/how-to/integrating-cycles-with-langchain)
+- [Caps and the three-way decision model](/protocol/caps-and-the-three-way-decision-model-in-cycles)
+- [SDK settlement recovery and durability](/protocol/sdk-settlement-recovery-and-durability)

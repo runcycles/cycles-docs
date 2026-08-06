@@ -1,301 +1,159 @@
 ---
 title: "Integrating Cycles with LangChain.js"
-description: "Add budget governance to LangChain.js applications using a custom callback handler that wraps every LLM call with a Cycles reservation."
+description: "Use withCycles for LangChain.js calls and reserveForStream for streaming or multi-step agents."
 ---
 
 # Integrating Cycles with LangChain.js
 
-This guide shows how to add budget governance to LangChain.js applications using a custom callback handler that wraps every LLM call with a Cycles reservation.
+Use the TypeScript SDK's lifecycle helpers instead of a raw LangChain callback:
 
-## Prerequisites
+| Workload | Helper |
+|---|---|
+| One chain/model invocation with a final result | `withCycles` |
+| Streaming response or multi-step agent run | `reserveForStream` |
+
+Both paths reserve before execution. Lifecycle-managed commits use the SDK's
+durable journal; `reserveForStream` also heartbeats the lease while the run is
+active. Version 0.4.3 also prevents broad error cleanup from releasing known
+spend after a terminal commit rejection.
+
+## Install
 
 ```bash
-npm install runcycles @langchain/core @langchain/openai
+npm install runcycles@^0.4.3 @langchain/openai @langchain/core
 ```
 
-```bash
-export CYCLES_BASE_URL="http://localhost:7878"
-export CYCLES_API_KEY="cyc_live_..."
-export CYCLES_TENANT="acme"
-export OPENAI_API_KEY="sk-..."
-```
-
-## The callback handler approach
-
-LangChain.js fires callback events on every LLM call. A custom `BaseCallbackHandler` can hook into `handleLLMStart` and `handleLLMEnd` to create and commit Cycles reservations:
-
-```typescript
-import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
-import { Serialized } from "@langchain/core/load/serializable";
-import { LLMResult } from "@langchain/core/outputs";
-import {
-  BudgetExceededError,
-  CyclesClient,
-} from "runcycles";
-
-interface CyclesBudgetHandlerOptions {
-  client: CyclesClient;
-  subject: { tenant: string; workflow?: string; agent?: string; toolset?: string };
-  estimateAmount?: number;
-  actionKind?: string;
-  actionName?: string;
-}
-
-export class CyclesBudgetHandler extends BaseCallbackHandler {
-  name = "CyclesBudgetHandler";
-
-  private client: CyclesClient;
-  private subject: CyclesBudgetHandlerOptions["subject"];
-  private estimateAmount: number;
-  private actionKind: string;
-  private actionName: string;
-  private reservations = new Map<string, string>();
-  private keys = new Map<string, string>();
-
-  constructor(options: CyclesBudgetHandlerOptions) {
-    super();
-    this.client = options.client;
-    this.subject = options.subject;
-    this.estimateAmount = options.estimateAmount ?? 2_000_000;
-    this.actionKind = options.actionKind ?? "llm.completion";
-    this.actionName = options.actionName ?? "gpt-4o";
-  }
-
-  async handleLLMStart(
-    _serialized: Serialized,
-    _prompts: string[],
-    runId: string,
-  ): Promise<void> {
-    const key = crypto.randomUUID();
-    this.keys.set(runId, key);
-
-    const res = await this.client.createReservation({
-      idempotency_key: key,
-      subject: this.subject,
-      action: { kind: this.actionKind, name: this.actionName },
-      estimate: { unit: "USD_MICROCENTS", amount: this.estimateAmount },
-      ttl_ms: 60_000,
-    });
-
-    if (!res.isSuccess) {
-      throw new Error(res.errorMessage ?? "Reservation failed");
-    }
-
-    // A DENY comes back as HTTP 2xx with decision: "DENY" and no
-    // reservation_id — isSuccess alone does not enforce the budget.
-    if (res.getBodyAttribute("decision") === "DENY") {
-      throw new BudgetExceededError("Budget denied for LLM call", {
-        status: res.status,
-        reasonCode: res.getBodyAttribute("reason_code") as string | undefined,
-      });
-    }
-
-    this.reservations.set(runId, res.getBodyAttribute("reservation_id") as string);
-  }
-
-  async handleLLMEnd(output: LLMResult, runId: string): Promise<void> {
-    const rid = this.reservations.get(runId);
-    const key = this.keys.get(runId);
-    this.reservations.delete(runId);
-    this.keys.delete(runId);
-    if (!rid || !key) return;
-
-    const usage = output.llmOutput?.tokenUsage ?? {};
-    const inputTokens = usage.promptTokens ?? 0;
-    const outputTokens = usage.completionTokens ?? 0;
-
-    await this.client.commitReservation(rid, {
-      idempotency_key: `commit-${key}`,
-      actual: {
-        unit: "USD_MICROCENTS",
-        amount: inputTokens * 250 + outputTokens * 1_000,
-      },
-      metrics: {
-        tokens_input: inputTokens,
-        tokens_output: outputTokens,
-      },
-    });
-  }
-
-  async handleLLMError(error: Error, runId: string): Promise<void> {
-    const rid = this.reservations.get(runId);
-    const key = this.keys.get(runId);
-    this.reservations.delete(runId);
-    this.keys.delete(runId);
-    if (rid && key) {
-      await this.client.releaseReservation(rid, {
-        idempotency_key: `release-${key}`,
-      });
-    }
-  }
-}
-```
-
-Note that the programmatic client returns responses instead of throwing typed errors, so the handler throws `BudgetExceededError` itself when the decision is `DENY` — that is what makes the `catch` blocks below work. Alternatively, wrap the whole chain in `withCycles`, which throws `BudgetExceededError` natively on a denial, as in the SDK's [langchain-js example](https://github.com/runcycles/cycles-client-typescript/blob/main/examples/langchain-js/src/chain.ts).
-
-## Using the handler
-
-### With a chat model
+## Guard a chain with `withCycles`
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
-import { HumanMessage } from "@langchain/core/messages";
-import { CyclesClient, CyclesConfig, BudgetExceededError } from "runcycles";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import type { AIMessage } from "@langchain/core/messages";
+import { BudgetExceededError, CyclesClient, CyclesConfig, withCycles } from "runcycles";
 
 const client = new CyclesClient(CyclesConfig.fromEnv());
-const handler = new CyclesBudgetHandler({
-  client,
-  subject: { tenant: "acme", agent: "my-agent" },
-});
+const model = new ChatOpenAI({ model: "gpt-4o" });
+const prompt = ChatPromptTemplate.fromMessages([["user", "{question}"]]);
+const chain = prompt.pipe(model);
 
-const llm = new ChatOpenAI({ model: "gpt-4o", callbacks: [handler] });
-
-try {
-  const result = await llm.invoke([new HumanMessage("Hello!")]);
-  console.log(result.content);
-} catch (err) {
-  if (err instanceof BudgetExceededError) {
-    console.log("Budget exhausted.");
-  } else {
-    throw err;
-  }
+function calculatedCost(message: AIMessage): number {
+  const usage = message.usage_metadata;
+  if (!usage) throw new Error("LangChain returned no normalized usage_metadata");
+  const cached = usage.input_token_details?.cache_read ?? 0;
+  const ordinaryInput = Math.max(0, usage.input_tokens - cached);
+  return ordinaryInput * 250 + cached * 125 + usage.output_tokens * 1_000;
 }
-```
 
-### With an agent and tools
-
-Every LLM call the agent makes (including tool-calling turns) gets its own reservation:
-
-```typescript
-import { tool } from "@langchain/core/tools";
-import { z } from "zod";
-
-const getWeather = tool(
-  async ({ location }: { location: string }) => `72°F in ${location}`,
+const ask = withCycles(
   {
-    name: "get_weather",
-    description: "Get weather for a location.",
-    schema: z.object({ location: z.string() }),
+    client,
+    actionKind: "llm.completion",
+    actionName: "gpt-4o",
+    estimate: 2_000_000,
+    actual: calculatedCost,
   },
+  async (question: string) => chain.invoke({ question }),
 );
 
-const handler = new CyclesBudgetHandler({
-  client,
-  subject: { tenant: "acme", agent: "tool-agent", toolset: "weather" },
-});
-
-const llm = new ChatOpenAI({ model: "gpt-4o", callbacks: [handler] });
-const llmWithTools = llm.bindTools([getWeather]);
-
 try {
-  const result = await llmWithTools.invoke([
-    new HumanMessage("What's the weather in NYC?"),
-  ]);
-  console.log(result.content);
-} catch (err) {
-  if (err instanceof BudgetExceededError) {
-    console.log("Agent stopped — budget exhausted.");
+  const answer = await ask("What is runtime authority?");
+  console.log(answer.content);
+} catch (error) {
+  if (error instanceof BudgetExceededError) {
+    console.error("Denied before the model call");
   } else {
-    throw err;
+    throw error;
   }
 }
 ```
 
-## How it works
+The rates above are caller-supplied examples, not live pricing. Verify the exact
+model and cache rate you deploy.
 
-| Event | Action |
-|-------|--------|
-| `handleLLMStart` | Create a reservation with the estimated cost |
-| `handleLLMEnd` | Commit the actual cost from token usage |
-| `handleLLMError` | Release the reservation to free held budget |
-
-The handler tracks active reservations by LangChain's `runId`, so concurrent calls are handled correctly.
-
-## Streaming with LangChain.js
-
-For streaming responses, use `reserveForStream` instead of the callback handler. This keeps the reservation alive with an automatic heartbeat while tokens are being streamed:
+## Streaming and multi-step agents
 
 ```typescript
-import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
-import {
-  CyclesClient,
-  CyclesConfig,
-  reserveForStream,
-  BudgetExceededError,
-} from "runcycles";
+import { reserveForStream } from "runcycles";
 
-const client = new CyclesClient(CyclesConfig.fromEnv());
-
+const streamEstimate = 4_000_000;
 const handle = await reserveForStream({
   client,
-  estimate: 2_000_000,
+  estimate: streamEstimate,
   unit: "USD_MICROCENTS",
-  actionKind: "llm.completion",
-  actionName: "gpt-4o",
+  actionKind: "agent.run",
+  actionName: "support-agent",
 });
 
-const llm = new ChatOpenAI({ model: "gpt-4o" });
-
+let dispatchAttempted = false;
 try {
-  const stream = await llm.stream([new HumanMessage("Write a short poem.")]);
-  let fullText = "";
-
+  // From this point onward the provider may incur partial usage even if the
+  // stream throws before returning a final normalized usage object.
+  dispatchAttempted = true;
+  const stream = await model.stream([new HumanMessage("Draft a reply.")]);
+  let finalUsage;
   for await (const chunk of stream) {
-    const content = typeof chunk.content === "string" ? chunk.content : "";
-    process.stdout.write(content);
-    fullText += content;
+    process.stdout.write(typeof chunk.content === "string" ? chunk.content : "");
+    if (chunk.usage_metadata) finalUsage = chunk.usage_metadata;
   }
+  if (!finalUsage) throw new Error("No finalized normalized usage_metadata");
 
-  // Estimate actual cost from output length (1 token ~ 4 chars)
-  const estimatedOutputTokens = Math.ceil(fullText.length / 4);
-  const actualCost = Math.ceil(500 * 250 + estimatedOutputTokens * 1_000);
-
-  await handle.commit(actualCost, {
-    tokensOutput: estimatedOutputTokens,
+  const cached = finalUsage.input_token_details?.cache_read ?? 0;
+  const actual = Math.max(0, finalUsage.input_tokens - cached) * 250
+    + cached * 125
+    + finalUsage.output_tokens * 1_000;
+  await handle.commit(actual, {
+    tokensInput: finalUsage.input_tokens,
+    tokensOutput: finalUsage.output_tokens,
   });
-} catch (err) {
-  await handle.release("stream_error");
-  throw err;
+} catch (error) {
+  if (!handle.finalized) {
+    if (dispatchAttempted) {
+      // No final usage may exist for an interrupted stream. Conservatively
+      // settle the estimate and mark it rather than returning budget for
+      // possible partial provider spend.
+      try {
+        await handle.commit(streamEstimate, undefined, { actual_source: "estimate" });
+      } catch (settlementError) {
+        console.error("Cycles settlement failed after stream error", settlementError);
+      }
+    } else {
+      await handle.release("stream_startup_failed");
+    }
+  }
+  throw error;
 }
 ```
 
-## Per-agent budgets
+For a multi-step agent, accumulate normalized usage across its finalized model
+messages, apply `handle.caps` before execution, then commit the aggregate once.
+See the runnable
+[`examples/langchain-js`](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/langchain-js)
+project.
 
-Use Cycles' subject hierarchy to give each agent its own budget scope:
+## Denial and failure semantics
 
-```typescript
-// Planning agent with its own budget
-const plannerHandler = new CyclesBudgetHandler({
-  client,
-  subject: { tenant: "acme", workflow: "support", agent: "planner" },
-});
+- Lifecycle helpers throw `BudgetExceededError` before LangChain runs.
+- At the raw reserve endpoint, budget denial is HTTP 409
+  `BUDGET_EXCEEDED`—not a 2xx `decision: "DENY"` response.
+- A pre-dispatch handler error releases. After provider dispatch, interrupted
+  streams conservatively commit the estimate when final usage is unavailable.
+- Once actual spend is known, commit recovery is journaled and uses the same
+  idempotency key. A recognized terminal commit rejection is surfaced with the
+  handle finalized; never release known spend from a broad catch.
+- A Cycles key deduplicates accounting only. Keep tool side effects separately
+  idempotent.
 
-// Executor agent with a separate budget
-const executorHandler = new CyclesBudgetHandler({
-  client,
-  subject: { tenant: "acme", workflow: "support", agent: "executor" },
-});
+## Why not the old callback recipe?
 
-const planner = new ChatOpenAI({ model: "gpt-4o", callbacks: [plannerHandler] });
-const executor = new ChatOpenAI({ model: "gpt-4o", callbacks: [executorHandler] });
-```
-
-Each agent draws from its own budget allocation. If the executor exhausts its budget, the planner can still operate independently.
-
-## Key points
-
-- **One reservation per LLM call.** The callback creates a reservation on every `handleLLMStart` and commits on `handleLLMEnd`.
-- **Agents are automatically covered.** Multi-turn agents that call the LLM repeatedly get budget-checked on every turn.
-- **Errors release budget.** If the LLM call fails, the reservation is released immediately.
-- **Concurrent-safe.** Reservations are tracked by `runId`, supporting concurrent LLM calls.
-- **Streaming uses a different pattern.** Use `reserveForStream` with its automatic heartbeat instead of the callback handler.
-- **Works with any LangChain.js model.** Attach the handler to `ChatOpenAI`, `ChatAnthropic`, or any other model via `callbacks: [handler]`.
+A simple `handleLLMStart`/`handleLLMEnd` map does not automatically heartbeat a
+long call or durably persist a pending commit before process exit. It can also
+read provider-specific `llmOutput.tokenUsage` while claiming provider-neutral
+behavior. Use the SDK helpers above unless you implement equivalent lease and
+recovery choreography yourself.
 
 ## Next steps
 
-- [Integrating Cycles with LangChain (Python)](/how-to/integrating-cycles-with-langchain) — the Python version of this guide
-- [Handling Streaming Responses](/how-to/handling-streaming-responses-with-cycles) — streaming patterns in detail
-- [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) — how much to reserve per model
-- [Error Handling Patterns in TypeScript](/how-to/error-handling-patterns-in-typescript) — handling Cycles errors in TypeScript
-- [LangChain.js example](https://github.com/runcycles/cycles-client-typescript/tree/main/examples/langchain-js) — runnable LangChain.js integration
+- [TypeScript error handling](/how-to/error-handling-patterns-in-typescript)
+- [Handling streaming responses](/how-to/handling-streaming-responses-with-cycles)
+- [Cost estimation cheat sheet](/how-to/cost-estimation-cheat-sheet)
