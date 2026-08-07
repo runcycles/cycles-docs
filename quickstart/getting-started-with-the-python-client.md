@@ -455,10 +455,16 @@ For each `@cycles`-decorated function call:
 4. If DENY: exception is raised, function does not run
 5. Heartbeat extension is scheduled (background thread; asyncio task for async functions)
 6. Function executes
-7. Actual usage is evaluated (callable, fixed value, or estimate)
+7. Actual usage is evaluated (callable, fixed value, or estimate); a failing or invalid callback commits the estimate with `metadata.actual_source=estimate`
 8. Commit is sent with actual amount and optional metrics
 9. Heartbeat is cancelled
-10. If function raised: reservation is released instead of committed
+10. If the guarded function raised: reservation is released instead of committed
+11. If post-action settlement setup failed: the error surfaces, but known spend is never released
+
+If estimate fallback is disabled without an `actual`, the client rejects the
+configuration before creating a reservation or running the function. A
+recognized terminal commit rejection stops retry and discards the unrecoverable
+journal record without releasing the reservation after spend occurred.
 
 ## Next steps
 

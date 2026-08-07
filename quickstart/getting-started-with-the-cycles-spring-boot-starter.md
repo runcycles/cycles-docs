@@ -215,11 +215,11 @@ Add the starter to your project:
 <dependency>
     <groupId>io.runcycles</groupId>
     <artifactId>cycles-client-java-spring</artifactId>
-    <version>0.3.2</version>
+    <version>0.3.3</version>
 </dependency>
 ```
 ```groovy [Gradle]
-implementation 'io.runcycles:cycles-client-java-spring:0.3.2'
+implementation 'io.runcycles:cycles-client-java-spring:0.3.3'
 ```
 :::
 
@@ -309,6 +309,12 @@ public ChatResponse chat(String prompt) {
 ```
 
 The `actual` expression is evaluated after the method returns, with `#result` bound to the return value.
+
+In v0.3.3+, an invalid explicit `actual` expression cannot turn completed work
+into a release: the starter logs the evaluation failure, commits the estimate,
+and adds `metadata.actual_source=estimate`. If estimate fallback is disabled
+and no `actual` expression is configured, validation fails before the
+reservation or method execution.
 
 ## Annotation attributes
 
@@ -597,7 +603,7 @@ public class LlmService {
 
 ## Commit retry
 
-Known actual usage is written to the durable journal before the first commit request. Transient and ambiguous outcomes retry with the original idempotency key; retry exhaustion, authentication failure, and unclassifiable 4xx responses remain queued across JVM restart. If the reservation expired, the starter switches the durable record to a direct event before attempting recovery.
+Known actual usage is written to the durable journal before the first commit request. Transient and ambiguous outcomes retry with the original idempotency key; retry exhaustion, authentication failure, and unclassifiable 4xx responses remain queued across JVM restart. If the reservation expired, the starter switches the durable record to a direct event before attempting recovery. A recognized terminal commit rejection stops retry and discards the unrecoverable journal entry, but never releases the reservation after the guarded method has spent the resource.
 
 The retry engine is configurable and extensible. The default `JournaledCommitRetryEngine` uses exponential backoff and drains for a bounded time during Spring shutdown.
 

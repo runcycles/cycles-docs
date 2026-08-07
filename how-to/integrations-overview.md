@@ -22,8 +22,8 @@ Cycles has integration patterns for LLM providers, agent frameworks, and web ser
 | [Ollama / Local LLMs](/how-to/integrating-cycles-with-ollama) | Python / TypeScript | — | Decorator / `withCycles` |
 | **AI Frameworks** | | | |
 | [LangChain](/how-to/integrating-cycles-with-langchain) | Python | Yes | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) — `CyclesModelGate` + `CyclesToolGate` + `CyclesFanOutGate` for `create_agent`; callback handler for non-agent runnables |
-| [LangChain.js](/how-to/integrating-cycles-with-langchain-js) | TypeScript | Yes | Callback handler |
-| [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | — | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) for `create_agent` nodes; callback handler / decorator for raw `StateGraph` |
+| [LangChain.js](/how-to/integrating-cycles-with-langchain-js) | TypeScript | Yes | `withCycles` / `reserveForStream` |
+| [LangGraph](/how-to/integrating-cycles-with-langgraph) | Python | Yes | Agent middleware ([`langchain-runcycles`](https://pypi.org/project/langchain-runcycles/)) for `create_agent`; managed decorator/reservation for raw `StateGraph` nodes |
 | [Vercel AI SDK](/how-to/integrating-cycles-with-vercel-ai-sdk) | TypeScript | Yes | `reserveForStream` |
 | [Spring AI](/how-to/integrating-cycles-with-spring-ai) | Java | Yes | `@Cycles` annotation |
 | [LlamaIndex](/how-to/integrating-cycles-with-llamaindex) | Python | — | Decorator |
@@ -81,9 +81,9 @@ Best for: production LangChain agents, anything using `create_agent`, agent-styl
 
 ### Callback handler
 
-For agent frameworks like LangChain that fire events on every LLM call. A custom callback handler creates reservations on `llm_start` and commits on `llm_end`.
+For framework surfaces that expose only callbacks. Use a lifecycle-managed callback that heartbeats long work and durably records known spend before commit; a raw in-memory `llm_start`/`llm_end` map is not crash-safe.
 
-Best for: bare LangChain runnables (`ChatOpenAI` / chains / RAG), non-agent LangGraph nodes, multi-turn agents on the legacy `bind_tools` flow without `create_agent`.
+Best for: bare Python LangChain runnables (`ChatOpenAI` / chains / RAG) when the SDK's managed callback recipe is used. Prefer `@cycles` for raw LangGraph nodes and `withCycles` for LangChain.js.
 
 ### `reserveForStream`
 

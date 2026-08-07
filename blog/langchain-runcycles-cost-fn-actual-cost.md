@@ -15,6 +15,17 @@ head:
 
 # Closing the Estimate-Actual Gap with cost_fn
 
+::: info Update — 2026-08-06
+`langchain-runcycles` 0.4.0 keeps the `cost_fn` contract described in this
+historical release post and adds two operational pieces: cache-aware optional
+rates (`cached_prompt_per_million_usd`, `cache_read_per_million_usd`, and
+separate 5-minute/1-hour cache-creation rates) and the Python SDK's heartbeat plus durable
+settlement lifecycle. A failed first commit is journaled before it is surfaced;
+restart replay and expired-reservation `/v1/events` recovery keep known spend
+from disappearing. The rates remain caller-supplied flat pricing, not a live
+provider-price lookup.
+:::
+
 When [`langchain-runcycles` 0.1.5](https://github.com/runcycles/langchain-runcycles/releases/tag/v0.1.5) shipped `CyclesModelGate` on 2026-05-10, the release notes called out the known limitation directly:
 
 > Commits at the configured `estimate`, not actual token cost.
@@ -63,6 +74,7 @@ model_gate = CyclesModelGate(
     estimate=Amount(unit=Unit.USD_MICROCENTS, amount=2_000_000),  # $0.02 worst case
     cost_fn=openai_cost(
         prompt_per_million_usd=2.50,
+        cached_prompt_per_million_usd=1.25,
         completion_per_million_usd=10.00,
     ),
 )
@@ -86,18 +98,22 @@ from langchain_runcycles.extractors import openai_cost, anthropic_cost
 # (`input_tokens` / `output_tokens`) under the hood.
 openai = openai_cost(
     prompt_per_million_usd=2.50,
+    cached_prompt_per_million_usd=1.25,
     completion_per_million_usd=10.00,
 )
 
 anthropic = anthropic_cost(
     input_per_million_usd=3.00,
     output_per_million_usd=15.00,
+    cache_read_per_million_usd=0.30,
+    cache_creation_5m_per_million_usd=3.75,
+    cache_creation_1h_per_million_usd=6.00,
 )
 ```
 
 Both factories use keyword-only pricing args. That is a deliberate choice — `openai_cost(2.50, 10.00)` would TypeError, which is exactly the kind of error a developer wants at construction time rather than after a quarter of skewed accounting. The asymmetry between input/prompt cost and output/completion cost is real and persistent; the API surface should not let a caller accidentally swap them. The OpenAI factory uses `prompt` / `completion` and the Anthropic factory uses `input` / `output` to match each vendor's historical pricing vocabulary; under the hood, both extractors read the same normalized LangChain `usage_metadata` fields (`input_tokens` / `output_tokens`), so the kwarg naming is purely a developer-facing affordance.
 
-Both extractors return `Amount` in `USD_MICROCENTS` so the commit path doesn't need a unit translation. For provider-specific tokenizers or custom pricing, write your own `cost_fn` — the contract is just a callable that receives the model response and returns an `Amount` (the exported `CostFn` alias is `Callable[[Any], Amount]`).
+Both extractors return `Amount` in `USD_MICROCENTS` so the commit path doesn't need a unit translation. Cache counts come from normalized `input_token_details`; Anthropic's `ephemeral_5m_input_tokens` and `ephemeral_1h_input_tokens` can carry different cache-write rates. Omitted tier rates fall back to the generic cache-creation rate and then ordinary input pricing for backward compatibility. Verify the rates and cache tier for the exact model you deploy. For provider-specific tokenizers or custom pricing, write your own `cost_fn` — the contract is just a callable that receives the model response and returns an `Amount` (the exported `CostFn` alias is `Callable[[Any], Amount]`).
 
 ## When cost_fn fails
 
@@ -117,6 +133,14 @@ The 0.2.0 cost_fn work is half the actuals story. The other half is whether comm
 Release HTTP failures (best-effort by design) log a warning and never raise. Log message wording also changed from "commit failed" to "commit raised" vs "commit returned HTTP failure" so operators can distinguish the two failure modes in audit logs.
 
 This is a small patch in line count and a meaningful patch in semantics. Reserve-at-estimate / commit-at-actual is structurally honest only if the commit outcome is itself reported honestly. A middleware that silently treats a failed commit as success would let `cost_fn` produce the correct actual amount and then discard it — the budget side would never learn what the model actually cost.
+
+Version 0.4.0 closes the durability gap that still existed after v0.2.3. Both
+policies now persist the exact known-spend settlement through the SDK before the
+first commit attempt. `"raise"` surfaces `CyclesProtocolError` after recovery is
+queued; `"log"` returns the handler result while the same durable recovery
+continues. The reservation is heartbeated during long handlers, and an expired
+commit is recovered through `POST /v1/events`. The policy is now an observation
+choice, not a choice between strict and best-effort accounting.
 
 ## The pattern, generalized
 
