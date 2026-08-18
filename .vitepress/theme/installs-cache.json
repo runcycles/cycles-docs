@@ -1,8 +1,8 @@
 {
   "npm": 9365,
-  "pypi": 7251,
+  "pypi": 7264,
   "crates": 158,
-  "clones": 144613,
+  "clones": 144869,
   "clonesByRepo": {
     ".github": {
       "count": 1841,
@@ -13,12 +13,12 @@
       "lastSeenDay": "2026-08-15"
     },
     "cycles-server": {
-      "count": 17566,
-      "lastSeenDay": "2026-08-15"
+      "count": 17597,
+      "lastSeenDay": "2026-08-17"
     },
     "cycles-protocol": {
-      "count": 11236,
-      "lastSeenDay": "2026-08-15"
+      "count": 11274,
+      "lastSeenDay": "2026-08-17"
     },
     "cycles-client-python": {
       "count": 2292,
@@ -45,8 +45,8 @@
       "lastSeenDay": "2026-08-15"
     },
     "cycles-client-typescript": {
-      "count": 3917,
-      "lastSeenDay": "2026-08-15"
+      "count": 3998,
+      "lastSeenDay": "2026-08-17"
     },
     "cycles-docs": {
       "count": 24909,
@@ -57,20 +57,20 @@
       "lastSeenDay": "2026-08-15"
     },
     "cycles-openclaw-budget-guard": {
-      "count": 2982,
-      "lastSeenDay": "2026-08-15"
+      "count": 3018,
+      "lastSeenDay": "2026-08-17"
     },
     "cycles-client-rust": {
       "count": 2529,
       "lastSeenDay": "2026-08-15"
     },
     "cycles-mcp-server": {
-      "count": 6766,
-      "lastSeenDay": "2026-08-15"
+      "count": 6816,
+      "lastSeenDay": "2026-08-17"
     },
     "langchain-runcycles": {
-      "count": 2818,
-      "lastSeenDay": "2026-08-15"
+      "count": 2838,
+      "lastSeenDay": "2026-08-17"
     },
     "cycles-spring-ai-starter": {
       "count": 8298,
@@ -110,18 +110,18 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 21210,
-  "fetchedAt": "2026-08-17T06:33:47.991Z",
+  "total": 21223,
+  "fetchedAt": "2026-08-18T06:25:31.834Z",
   "npmByPackage": {
     "runcycles": 3027,
     "@runcycles/mcp-server": 2757,
     "@runcycles/openclaw-budget-guard": 3581
   },
   "pypiByPackage": {
-    "runcycles": 3847,
-    "runcycles-openai-agents": 888,
-    "langchain-runcycles": 1894,
-    "runcycles-ap2": 622
+    "runcycles": 3854,
+    "runcycles-openai-agents": 890,
+    "langchain-runcycles": 1896,
+    "runcycles-ap2": 624
   },
   "cratesByPackage": {
     "runcycles": 158
