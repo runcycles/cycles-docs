@@ -25,7 +25,7 @@ Then a poisoned ticket or planning error sends it into a broad search. The agent
 
 ## Read permission is not an exposure budget
 
-Identity and access systems are the right place to decide which principal may reach which resource. Row filters, field-level permissions, and [tenant isolation](/glossary#tenant-isolation) should narrow the records a query can return. Those controls solve problems that a budget ledger does not.
+Identity and access systems are the right place to decide which principal may reach which resource. Row filters, field-level permissions, and application-level tenant-data isolation should narrow the records a query can return. Those controls solve problems that a budget ledger does not.
 
 They answer a different question, however. An agent may be authorized to read each of 10,000 customer records individually while having no legitimate reason to collect all 10,000 during one support run. This is the read-side version of the distinction between standing permission and cumulative authority described in [Agent Identity Is Not Agent Authority](/blog/agent-identity-is-not-agent-authority).
 
