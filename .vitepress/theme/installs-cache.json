@@ -1,16 +1,16 @@
 {
-  "npm": 9422,
+  "npm": 9468,
   "pypi": 7271,
   "crates": 158,
-  "clones": 145269,
+  "clones": 145369,
   "clonesByRepo": {
     ".github": {
       "count": 1860,
       "lastSeenDay": "2026-08-17"
     },
     "cycles-server-admin": {
-      "count": 20039,
-      "lastSeenDay": "2026-08-17"
+      "count": 20068,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-server": {
       "count": 17597,
@@ -21,48 +21,48 @@
       "lastSeenDay": "2026-08-17"
     },
     "cycles-client-python": {
-      "count": 2319,
-      "lastSeenDay": "2026-08-17"
+      "count": 2327,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-spring-boot-starter": {
-      "count": 2914,
-      "lastSeenDay": "2026-08-17"
+      "count": 2925,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-agent-action-authority-demo": {
-      "count": 829,
-      "lastSeenDay": "2026-08-17"
+      "count": 831,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-dashboard": {
-      "count": 26655,
-      "lastSeenDay": "2026-08-17"
+      "count": 26672,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-server-events": {
       "count": 5331,
       "lastSeenDay": "2026-08-17"
     },
     "cycles-runaway-demo": {
-      "count": 1294,
-      "lastSeenDay": "2026-08-17"
+      "count": 1307,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-client-typescript": {
-      "count": 3998,
-      "lastSeenDay": "2026-08-17"
+      "count": 4002,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-docs": {
       "count": 24960,
       "lastSeenDay": "2026-08-17"
     },
     "cycles-openai-agents": {
-      "count": 1329,
-      "lastSeenDay": "2026-08-17"
+      "count": 1334,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-openclaw-budget-guard": {
       "count": 3018,
       "lastSeenDay": "2026-08-17"
     },
     "cycles-client-rust": {
-      "count": 2555,
-      "lastSeenDay": "2026-08-17"
+      "count": 2566,
+      "lastSeenDay": "2026-08-19"
     },
     "cycles-mcp-server": {
       "count": 6816,
@@ -110,11 +110,11 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 21287,
-  "fetchedAt": "2026-08-19T06:25:55.335Z",
+  "total": 21333,
+  "fetchedAt": "2026-08-20T06:27:39.769Z",
   "npmByPackage": {
-    "runcycles": 3036,
-    "@runcycles/mcp-server": 2780,
+    "runcycles": 3071,
+    "@runcycles/mcp-server": 2791,
     "@runcycles/openclaw-budget-guard": 3606
   },
   "pypiByPackage": {
