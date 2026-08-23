@@ -7,7 +7,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "finalhandler": "^2.1.1",
     "puppeteer": "^25.6.0",
-    "satori": "^0.29.0",
+    "satori": "^0.29.1",
     "serve-static": "^2.2.1",
     "sharp": "^0.35.3",
     "vitepress": "^1.6.3",
