@@ -6,7 +6,7 @@
     "@fontsource/inter": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
     "finalhandler": "^2.1.1",
-    "puppeteer": "^25.8.0",
+    "puppeteer": "^25.9.0",
     "satori": "^0.33.4",
     "serve-static": "^2.2.1",
     "sharp": "^0.35.4",
