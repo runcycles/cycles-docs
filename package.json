@@ -9,7 +9,7 @@
     "puppeteer": "^25.8.0",
     "satori": "^0.29.1",
     "serve-static": "^2.2.1",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "vitepress": "^1.6.3",
     "vitest": "^4.1.11"
   },
