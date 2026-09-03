@@ -45,7 +45,7 @@ The protocol requires at least one standard subject field: `tenant`, `workspace`
 | `CYCLES_CC_FAIL_CLOSED` | `false` | `true` blocks calls when the Cycles server is unreachable |
 | `CYCLES_CC_TTL_MS` | `1800000` (30 min) | Reservation TTL; must outlive permission prompts and long tool runs |
 
-The Cycles budget tools themselves are never gated (exact-namespace recursion guard). The plugin configures the pinned companion Cycles MCP Server, `@runcycles/mcp-server@0.6.0`, which `npx` fetches as needed rather than the plugin vendoring it. The model can plan with `cycles_check_balance` and explicit reserves while the dispatch hook gates other configured tools.
+The Cycles budget tools themselves are never gated (exact-namespace recursion guard). The plugin configures the pinned companion Cycles MCP Server, `@runcycles/mcp-server@0.6.1`, which `npx` fetches as needed rather than the plugin vendoring it. The model can plan with `cycles_check_balance` and explicit reserves while the dispatch hook gates other configured tools.
 
 ## Verify enforcement
 

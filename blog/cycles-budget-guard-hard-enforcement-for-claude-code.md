@@ -38,7 +38,7 @@ On the [Cycles server](/glossary#cycles-server), a [reservation](/glossary#reser
 
 ## Enforcement design and recovery boundaries
 
-The plugin sits in the dispatch path of every gated tool call. Its [current audit log](https://github.com/runcycles/cycles-claude-plugin/blob/main/AUDIT.md) records the enforcement reviews and operational hardening included through v0.2.0. The resulting boundaries are explicit:
+The plugin sits in the dispatch path of every gated tool call. Its [current audit log](https://github.com/runcycles/cycles-claude-plugin/blob/main/AUDIT.md) records the enforcement reviews and operational hardening included through v0.2.1. The resulting boundaries are explicit:
 
 **Integrity failures are not availability failures.** An unreachable server is eligible for fail-open by default, bounded by a four-second request deadline, or fail-closed when configured. A fail-open call has no reservation and is therefore unmetered. A malformed reserve response — an unknown decision, a missing reservation id, or a `tool_denylist` sent as a string instead of an array — is denied. The plugin never grants execution from a reserve response it cannot interpret, and a mistyped cap is malformed rather than missing.
 
