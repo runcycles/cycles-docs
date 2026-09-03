@@ -33,7 +33,7 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | `cycles-mcp-server` | 0.6.1 | 2026-07-27 | Node 20+, MCP protocol, Claude Desktop `.mcpb` | [CHANGELOG](https://github.com/runcycles/cycles-mcp-server/blob/main/CHANGELOG.md) |
 | `cycles-openai-agents` | 0.3.0 | 2026-07-27 | OpenAI Agents SDK (Python) | [CHANGELOG](https://github.com/runcycles/cycles-openai-agents/blob/main/CHANGELOG.md) |
 | `cycles-openclaw-budget-guard` | 0.9.0 | 2026-07-27 | OpenClaw plugin (Node) | [CHANGELOG](https://github.com/runcycles/cycles-openclaw-budget-guard/blob/main/CHANGELOG.md) |
-| `cycles-claude-plugin` | 0.2.0 | 2026-07-22 | Cycles Budget Guard for Claude Code (Node 22+; companion MCP server 0.6.0) | [CHANGELOG](https://github.com/runcycles/cycles-claude-plugin/blob/main/CHANGELOG.md) |
+| `cycles-claude-plugin` | 0.2.1 | 2026-09-01 | Cycles Budget Guard for Claude Code (Node 22+; companion MCP server 0.6.1) | [CHANGELOG](https://github.com/runcycles/cycles-claude-plugin/blob/main/CHANGELOG.md) |
 | `langchain-runcycles` | 0.4.0 | 2026-08-06 | LangChain `create_agent` middleware (Python) — model/tool reserve modes now use SDK heartbeat and durable journal/event recovery; cache-aware normalized cost extractors; `CyclesFanOutGate` loop control | [CHANGELOG](https://github.com/runcycles/langchain-runcycles/blob/main/CHANGELOG.md) |
 | `cycles-spring-ai-starter` | 0.4.0 | 2026-07-27 | Spring Boot 3.5+, Spring AI 1.0+/1.1+, Java 21 — three extension points added in 0.3.0: **pluggable `SubjectResolver`** for per-call attribution (multi-tenant agents can route the Cycles subject from an authenticated principal, header, or thread-local); **pluggable `PromptTokenEstimator`** with a real BPE impl (`JtokkitPromptTokenEstimator` via `com.knuddels:jtokkit`, opt in with `cycles.spring-ai.token-estimator-encoding=cl100k_base` / `o200k_base`); **`cycles.reservation_id` on chat-client traces** as a high-cardinality `KeyValue` for trace ↔ reservation correlation. End-to-end integration test added. 98.3% instruction / 95.7% branch test coverage at 0.3.0; 0.3.1 is a documentation-only patch (fixed a 10x cost-per-token example) verified at 100% / 100%. No breaking changes vs 0.2.0. Companion to `cycles-spring-boot-starter`. | [CHANGELOG](https://github.com/runcycles/cycles-spring-ai-starter/blob/main/CHANGELOG.md) |
 | `cycles-ap2-python` | 0.3.1 | 2026-07-27 | AP2 payment-mandate guard (Python 3.10+) | [CHANGELOG](https://github.com/runcycles/cycles-ap2-python/blob/main/CHANGELOG.md) |
@@ -345,7 +345,7 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `cycles-client-java-spring` | 0.3.2 | v0.1.23+, v0.1.24+, v0.1.25+; server-authoritative heartbeat on runtime 0.1.25.59+ |
 | `@runcycles/mcp-server` | 0.6.1 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.9.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
-| Cycles Budget Guard for Claude Code | 0.2.0 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.0 |
+| Cycles Budget Guard for Claude Code | 0.2.1 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.1 |
 | Cycles Server (runtime) | v0.1.25.59 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
 | Cycles Admin Server | v0.1.25.55 | Governance spec v0.1.25.42 |
 | Cycles Events Service | v0.1.25.25 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
