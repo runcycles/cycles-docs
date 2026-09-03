@@ -185,6 +185,25 @@ The most useful budgets mirror how Grok Bot actually runs:
 
 These budgets do not replace a human approval rule. A production deployment can require approval *and* consume 100 risk points. One control answers whether the person approved this action; the other answers whether the cumulative allowance still exists.
 
+## Worked Example: A Paid-Media Budget Change
+
+Paid media makes the boundary concrete. xAI's [Grok Bot use-case guide](https://docs.x.ai/grok-bot/use-cases) recommends a draft-first workflow: gather performance data, produce recommendations, and require approval before changing campaigns. Keep that approval. Then place the mutation behind one custom MCP tool, such as `apply_campaign_daily_budget`.
+
+Suppose the Bot proposes raising a campaign from $800 to $950 per day. The execution path is:
+
+1. Grok Bot researches performance and drafts the change.
+2. A person approves the consequential tool call through Grok Bot.
+3. The gateway authenticates the connector, authorizes the configured ad account, and reads the current $800 budget directly from the provider. It does not trust a model-supplied current value.
+4. The gateway computes 35 `RISK_POINTS`—a 25-point base plus 5 points for each started $100 of change—and reserves them against the member, routine, and paid-media toolset.
+5. Only after `ALLOW` does it call the provider. The write carries the stable operation ID, the Cycles reservation ID, and the expected $800 current value. A concurrent change causes the provider to reject the mutation instead of applying authority calculated from stale state.
+6. The gateway commits after a confirmed write. If the provider times out after dispatch, it conservatively commits and queues reconciliation rather than releasing authority that may have been used.
+
+The result is deliberately layered. Grok Bot records the proposal and approval; the gateway records the authenticated principal, arguments, and downstream request; Cycles records the scoped reservation and settlement. A shared operation ID and reservation ID join those records without pretending that Cycles itself verified the campaign's business rationale.
+
+::: tip Runnable reference
+The [`cycles-mcp-server` Grok Bot paid-media gateway](https://github.com/runcycles/cycles-mcp-server/tree/main/examples/grok-bot-paid-media-gateway) includes the MCP tool, authenticated HTTP transport, mock paid-media API, fail-closed settlement behavior, and tests. Deploy it behind HTTPS, add the `/mcp` endpoint as a [custom connector](https://docs.x.ai/grok/connectors), and replace the demo token with OAuth or an identity-aware gateway before production use.
+:::
+
 ## A Three-Layer Decision
 
 For a consequential custom tool, execution should require all three layers to agree:
@@ -202,7 +221,7 @@ For a consequential custom tool, execution should require all three layers to ag
 
 A denial at any layer stops the action. This is stronger than asking one system to imitate all three jobs.
 
-It also produces cleaner incident response. Grok Bot's action history can show what the Bot attempted and what a person approved. The application log can show which principal and arguments were authorized. Cycles can show which scoped ledger admitted or denied the action and how much cumulative authority remained.
+It also produces cleaner incident response. Grok Bot's action history can show what the Bot attempted and what a person approved. The application log can show which principal and arguments were authorized. Cycles can show which scoped ledger admitted or denied the action and how much cumulative authority remained. Carry one operation ID through all three layers, add the Cycles reservation ID to the downstream request, and retain the provider's request ID for reconciliation.
 
 ## Start With One Boundary
 
@@ -232,11 +251,13 @@ A persistent agent can keep working. Runtime authority decides when it must stop
 
 - [Introducing Grok Bot](https://x.ai/news/introducing-grok-bot) — launch positioning, early-beta status, and example workflows
 - [Grok Bot overview](https://docs.x.ai/grok-bot/overview) — persistent computers, collaboration, shared state, and routines
+- [Grok Bot use cases](https://docs.x.ai/grok-bot/use-cases) — paid-media research, draft-first recommendations, and approval before campaign changes
 - [Use the computer and apps](https://docs.x.ai/grok-bot/computer-and-apps) — shared sessions, files, credentials, and connectors
 - [Skills and routines](https://docs.x.ai/grok-bot/skills-routines-and-automations) — scheduled work, real test runs, and recommended approval boundaries
 - [Approvals, security, and privacy](https://docs.x.ai/grok-bot/approvals-security-and-privacy) — Auto Review, local execution, least privilege, and shared-computer security
 - [Grok Bot for teams and enterprises](https://docs.x.ai/grok-bot/teams-and-enterprises) — architecture, identity, MCP policy, network controls, and action recording
 - [Grok connectors](https://docs.x.ai/grok/connectors) — custom MCP connector support and authentication
+- [Custom MCP tunneling](https://docs.x.ai/grok/connectors/custom-mcp-tunneling) — exposing a local MCP server for temporary connector evaluation
 - [Add Hard Budgets to MCP Tools Before They Execute](/blog/mcp-tool-budgets-before-execution) — the complete Cycles MCP wrapper pattern
 - [Computer-Use Agents Have No Tool Boundary](/blog/computer-use-agents-have-no-tool-boundary) — why arbitrary browser clicks need target, intent, and context outside Cycles' current schema
 - [How Cycles Meters Caller-Assigned Action Exposure](/blog/beyond-budget-how-cycles-controls-agent-actions) — what `RISK_POINTS` do and do not enforce
