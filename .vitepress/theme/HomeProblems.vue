@@ -2,30 +2,30 @@
 const problems = [
   {
     icon: '/icons/gauge.svg',
-    hook: 'Your agent spent $4,200 while you slept.',
-    detail: 'It hit an ambiguous error, retried with expanding context, and looped 240 times. Provider caps fired the next morning — blocking every agent on the account.',
-    solution: 'Cap it at $15 per run.',
+    hook: '240 iterations. $52.80 in modeled spend.',
+    detail: 'In an illustrative coding-agent loop, an ambiguous error triggers 240 iterations over three hours. At the stated average token usage and prices, a mandatory $15 run budget rejects a protected call around iteration 68.',
+    solution: 'See the $15 run-budget example.',
     link: '/why-cycles/cost-control',
   },
   {
     icon: '/icons/shield-check.svg',
-    hook: '200 emails. $1.40 in tokens. $50K in damage.',
-    detail: 'A prompt regression turned welcome emails into collections notices. The agent stayed within its token budget the entire time. No spending limit would have caught it.',
-    solution: 'Gate actions, not just spend.',
+    hook: '200 mistaken emails. $1.40 in modeled token cost.',
+    detail: 'In an illustrative support-agent scenario, a template regression sends payment reminders instead of welcome messages. Business impact is unquantified. A token-spend budget can leave this activity within its limit.',
+    solution: 'Budget caller-assigned tool exposure.',
     link: '/why-cycles/action-authority',
   },
   {
     icon: '/icons/users-lock.svg',
-    hook: "One customer's runaway just blocked your other 500.",
-    detail: "Customer #47 triggered a research loop. Their session burned through the shared API budget. The provider cap fired and blocked every tenant on the platform.",
-    solution: 'Isolate every customer.',
+    hook: "One customer's loop can exhaust a shared budget.",
+    detail: 'In an illustrative SaaS scenario, one research loop consumes a shared provider allocation and interrupts other tenants. Separate application ledgers can bound each tenant\'s submitted usage on protected paths.',
+    solution: 'Configure tenant budget isolation.',
     link: '/why-cycles/multi-tenant',
   },
   {
     icon: '/icons/book-text.svg',
-    hook: 'Auditor asks: prove the agent was under control.',
-    detail: "Dashboards show what happened after the fact. They don't show the pre-execution decision, scope, denial, commit, and authority trail.",
-    solution: 'Show enforcement evidence.',
+    hook: 'Can you explain the budget decision before a call?',
+    detail: 'Reservation lifecycle records show submitted scopes, budget decisions, and settlement. Correlate them with application logs for tool authorization and outcomes.',
+    solution: 'Inspect budget enforcement evidence.',
     link: '/why-cycles/governance',
   },
 ]
@@ -34,7 +34,7 @@ const problems = [
 <template>
   <section class="home-problems">
     <div class="inner">
-      <h2 class="heading">Four incidents Cycles prevents</h2>
+      <h2 class="heading">Budget and exposure scenarios</h2>
       <div class="grid">
         <a
           v-for="item in problems"

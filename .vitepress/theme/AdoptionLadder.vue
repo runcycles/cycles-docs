@@ -21,7 +21,7 @@ const steps = [
     iconAlt: 'Shield',
     heading: 'Wrap one tool call',
     time: '~30 min',
-    detail: 'Cap what agents can do (email, deploy, mutation), not just what they spend.',
+    detail: 'Assign a tool-exposure estimate and require a reservation before dispatch. Your application authorizes the tool.',
     link: '/how-to/assigning-risk-points-to-agent-tools',
   },
   {

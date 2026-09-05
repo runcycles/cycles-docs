@@ -2,8 +2,8 @@
 const layers = [
   {
     id: 'routing',
-    label: 'Routing',
-    question: 'Which model?',
+    label: 'Gateway controls',
+    question: 'Route and enforce supported traffic',
     examples: 'LiteLLM · Portkey · Gateways',
     accent: false,
   },
@@ -11,13 +11,13 @@ const layers = [
     id: 'visibility',
     label: 'Visibility',
     question: 'What happened?',
-    examples: 'LangSmith · Langfuse · Helicone',
+    examples: 'Tracing and dashboards',
     accent: false,
   },
   {
     id: 'authority',
-    label: 'Authority',
-    question: 'Should this happen?',
+    label: 'Application budgets',
+    question: 'Does this protected operation fit?',
     examples: 'Cycles',
     accent: true,
   },
@@ -25,7 +25,7 @@ const layers = [
 </script>
 
 <template>
-  <div class="stack-diagram" role="img" aria-label="AI agent infrastructure stack: Routing, Visibility, and Authority layers">
+  <div class="stack-diagram" role="img" aria-label="Budget boundaries: gateways enforce supported routed traffic; tracing records activity; Cycles checks shared budgets for operations the host instruments. The host authorizes actions and skips execution when a reservation is rejected.">
     <div
       v-for="(layer, i) in layers"
       :key="layer.id"
@@ -41,20 +41,19 @@ const layers = [
       </div>
       <div v-if="layer.accent" class="layer-pillars">
         <span class="pillar">Budget Gate</span>
-        <span class="pillar">Action Gate</span>
-        <span class="pillar">Audit Trail</span>
+        <span class="pillar">Exposure Budget</span>
+        <span class="pillar">Lifecycle Records</span>
       </div>
     </div>
     <p class="stack-caption">
-      Routing and visibility are necessary. They are not sufficient. Neither can prevent the 241st retry or block the 201st email.
+      Gateways can reject supported model and tool calls before execution. Tracing records activity; some products also provide gateway controls. Cycles applies shared application budgets across operations the host instruments, including direct APIs and jobs outside the gateway. The host authorizes actions and skips execution when a reservation is rejected.
     </p>
     <div class="visually-hidden">
-      AI agent infrastructure stack — three layers:
-      1. Routing layer (which model?) — LiteLLM, Portkey, gateway proxies.
-      2. Visibility layer (what happened?) — LangSmith, Langfuse, Helicone.
-      3. Authority layer (should this happen? — before execution) — Cycles.
-      The Authority layer contains three capabilities: Budget Gate, Action Gate, and Audit Trail.
-      Routing and visibility are necessary but not sufficient. Neither can prevent the 241st retry or block the 201st email. Cycles is the authority layer — the decision point between "the agent wants to do X" and "X happens."
+      AI agent infrastructure stack — three concerns:
+      1. Gateway controls — routing and pre-execution enforcement on supported traffic.
+      2. Visibility — tracing and dashboards record activity; a product can serve more than one concern.
+      3. Application budgets — Cycles checks shared ledgers for instrumented operations across services.
+      Cycles provides budget checks, caller-assigned exposure budgets, and reservation lifecycle records. The host authorizes tools and arguments and enforces the reservation result before dispatch.
     </div>
   </div>
 </template>

@@ -2,8 +2,8 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 // Both demos appear on the homepage and on /demos/.
-// Action authority goes first because it is the product's clearest
-// differentiator: staying under budget does not make an action safe.
+// The first demo shows the host skipping an email after its toolset
+// budget reservation is rejected.
 // Cost runaway follows as the familiar spend-enforcement case.
 // CTAs deep-link to the corresponding H2 anchors on /demos/ for run instructions.
 //
@@ -22,10 +22,10 @@ const demos = [
     webm: '/demo-action-authority.webm',
     gifFallback: '/demo-action-authority.gif',
     alt: 'Cycles demo: a support agent runs a four-step workflow; without Cycles all four actions execute including the customer email; with Cycles the first three proceed and the email is blocked before it sends.',
-    intro: 'Same workflow. Different boundary.',
+    intro: 'Mocked tools. A configured toolset budget.',
     captionWithout: 'All four actions execute — including the customer email.',
-    captionWith: 'Internal actions proceed; the email is blocked before it sends.',
-    mechanism: 'decide → DENY → no email send',
+    captionWith: 'Internal actions proceed; the host skips the email when its reservation is rejected.',
+    mechanism: 'reserve → 409 BUDGET_EXCEEDED → no email send',
     ctaText: 'Run the action-authority demo',
     ctaLink: '/demos/#action-authority-demo',
   },
@@ -36,11 +36,11 @@ const demos = [
     mp4: '/demo-runaway.mp4',
     webm: '/demo-runaway.webm',
     gifFallback: '/demo-runaway.gif',
-    alt: 'Cycles demo: an agent burns ~$10 in 12 seconds without enforcement; with Cycles, the same agent stops cleanly at $1.',
-    intro: 'Same agent. Same bug.',
-    captionWithout: '~$10 in 12s — the pace behind $4,200 incidents.',
-    captionWith: '$1 cap, before the next action ran.',
-    mechanism: 'reserve → deny → no downstream call',
+    alt: 'Accelerated demo recording with simulated costs: roughly $10 in 12 seconds without Cycles; a $1 budget stops the protected agent before its next call.',
+    intro: 'Same agent. Same bug. Simulated costs.',
+    captionWithout: '~$10 in 12s in this accelerated recording; the local demo runs to ~$5.95 in ~30s.',
+    captionWith: 'The $1 budget rejects the next reservation; the host skips the call.',
+    mechanism: 'reserve → 409 BUDGET_EXCEEDED → no downstream call',
     ctaText: 'Run the runaway demo',
     ctaLink: '/demos/#runaway-agent-demo',
   },

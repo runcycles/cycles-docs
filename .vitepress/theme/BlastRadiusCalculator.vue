@@ -142,7 +142,7 @@ const worstIncident = computed(() =>
 )
 // Worst single-runaway blast: one action looping up to the runaway ceiling
 // before containment. This is the discrete catastrophe a per-run budget or
-// per-action RISK_POINTS quota bounds — lower the ceiling to your cap to see it.
+// positive per-operation RISK_POINTS charge can bound on protected paths.
 const worstRunaway = computed(() =>
   computedRows.value.length ? Math.max(...computedRows.value.map(r => r.runawayBlast)) : 0
 )
@@ -261,13 +261,13 @@ async function downloadPng() {
 
       <div class="global-controls">
         <label class="containment">
-          <span class="containment-label">Cycles containment (% of incidents prevented)</span>
+          <span class="containment-label">Assumed containment (% of incidents prevented)</span>
           <div class="containment-row">
             <input type="range" min="0" max="100" step="5" v-model.number="state.containmentPct" class="containment-slider" @change="normalizeContainment" />
             <input type="number" min="0" max="100" step="1" v-model.number="state.containmentPct" class="containment-num" @change="normalizeContainment" @blur="normalizeContainment" />
             <span class="containment-pct">%</span>
           </div>
-          <span class="containment-hint">Default 0% shows the unbounded blast radius. Dial up to see the value of runtime action authority.</span>
+          <span class="containment-hint">Default 0% assumes no prevention. Set a value supported by your actual controls; this is a modeling assumption, not a measured Cycles prevention rate.</span>
         </label>
         <label class="runaway">
           <span class="containment-label">Runaway ceiling (max wrong fires in one incident)</span>
@@ -275,7 +275,7 @@ async function downloadPng() {
             <input type="number" min="1" step="10" v-model.number="state.runawayCeiling" class="containment-num runaway-num" @change="normalizeRunaway" @blur="normalizeRunaway" />
             <span class="containment-pct">fires</span>
           </div>
-          <span class="containment-hint">A single runaway is this many wrong fires before something stops it. A Cycles per-run <em>action-count</em> cap sets this ceiling directly; a per-run budget or a per-action <a href="/how-to/assigning-risk-points-to-agent-tools">RISK_POINTS</a> quota bounds it indirectly — the number of fires allowed before the budget runs out. Lower it to your effective cap to see the bounded blast.</span>
+          <span class="containment-hint">This is an assumed maximum number of wrong executions per incident. Today, a shared run budget with a fixed, positive <a href="/how-to/assigning-risk-points-to-agent-tools">RISK_POINTS</a> charge can bound protected calls when the host requires a reservation and settles each call. Server-enforced action-kind count quotas are <a href="/protocol/action-governance-preview-in-cycles">preview features</a>. Use a ceiling justified by your integration.</span>
         </label>
       </div>
 

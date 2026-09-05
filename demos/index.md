@@ -9,7 +9,7 @@ Each demo runs locally with Docker. No LLM API keys required — all tools and m
 
 ## Runaway Agent Demo
 
-A support agent with a quality-loop bug burns ~$5.95 in ~30 seconds without Cycles (simulated calls at 50ms latency) — auto-terminated only because the demo enforces a safety timeout. In production, there would be no timeout. With Cycles, the agent stops cleanly at $1.00.
+A support agent with a quality-loop bug burns ~$5.95 in ~30 seconds without Cycles (simulated calls at 50ms latency) — auto-terminated because the demo enforces a safety timeout. A production deployment may have its own timeout or other limits. With Cycles, this protected demo agent stops at its $1.00 budget.
 
 **What it shows:** Budget enforcement stops a cost runaway before damage accumulates.
 
@@ -45,7 +45,7 @@ The recording above uses an accelerated call rate (~$10 in 12 seconds) for visua
 
 A support agent handles a billing dispute in four steps. Cycles allows internal actions (notes, CRM updates) but blocks the customer email — before it executes.
 
-**What it shows:** Toolset-scoped budgets give agents authority over safe actions while blocking risky ones.
+**What it shows:** The host checks a configured toolset budget before dispatch and skips the email when its reservation is rejected. Tool and argument authorization remain host responsibilities; this demo does not implement the preview action-kind policy engine.
 
 **Mechanism:** `reserve → 409 BUDGET_EXCEEDED → no email send` (the terminal display renders the blocked reservation as a DENY)
 
