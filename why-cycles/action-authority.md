@@ -7,7 +7,7 @@ description: "Illustrative scenario: 200 mistaken emails have low token cost and
 
 Consider an [illustrative support-agent scenario](/blog/ai-agent-action-control-hard-limits-side-effects): a template regression turns welcome messages into payment reminders, and the host sends 200 emails. The modeled token cost is about $1.40; customer and business impact are potentially much larger but not quantified by source data.
 
-No spending limit would have caught this. The LLM calls were cheap. The damage was in what the agent *did*, not what it *spent*.
+A monetary budget above the modeled $1.40 token cost would not stop these emails on cost alone. The host also needs action authorization and limits on cumulative tool exposure.
 
 ## Why budget limits aren't enough
 

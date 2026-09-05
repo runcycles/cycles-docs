@@ -2,12 +2,12 @@
 layout: home
 title: "Cycles — Runtime authority for autonomous agents"
 titleTemplate: false
-description: "Runtime authority for autonomous AI agents — pre-execution gating on cost, risk, and tool actions. Open protocol, self-hosted, Apache 2.0."
+description: "Shared application budgets for protected model calls, paid APIs, and caller-assigned tool exposure. Open protocol, self-hosted, Apache 2.0."
 hero:
   name: "Cycles"
   text: "Runtime authority for autonomous agents"
   tagline: >-
-    Stop runaway agent spend and risky actions before they execute.<br><span style="font-size: 0.85em; opacity: 0.7;">Self-hosted, no prompt storage. Apache 2.0.</span>
+    Reserve budget before protected model calls and tool operations.<br><span style="font-size: 0.85em; opacity: 0.7;">Self-hosted, no prompt storage. Apache 2.0.</span>
   image:
     light: /runcycles-hero.svg?v=8
     dark: /runcycles-hero-dark.svg?v=8
