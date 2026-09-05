@@ -27,10 +27,12 @@ This is a post-mortem of why that happened, and why I think most teams building 
 
 The reasoning at the time was unremarkable:
 
-- Our agents called **many paid providers** — OpenAI, Stable Diffusion, Kling, Google, stock data APIs, web search. No off-the-shelf proxy covered all of them.
-- Existing LLM proxies (LiteLLM, Helicone) solved the LLM layer, not the tool-call layer. They wouldn't see the $2 stock chart API call or the $0.30 web search.
+- Our agents called **many paid providers** — OpenAI, Stable Diffusion, Kling, Google, stock data APIs, web search. Our gateway integrations did not cover the full workload.
+- The $2 stock chart API call and the $0.30 web search ran outside our LLM proxy path, so that path did not account for them.
 - We needed per-user caps — a single customer's runaway agent shouldn't consume another customer's budget.
 - "It's just Redis and some counters. How hard could it be?"
+
+This describes our integration at the time, not a current limit on every gateway. As checked September 4, 2026, LiteLLM documents [budget reservations](https://docs.litellm.ai/docs/proxy/users#budget-reservation), [agent/session controls](https://docs.litellm.ai/docs/a2a_iteration_budgets), and [MCP tool-cost tracking](https://docs.litellm.ai/docs/mcp_cost). The relevant question today is whether supported gateway paths and scopes cover the shared application budget; the [current comparison](/concepts/cycles-vs-litellm) examines that boundary.
 
 We started with a straightforward design, hit a wall, rebuilt, hit another wall, rebuilt again. Here's the story of each wall.
 

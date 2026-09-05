@@ -35,9 +35,11 @@ The simplest approach: tell the agent what not to do.
 
 This is a semantic control — a natural-language instruction to a probabilistic system. It works often enough in testing to feel reliable — until it doesn't.
 
-### 2. LLM Proxy Rate Limits
+### 2. Gateway Rate Limits and Budgets
 
 Tools like LiteLLM, Helicone, or custom API gateways that sit between your agent and the model provider. They enforce token-per-minute caps, request rate limits, per-key spend thresholds, and in some cases hard budget ceilings per team or user.
+
+LiteLLM also documents [default-enabled budget reservations](https://docs.litellm.ai/docs/proxy/users#budget-reservation) and [agent iteration/session-spend limits](https://docs.litellm.ai/docs/a2a_iteration_budgets). Its [MCP cost tracking](https://docs.litellm.ai/docs/mcp_cost) covers supported tool paths. These capabilities, checked September 4, 2026, go beyond rate limiting; evaluate their route coverage and admission semantics separately.
 
 ### 3. Framework-Native Guards
 
@@ -49,7 +51,7 @@ Provider dashboards (OpenAI usage page, Anthropic console) or custom monitoring 
 
 ### 5. Build Your Own Rate Limiter
 
-This is what we did at [scalerX](https://scalerx.ai). When your agents call across multiple providers — LLMs, image generation, video generation, stock chart APIs, market data feeds, web search — no off-the-shelf proxy covers all of them. So you build a custom rate limiter that tracks usage across providers, enforces per-agent or per-user caps, and tries to keep aggregate spend under control. It works — until it doesn't.
+This is what we did at [scalerX](https://scalerx.ai). Our agents called across LLMs, image generation, video generation, stock chart APIs, market data feeds, and web search, with operations outside the gateway paths we had integrated. We built a custom rate limiter to track usage across those providers and enforce per-agent or per-user caps. The maintenance and shared-accounting requirements grew with the integrations.
 
 ---
 
@@ -60,7 +62,7 @@ Here's how each approach holds up against cost and risk:
 | Approach | Cost control | Risk control |
 |---|---|---|
 | System prompts | Suggestion | Suggestion |
-| Proxy rate limits | Per-provider only | Blind |
+| Gateway rate limits and budgets | Supported routed traffic and configured scopes | Gateway policies where supported; direct actions need host controls |
 | Framework guards | Framework-specific | Coarse-grained |
 | Spend dashboards | Post-hoc | Absent |
 | Custom rate limiter | Partial | Absent |
@@ -69,7 +71,7 @@ Each approach has a specific failure mode when it comes to controlling spend:
 
 **System prompts** are suggestions, not transactional budget controls. A model can fail to follow them under complex reasoning, tool loops, or adversarial input. In one [$12,400 illustrative weekend workload model](/blog/true-cost-of-uncontrolled-agents), the agent does exactly what the workflow permits — simply more times than planned.
 
-**Proxy rate limits** manage request and spend controls well at the LLM layer — but they don't unify into a general action-governance layer for the entire agent runtime. If your agent calls OpenAI for reasoning, Stable Diffusion for images, and a paid data API for stock quotes, no single proxy sees the aggregate cost across all of them. Rate limits also throttle everything equally — they can't distinguish between a $0.03 lookup and a $7.20 multi-step research chain. And they typically operate per-key, not per-agent, per-[tenant](/glossary#tenant), or per-workflow.
+**Gateway controls** can aggregate routed model and supported tool costs across multiple providers and identities. The gap is work outside those configured paths, or shared application scopes the controls do not express. A workflow spanning gateway inference, a direct paid data API, and a metered job needs each operation included in its budget boundary. A request-rate limit alone does not express that cumulative cost budget; LiteLLM's reservations and agent/session controls should be evaluated on their own terms. See the [updated comparison](/concepts/cycles-vs-litellm).
 
 **Framework guards** are tightly coupled to one orchestration layer. A max-iteration count in LangGraph doesn't protect you if the agent makes an expensive external API call on iteration one. And if you switch frameworks — or run agents across multiple frameworks — each guard is framework-specific and none of them compose.
 
@@ -93,7 +95,7 @@ This is where every approach listed above fails simultaneously:
 
 **System prompts can be bypassed.** Prompt injection — whether from user input, retrieved documents, or tool outputs — can redirect an agent's behavior within its existing permissions. The agent still has email access. The system prompt said "only send emails the user approves." The injected context convinced the agent that the user approved. OWASP's Top 10 for Agentic Applications [lists Agent Goal Hijack (ASI01) as the first entry](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) — and prompt injection is one of the primary attack vectors.
 
-**Proxy rate limits don't see tool calls.** A proxy sits between your agent and the LLM provider. It sees token usage. It doesn't see that the agent called `send_email()` 200 times, or `delete_record()` on a production database, or `deploy()` to a live environment. Tool calls are invisible to the proxy layer.
+**Gateway coverage requires routed operations.** A tool called through a supported gateway interface can be tracked or governed there. Direct calls to `send_email()`, `delete_record()`, or `deploy()` outside that interface require host-side controls. Monetary accounting alone also does not express whether the action and its arguments are authorized or how much operational exposure is acceptable.
 
 **Framework guards are coarse-grained.** A max-iteration limit might stop a loop, but it can't express "allow `search()` unlimited times, allow `send_email()` three times per run, deny `delete_record()` entirely." You can wire custom pre-execution checks into frameworks like LangGraph or CrewAI, but they stay custom, framework-specific, and hard to generalize across providers. No major framework provides this as a first-class, cross-provider, pre-execution runtime primitive today — what we call [action authority](/blog/ai-agent-action-control-hard-limits-side-effects).
 
@@ -134,13 +136,13 @@ The shift isn't conceptual — it's architectural. Instead of hoping guardrails 
 | Current Approach | Structural Alternative |
 |---|---|
 | System prompt: "don't exceed $10" | [Reserve-commit lifecycle](/blog/what-is-runtime-authority-for-ai-agents): budget atomically locked before each call |
-| Proxy rate limit per provider | Cross-provider budget scope: one enforcement point across all models and tools |
+| Gateway controls covering routed traffic | Shared application budgets across instrumented gateway calls and direct services |
 | Framework max-iteration count | [Caller-assigned RISK_POINTS](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk): the application scores and meters tool exposure, not just iterations |
 | Spend dashboard + alert | Live reservation rejection before the instrumented call |
 | Custom rate limiter across providers | [Reserve-commit](/blog/what-is-runtime-authority-for-ai-agents) for both monetary and caller-assigned exposure budgets; each provider path still needs integration |
 | Inherited permissions in delegation | [Authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation): explicitly provision a narrower child ledger and restrict its tool set in the orchestrator |
 
-The pattern is the same in every row: move the decision upstream, from after execution to before it. From semantic to structural. From observation to enforcement.
+The shared requirement is a pre-execution control covering the relevant operation and scope. Some gateways already supply that boundary; direct services and application-specific exposure budgets may need additional integration.
 
 ---
 

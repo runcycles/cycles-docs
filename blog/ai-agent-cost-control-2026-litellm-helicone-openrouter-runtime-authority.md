@@ -17,26 +17,29 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-If you're running AI agents in production, you've probably evaluated — or already deployed — at least one cost control tool. LiteLLM for routing and team budgets. Helicone for observability and rate limiting. OpenRouter for unified model access with spending caps.
+If you're running AI agents in production, you've probably evaluated — or already deployed — at least one cost control tool. LiteLLM for routing, budget reservations, and agent/session limits. Helicone for observability and rate limiting. OpenRouter for unified model access with spending caps.
 
-Each solves a real problem. None of them solve the whole problem.
+Each can cover a useful budget boundary. The choice depends on which operations and shared scopes your application needs to govern.
 
-This post maps what each tool actually does, where they converge, where they diverge, and the architectural layer that sits underneath all of them. It's written for engineers evaluating their production stack — not to sell you one tool over another, but to help you see where the gaps are before you discover them in production. (For a broader comparison of proxy and observability layers as categories, see [Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools).)
+This post maps gateway controls and the application boundaries that may need additional accounting. For a broader comparison of proxy and observability layers as categories, see [Cycles vs LLM Proxies and Observability Tools](/blog/cycles-vs-llm-proxies-and-observability-tools).
 
 <!-- more -->
 
 ## What each tool does
 
-### LiteLLM: Proxy with team budgets
+### LiteLLM: Gateway reservations and agent budgets
 
-[LiteLLM](https://docs.litellm.ai) is an open-source LLM proxy that routes calls across providers with automatic fallback. Over the past year, it has grown into a legitimate cost control layer:
+[LiteLLM](https://docs.litellm.ai) is an open-source gateway that routes calls across providers with automatic fallback and provides cost controls:
 
 - **Per-key and per-team budgets** with `max_budget` (hard cap) and `soft_budget` (alert before cutoff)
-- **Budget duration** with auto-reset from seconds to 30 days
+- **Budget duration** with configurable reset intervals
 - **RPM/TPM rate limits** configurable per key, team, user, and customer
 - **Webhook alerts** on budget threshold events (Slack, Discord, MS Teams, custom webhooks)
 - **Model access control** — restrict which models a key can use
 - **Spend tracking** across keys, teams, internal users, end users, and model/provider dimensions
+- **Budget reservations enabled by default** — estimate and reserve supported request cost, reject before provider execution when capacity is insufficient, then reconcile actual cost ([documentation](https://docs.litellm.ai/docs/proxy/users#budget-reservation))
+- **Agent/session limits** — `max_iterations` and `max_budget_per_session` with session attribution ([agent budgets](https://docs.litellm.ai/docs/a2a_iteration_budgets))
+- **MCP tool-cost tracking** — fixed tool/server prices or custom post-call cost hooks ([MCP accounting](https://docs.litellm.ai/docs/mcp_cost))
 
 LiteLLM's budget features are real and useful. A team that needs proxy-layer cost governance with team budgets and rate limits has a lot to work with here.
 
@@ -71,76 +74,76 @@ These tools are more similar than different. They all operate at the **proxy/gat
 | Capability | LiteLLM | Helicone | OpenRouter |
 |---|---|---|---|
 | Cost tracking | Per-key, per-team, per-model | Per-request, per-session, per-user | Per-workspace, member, and key context |
-| Pre-execution blocking | Yes (hard budget cap) | Yes (cost-based rate limit) | Yes (workspace budget and guardrails) |
+| Pre-execution blocking | Yes (budget reservations on supported routes) | Yes (cost-based rate limit) | Yes (workspace budget and guardrails) |
 | Rate limiting | RPM, TPM configurable | Request-count and cost-per-window | Workspace budgets are spend limits, not RPM/TPM controls |
 | Model access control | Per-key model lists | N/A | Model + provider allowlists |
 | Alerts/notifications | Webhooks (configurable) | Email, Slack | Usage dashboard |
 | Open source | Yes (self-hostable) | Yes (MIT license + hosted service) | No |
 
-If your agents only make LLM calls — no tool invocations, no side effects, no multi-agent delegation — one of these three tools, configured well, can cover most of the cost control problem.
+When governed operations use supported gateway paths and the configured scopes match the workload, gateway controls may cover the budget requirement. Multiple agents or concurrent calls alone do not establish a need for another budget service.
 
 ## Where the gateway boundary stops
 
-The convergence ends when you move past "how much does the agent spend?" to "what is the agent allowed to do?"
+The evaluation shifts when a workflow needs shared accounting across operations and services beyond its configured gateway coverage.
 
-### 1. None of them control actions
+### 1. Coverage depends on the operation's path
 
-All three tools operate at the model-call layer. They see tokens in, tokens out, and cost. They don't see what the agent *does* with the model's output.
+Gateways govern traffic that uses their supported interfaces. LiteLLM also exposes MCP tool accounting and gateway controls, so tool calls are not categorically invisible. A direct API request or background job outside those paths still needs its own enforcement integration.
 
 In a constructed scenario, model calls associated with 200 emails cost about $1.40. A proxy-layer cost budget sees inference spend, not whether the application should send an email. [Cost and risk are different failure modes](/blog/how-teams-control-ai-agents-today-and-where-it-breaks) that require different controls.
 
 That policy requires application authorization and counters or budgets at the tool-dispatch boundary. Cycles can account for caller-assigned `RISK_POINTS`, but the host must classify and authorize the action.
 
-### 2. Gateway budgets are real, but use a different lifecycle
+### 2. Reservation semantics vary by route and control
 
-LiteLLM, Helicone, and OpenRouter all provide enforceable gateway controls. LiteLLM supports project/user spend management, Helicone can return `429` for request- or cost-window limits, and OpenRouter checks workspace budgets before routing. Those controls should be used when inference is the governed boundary.
+LiteLLM, Helicone, and OpenRouter all provide enforceable gateway controls. LiteLLM documents reservations before supported provider calls, Helicone can return `429` for request- or cost-window limits, and OpenRouter checks workspace budgets before routing. Those controls should be used when they match the governed boundary.
 
-Cycles adds an explicit estimate hold before work starts. Concurrent reservations consume available capacity atomically, then commit reconciles actual usage. OpenRouter documents that already-dispatched requests can slightly exceed a workspace limit; compare each gateway's stated concurrency semantics rather than assuming all products behave the same way.
+LiteLLM's reservation coverage has exceptions, including routes without token pricing and full batch-job cost at submission. Its session-budget guide separately describes checking accumulated spend before calls and adding cost after successful LLM calls. Check the route, scope, and deployment configuration before asserting a hard ceiling. Cycles provides atomic estimate holds across matching application ledgers, with actual overages governed by the configured policy.
 
-### 3. None of them support delegation attenuation
+### 3. Application hierarchy requires explicit mapping
 
-Gateway products support meaningful identities such as projects, workspaces, users, members, teams, and keys. They do not automatically know an application's delegation graph or authorize its downstream tools.
+Gateway products support identities such as projects, workspaces, users, members, teams, and keys. LiteLLM also enforces [MCP server and tool permissions](https://docs.litellm.ai/docs/mcp_control). The application must map its delegation graph to the relevant identities and protect any operations outside those gateway policies.
 
 An orchestrator can implement [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) by assigning narrower child scopes, budgets, and permissions. Cycles can account against submitted hierarchical scopes, but it does not discover the parent-child relationship or enforce an action mask automatically.
 
-### 4. None of them have a reserve-commit lifecycle
+### 4. A caller-facing lifecycle across services
 
-Gateways can make a preflight decision from accumulated spend, but exact request cost is known after generation. Cycles' distinct primitive is a caller-supplied estimate reserved before execution, followed by actual settlement.
+LiteLLM already reserves estimated cost and reconciles actual usage. The Cycles distinction is the caller-facing lifecycle across instrumented operations: a model request, a direct paid API call, and a metered job can all consume the same workflow and tenant ledgers.
 
-A [reserve-commit lifecycle](/blog/what-is-runtime-authority-for-ai-agents) locks budget before the action, executes only if approved, and reconciles the actual cost after. This is how payment systems, capacity planners, and database transactions handle the same problem — and how budget enforcement becomes structurally safe rather than best-effort.
+A [reserve-commit lifecycle](/blog/what-is-runtime-authority-for-ai-agents) requires the host to estimate usage, reserve before dispatch, and settle actual consumption. Cancellation, retries, lease expiry, and estimate overages need explicit handling. The [LiteLLM comparison workload](/concepts/cycles-vs-litellm#a-workload-to-evaluate-across-several-services) shows how to evaluate those behaviors with shared ledgers; it is a test design, not published benchmark results.
 
 ## The missing layer: runtime authority
 
-The gap that all three tools share isn't a feature they forgot to build. It's an architectural boundary they operate above.
+An application budget boundary is useful when the configured gateway controls do not cover the required operations or shared scopes.
 
-Proxy tools sit between your application and the model provider. They control the **model call**. Runtime authority sits between the agent's decision to act and the action itself. It controls the **agent action** — which may or may not involve a model call.
+Gateways enforce their configured policies on supported traffic. Cycles evaluates submitted budgets before the host dispatches protected work, including operations outside the gateway. The host remains responsible for authorizing the action and making the budget check mandatory.
 
 | | Proxy layer (LiteLLM, Helicone, OpenRouter) | Authority layer (Runtime authority) |
 |---|---|---|
-| Controls | Routed model calls | Any host operation explicitly instrumented |
+| Controls | Supported gateway traffic, including tool interfaces where offered | Any host operation explicitly instrumented |
 | Enforces | Product-specific workspace/project/team/user/key limits | Configured budget per tenant and submitted subject scope |
-| Concurrency | Product-specific; OpenRouter notes possible in-flight overage | Atomic estimate reservation |
+| Concurrency | Product-specific; LiteLLM reserves supported request estimates | Atomic estimate reservation; actual overages follow policy |
 | Scope | Product-specific identities and guardrails | Tenant plus submitted workspace/app/workflow/agent/toolset dimensions |
 | Risk unit | Usually requests or cost | Dollars, tokens, credits, and caller-assigned [RISK_POINTS](/how-to/assigning-risk-points-to-agent-tools) |
-| Degradation | Allow or deny | [ALLOW, ALLOW_WITH_CAPS, or DENY](/glossary#three-way-decision) |
+| Degradation | Product-specific routing and fallbacks | [ALLOW, ALLOW_WITH_CAPS, or DENY](/glossary#three-way-decision); host applies caps |
 | Delegation | Application graph not automatic | Orchestrator can implement [authority attenuation](/blog/agent-delegation-chains-authority-attenuation-not-trust-propagation) with narrower scopes |
 | Setup complexity | Minutes (API key + headers) | Hours (server deployment + SDK integration) |
 | Routing/caching | Built-in (model routing, response caching) | Not included — needs a proxy layer |
 | Ecosystem maturity | Large communities, broad integrations | Newer, narrower integration surface |
 
-This is the layer [Cycles](https://runcycles.io) implements. It's not a replacement for proxy-layer tools — it's the layer beneath them.
+[Cycles](https://runcycles.io) implements the application budget lifecycle for explicitly instrumented operations.
 
 ## The production stack
 
-In a production agent system, you typically need both layers:
+When a workload needs both gateway controls and shared application ledgers, a protected model call can use this flow:
 
 ```
 Agent decides to act
   → Application policy: authorize the tool and arguments
   → Cycles: reserve submitted cost or exposure estimate
-  → Proxy layer: check gateway policy and route/cache the model call
+  → Proxy layer: apply gateway controls, including supported reservations, and route/cache
   → Provider: Execute the call
-  → Proxy layer: Record cost, check window limit
+  → Proxy layer: record cost and reconcile any gateway reservation
   → Runtime authority: Commit actual cost, release unused reservation
 ```
 
@@ -152,18 +155,18 @@ The proxy layer can both optimize inference and enforce its own gateway limits. 
 
 | Your situation | Recommended stack |
 |---|---|
-| Single agent, single provider, prototype | Any one proxy tool is enough |
+| Governed operations and scopes fit a gateway | A configured gateway may meet the budget requirement |
 | Multi-provider, need routing + fallback | LiteLLM or OpenRouter |
 | Need cost visibility + caching | Helicone |
 | Need team budgets + rate limits | LiteLLM |
 | Need per-key caps with model restrictions | OpenRouter |
-| **Agents with side-effecting tools** | **Proxy + runtime authority** |
-| **Multi-tenant SaaS with per-customer budgets** | **Proxy + runtime authority** |
-| **Multi-agent delegation chains** | **Proxy + runtime authority** |
-| **Concurrent agents sharing budgets** | **Proxy + runtime authority** |
-| **Compliance requirements (EU AI Act, NIST)** | **Proxy + runtime authority** |
+| Agent iterations and session-spend limits on supported calls | Evaluate LiteLLM's native agent/session controls |
+| Tool costs routed through MCP | Evaluate gateway tool accounting and admission semantics |
+| Shared workflow/tenant budgets spanning gateway calls and direct services | Gateway + application budget lifecycle such as Cycles |
+| Caller-assigned exposure budgets on protected operations | Application authorization + RISK_POINTS accounting |
+| Multi-agent delegation chains | Orchestrator maps scopes and permissions; select budgets that match those scopes |
 
-The left column is proxy-only. The right column is where you need the authority layer underneath.
+Choose the budget boundary from the operations and shared scopes you need to protect. Cycles requires host instrumentation; a gateway requires routing through supported interfaces.
 
 ## Update, July 2026: the quarter cost control went mainstream
 
@@ -171,7 +174,7 @@ Three developments since this guide was published in April are worth folding in.
 
 **The bills arrived.** TechCrunch's June 5 report ["The token bill comes due"](https://techcrunch.com/2026/06/05/the-token-bill-comes-due-inside-the-industry-scramble-to-manage-ais-runaway-costs/) documented Uber exhausting its entire 2026 AI coding budget by April, Microsoft revoking internal Claude Code licenses months after enabling them (per The Verge), a Priceline employee describing a 4–5x Cursor renewal, and — per Axios — an unnamed company hitting a $500M Claude bill after failing to set usage limits. Faros AI's April study of 20,000 developers measured per-developer token consumption up 18.6x in nine months. FinOps Foundation executive director J.R. Storment summarized the shift: "In April and May, I started hearing from companies: 'Oh my god, we are 3x over our entire 2026 token budget and it's only April.'" None of this changes the analysis above — it confirms that per-seat intuitions don't survive contact with per-token reality, and that unenforced or post-hoc-only tracking finds out after the budget is gone.
 
-**Standards bodies moved.** On June 3, the Linux Foundation [announced its intent to launch the Tokenomics Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-intent-to-launch-the-tokenomics-foundation-to-establish-open-standards-for-ai-cost-management) — open specifications, benchmarks, and frameworks for token-based spending, with initial support from Google Cloud, Microsoft, IBM, JPMorganChase, Booking.com, and others. What those specifications should standardize — spend semantics that hold under concurrency and retries, not just reporting formats — is exactly the territory this post's "atomic enforcement" section covers.
+**Standards bodies moved.** On June 3, the Linux Foundation [announced its intent to launch the Tokenomics Foundation](https://www.linuxfoundation.org/press/linux-foundation-announces-the-intent-to-launch-the-tokenomics-foundation-to-establish-open-standards-for-ai-cost-management) — open specifications, benchmarks, and frameworks for token-based spending, with initial support from Google Cloud, Microsoft, IBM, JPMorganChase, Booking.com, and others. What those specifications should standardize — spend semantics that hold under concurrency and retries, not just reporting formats — is exactly the territory this post's section on reservation semantics covers.
 
 **A new tool category appeared.** In April, Portal26 [launched "Agentic Token Controls"](https://siliconangle.com/2026/04/23/portal26-launches-agentic-token-controls-cap-runaway-ai-agent-spend/) — token budgets per agent, workflow, or organization, with throttling as limits approach and pause/terminate on breach. It's a meaningful signal: enterprise vendors now treat runaway agent spend as its own product category, not a dashboard feature. The evaluation questions from this guide apply unchanged to the new entrants: is enforcement atomic under concurrency, does it happen before execution or as adaptive reaction during it, can it see actions and delegation or only tokens?
 
@@ -185,12 +188,12 @@ That's the gap runtime authority fills. Not instead of proxy tools — underneat
 
 ## Sources and versions
 
-Feature claims in this post were verified against the following documentation on July 24, 2026:
+LiteLLM claims were rechecked on September 4, 2026. Other competitor claims retain the July 24, 2026 review date. The workload linked above is an evaluation design, not a benchmark run.
 
-- **LiteLLM** — [docs.litellm.ai](https://docs.litellm.ai/) (gateway budgets, rate limits, routing, and virtual keys)
+- **LiteLLM** — [budget reservations](https://docs.litellm.ai/docs/proxy/users#budget-reservation), [agent budgets](https://docs.litellm.ai/docs/a2a_iteration_budgets), and [MCP cost tracking](https://docs.litellm.ai/docs/mcp_cost)
 - **Helicone** — [custom rate limits](https://docs.helicone.ai/features/advanced-usage/custom-rate-limits) (cost tracking, custom limits, and request controls)
 - **OpenRouter** — [guardrails overview](https://openrouter.ai/docs/guides/features/guardrails) and [workspace budgets](https://openrouter.ai/docs/guides/features/workspaces/workspace-budgets) (guardrails, scoped limits, and budget windows)
-- **Cycles** — [runcycles.io](https://runcycles.io) v0.1.25 (runtime authority, reserve-commit, RISK_POINTS)
+- **Cycles** — [authoritative YAML specification](/cycles-protocol-v0.yaml) (reservation lifecycle, scope derivation, and overage policies)
 
 These tools evolve quickly. If a claim looks outdated, check the linked docs for the latest.
 
