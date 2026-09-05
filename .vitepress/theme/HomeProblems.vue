@@ -50,6 +50,11 @@ const problems = [
           <span class="card-cta">{{ item.solution }} &rarr;</span>
         </a>
       </div>
+      <p class="capability-note">
+        Tool exposure limits today use risk budgets configured by your application.
+        Server-enforced action-kind quotas and action-kind allow/deny policies remain
+        <a href="/protocol/action-governance-preview-in-cycles">preview features</a>.
+      </p>
     </div>
   </section>
 </template>
@@ -88,6 +93,18 @@ const problems = [
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
+}
+
+.capability-note {
+  margin: 20px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+.capability-note a {
+  color: var(--vp-c-brand-1);
+  text-decoration: underline;
 }
 
 @media (min-width: 768px) {
