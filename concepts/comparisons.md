@@ -11,7 +11,7 @@ Teams evaluating Cycles usually already have some controls in place. This page h
 
 | Tool | Best for | Where Cycles fits |
 |---|---|---|
-| LiteLLM | Unified provider routing, key-level budgets | Adds atomic scoped budget authority at an application boundary |
+| LiteLLM | Provider routing, gateway reservations, agent/session limits, MCP cost tracking | Shared application ledgers and a caller-managed lifecycle across protected services |
 | Helicone | Observability, caching, window cost limits | Bounds spend pre-execution instead of after the fact |
 | OpenRouter | Single-API model access, per-key caps | Adds per-tenant + per-run hierarchical budgets |
 | LangSmith | Tracing/evaluation; private-beta LLM Gateway spend policies | Adds reserve-commit budgets at an application boundary, including non-LLM work |
@@ -27,7 +27,7 @@ Need all of it in one layer? [Talk to a founder](mailto:founder@runcycles.io) ab
 
 | Approach | Pre-execution? | Per-tenant? | Cost-aware? | Action control? | Degradation? | Reserve-commit? |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| LiteLLM | Yes (budget check) | Per-team/key | Yes | No | No | No |
+| LiteLLM | Yes (reservations for supported routes) | Multiple gateway scopes | Yes, including MCP tracking | Gateway model/tool policies | Gateway routing/fallbacks | Gateway-managed reservation and reconciliation |
 | Helicone | Window rate limit | Per-user/property | Yes | No | No | No |
 | OpenRouter | Yes (key cap) | Per-key | Yes | No | No | No |
 | LangSmith | Gateway: yes | Workspace/API key/user | Gateway: yes | No downstream tool authorization | Gateway model fallbacks | No |
@@ -36,6 +36,8 @@ Need all of it in one layer? [Talk to a founder](mailto:founder@runcycles.io) ab
 | Provider controls | Vendor-dependent soft or hard boundary | Provider identity only | Yes for covered usage | No application tool policy | Application chooses fallback | No application reserve-commit |
 | DIY wrapper | Partial | Partial | Partial | No | No | No |
 | **Cycles** | **Yes, when required by host** | **Yes** | **Yes** | **Caller-assigned RISK_POINTS budget; host authorizes** | **Configured caps returned; host applies** | **Yes** |
+
+LiteLLM documents [budget reservations enabled by default](https://docs.litellm.ai/docs/proxy/users#budget-reservation), [agent iteration/session limits](https://docs.litellm.ai/docs/a2a_iteration_budgets), and [MCP cost tracking](https://docs.litellm.ai/docs/mcp_cost) (checked September 4, 2026). Reservation coverage depends on the route; session and MCP accounting should not be assumed to have identical admission semantics. Cycles' distinction is its caller-facing lifecycle and shared application scopes for instrumented operations, including work outside the gateway. See the [detailed comparison](/concepts/cycles-vs-litellm) for qualifications and an evaluation workload.
 
 ## By alternative
 
@@ -49,7 +51,7 @@ Need all of it in one layer? [Talk to a founder](mailto:founder@runcycles.io) ab
 
 ### LLM proxies and gateways
 
-- **[Cycles vs LiteLLM](/concepts/cycles-vs-litellm)** — LiteLLM routes, rate-limits, and tracks spend at the proxy layer. Cycles enforces atomic scoped budgets at the application boundary. They complement each other — LiteLLM picks the model, Cycles decides whether the submitted budget request fits, and the host authorizes the action.
+- **[Cycles vs LiteLLM](/concepts/cycles-vs-litellm)** — LiteLLM routes, reserves gateway budgets, and provides agent/session controls and MCP accounting. Cycles applies a caller-managed lifecycle across shared application ledgers for protected model calls, paid APIs, and other operations. The host authorizes the action.
 
 - **[Cycles vs Helicone](/concepts/cycles-vs-helicone)** — Helicone provides observability, caching, and window-based cost limits. Cycles provides cumulative budgets for caller-submitted operations; the host separately authorizes application actions.
 

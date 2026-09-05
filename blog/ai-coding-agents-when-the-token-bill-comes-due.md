@@ -90,7 +90,7 @@ Seat pricing made spend predictable by construction. Tokens made it unbounded by
 ## Further Reading
 
 - [Budget Limits for Claude Code, Cursor, and Windsurf via MCP](/blog/claude-code-cursor-windsurf-budget-limits-mcp) — the config-only implementation
-- [AI Agent Cost Control in 2026: A Landscape Guide](/blog/ai-agent-cost-control-2026-litellm-helicone-openrouter-runtime-authority) — where proxy budgets stop and enforcement starts
+- [AI Agent Cost Control in 2026: A Landscape Guide](/blog/ai-agent-cost-control-2026-litellm-helicone-openrouter-runtime-authority) — gateway and application budget boundaries
 - [When Budget Runs Out: AI Agent Degradation Patterns](/blog/when-budget-runs-out-graceful-degradation-patterns-for-ai-agents) — downgrade before deny
 - [Budgeting Reasoning Tokens](/blog/budgeting-reasoning-tokens-governing-extended-thinking-before-it-bills) — the hidden-token dimension
 - [AI Agent Unit Economics](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin) — reporting spend as business metrics

@@ -20,7 +20,7 @@ Consider an illustrative platform team running [autonomous agents](/glossary#aut
 
 On Friday afternoon, a customer's document-processing agent enters a [tool loop](/glossary#tool-loop). It calls the LLM, parses the response, calls a tool, gets an error, and retries — hundreds of times.
 
-LiteLLM routes every call faithfully. That is its job.
+With no matching budget configured in this scenario, LiteLLM continues routing calls. Its native reservation and agent/session controls could bound a supported workload when configured.
 
 Langfuse logs every trace with full cost data. That is its job.
 
@@ -30,7 +30,7 @@ By Monday morning, the agent has made 4,700 calls and consumed $2,800. The team 
 
 Every configured control worked as designed. The stack had routing and visibility, but no workload-level limit that matched this agent.
 
-The missing layer was not routing or visibility. It was **[runtime authority](/glossary#runtime-authority)** — a pre-execution decision about whether the next action should proceed given the remaining budget.
+The missing control was a pre-execution budget decision matching this workload. A gateway budget may supply it for supported routed traffic; application **[runtime authority](/glossary#runtime-authority)** can extend that boundary across other protected operations.
 
 ## Three layers, three questions
 
@@ -62,23 +62,25 @@ Tools like LiteLLM and Portkey solve real problems that teams hit as soon as the
 
 **Cost logging.** Proxies typically log token counts and compute cost per call. Some offer dashboards showing spend by model, by key, or by time window.
 
+**Budget reservations and session limits.** LiteLLM documents [reservations enabled by default](https://docs.litellm.ai/docs/proxy/users#budget-reservation): estimate supported request cost, reserve capacity, reject before the provider call if necessary, and reconcile actual cost. Its [agent controls](https://docs.litellm.ai/docs/a2a_iteration_budgets) include `max_iterations` and `max_budget_per_session` with session attribution. The session-spend guide describes accumulated-spend checks separately; identical reservation guarantees should not be inferred for every limiter.
+
 **Caching.** Identical prompts can be served from cache, reducing both latency and cost for repeated queries.
 
 These are valuable capabilities. A proxy earns its place in any production LLM stack.
 
 ### Where gateway boundaries stop
 
-The gap appears when you need to **enforce** a budget, not just **track** spend.
+The gap appears when the operations or shared application scopes you need to protect extend beyond the configured gateway controls.
 
-**Proxies only see model calls.** An autonomous agent does more than call LLMs. It invokes tools, writes to databases, sends emails, makes API requests, and triggers deployments. A proxy sitting between the app and the model provider has no visibility into these non-LLM actions. If your agent's tool calls cost money — and they often do — the proxy cannot meter them.
+**Coverage follows the integration path.** LiteLLM documents [MCP tool-cost tracking](https://docs.litellm.ai/docs/mcp_cost), including fixed prices and custom post-call cost hooks. A direct paid API request or background job outside the gateway still needs its own integration. Tool tracking alone does not establish pre-execution reservation semantics for every tool route.
 
-**Current gateways can reject before a provider call.** LiteLLM supports project/user spend management, OpenRouter checks workspace budgets before routing, and Helicone can return `429` for request- or cost-window limits. Those controls are useful and should not be described as post-hoc-only.
+**Current gateways can reject before a provider call.** LiteLLM reserves estimated cost on supported routes, OpenRouter checks workspace budgets before routing, and Helicone can return `429` for request- or cost-window limits. Those controls are useful and should not be described as post-hoc-only.
 
-**Their accounting model is gateway-specific.** Gateway spend windows govern routed inference. OpenRouter documents that already-dispatched requests can produce slight budget overage. Cycles instead atomically [reserves](/glossary#reservation) a caller estimate before protected work and reconciles the actual amount afterward.
+**Reservation coverage is specific to the control.** LiteLLM documents exceptions for routes without token pricing and full batch-job cost at submission. Cycles exposes a caller-facing [reservation](/glossary#reservation) lifecycle for protected operations across services. Both estimation and failure handling matter; Cycles' actual overages follow the configured policy rather than always becoming debt.
 
-**Hierarchy varies by product.** LiteLLM supports multi-tenant spend management per project/user, and OpenRouter supports organization, workspace, member, and key controls. The remaining distinction is not "no hierarchy"; it is whether those gateway identities match application boundaries such as a workflow, an individual run mapped to a workflow ledger, or a non-LLM operation.
+**Hierarchy varies by product.** LiteLLM supports multiple budget identities and agent/session controls, and OpenRouter supports organization, workspace, member, and key controls. Evaluate whether those scopes match application boundaries such as a workflow whose model requests, direct API calls, and background jobs must share a ledger.
 
-**No shared budget-degradation signal.** A proxy can route to a cheaper model when the primary is unavailable. A Cycles preflight can return the canonical `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` decision from configured budget state; the application must interpret any caps and perform the downgrade.
+**Budget fallback and application caps are different interfaces.** LiteLLM documents [budget-triggered model fallbacks](https://docs.litellm.ai/docs/proxy/budget_fallbacks). Cycles returns the canonical `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` decision from configured budget state; the application must interpret any caps and perform the downgrade. Compare the configured behavior needed by the workload.
 
 ### Comparison
 
@@ -88,12 +90,12 @@ The gap appears when you need to **enforce** a budget, not just **track** spend.
 | Unified provider API | Yes | No |
 | Cost tracking | Yes | Yes |
 | Pre-execution inference limit | Varies; supported by current LiteLLM, OpenRouter, and Helicone gateways | Can protect an instrumented inference call |
-| Non-LLM action coverage | No | Instrumented tools and APIs |
-| Caller-estimated reserve-commit lifecycle | Generally no | Yes |
+| Non-LLM action coverage | Supported tool paths, including LiteLLM MCP accounting | Instrumented tools and APIs, including direct calls outside the gateway |
+| Reservation lifecycle | LiteLLM: gateway-managed reservations and reconciliation on supported routes | Caller-managed reserve, commit, release, and extend |
 | Per-tenant / per-agent scopes | Product-specific projects, workspaces, users, keys, and metadata | Subject scopes configured by the application |
 | [Graceful degradation](/glossary#graceful-degradation) | Partial (model fallback) | Three-way decision; caller applies caps |
 | Caching | Yes | No |
-| Concurrency behavior | Product-specific; in-flight overage may be possible | Atomic estimate reservation |
+| Concurrency behavior | Product-specific; LiteLLM reserves supported request estimates | Atomic estimate reservation; actual overages follow policy |
 
 ### Using both together
 
@@ -102,19 +104,19 @@ The proxy and the runtime authority serve different purposes. They compose natur
 ```
 Agent
   │
-  ├─ Cycles: reserve budget (is this action allowed?)
+  ├─ Cycles: reserve estimate (does it fit application budgets?)
   │    ↓ ALLOW
-  ├─ LLM Proxy: route to model (which provider handles this?)
+  ├─ LLM Proxy: apply gateway controls, reserve where supported, and route
   │    ↓ response
   ├─ Cycles: commit actual cost (record what was spent)
   │
 ```
 
-Cycles decides **whether** to call. The proxy decides **which model** handles it.
+Both Cycles and the proxy can deny a model request at their respective budget boundaries. The application separately authorizes the operation.
 
 If Cycles denies the reservation, the proxy is never invoked. Zero cost. Zero tokens. The agent receives a budget-exhausted signal and can degrade gracefully — return a cached result, skip an optional step, or surface a budget limit to the user.
 
-If Cycles allows the reservation, the proxy routes the call as usual. After the response arrives, the actual token count is committed to Cycles, and unused budget from the estimate is released.
+If Cycles allows the reservation, the proxy applies its own controls before routing. After execution, it reconciles any gateway reservation and the application commits actual usage to Cycles in the reserved unit. If the proxy rejects before any cost is incurred, the application releases the Cycles hold. Costs incurred before an error still need settlement.
 
 **Keep your proxy.** It solves model routing, provider abstraction, and operational resilience.
 
@@ -204,7 +206,7 @@ Agent
   │
   ├─ Cycles (runtime authority)         → Should this action proceed?
   │
-  ├─ LLM Proxy (routing layer)        → Which model handles this call?
+  ├─ LLM Proxy (gateway controls)     → Does gateway policy admit it, and which model handles it?
   │
   ├─ Provider (execution)             → Execute the call
   │
@@ -229,6 +231,8 @@ It is "which layer is missing?"
 The missing layer is whichever boundary your current controls do not cover. For inference-only workloads, a configured gateway budget may be sufficient. For workflows that span providers and non-LLM tools, an application-level reserve-commit boundary can fill the gap.
 
 Feature claims were rechecked on July 24, 2026 against [LiteLLM's gateway documentation](https://docs.litellm.ai/), [OpenRouter workspace budgets](https://openrouter.ai/docs/guides/features/workspaces/workspace-budgets), and [Helicone custom rate limits](https://docs.helicone.ai/features/advanced-usage/custom-rate-limits).
+
+LiteLLM reservation, agent/session, and MCP accounting claims were updated from the specific documentation linked above on September 4, 2026. Cycles lifecycle claims follow the [authoritative YAML specification](/cycles-protocol-v0.yaml). The [detailed LiteLLM comparison](/concepts/cycles-vs-litellm#a-workload-to-evaluate-across-several-services) includes a workload design for evaluating shared budgets across three services; no benchmark result is claimed here.
 
 ## Next steps
 
