@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useData, useRoute } from 'vitepress'
-import { ThumbsUp, ThumbsDown } from 'lucide-vue-next'
+import { ThumbsUp, ThumbsDown } from '@lucide/vue'
 
 const { frontmatter } = useData()
 const route = useRoute()
