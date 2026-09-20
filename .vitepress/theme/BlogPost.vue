@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useData, useRoute } from 'vitepress'
-import { Link as LinkIcon } from 'lucide-vue-next'
+import { Link as LinkIcon } from '@lucide/vue'
 import { xTwitterPath, linkedInPath } from './SocialIcons'
 import { data as posts } from '../../blog/posts.data'
 
