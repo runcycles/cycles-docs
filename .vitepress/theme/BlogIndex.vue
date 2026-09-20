@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Rss } from 'lucide-vue-next'
+import { Rss } from '@lucide/vue'
 import { data as posts } from '../../blog/posts.data'
 
 const selectedTag = ref(null)

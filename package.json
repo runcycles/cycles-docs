@@ -30,11 +30,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@lucide/vue": "^1.46.0",
     "feed": "^6.0.0",
     "html2canvas-pro": "^2.4.3",
     "medium-zoom": "^1.1.0",
     "shiki": "^4.4.3",
     "vitepress-openapi": "^0.2.5",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }
