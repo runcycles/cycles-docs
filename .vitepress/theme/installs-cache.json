@@ -1,6 +1,6 @@
 {
   "npm": 10181,
-  "pypi": 7729,
+  "pypi": 7733,
   "crates": 158,
   "clones": 152661,
   "clonesByRepo": {
@@ -110,7 +110,7 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 22504,
+  "total": 22508,
   "fetchedAt": "2026-09-26T10:30:31.393Z",
   "npmByPackage": {
     "runcycles": 3388,
@@ -119,7 +119,7 @@
   },
   "pypiByPackage": {
     "runcycles": 4039,
-    "runcycles-openai-agents": 974,
+    "runcycles-openai-agents": 978,
     "langchain-runcycles": 2028,
     "runcycles-ap2": 688
   },
