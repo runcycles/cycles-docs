@@ -1,6 +1,6 @@
 {
-  "npm": 10181,
-  "pypi": 7733,
+  "npm": 10235,
+  "pypi": 7735,
   "crates": 158,
   "clones": 152661,
   "clonesByRepo": {
@@ -110,18 +110,18 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 22508,
-  "fetchedAt": "2026-09-26T10:30:31.393Z",
+  "total": 22564,
+  "fetchedAt": "2026-09-27T11:01:57.498Z",
   "npmByPackage": {
-    "runcycles": 3388,
-    "@runcycles/mcp-server": 3090,
-    "@runcycles/openclaw-budget-guard": 3703
+    "runcycles": 3410,
+    "@runcycles/mcp-server": 3117,
+    "@runcycles/openclaw-budget-guard": 3708
   },
   "pypiByPackage": {
     "runcycles": 4039,
     "runcycles-openai-agents": 978,
-    "langchain-runcycles": 2028,
-    "runcycles-ap2": 688
+    "langchain-runcycles": 2029,
+    "runcycles-ap2": 689
   },
   "cratesByPackage": {
     "runcycles": 158
