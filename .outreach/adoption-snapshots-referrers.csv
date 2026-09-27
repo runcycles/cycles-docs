@@ -513,3 +513,15 @@ date,repo,rank,referrer,views,uniques
 2026-09-20,cycles-protocol,2,github.com,1,1
 2026-09-20,cycles-protocol,3,reddit.com,1,1
 2026-09-20,cycles-claude-plugin,1,github.com,4,1
+2026-09-27,cycles-docs,1,github.com,34,4
+2026-09-27,cycles-dashboard,1,github.com,1,1
+2026-09-27,cycles-openclaw-budget-guard,1,Bing,1,1
+2026-09-27,cycles-openclaw-budget-guard,2,Google,1,1
+2026-09-27,cycles-openclaw-budget-guard,3,github.com,1,1
+2026-09-27,cycles-client-python,1,github.com,2,1
+2026-09-27,langchain-runcycles,1,Google,1,1
+2026-09-27,cycles-protocol,1,Google,1,1
+2026-09-27,cycles-server,1,Google,2,2
+2026-09-27,cycles-server,2,github.com,2,1
+2026-09-27,cycles-spring-boot-starter,1,Google,1,1
+2026-09-27,cycles-spring-boot-starter,2,github.com,1,1
