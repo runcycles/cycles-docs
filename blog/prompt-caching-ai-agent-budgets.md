@@ -75,7 +75,7 @@ None of these causes produce an error. The request succeeds, the response is nor
 
 A pre-execution budget has to decide how much to hold before the provider reports usage. For cached calls there are three candidate prices, and only one of them is a safe upper bound for the request.
 
-**Reserving at the cache-read price** assumes a hit. Hits are not guaranteed: OpenAI's guide says a request reuses a prefix only if it "reaches a machine holding a matching entry that has not expired," and every cause in the table above turns the expected hit into a write. In the fixture, a turn that writes instead of reading costs 5.2× that reservation.
+**Reserving at the cache-read price** assumes a hit. Hits are not guaranteed: OpenAI's guide says a request reuses a prefix only if it "reaches a machine holding a matching entry that has not expired," and the causes in the table above turn an expected read into a cache write or uncached processing. In the fixture, a turn that writes instead of reading costs 5.2× that reservation.
 
 **Reserving at the uncached price** looks conservative, but it is below the write price. In the fixture, the uncached estimate is $0.0705 and a write costs $0.0855. The [Cycles protocol](/glossary#cycles-protocol) recommends a 10-20% estimation buffer when using the `REJECT` [overage policy](/glossary#overage-policy), and even the full 20% ($0.0846) falls short. The write premium on this prefix-dominated request is about 21% of the uncached total.
 
@@ -103,7 +103,7 @@ The commit overage policy determines what happens when the actual exceeds the re
 
 The Cycles protocol describes the `REJECT` case directly: "If the action already happened externally, this creates an unaccounted gap." The Python SDK does not release the reservation after a rejected commit, because that would return budget for real spend. The reservation stays held until its own TTL and [grace period](/glossary#grace-period) expire. The [overage policy guide](/how-to/choosing-the-right-overage-policy) compares the three policies in detail.
 
-Under the permissive policies, the accounting is preserved, but admission (the reserve-time decision to allow or deny the call) was still made against an understated estimate. With concurrent turns, several under-reserved calls can be admitted together and overshoot the available budget.
+The permissive policies record more of the spend, but not unconditionally: `ALLOW_IF_AVAILABLE` can cap the charge below actual, and `ALLOW_WITH_OVERDRAFT` can reject a commit past the overdraft limit. Either outcome needs reconciliation. In every case, admission (the reserve-time decision to allow or deny the call) was made against an understated estimate. With concurrent turns, several under-reserved calls can be admitted together and overshoot the available budget.
 
 ### The cost of reserving high
 
@@ -149,7 +149,7 @@ The <a href="/examples/prompt-cache-budget-drill.py" download>downloadable Pytho
 Real admission and settlement against synthetic cache behavior, without provider credentials. It does not measure any provider's hit rate, eviction behavior, or latency, and it models a single cache breakpoint. Verify your real cache behavior from provider usage fields.
 :::
 
-Use a disposable test [tenant](/glossary#tenant) from the [full-stack quickstart](/quickstart/deploying-the-full-cycles-stack) with at least $0.72 of available tenant budget, no configured caps, and no competing traffic. The drill creates four workflow ledgers of $0.30 each and leaves them for inspection. Each successful invocation commits $0.6285 of synthetic usage to the matching ledgers and briefly holds another $0.0846 until the rejected reservation expires, so repeated runs consume additional test allocation.
+Use a disposable test [tenant](/glossary#tenant) from the [full-stack quickstart](/quickstart/deploying-the-full-cycles-stack) with at least $0.80 of available tenant budget, no configured caps, and no competing traffic. The drill creates four workflow ledgers of $0.30 each and leaves them for inspection. Each successful invocation commits $0.6285 of synthetic usage to the matching ledgers and briefly holds another $0.0846 until the rejected reservation expires, so repeated runs consume additional test allocation.
 
 ```bash
 python -m pip install "runcycles==0.5.3"
@@ -219,7 +219,7 @@ PASS idle-gap: settled=5 blocked=0 unsettled=0 ledger_spent=22050000 provider_co
 
 Amounts are in `USD_MICROCENTS`; $1 is 100,000,000. These results were reproduced with Python SDK 0.5.3, Cycles Server 0.1.25.59, and [Admin Server](/glossary#admin-server) 0.1.25.55. The SDK may also log the rejected commit in the first scenario; the summary lines are the drill's result.
 
-The first row is the important one. The provider call ran and would be billed, but the ledger shows nothing spent and a reservation that will expire. The timestamp row shows the budget containing the regression: the same agent with a broken cache reaches the $0.30 limit after three turns instead of continuing at five times the per-turn cost.
+The first row is the important one. The provider call ran and would be billed, but the ledger shows nothing spent and a reservation that will expire. The timestamp row shows the budget containing the regression: the same agent with a broken cache is blocked when its fourth write-priced reservation no longer fits the $0.30 budget, instead of continuing at five times the per-turn cost.
 
 ## Track prompt cache read share as a cost metric
 
@@ -232,7 +232,7 @@ cache_read_share = cache_read_tokens / (cache_read_tokens + cache_write_tokens +
 In the drill, the stable run reads 80% of its prefix tokens from cache, the idle-gap run reads 60%, and the timestamp run reads none. Record it per route, model, and tenant alongside [cost per completed task](/blog/ai-agent-unit-economics-cost-per-conversation-per-user-margin):
 
 - **Alert on step changes after deploys.** Prompt-assembly changes are a common cause of regressions. A drop from a steady baseline to near zero usually means something changed in the prefix.
-- **Assert it in integration tests.** Send the same request twice and assert that the second one reports cache reads. A standing check catches regressions that a one-time look at setup does not.
+- **Check it in integration tests.** Send a short series of identical requests above the model's minimum cacheable length and assert that reads cover most of the prefix. Providers do not guarantee a hit on any single request, so test a threshold rather than one response. A standing check catches regressions that a one-time look at setup does not.
 - **Read it next to the reserve-to-commit ratio.** A falling read share and a ratio falling toward 1.0 point to the same cause.
 - **Separate expected writes.** First turns, post-approval resumes, and fan-out branches write by design. Segment by workflow stage so they do not mask a real regression.
 
