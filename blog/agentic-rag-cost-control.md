@@ -175,15 +175,15 @@ Use the model gate for planning and generation calls that pass through that agen
 
 Be explicit about ownership. If a retrieval tool runs search and reranking internally, either reserve for that bounded composite operation or gate its subcalls. Do not charge the same provider operation through both paths. Separately invoked graders, query-rewrite models, and arbitrary LangGraph nodes do not acquire coverage merely because another agent has middleware; wrap their execution boundaries too.
 
-The SDK boundary above is useful for those explicit calls. Replace the synthetic handler and cost with the real bounded operation and its trusted usage record. On a new billable attempt, use a new operation identity. A retry of the same Cycles operation should retain its identity and request body. Persist identity across checkpoint replay rather than assuming a new framework invocation represents new work.
+The SDK boundary above is useful for those explicit calls. Replace the synthetic handler and cost with the real bounded operation and its trusted usage record. On a new billable attempt, use a new operation identity. A retry of the same Cycles operation should retain its identity and request body. Persist identity across checkpoint replay rather than assuming a new framework invocation represents new work. A Cycles idempotency key does not deduplicate provider execution: re-entering the SDK context can run its body again. The application must separately prevent duplicate provider dispatch or reconcile replayed work.
 
-Keep answer validation after the provider operation has settled. In Python SDK 0.5.3, an exception escaping the `stream_reservation` body releases the reservation, even if you already set `usage.actual_cost`. The LangChain tool gate also releases on a handler exception. A real adapter must handle a billable partial failure through an explicit settlement/reconciliation path rather than letting that exception erase known usage from the ledger.
+Keep answer validation after the provider operation has settled. In Python SDK 0.5.3, an exception escaping the `stream_reservation` body attempts to release the reservation, even if you already set `usage.actual_cost`. The LangChain tool gate also attempts to release on a handler exception. A real adapter must handle a billable partial failure through an explicit settlement/reconciliation path rather than letting that exception erase known usage from the ledger.
 
 Do not release already consumed search or model cost because the user received no useful answer. When a timeout or cancelled stream leaves provider usage unknown, retain enough provider identifiers to reconcile it; the budget ledger cannot reconstruct usage that the provider never reported.
 
 ## Handle budget exhaustion without inventing an answer
 
-At the raw API boundary, an insufficient live reservation returns HTTP 409 `BUDGET_EXCEEDED`. `DENY` is a decision from preflight or dry-run evaluation. Neither means the application should repeatedly try the same unaffordable work.
+At the raw API boundary, a live reservation request that exceeds available budget returns HTTP 409 `BUDGET_EXCEEDED`. `DENY` is a decision from preflight or dry-run evaluation. Neither means the application should repeatedly try the same unaffordable work.
 
 Choose the user-visible outcome before rollout:
 
