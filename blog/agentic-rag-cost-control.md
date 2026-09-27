@@ -23,7 +23,7 @@ Consider a constructed support workflow: a customer asks whether a contract amen
 
 Agentic RAG cost control needs a budget for the whole answer, enforced before each protected step. That includes model calls and paid retrieval services. The application also needs a useful response when further work no longer fits.
 
-This post walks through that design and a runnable Cycles budget drill. The drill uses real [reservations](/glossary#reservation) with synthetic model, search, and reranking costs. It requires no paid model credentials and makes no claim about answer quality or typical provider prices.
+This post walks through provisioning and sizing an answer budget, then testing it with real [reservations](/glossary#reservation). The goal is to stop further spending while giving the user a useful, evidence-based response.
 
 <!-- more -->
 
@@ -78,6 +78,27 @@ tenant:acme
 
 Provision the workflow ledger explicitly. Adding `run_id` to metadata or custom dimensions does not create a per-run budget. A tenant ledger can impose a broader customer ceiling, but it does not automatically allocate child budgets. The [budget allocation guide](/how-to/budget-allocation-and-management-in-cycles) explains those scope rules.
 
+### Provision before dispatch
+
+The trusted application backend owns provisioning; the agent does not choose its own allowance or hold budget-writing credentials. For each incoming question:
+
+1. Assign a durable answer ID and select its authorized allocation.
+2. Create the matching workflow ledger through `POST /v1/admin/budgets`, using a tenant-scoped key with `budgets:write`.
+3. Confirm the expected scope, unit, allocation, and active status before dispatching work. After a duplicate response or ambiguous timeout, look up the existing ledger with `budgets:read`; do not blindly fund or reset it.
+4. Pass the workflow ID to workers using runtime-only credentials. Reuse that identity when the answer resumes.
+
+If provisioning cannot be confirmed, leave the job pending or return a setup failure. A missing workflow ledger is skipped during budget enforcement: an existing tenant ledger can still admit the call. The application must prevent dispatch without the intended answer budget.
+
+This adds an Admin API dependency before execution. A queue can place provisioning before worker dispatch, but it does not remove the dependency. A component in the existing backend can own this sequence; a separate provisioning service is optional.
+
+### Plan for retained ledgers
+
+In the current v0.1.25 APIs, workflow ledgers have no automatic TTL or per-budget deletion endpoint. Reservation TTL governs the hold lifecycle; it does not delete the ledger. Budget period metadata is not a cleanup mechanism either.
+
+After settlement and any permitted resumes finish, mark the answer complete in the application and reject new dispatch for it. That application state does not revoke an already-issued worker credential. Keep the ledger for accounting, and plan storage and index cardinality before allocating one per question at high volume. This pattern supplies per-answer enforcement, not built-in ephemeral-ledger garbage collection.
+
+### Reserve each protected operation
+
 For each protected operation, the application follows the reserve-commit lifecycle:
 
 1. Calculate a conservative estimate for a bounded request.
@@ -90,9 +111,32 @@ With parallel retrieval, each branch needs its own reservation against that same
 
 The budget bounds admitted estimates. It does not independently cap a provider's invoice. The latter also depends on bounded provider requests, complete instrumentation, conservative estimation, and correct handling of usage and overages. [Estimate drift](/blog/estimate-drift-silent-killer-of-enforcement) is therefore an enforcement concern, not just an accounting detail.
 
+## Size the budget from RAG cost per query
+
+The drill below uses $0.12 to make admission behavior easy to inspect. Choose a production allowance from your workload instead:
+
+1. Record trusted usage for every model, embedding, search, and reranking call, grouped by answer ID. Include retries and unsuccessful answers.
+2. Compare cost distributions for relevant workload classes, such as a simple lookup versus multi-document research. A p95 or p99 cost is a starting candidate, chosen against your acceptable interruption rate and economics.
+3. Replay the sequence of conservative estimates, commits, and concurrent holds against candidate budgets. At each admission, the allocation must cover committed spend, existing holds, and the new estimate.
+4. Test completion rate, evidence quality, and the exhaustion response before enforcing the selected allowance. Reserve headroom for answer generation if the product requires it.
+
+The normal drill commits $0.07, but needs $0.08 to finish unchanged: $0.04 is already spent when generation requests a $0.04 hold. Setting the budget to final measured cost alone would block that last step.
+
+Use [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforcement-without-breaking-production) to inspect policy decisions alongside application usage telemetry. Dry-run requests create no holds and change no balances, so isolated dry-run responses do not reproduce cumulative or concurrent depletion. Measure actual spend separately and replay those admission conditions explicitly.
+
+### Estimate the model-cost component
+
+For an illustrative answer whose planning, grading, and generation calls total 6,000 input [tokens](/glossary#tokens) and 1,500 output tokens, assumed rates of $2 per million input tokens and $10 per million output tokens give **$0.027 in model cost**. These are adjustable example rates, not a vendor quote. Add query embeddings, paid retrieval, and reranking separately; ingestion remains a separate budget.
+
+Open the [model-cost calculator with this answer preset](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJSQUcgYW5zd2VyIC0gbW9kZWwgY2FsbHMgb25seSIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiJBZ2dyZWdhdGUgbW9kZWwgdG9rZW5zIHBlciBhbnN3ZXIuIEV4Y2x1ZGVzIHF1ZXJ5IGVtYmVkZGluZ3MsIHNlYXJjaCwgcmVyYW5raW5nIGFuZCBpbmdlc3Rpb24uIFJlcGxhY2UgaWxsdXN0cmF0aXZlIHJhdGVzLiIsImlucHV0VG9rZW5zIjo2MDAwLCJvdXRwdXRUb2tlbnMiOjE1MDAsImNhbGxzUGVyRGF5IjoxMDAwLCJtb2RlbHMiOlt7Im91dHB1dFBlck0iOjEwLCJpbnB1dFBlck0iOjIsIm5hbWUiOiJJbGx1c3RyYXRpdmUgcmF0ZXMgLSByZXBsYWNlIHdpdGggeW91ciBwcm92aWRlciJ9XX0). In this preset, one calculator "call" represents the aggregate model tokens for one answer; the 1,000 calls/day field means 1,000 answers/day. Replace the rates and token totals with your measurements. The calculator does not include retrieval or reranking charges.
+
 ## Run a Cycles RAG budget drill
 
 The <a href="/examples/agentic-rag-budget-drill.py" download>downloadable Python drill</a> replaces provider calls with deterministic handlers while exercising a real [Cycles server](/glossary#cycles-server). It checks both the number of handlers admitted and the resulting workflow balances.
+
+::: info What this drill shows
+Real admission and accounting with synthetic prices, without paid model credentials. It tests normal execution, a repeated retrieval loop, and concurrent holds. It does not benchmark retrieval quality, provider savings, crash recovery, or [tenant isolation](/glossary#tenant-isolation); those require application tests.
+:::
 
 Use a disposable test tenant from the [full-stack quickstart](/quickstart/deploying-the-full-cycles-stack). Its tenant budget should have at least $0.34 of available capacity, with no configured caps or competing traffic. The drill creates three fresh workflow ledgers and leaves them available for inspection; each successful invocation commits $0.24 of synthetic usage to the matching ledgers. Repeated runs consume additional test allocation.
 
@@ -121,14 +165,14 @@ The fixture values are deliberately simple. One dollar is 100,000,000 `USD_MICRO
 | Rerank | $0.02 | $0.01 |
 | Generate answer | $0.04 | $0.03 |
 
-These are test inputs, not current vendor rates. Committing less than the estimate releases the unused hold.
+The parallel case uses a larger search fixture: $0.04 reserved and $0.03 committed, so two overlapping holds fit within its $0.10 allocation. Committing less than the estimate releases the unused hold.
 
 The core SDK boundary in the drill is:
 
 ```python
 with client.stream_reservation(
     subject=subject,  # Same tenant and unique workflow for the entire answer.
-    action=Action(kind="tool.call", name=f"rag-drill.{step.name}"),
+    action=Action(kind=step.kind, name=f"rag-drill.{step.name}"),
     estimate=Amount(unit=Unit.USD_MICROCENTS, amount=step.estimate),
     idempotency_key=operation_id,
     overage_policy="REJECT",
@@ -141,7 +185,7 @@ with client.stream_reservation(
     reservation.usage.actual_cost = step.actual
 ```
 
-Despite its name, `stream_reservation` also brackets a non-streaming operation. The full script supplies imports, provisions workflow budgets, distinguishes a reserve denial from a settlement failure, and verifies balances. It deliberately stops on returned constraints it cannot apply; a production adapter must enforce applicable caps before dispatch or decline the action.
+The SDK's `stream_reservation` context manages both streaming and non-streaming work. Each fixture carries its action kind: `llm.completion` for planning and generation, and `tool.call` for the simulated search and reranking tools. The full script provisions workflow budgets, distinguishes admission denial from settlement failure, and verifies balances. It declines returned caps it cannot apply; a production adapter must enforce applicable caps before dispatch or decline the action.
 
 ### Three outcomes to inspect
 
@@ -151,7 +195,7 @@ Despite its name, `stream_reservation` also brackets a non-streaming operation. 
 | Repeated plan/search/rerank loop | $0.12 | Eight handlers execute; the ninth is blocked; $0.11 committed |
 | Four concurrent searches, each reserving $0.04 | $0.10 | Two admitted and two blocked while both holds remain live; $0.06 committed |
 
-The parallel case holds admitted reservations open until all four admission attempts finish. Once the admitted calls commit $0.03 each, $0.04 becomes available again. The test does not claim that only two searches can ever execute over the workflow's lifetime.
+The parallel case holds admitted reservations open until all four admission attempts finish. Once the admitted calls commit $0.03 each, $0.04 becomes available again for later work.
 
 The summary lines should be:
 
@@ -161,11 +205,9 @@ PASS loop: executed=8 blocked=1 spent=11000000
 PASS parallel: executed=2 blocked=2 spent=6000000
 ```
 
-These results were reproduced with Python SDK 0.5.3, Cycles Server 0.1.25.59, and Admin Server 0.1.25.55. They describe this fixture and test configuration.
+These results were reproduced with Python SDK 0.5.3, Cycles Server 0.1.25.59, and [Admin Server](/glossary#admin-server) 0.1.25.55.
 
 In the loop case, $0.01 remains, but the next reranking estimate is $0.02. The handler is blocked even though its fixture actual would have been $0.01. Admission uses the estimate available before execution, not hindsight.
-
-This is an admission-and-accounting drill, not an end-to-end retrieval implementation. It does not measure relevance, citation correctness, provider cost savings, crash recovery, or isolation between tenants. Those need separate application tests.
 
 ## Connect the budget to LangChain or LangGraph
 
@@ -175,7 +217,64 @@ Use the model gate for planning and generation calls that pass through that agen
 
 Be explicit about ownership. If a retrieval tool runs search and reranking internally, either reserve for that bounded composite operation or gate its subcalls. Do not charge the same provider operation through both paths. Separately invoked graders, query-rewrite models, and arbitrary LangGraph nodes do not acquire coverage merely because another agent has middleware; wrap their execution boundaries too.
 
-The SDK boundary above is useful for those explicit calls. Replace the synthetic handler and cost with the real bounded operation and its trusted usage record. On a new billable attempt, use a new operation identity. A retry of the same Cycles operation should retain its identity and request body. Persist identity across checkpoint replay rather than assuming a new framework invocation represents new work. A Cycles idempotency key does not deduplicate provider execution: re-entering the SDK context can run its body again. The application must separately prevent duplicate provider dispatch or reconcile replayed work.
+### Wrap a LangGraph retrieval node
+
+For a raw LangGraph node, put the reservation around its paid retrieval boundary. This one-node graph returns passages or `budget_exhausted`, then stops. Supply an initialized client, a provisioned workflow ledger, and a `bounded_search(query)` adapter returning `(passages, actual_microcents)`. The adapter must enforce the request bounds behind your estimate and return trusted usage. The snippet was tested with `langgraph==1.2.12` and `runcycles==0.5.3`.
+
+```python
+from typing import TypedDict
+from langgraph.graph import START, END, StateGraph
+from runcycles import Action, Amount, CyclesProtocolError, Subject, Unit
+
+class RagState(TypedDict):
+    query: str
+    workflow: str
+    attempt_id: str
+    passages: list[str]
+    status: str
+
+def retrieval_graph(client, tenant, bounded_search, estimate_microcents):
+    def retrieve(state: RagState):
+        entered = False
+        try:
+            with client.stream_reservation(
+                subject=Subject(tenant=tenant, workflow=state["workflow"]),
+                action=Action(kind="memory.read", name="contracts.retrieve"),
+                estimate=Amount(unit=Unit.USD_MICROCENTS, amount=estimate_microcents),
+                idempotency_key=state["attempt_id"],
+                overage_policy="REJECT", raise_on_commit_failure=True,
+            ) as reservation:
+                entered = True
+                if reservation.caps and reservation.caps.model_dump(exclude_none=True):
+                    raise RuntimeError("This adapter cannot enforce returned caps")
+                passages, actual = bounded_search(state["query"])
+                reservation.usage.actual_cost = actual
+        except CyclesProtocolError as exc:
+            if entered or not exc.is_budget_exceeded():
+                raise
+            return {"status": "budget_exhausted"}
+        return {"passages": passages, "status": "retrieved"}
+
+    builder = StateGraph(RagState)
+    builder.add_node("retrieve", retrieve)
+    builder.add_edge(START, "retrieve")
+    builder.add_edge("retrieve", END)
+    return builder.compile()
+```
+
+Invoke it with an application-assigned workflow and retrieval attempt:
+
+```python
+graph = retrieval_graph(client, tenant, bounded_search, estimate_microcents)
+result = graph.invoke({
+    "query": question, "workflow": workflow_id, "attempt_id": retrieval_attempt_id,
+    "passages": [], "status": "pending",
+})
+```
+
+Persist those identities before dispatch, and check `result["status"]` before scheduling more work. A denied retrieval leaves any existing passages intact. Unsupported caps stop execution before search; settlement failures propagate rather than masquerading as budget denial.
+
+On a new billable attempt, use a new operation identity. A retry of the same Cycles operation should retain its identity and request body. Persist identity across checkpoint replay: re-entering the SDK context can execute its body again. Cycles idempotency does not deduplicate provider dispatch. [Durable Budget Control for LangChain Agents](/blog/durable-budget-control-for-langchain-agents) explains settlement recovery and the separate provider-idempotency boundary.
 
 Keep answer validation after the provider operation has settled. In Python SDK 0.5.3, an exception escaping the `stream_reservation` body attempts to release the reservation, even if you already set `usage.actual_cost`. The LangChain tool gate also attempts to release on a handler exception. A real adapter must handle a billable partial failure through an explicit settlement/reconciliation path rather than letting that exception erase known usage from the ledger.
 
@@ -195,6 +294,8 @@ Choose the user-visible outcome before rollout:
 | More research requires approval | Persist progress and resume only after an authorized budget change |
 
 An explanation can be a deterministic message with existing source links. Asking an LLM to summarize after the budget is exhausted creates another billable step. Plan capacity for that step explicitly, or use a response that requires no new model call.
+
+Return to the contract-amendment question. If the agreement and amendment still show conflicting renewal dates when the next search is denied, return the two retrieved passages with their source links and a fixed message: "These documents show conflicting renewal dates. I could not resolve the conflict within this answer's research budget." Preserve the passages and progress for an authorized resume; do not pick a date just to produce a complete-looking answer.
 
 Keep the retrieval trust boundary intact. Budget exhaustion is not a reason to replace a source-grounded answer with an unsupported guess. It also does not relax document authorization or tenant-data filters.
 

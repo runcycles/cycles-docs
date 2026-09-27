@@ -23,15 +23,16 @@ CENT = 1_000_000  # One dollar is 100,000,000 USD_MICROCENTS.
 @dataclass(frozen=True)
 class Step:
     name: str
+    kind: str
     estimate: int
     actual: int
 
 
 # Fixture values, not provider prices or estimates of typical RAG costs.
-PLAN = Step("plan", 2 * CENT, CENT)
-SEARCH = Step("search", 3 * CENT, 2 * CENT)
-RERANK = Step("rerank", 2 * CENT, CENT)
-ANSWER = Step("answer", 4 * CENT, 3 * CENT)
+PLAN = Step("plan", "llm.completion", 2 * CENT, CENT)
+SEARCH = Step("search", "tool.call", 3 * CENT, 2 * CENT)
+RERANK = Step("rerank", "tool.call", 2 * CENT, CENT)
+ANSWER = Step("answer", "llm.completion", 4 * CENT, 3 * CENT)
 
 
 def provision(workflow: str, allocation: int, tenant: str) -> None:
@@ -55,7 +56,7 @@ def run_step(client, subject, step, operation_id, barrier=None):
     try:
         with client.stream_reservation(
             subject=subject,
-            action=Action(kind="tool.call", name=f"rag-drill.{step.name}"),
+            action=Action(kind=step.kind, name=f"rag-drill.{step.name}"),
             estimate=Amount(unit=Unit.USD_MICROCENTS, amount=step.estimate),
             idempotency_key=operation_id,
             overage_policy="REJECT",
@@ -126,7 +127,8 @@ def main():
         provision(workflow, 10 * CENT, tenant)
         subject = Subject(tenant=tenant, workflow=workflow)
         barrier = Barrier(4)
-        step = Step("parallel-search", 4 * CENT, 3 * CENT)
+        # Larger search fixture keeps two simultaneous holds within ten cents.
+        step = Step("parallel-search", "tool.call", 4 * CENT, 3 * CENT)
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = [
                 pool.submit(run_step, client, subject, step, f"{workflow}-{i}", barrier)
