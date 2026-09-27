@@ -73,6 +73,7 @@ def run_turn(client, subject, estimate, operation_id, cache, prefix, now):
     """Return 'settled', 'blocked', or 'unsettled', plus the provider-side cost."""
     entered = False
     cost = 0
+    usage = None
     try:
         with client.stream_reservation(
             subject=subject,
