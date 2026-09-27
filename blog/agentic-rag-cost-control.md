@@ -67,7 +67,7 @@ These controls compose. A five-step run can cost more than a ten-step run if it 
 
 ## Give each answer a shared budget
 
-Map one application-assigned run identifier to an enforceable workflow scope. Every protected model, retrieval, and reranking call for that answer submits the same [tenant](/glossary#tenant) and workflow subject.
+Map one application-assigned run identifier to an enforceable workflow scope. Every protected call for that answer must use the same full scope prefix: [tenant](/glossary#tenant), any workspace and app, and workflow. For example, `tenant:acme/workflow:x` does not cover `tenant:acme/workspace:prod/workflow:x`. Include those fields explicitly when constructing a `Subject`; the SDK does not merge client subject defaults into an explicit subject. The drill below consistently uses the two-level tenant/workflow hierarchy.
 
 ```text
 tenant:acme
@@ -126,7 +126,7 @@ Use [shadow mode](/how-to/shadow-mode-in-cycles-how-to-roll-out-budget-enforceme
 
 ### Estimate the model-cost component
 
-For an illustrative answer whose planning, grading, and generation calls total 6,000 input [tokens](/glossary#tokens) and 1,500 output tokens, assumed rates of $2 per million input tokens and $10 per million output tokens give **$0.027 in model cost**. These are adjustable example rates, not a vendor quote. Add query embeddings, paid retrieval, and reranking separately; ingestion remains a separate budget.
+For an illustrative answer whose planning, grading, and generation calls total 6,000 input [tokens](/glossary#token) and 1,500 output tokens, assumed rates of $2 per million input tokens and $10 per million output tokens give **$0.027 in model cost**. These are adjustable example rates, not a vendor quote. Add query embeddings, paid retrieval, and reranking separately; ingestion remains a separate budget.
 
 Open the [model-cost calculator with this answer preset](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJSQUcgYW5zd2VyIC0gbW9kZWwgY2FsbHMgb25seSIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiJBZ2dyZWdhdGUgbW9kZWwgdG9rZW5zIHBlciBhbnN3ZXIuIEV4Y2x1ZGVzIHF1ZXJ5IGVtYmVkZGluZ3MsIHNlYXJjaCwgcmVyYW5raW5nIGFuZCBpbmdlc3Rpb24uIFJlcGxhY2UgaWxsdXN0cmF0aXZlIHJhdGVzLiIsImlucHV0VG9rZW5zIjo2MDAwLCJvdXRwdXRUb2tlbnMiOjE1MDAsImNhbGxzUGVyRGF5IjoxMDAwLCJtb2RlbHMiOlt7Im91dHB1dFBlck0iOjEwLCJpbnB1dFBlck0iOjIsIm5hbWUiOiJJbGx1c3RyYXRpdmUgcmF0ZXMgLSByZXBsYWNlIHdpdGggeW91ciBwcm92aWRlciJ9XX0). In this preset, one calculator "call" represents the aggregate model tokens for one answer; the 1,000 calls/day field means 1,000 answers/day. Replace the rates and token totals with your measurements. The calculator does not include retrieval or reranking charges.
 
@@ -219,7 +219,7 @@ Be explicit about ownership. If a retrieval tool runs search and reranking inter
 
 ### Wrap a LangGraph retrieval node
 
-For a raw LangGraph node, put the reservation around its paid retrieval boundary. This one-node graph returns passages or `budget_exhausted`, then stops. Supply an initialized client, a provisioned workflow ledger, and a `bounded_search(query)` adapter returning `(passages, actual_microcents)`. The adapter must enforce the request bounds behind your estimate and return trusted usage. The snippet was tested with `langgraph==1.2.12` and `runcycles==0.5.3`.
+For a raw LangGraph node, put the reservation around its paid retrieval boundary. This one-node graph uses the drill's tenant/workflow hierarchy, returns passages or `budget_exhausted`, then stops. Supply an initialized client, a provisioned workflow ledger, and a `bounded_search(query)` adapter returning `(passages, actual_microcents)`. The adapter must enforce the request bounds behind your estimate and return trusted usage. The snippet was tested with `langgraph==1.2.12` and `runcycles==0.5.3`.
 
 ```python
 from typing import TypedDict
