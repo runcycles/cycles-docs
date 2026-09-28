@@ -1,5 +1,5 @@
 {
-  "npm": 10235,
+  "npm": 10266,
   "pypi": 7735,
   "crates": 158,
   "clones": 152661,
@@ -110,12 +110,12 @@
   },
   "ghPackages": 2959,
   "maven": 1477,
-  "total": 22564,
-  "fetchedAt": "2026-09-27T11:01:57.498Z",
+  "total": 22595,
+  "fetchedAt": "2026-09-28T12:22:02.743Z",
   "npmByPackage": {
-    "runcycles": 3410,
-    "@runcycles/mcp-server": 3117,
-    "@runcycles/openclaw-budget-guard": 3708
+    "runcycles": 3435,
+    "@runcycles/mcp-server": 3122,
+    "@runcycles/openclaw-budget-guard": 3709
   },
   "pypiByPackage": {
     "runcycles": 4039,
