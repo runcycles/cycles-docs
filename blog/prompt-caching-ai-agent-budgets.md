@@ -1,6 +1,6 @@
 ---
 title: "Prompt Caching Costs and AI Agent Budgets"
-date: 2026-09-27
+date: 2026-09-28
 author: Albert Mavashev
 tags: [costs, budgets, agents, cost-control, production, runtime-authority]
 description: "Prompt caching gives one agent call three prices. Learn why AI agent budgets should reserve for the cache write, settle from usage, and track cache read share."
