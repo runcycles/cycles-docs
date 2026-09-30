@@ -5,7 +5,7 @@ og:
   preview:
     value: "$18K"
     label: "monthly — highest vs lowest model, same workload"
-    pill: "43×"
+    pill: "100×"
     pillCaption: "model spread"
   hook: "Plug in your token volume. Compare leading Claude and GPT models. Share the URL."
 ---
@@ -24,7 +24,9 @@ A free interactive calculator that compares per-call, per-day, per-month, and pe
 
 ## How the calculation works
 
-Model prices change frequently. The defaults are starting points, not a pricing guarantee — edit any rate to match the current provider pricing page or your contracted rates.
+Default model rates were verified on **September 30, 2026** against [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing). The lineup includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna, GPT-6 Sol, Claude Fable 5.1, Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku 4.5.
+
+Prices are in USD for standard API processing without caching. GPT rates assume at most **272,000 input tokens per call**; each model's context limit still applies. Model prices change frequently; edit any rate to match current provider pricing or your contract. Shared URLs preserve saved models and rates, so an older link can contain older prices.
 
 The cost for a single LLM call is:
 
@@ -34,15 +36,16 @@ cost_per_call = (input_tokens × input_price_per_M + output_tokens × output_pri
 
 Per-day, per-month, and per-year columns multiply by `calls_per_day`, then by 30 and 365 respectively.
 
-The pricing rates default to widely-published reference values, but they are user-editable above so you can plug in current or contracted rates. The cheapest per-year row is highlighted.
+Use total billed output tokens, including [OpenAI reasoning tokens](https://developers.openai.com/api/docs/guides/reasoning#how-reasoning-works) or [Claude thinking tokens](https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost), rather than just the visible answer. Token counts depend on the model's tokenizer, so identical text can produce different counts. The cheapest positive per-year total is highlighted; equal token volumes compare rates, not model quality or equal-text costs.
 
 ## What the calculator does not include
 
-- **Prompt caching discounts.** Anthropic's `cache_control` blocks bill cache hits at a fraction of base input pricing (for example, Opus 4.8 cache hits at $0.50 / MTok vs $5 / MTok base input). OpenAI also offers cached-input and Batch API pricing on supported models, but the discount varies by model. If a meaningful share of your prompts are reused, your real cost may be 30–60% lower than the calculator suggests.
-- **Batch API discounts.** Both providers offer batch-processing discounts (Anthropic at 50%; OpenAI varies).
+- **Prompt caching.** Reads have discounted rates, while cache writes can cost more than ordinary input. Savings depend on the model, cache lifetime, and hit rate; the calculator uses uncached input rates.
+- **Batch and Flex discounts.** Both providers publish 50% Batch discounts for the default models. OpenAI also offers Flex pricing. These modes are not selected automatically.
+- **Fast and Ultrafast modes, data residency, and tool fees.** These can add charges beyond standard token rates.
 - **Fine-tuning costs.** Per-token rates differ for fine-tuned model variants.
 - **Reserved or committed-use pricing.** Enterprise contracts often beat list pricing materially.
-- **Context-window pricing tiers.** Some providers charge differently for very long contexts.
+- **Automatic context-window pricing tiers.** Above 272,000 input tokens, the default GPT models charge 2× the input rate and 1.5× the output rate for the entire request. Enter those rates manually for long-context workloads. Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 have standard rates throughout their 1M-token context windows; Haiku 4.5 has a 200K-token context window. Check model limits before budgeting a request.
 
 For accurate enterprise planning, treat the calculator as a directional estimate and verify with your provider account manager.
 
