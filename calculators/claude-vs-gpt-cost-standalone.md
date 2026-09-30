@@ -5,7 +5,7 @@ og:
   preview:
     value: "$18K"
     label: "monthly — highest vs lowest model, same workload"
-    pill: "43×"
+    pill: "100×"
     pillCaption: "model spread"
   hook: "Plug in your token volume. Compare leading Claude and GPT models. Share the URL."
 layout: standalone
