@@ -19,6 +19,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 20
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+      - name: Test agent rollback risk drill
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m unittest discover -s scripts/__tests__ -p test_rollback_risk_drill.py
       - name: Install Chrome dependencies for Puppeteer
         # `npm run build` now invokes generate-pdfs.js, which uses Puppeteer
         # to render featured-post PDFs. Chrome runtime libs aren't in the
