@@ -18,21 +18,25 @@ head:
 
 Consider an illustrative customer-support agent running on GPT-4o. A prototype-based estimate puts it at $800 per month; production-shaped assumptions put it at $4,200. The model rate is unchanged. The scenario reaches the higher total because it assumes 11 LLM calls per conversation instead of three, growing contexts, and additional retries on tool failures. The per-token price is not the only variable; the execution pattern is.
 
-> **Recreate the "estimated $800, actual $4,200" scenario in the calculator:** [Open with these numbers pre-loaded →](/calculators/claude-vs-gpt-cost-standalone#s=eyJ3b3JrbG9hZE5hbWUiOiJDdXN0b21lciBzdXBwb3J0IGJvdCIsIndvcmtsb2FkRGVzY3JpcHRpb24iOiIxMSBMTE0gY2FsbHMgcGVyIGNvbnZlcnNhdGlvbi4gQ29udGV4dCB3aW5kb3dzIGdyb3cgd2l0aCBlYWNoIHR1cm4uIEVzdGltYXRlZCAkODAwL21vLCBhY3R1YWwgJDQsMjAwLiIsImlucHV0VG9rZW5zIjo1MDAwLCJvdXRwdXRUb2tlbnMiOjEyMDAsImNhbGxzUGVyRGF5IjozMzAwfQ)
+> **Explore your own call volume and token mix:** use the [Claude vs GPT cost calculator](/calculators/claude-vs-gpt-cost-comparison).
 
 <!-- more -->
 
-This post is a reference guide. We break down representative per-token pricing across major providers, then show what those prices mean under illustrative agent workload assumptions. Pricing was verified against provider documentation on **July 24, 2026**; recheck the linked provider pages before making a purchasing decision.
+This post is a reference guide. We break down representative per-token pricing across major providers, then show what those prices mean under illustrative agent workload assumptions. Pricing was verified against provider documentation on **October 1, 2026**; recheck the linked provider pages before making a purchasing decision.
 
 ## Per-Token Pricing by Provider
 
-All prices below are per 1 million [tokens](/glossary#tokens). Every provider charges separately for input tokens (what you send) and output tokens (what the model generates). Agents are output-heavy relative to simple completions, because they generate tool calls, reasoning chains, and structured responses.
+All prices below are selected standard text rates per 1 million [tokens](/glossary#tokens), with input and output billed separately. The tables exclude caching, batch/flex discounts, tools, and regional premiums. The listed GPT-6 and GPT-5.6 families above 272,000 input tokens have higher full-request rates (2× input, 1.5× output); Gemini 2.5 Pro above 200,000 uses $2.50 input / $15 output. Check each model’s terms. The worked scenarios use shorter contexts and unchanged token-count assumptions.
 
-### [OpenAI](https://developers.openai.com/api/docs/models/gpt-4o)
+### [OpenAI](https://developers.openai.com/api/docs/pricing)
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
 |---|---|---|---|
-| gpt-4o | $2.50 | $10.00 | Flagship multimodal model |
+| gpt-6-astra | $10.00 | $50.00 | Standard text rate |
+| gpt-6.1-sol | $2.00 | $10.00 | Standard text rate |
+| gpt-6-luna | $0.10 | $0.50 | Standard text rate |
+| gpt-6-sol | $2.00 | $10.00 | Standard text rate |
+| gpt-4o | $2.50 | $10.00 | Older multimodal model used below |
 | gpt-4o-mini | $0.15 | $0.60 | Cost-optimized for high-volume |
 | gpt-4.1 | $2.00 | $8.00 | General-purpose model with long context |
 | gpt-4.1-mini | $0.40 | $1.60 | Balanced cost/capability |
@@ -43,8 +47,9 @@ All prices below are per 1 million [tokens](/glossary#tokens). Every provider ch
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
 |---|---|---|---|
-| Claude Opus 4.8 | $5.00 | $25.00 | Premium Opus tier |
-| Claude Sonnet 5 | $2.00 | $10.00 | Introductory rate through August 31, 2026; $3/$15 afterward |
+| Claude Fable 5.1 | $10.00 | $50.00 | Standard text rate |
+| Claude Opus 5.5 | $4.00 | $20.00 | Standard text rate |
+| Claude Sonnet 5.5 | $2.00 | $10.00 | Standard text rate |
 | Claude Haiku 4.5 | $1.00 | $5.00 | Fast, lower-cost tier |
 
 ### [Google](https://ai.google.dev/gemini-api/docs/pricing)
@@ -55,7 +60,7 @@ All prices below are per 1 million [tokens](/glossary#tokens). Every provider ch
 | Gemini 2.5 Flash | $0.30 | $2.50 | Hybrid reasoning and throughput |
 | Gemini 2.5 Flash-Lite | $0.10 | $0.40 | Lower-cost high-volume option |
 
-A quick observation: even within this small representative set, output pricing ranges from $0.40 per million tokens for Gemini 2.5 Flash-Lite to $25 for Claude Opus 4.8—a 62.5x spread. Model selection is a major cost lever, but only if the cheaper model still meets the workload's quality, latency, and tool-use requirements.
+A quick observation: even within this small representative set, output pricing ranges from $0.40 per million tokens for Gemini 2.5 Flash-Lite to $50 for Claude Fable 5.1 and GPT-6 Astra—a 125x spread. Model selection is a major cost lever, but only if the cheaper model still meets the workload's quality, latency, and tool-use requirements.
 
 ## Why Agents Cost More Than You Think
 
@@ -106,11 +111,11 @@ A support bot handling customer questions — looking up orders, checking polici
 |---|---|---|---|
 | gpt-4o | $0.018 | $21.60 | $648 |
 | gpt-4o-mini | $0.00108 | $1.30 | $38.88 |
-| Claude Sonnet 5 | $0.016 | $19.20 | $576 |
+| Claude Sonnet 5.5 | $0.016 | $19.20 | $576 |
 | Claude Haiku 4.5 | $0.008 | $9.60 | $288 |
 | Gemini 2.5 Flash | $0.0032 | $3.84 | $115.20 |
 
-Under these assumptions, the same support bot costs about $39 per month on gpt-4o-mini or $576 on Claude Sonnet 5 at its introductory rate. That spread is material, but it is not a quality-adjusted comparison.
+Under these assumptions, the same support bot costs about $39 per month on gpt-4o-mini or $576 on Claude Sonnet 5.5. That spread is material, but it is not a quality-adjusted comparison.
 
 ### Scenario 2: Coding agent
 
@@ -128,11 +133,11 @@ An agent that reads codebases, generates changes, runs tests, and iterates on fa
 |---|---|---|---|
 | gpt-4o | $0.035 | $43.75 | $1,313 |
 | gpt-4.1 | $0.028 | $35.00 | $1,050 |
-| Claude Sonnet 5 | $0.032 | $40.00 | $1,200 |
-| Claude Opus 4.8 | $0.080 | $100.00 | $3,000 |
+| Claude Sonnet 5.5 | $0.032 | $40.00 | $1,200 |
+| Claude Opus 5.5 | $0.064 | $80.00 | $2,400 |
 | o3 | $0.028 | $35.00 | $1,050 |
 
-At this volume, the illustrative Claude Opus 4.8 workload costs $3,000 per month. That reflects the combination of a premium model and agent-scale call volume. Routing only the hardest subtasks to a premium model can reduce the blended rate.
+At this volume, the illustrative Claude Opus 5.5 workload costs $2,400 per month. That reflects the combination of a premium model and agent-scale call volume. Routing only the hardest subtasks to a premium model can reduce the blended rate.
 
 ### Scenario 3: Data pipeline agent
 
@@ -173,10 +178,10 @@ A coordinator agent dispatches work to specialized sub-agents — a planner, a r
 |---|---|---|---|
 | gpt-4o | $0.028 | $44.00 | $1,320 |
 | gpt-4.1 | $0.022 | $35.20 | $1,056 |
-| Claude Sonnet 5 | $0.025 | $40.00 | $1,200 |
-| Mixed (Sonnet 5 coordinator + Haiku 4.5 workers) | $0.015 avg | $24.00 | $720 |
+| Claude Sonnet 5.5 | $0.025 | $40.00 | $1,200 |
+| Mixed (Sonnet 5.5 coordinator + Haiku 4.5 workers) | $0.015 avg | $24.00 | $720 |
 
-The "mixed" row assumes one Sonnet 5 coordinator call for every four Haiku 4.5 worker calls. It is 40% cheaper than the all-Sonnet example under this exact mix; different orchestration ratios produce different savings.
+The "mixed" row assumes one Sonnet 5.5 coordinator call for every four Haiku 4.5 worker calls. It is 40% cheaper than the all-Sonnet example under this exact mix; different orchestration ratios produce different savings.
 
 ## The Hidden Cost Multipliers
 
