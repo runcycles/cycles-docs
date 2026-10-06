@@ -525,3 +525,15 @@ date,repo,rank,referrer,views,uniques
 2026-09-27,cycles-server,2,github.com,2,1
 2026-09-27,cycles-spring-boot-starter,1,Google,1,1
 2026-09-27,cycles-spring-boot-starter,2,github.com,1,1
+2026-10-04,cycles-docs,1,github.com,43,2
+2026-10-04,.github,1,github.com,1,1
+2026-10-04,cycles-openclaw-budget-guard,1,Bing,1,1
+2026-10-04,cycles-server,1,github.com,4,1
+2026-10-04,cycles-spring-boot-starter,1,Google,1,1
+2026-10-04,cycles-spring-ai-starter,1,Google,1,1
+2026-10-04,cycles-spring-ai-starter,2,github.com,1,1
+2026-10-04,cycles-client-rust,1,github.com,2,1
+2026-10-04,cycles-server-admin,1,github.com,1,1
+2026-10-04,cycles-openai-agents,1,Google,1,1
+2026-10-04,cycles-protocol,1,github.com,3,1
+2026-10-04,cycles-ap2-python,1,Google,1,1
