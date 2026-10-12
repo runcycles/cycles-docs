@@ -200,7 +200,7 @@ function ghHeaders(): Record<string, string> {
 // cached value instead of comparing against 0.
 //
 // Package lists are duplicated in scripts/update-registry-counts.mjs
-// (the daily refresh workflow). Keep them in sync by convention.
+// (the weekly refresh workflow). Keep them in sync by convention.
 
 // ── npm ──────────────────────────────────────────────────────────────
 const NPM_PACKAGES = [
