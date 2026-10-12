@@ -1,8 +1,10 @@
 name: Refresh install + GitHub counts
 
-# Daily refresh of installs-cache.json (and manual-package-counts.json).
+# Weekly refresh of installs-cache.json (and manual-package-counts.json).
 # Combines the two halves of the count update into a single job so they
-# share a checkout and produce a single PR per day.
+# share a checkout and produce a single scheduled PR per week.
+# adoption-snapshot.yml separately records the weekly history in CSV files;
+# it does not update these caches.
 #
 # Step 1 — registry counters (bash + curl + jq):
 #   npm    (api.npmjs.org)
@@ -47,7 +49,7 @@ name: Refresh install + GitHub counts
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # 6 AM UTC daily
+    - cron: '0 6 * * 0'  # 6 AM UTC every Sunday
   workflow_dispatch:
 
 permissions:
@@ -101,7 +103,7 @@ jobs:
           # `fetchedAt` (and `lastVerifiedAt` in manual-package-counts.json
           # whenever the GHCR sub-step succeeds), so a no-op refresh — fresh
           # data fetched, but no count actually moved — still produces a
-          # 1-line diff. Without this filter that would open a PR every day
+          # 1-line diff. Without this filter that would open a PR every run
           # whose only change is a timestamp; PR #605 (2026-05-09) closed
           # without merging for exactly this reason.
           DIFF=$(git diff --no-color -- \
@@ -136,6 +138,6 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
           gh pr create \
             --title "chore: refresh counts $(date -u +%Y-%m-%d)" \
-            --body "Automated daily refresh of registry counts (npm / PyPI / crates) and GitHub-side counts (clones / releases / ghPackages). One PR per day from the unified refresh-counts.yml workflow." \
+            --body "Automated refresh of registry counts (npm / PyPI / crates) and GitHub-side counts (clones / releases / ghPackages). Scheduled weekly on Sundays, with manual runs available, from the unified refresh-counts.yml workflow." \
             --head "$BRANCH" \
             --base main
