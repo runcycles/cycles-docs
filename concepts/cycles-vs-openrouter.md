@@ -23,7 +23,7 @@ If all protected spend flows through OpenRouter, those controls provide real pre
 | **Action control** | No native authorization for downstream application tools | Caller-assigned [RISK_POINTS](/glossary#risk-points) budget; application authorization remains separate |
 | **Multi-tenant** | Organization, workspace, member, and key controls | Tenant-scoped keys plus subject-scoped budgets |
 | **Budget hierarchy** | Workspace interval budgets and inherited/assigned guardrails | Deepest matching configured subject scope |
-| **Alerts** | Usage dashboard + key credit/usage introspection | Webhook events on budget state transitions (programmatic, PagerDuty/Slack) |
+| **Alerts** | Workspace-budget threshold alerts via email, Slack, or webhooks on Business/Enterprise; low-balance and API-key spend alerts are email-only | Webhook events on budget state transitions (programmatic, PagerDuty/Slack) |
 | **Concurrency behavior** | Preflight enforcement; in-flight inference may slightly exceed a limit | Reservation atomically consumes available budget before work starts |
 
 ## Where OpenRouter's guardrails work well
@@ -53,11 +53,11 @@ OpenRouter controls inference requests, models, providers, prompts, and data pol
 
 For example, a host can assign a `RISK_POINTS` estimate to each email attempt and require a Cycles reservation before invoking the email provider. Cycles bounds the submitted cumulative exposure; the host still decides whether the email is authorized and enforces the tool call.
 
-### 3. No graduated enforcement or programmatic alerts
+### 3. Budget alerts and reservation decisions
 
-OpenRouter offers dashboard-level usage alerts and per-key activity logs. But enforcement is binary: under the cap (allowed) or over the cap (rejected). There's no graduated middle ground — no "proceed but with constraints" response, no threshold-triggered webhook events for programmatic automation.
+OpenRouter supports [workspace-budget alerts](https://openrouter.ai/docs/guides/features/notifications) at configurable percentages of a budget, with email, Slack, and custom webhook delivery on Business and Enterprise plans. These webhooks can trigger downstream automation. Low-balance and API-key spend-limit alerts remain email-only.
 
-Cycles provides [three-way decisions](/glossary#three-way-decision): ALLOW, ALLOW_WITH_CAPS (proceed with constraints like model downgrade or tool restrictions), and DENY. Plus webhook events on budget state transitions (`budget.exhausted`, `budget.over_limit_entered`) that integrate with PagerDuty, Slack, and automated remediation pipelines.
+OpenRouter's workspace-budget check allows or rejects a routed request. Cycles provides [three-way reservation decisions](/glossary#three-way-decision): `ALLOW`, `ALLOW_WITH_CAPS`, and `DENY`. A host can use returned, configured caps to select a cheaper model or restrict tools. Cycles also emits budget-state webhook events such as `budget.exhausted` and `budget.over_limit_entered` for operational automation. The comparison is about the decision and scope being governed; both products support programmatic budget alerts.
 
 ### 4. Preflight spend checks vs. reserve-commit
 
@@ -129,11 +129,13 @@ Cycles is not a router or model aggregator. It doesn't provide access to hundred
 - You need atomic budget enforcement under concurrent agent load
 - You need graduated enforcement (ALLOW_WITH_CAPS for graceful degradation)
 - Multi-agent delegation chains requiring authority attenuation
-- Webhook events for operational alerting and automated response
+- Budget-state webhook events across instrumented application operations, including non-LLM work
 
 ## Sources
 
 Feature claims verified against OpenRouter's [guardrails](https://openrouter.ai/docs/guides/features/guardrails) and [workspace budgets](https://openrouter.ai/docs/guides/features/workspaces/workspace-budgets) documentation on July 24, 2026. Cycles claims are based on v0.1.25. These tools evolve quickly—check the linked docs for the latest.
+
+Alert capabilities rechecked against OpenRouter's [notifications documentation](https://openrouter.ai/docs/guides/features/notifications) on October 23, 2026, including plan availability and delivery-channel restrictions.
 
 ## Related
 
