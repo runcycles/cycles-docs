@@ -17,7 +17,7 @@ head:
 
 Europe's dates get the headlines: the European Commission says its GPAI enforcement powers apply from [August 2, 2026](/blog/eu-ai-act-what-actually-happens-august-2-2026). For US federal systems, contractors, and organizations that use SP 800-53 baselines, the NIST track may shape future assessment evidence. That track moved twice this year: NIST's Center for AI Standards and Innovation (CAISI) launched the [AI Agent Standards Initiative](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) in February, and NIST's [COSAiS project](https://csrc.nist.gov/projects/cosais) (Control Overlays for Securing AI Systems) is developing SP 800-53 overlays that include two proposed agent use cases: **Using AI Agent Systems (Single Agent)** and **(Multi-Agent)**.
 
-[NIST says](https://csrc.nist.gov/Projects/cosais/faqs) these overlays are voluntary starting points, not mandatory requirements. If published as proposed and adopted by a program, the agent overlays could give implementers and assessors tailored mappings to existing SP 800-53 controls. Their final content and assessment treatment remain open.
+[NIST says](https://csrc.nist.gov/Projects/cosis/faqs) these overlays are voluntary starting points, not mandatory requirements. If published as proposed and adopted by a program, the agent overlays could give implementers and assessors tailored mappings to existing SP 800-53 controls. Their final content and assessment treatment remain open.
 
 Which makes the gap analysis worth reading closely — because the sharpest sentence about these overlays wasn't written by NIST.
 
@@ -57,7 +57,7 @@ Use the draft period to inventory agent identities, task-scoped access controls,
 ## Sources
 
 1. [NIST — COSAiS: Control Overlays for Securing AI Systems](https://csrc.nist.gov/projects/cosais) — overlay list, basis, and timeline
-2. [NIST — COSAiS frequently asked questions](https://csrc.nist.gov/Projects/cosais/faqs) — voluntary status and intended use of overlays
+2. [NIST — COSIS (formerly COSAiS) frequently asked questions](https://csrc.nist.gov/Projects/cosis/faqs) — voluntary status and intended use of overlays
 3. [CSA — Research note on the NIST AI Agent Standards Initiative](https://labs.cloudsecurityalliance.org/research/csa-research-note-nist-ai-agent-standards-initiative-2026040/) — agent-control gap analysis
 4. [NIST — AI Agent Standards Initiative announcement](https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure) — February 17, 2026
 5. [European Commission — guidelines for general-purpose AI providers](https://digital-strategy.ec.europa.eu/en/policies/guidelines-gpai-providers) — enforcement schedule
