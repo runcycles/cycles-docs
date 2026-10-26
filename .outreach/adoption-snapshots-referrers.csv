@@ -559,3 +559,10 @@ date,repo,rank,referrer,views,uniques
 2026-10-18,cycles-spring-boot-starter,1,github.com,3,1
 2026-10-18,cycles-spring-ai-starter,1,github.com,1,1
 2026-10-18,cycles-openai-agents,1,Google,1,1
+2026-10-25,cycles-docs,1,github.com,9,3
+2026-10-25,cycles-docs,2,claude.ai,1,1
+2026-10-25,cycles-mcp-server,1,github.com,1,1
+2026-10-25,cycles-server-events,1,github.com,1,1
+2026-10-25,cycles-spring-ai-starter,1,github.com,1,1
+2026-10-25,cycles-spring-boot-starter,1,github.com,1,1
+2026-10-25,cycles-client-rust,1,Google,1,1
