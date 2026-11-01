@@ -6,7 +6,7 @@
     "@fontsource/inter": "^5.3.0",
     "@resvg/resvg-js": "^2.6.2",
     "finalhandler": "^2.1.1",
-    "puppeteer": "^25.15.0",
+    "puppeteer": "^25.16.0",
     "satori": "^0.63.2",
     "serve-static": "^2.2.1",
     "sharp": "^0.35.5",
@@ -30,7 +30,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@lucide/vue": "^1.61.0",
+    "@lucide/vue": "^1.64.0",
     "feed": "^6.0.0",
     "html2canvas-pro": "^2.5.2",
     "medium-zoom": "^1.1.2",
