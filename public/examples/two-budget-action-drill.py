@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import json
 import os
 import threading
+import time
 from uuid import uuid4
 
 import httpx
@@ -28,6 +29,7 @@ PERIOD_ESTIMATE = 40 * CENT       # Synthetic price ceiling for one billing peri
 PERIOD_ACTUAL = 35 * CENT         # Synthetic metered usage for one period
 TENANT_MINIMUM = 150 * CENT
 TTL_MS = 30_000                   # Short lease, per the spec's leasing guidance
+DISPATCH_MARGIN_S = 5             # Refuse to dispatch on a lease about to lapse
 
 
 def amount(unit, value):
@@ -75,11 +77,27 @@ class Fleet:
         emit("instance_terminated", op=op)
 
 
+@dataclass
+class Hold:
+    """One live reservation plus a conservative local deadline for its lease."""
+
+    rid: str
+    key: str
+    unit: str
+    capped: bool
+    deadline: float
+
+    def seconds_left(self):
+        return self.deadline - time.monotonic()
+
+
 def reserve(client, subject, op, unit, value, key_suffix):
+    key = f"{op}-{key_suffix}"
+    sent_at = time.monotonic()  # Measure from send time: never overstate the lease
     response = client.create_reservation({
         # One key per unit: idempotency is scoped to the endpoint, so reusing
         # a key with a different unit returns 409 IDEMPOTENCY_MISMATCH.
-        "idempotency_key": f"{op}-{key_suffix}-reserve",
+        "idempotency_key": key + "-reserve",
         "subject": subject,
         "action": {"kind": "infra.provision", "name": "compute.gpu_instance"},
         "estimate": amount(unit, value),
@@ -97,58 +115,70 @@ def reserve(client, subject, op, unit, value, key_suffix):
     if response.status != 200:
         # Transport error or 5xx: the reservation may exist. A production
         # adapter retries with the same key; this drill stops for inspection.
-        raise RuntimeError(f"Admission unresolved for {op}/{key_suffix}: HTTP {response.status}")
+        raise RuntimeError(f"Admission unresolved for {key}: HTTP {response.status}")
     rid = body.get("reservation_id")
     if not rid or body.get("decision") not in ("ALLOW", "ALLOW_WITH_CAPS"):
-        raise RuntimeError(f"Invalid admission for {op}/{key_suffix}")
+        raise RuntimeError(f"Invalid admission for {key}")
     capped = body.get("decision") == "ALLOW_WITH_CAPS" or bool(body.get("caps"))
+    # The server may grant less than the requested TTL; trust its remaining_ttl_ms.
+    lease_ms = min(TTL_MS, body.get("remaining_ttl_ms", TTL_MS))
     emit("reserved", op=op, unit=unit, amount=value, reservation_id=rid)
-    return rid, capped
+    return Hold(rid, key, unit, capped, sent_at + lease_ms / 1000)
 
 
-def release(client, rid, key, reason):
-    response = client.release_reservation(rid, {
-        "idempotency_key": key + "-release",
+def release(client, hold, reason):
+    response = client.release_reservation(hold.rid, {
+        "idempotency_key": hold.key + "-release",
         "reason": reason,
     })
     if response.status != 200 or (response.body or {}).get("status") != "RELEASED":
-        raise RuntimeError(f"Release unresolved for {key}: HTTP {response.status}")
-    emit("released", key=key)
+        raise RuntimeError(f"Release unresolved for {hold.key}: HTTP {response.status}")
+    emit("released", key=hold.key)
 
 
-def commit(client, rid, key, unit, value):
-    response = client.commit_reservation(rid, {
-        "idempotency_key": key + "-commit",
-        "actual": amount(unit, value),
+def release_all(client, holds, reason):
+    """Attempt every release, even if one fails, then report what is unresolved."""
+    failures = []
+    for hold in holds:
+        try:
+            release(client, hold, reason)
+        except Exception as exc:  # Keep going: the other hold is independent
+            failures.append(f"{hold.key}: {exc}")
+    if failures:
+        raise RuntimeError("Unresolved holds: " + "; ".join(failures))
+
+
+def commit(client, hold, value):
+    response = client.commit_reservation(hold.rid, {
+        "idempotency_key": hold.key + "-commit",
+        "actual": amount(hold.unit, value),
     })
     body = response.body or {}
     if (response.status != 200 or body.get("status") != "COMMITTED"
-            or body.get("charged") != amount(unit, value)):
-        raise RuntimeError(f"Commit unresolved for {key}: HTTP {response.status}")
-    emit("committed", key=key, unit=unit, amount=value)
+            or body.get("charged") != amount(hold.unit, value)):
+        raise RuntimeError(f"Commit unresolved for {hold.key}: HTTP {response.status}")
+    emit("committed", key=hold.key, unit=hold.unit, amount=value)
 
 
 def admit_launch(client, subject, op):
     """Both reservations must succeed before dispatch. Fixed order: risk, then cost."""
-    risk_rid, risk_capped = reserve(client, subject, op, RISK, LAUNCH_POINTS, "risk")
+    risk = reserve(client, subject, op, RISK, LAUNCH_POINTS, "risk")
     try:
-        usd_rid, usd_capped = reserve(client, subject, op, USD, PERIOD_ESTIMATE, "usd-p1")
+        usd = reserve(client, subject, op, USD, PERIOD_ESTIMATE, "usd-p1")
     except Refused as refused:
         # Definitive: no cost reservation exists, so return the risk hold now.
-        release(client, risk_rid, f"{op}-risk", f"Cost reservation refused: {refused.error}")
+        release_all(client, [risk], f"Cost reservation refused: {refused.error}")
         raise
-    if risk_capped or usd_capped:
+    if risk.capped or usd.capped:
         # This fixture cannot enforce caps, so it declines the action entirely.
-        reason = "Caps returned; executor cannot enforce them"
-        release(client, risk_rid, f"{op}-risk", reason)
-        release(client, usd_rid, f"{op}-usd-p1", reason)
+        release_all(client, [risk, usd], "Caps returned; executor cannot enforce them")
         raise RuntimeError("Use a test tenant without caps; this fixture cannot enforce them")
-    return risk_rid, usd_rid
+    return risk, usd
 
 
 def launch(client, subject, fleet, op, barrier=None):
     try:
-        risk_rid, usd_rid = admit_launch(client, subject, op)
+        risk, usd = admit_launch(client, subject, op)
     except Denied as denied:
         if barrier:
             barrier.wait()
@@ -157,30 +187,46 @@ def launch(client, subject, fleet, op, barrier=None):
         if barrier:
             barrier.abort()  # Unblock the other workers instead of hanging
         raise
-    if barrier:
-        barrier.wait()  # Hold admitted reservations until every attempt is decided
+    try:
+        if barrier:
+            barrier.wait()  # Hold admitted reservations until every attempt is decided
+        if min(risk.seconds_left(), usd.seconds_left()) < DISPATCH_MARGIN_S:
+            raise RuntimeError(f"Lease too short to dispatch {op}")
+    except Exception:
+        # Nothing was dispatched: return both holds rather than strand them.
+        release_all(client, [risk, usd], "Not dispatched: synchronization or lease failure")
+        raise
     fleet.launch(op)
+    failures = []
     # Policy: the risk charge is fixed once the provider accepts the launch.
-    commit(client, risk_rid, f"{op}-risk", RISK, LAUNCH_POINTS)
     # The first period's metered usage settles the first cost reservation.
-    commit(client, usd_rid, f"{op}-usd-p1", USD, PERIOD_ACTUAL)
+    for hold, value in ((risk, LAUNCH_POINTS), (usd, PERIOD_ACTUAL)):
+        try:
+            commit(client, hold, value)
+        except Exception as exc:  # Settle each ledger independently
+            failures.append(f"{hold.key}: {exc}")
+    if failures:
+        # Execution happened, so never release. Stop the spend and leave the
+        # unsettled holds for reconciliation against what actually ran.
+        fleet.teardown(op)
+        raise RuntimeError("Settlement unresolved after launch: " + "; ".join(failures))
     return "launched"
 
 
 def renew(client, subject, fleet, op, period):
     """Continuing spend needs fresh admission. Teardown is never gated on it."""
     try:
-        rid, capped = reserve(client, subject, op, USD, PERIOD_ESTIMATE, f"usd-p{period}")
-        if capped:
-            release(client, rid, f"{op}-usd-p{period}", "Caps returned; executor cannot enforce them")
+        hold = reserve(client, subject, op, USD, PERIOD_ESTIMATE, f"usd-p{period}")
+        if hold.capped:
+            release_all(client, [hold], "Caps returned; executor cannot enforce them")
             raise RuntimeError("Use a test tenant without caps")
+        commit(client, hold, PERIOD_ACTUAL)
     except Denied:
         fleet.teardown(op)
         return "terminated"
     except Exception:
-        fleet.teardown(op)  # No confirmed admission for this period: stop the spend
+        fleet.teardown(op)  # No confirmed, settled period: stop the spend
         raise
-    commit(client, rid, f"{op}-usd-p{period}", USD, PERIOD_ACTUAL)
     return "renewed"
 
 
@@ -259,7 +305,7 @@ def main():
 
         # 3. Three concurrent launches: risk allows three, cost allows two.
         fleet, subject = Fleet(), subject_for("race", 100 * CENT, 60)
-        barrier = threading.Barrier(3, timeout=30)
+        barrier = threading.Barrier(3, timeout=10)
         ops = [f"{batch}-race{i}" for i in range(3)]
 
         def attempt(op):

@@ -58,7 +58,7 @@ The action runs only after both reservations succeed. That requires a few decisi
 
 **Resolve an ambiguous result by key, never by dispatch.** If the second reservation request times out, retry it with the same idempotency key until you learn whether it was created. If you stop trying, release what you hold and let any unconfirmed reservation expire. The action itself does not run. [Retry storms and idempotency](/blog/retry-storms-and-idempotency-in-agent-budget-systems) covers why the key must stay stable across retries.
 
-**Apply caps from either reservation.** Either reservation can return `ALLOW` or `ALLOW_WITH_CAPS`. When both return [caps](/protocol/caps-and-the-three-way-decision-model-in-cycles), the host should apply the stricter value of each constraint: the smaller `max_tokens` and `max_steps_remaining`, the larger `cooldown_ms`, the intersection of the tool allowlists, and the union of the denylists. If the executor cannot enforce a returned constraint, release both reservations and decline the action.
+**Apply caps from either reservation.** Either reservation can return `ALLOW` or `ALLOW_WITH_CAPS`. When both return [caps](/protocol/caps-and-the-three-way-decision-model-in-cycles), the host should apply the stricter value of each numeric constraint: the smaller `max_tokens` and `max_steps_remaining` and the larger `cooldown_ms`. Do not merge the tool lists field by field. A non-empty allowlist overrides a denylist, and two disjoint allowlists intersect to an empty list, which means no restriction. Instead, evaluate each reservation's tool rules on their own and permit a tool only when both allow it. If the executor cannot enforce a returned constraint, release both reservations and decline the action.
 
 **Do not treat a preflight as admission.** A `dry_run` or `/v1/decide` check on each unit returns `ALLOW`, `ALLOW_WITH_CAPS`, or `DENY` for that moment; a live reservation that does not fit returns `409 BUDGET_EXCEEDED` instead. Concurrent work can change the answer between the two.
 
@@ -69,23 +69,21 @@ The admission step in the drill reduces to this:
 ```python
 def admit_launch(client, subject, op):
     """Both reservations must succeed before dispatch. Fixed order: risk, then cost."""
-    risk_rid, risk_capped = reserve(client, subject, op, RISK, LAUNCH_POINTS, "risk")
+    risk = reserve(client, subject, op, RISK, LAUNCH_POINTS, "risk")
     try:
-        usd_rid, usd_capped = reserve(client, subject, op, USD, PERIOD_ESTIMATE, "usd-p1")
+        usd = reserve(client, subject, op, USD, PERIOD_ESTIMATE, "usd-p1")
     except Refused as refused:
         # Definitive: no cost reservation exists, so return the risk hold now.
-        release(client, risk_rid, f"{op}-risk", f"Cost reservation refused: {refused.error}")
+        release_all(client, [risk], f"Cost reservation refused: {refused.error}")
         raise
-    if risk_capped or usd_capped:
+    if risk.capped or usd.capped:
         # This fixture cannot enforce caps, so it declines the action entirely.
-        reason = "Caps returned; executor cannot enforce them"
-        release(client, risk_rid, f"{op}-risk", reason)
-        release(client, usd_rid, f"{op}-usd-p1", reason)
+        release_all(client, [risk, usd], "Caps returned; executor cannot enforce them")
         raise RuntimeError("Use a test tenant without caps; this fixture cannot enforce them")
-    return risk_rid, usd_rid
+    return risk, usd
 ```
 
-`Refused` covers every definitive 4xx, including `UNIT_MISMATCH`. `Denied` is its `409 BUDGET_EXCEEDED` subclass. A transport error or 5xx on the second request is ambiguous, so the drill stops for inspection rather than releasing.
+`Refused` covers every definitive 4xx, including `UNIT_MISMATCH`, and `Denied` is its `409 BUDGET_EXCEEDED` subclass. `release_all` attempts every release even if one fails. A transport error or 5xx on the second request is ambiguous, so the drill stops for inspection rather than releasing. After admission, the drill also declines to dispatch if either lease is close to expiring. If a commit fails after launch, it tears the instance down and keeps the unsettled hold for reconciliation instead of releasing it.
 
 This is the low-level shape, not a production adapter. It has no durable journal or same-key retry. A crash or an unresolved second request leaves the first hold to expire through its TTL. A production executor should record the operation ID and both reservation IDs before dispatch.
 
@@ -174,7 +172,7 @@ An auditor reviewing the launch needs both decisions, not just whichever ledger 
 
 ## What would have stopped the DN42 plan
 
-A host enforcing both limits gives the operator two independent stops. The cost ceiling for five large instances has to fit a budget sized for the task. Scanning infrastructure the agent does not own has to fit a risk allowance the operator chose in advance. Either boundary would likely have stopped the plan before the bill, without depending on someone reading the plan first. An [approval queue](/blog/ai-agent-approval-queues-need-runtime-authority) helps only when the reviewer reads what they approve; a budget boundary holds either way.
+A host enforcing both limits gives the operator two independent stops. The cost ceiling for five large instances has to fit a budget sized for the task. Scanning infrastructure the agent does not own has to fit a risk allowance the operator chose in advance. Either boundary could reject the plan before provisioning if its enforced cost estimate or risk charge exceeded the corresponding allowance, without depending on someone reading the plan first. An [approval queue](/blog/ai-agent-approval-queues-need-runtime-authority) helps only when the reviewer reads what they approve; a budget boundary holds either way.
 
 Both limits hold only if the executor is the only path to the cloud API. If the agent also holds credentials that can launch instances directly, neither budget sees the launch.
 
