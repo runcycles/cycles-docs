@@ -41,7 +41,7 @@ Cycles' reserve → commit → release lifecycle doesn't care what you're measur
 | `CREDITS` | Abstract [credits](/glossary#credits) | Internal allocation systems |
 | `RISK_POINTS` | Action risk | Tool calls, API requests, side effects |
 
-When you use `RISK_POINTS`, the application submits its own exposure estimate rather than a monetary cost. That budget can bound repeated authorized attempts, but it does not decide whether the principal may call `send_email` or whether particular recipients and arguments are safe.
+When you use `RISK_POINTS`, the application submits its own exposure estimate rather than a monetary cost. That budget can bound repeated authorized attempts, but it does not decide whether the principal may call `send_email` or whether particular recipients and arguments are safe. Some actions draw on a USD budget and a `RISK_POINTS` budget at once; [When One AI Agent Action Needs Two Budgets](/blog/ai-agent-action-cost-and-risk-budgets) covers admitting them together.
 
 ## How tool estimate mapping works
 

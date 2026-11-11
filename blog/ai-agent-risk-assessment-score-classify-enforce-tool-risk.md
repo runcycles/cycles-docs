@@ -123,7 +123,7 @@ This classification alone tells you something important: **half the agent's tool
 
 ## Assigning Risk Scores: The RISK_POINTS Methodology
 
-Classification tells you *which* tools are dangerous. Risk scoring tells you *how much* danger to allow per run. [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) are budgets denominated in blast radius, not dollars — the mechanism that turns a risk assessment into an enforceable limit.
+Classification tells you *which* tools are dangerous. Risk scoring tells you *how much* danger to allow per run. [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) are budgets denominated in blast radius, not dollars — the mechanism that turns a risk assessment into an enforceable limit. Tools that also incur provider charges need a cost budget alongside it, as covered in [two-budget admission](/blog/ai-agent-action-cost-and-risk-budgets).
 
 ### Step 1: Assign Base Points Per Tier
 
