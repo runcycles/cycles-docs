@@ -163,6 +163,8 @@ At a mandatory boundary, this illustrative budget would reject an attempt whose 
 
 To enforce this per run, create the ledger at a unique workflow scope such as `workflow:run-12345` and send that run ID as `subjects.workflow` on every protected tool attempt. `run` is not a native scope, and `dimensions.run_id` is attribution only.
 
+If a scored tool also incurs provider cost, such as launching billed infrastructure, admit it against both a `RISK_POINTS` ledger and a USD ledger before dispatch. [When One AI Agent Action Needs Two Budgets](/blog/ai-agent-action-cost-and-risk-budgets) covers ordering, release on denial, and settlement.
+
 ## Step 5: Validate with shadow mode
 
 Before enforcing, run with [`dry_run: true`](/protocol/dry-run-shadow-mode-evaluation-in-cycles) long enough to cover representative traffic:
