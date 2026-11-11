@@ -312,13 +312,18 @@ def main():
             with CyclesClient(config) as worker:
                 return launch(worker, subject, fleet, op, barrier)
 
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            results = sorted(pool.map(attempt, ops))
-        check(results == ["denied:" + USD, "launched", "launched"], f"Unexpected result: {results}")
-        check(len(fleet.launches) == 2, f"Unexpected launches: {fleet.launches}")
-        verify(client, subject, 2 * PERIOD_ACTUAL, 2 * LAUNCH_POINTS)
-        for op in fleet.launches:
-            fleet.teardown(op)  # Clean shutdown; no reservation required
+        try:
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                results = sorted(pool.map(attempt, ops))
+            check(results == ["denied:" + USD, "launched", "launched"], f"Unexpected result: {results}")
+            check(len(fleet.launches) == 2, f"Unexpected launches: {fleet.launches}")
+            verify(client, subject, 2 * PERIOD_ACTUAL, 2 * LAUNCH_POINTS)
+        finally:
+            # Workers have finished. Stop every launched instance, pass or fail;
+            # teardown needs no reservation, and executed holds are never released.
+            for op in fleet.launches:
+                if op not in fleet.teardowns:
+                    fleet.teardown(op)
         emit("PASS", scenario="race", launches=2, usd_spent=2 * PERIOD_ACTUAL,
              risk_spent=2 * LAUNCH_POINTS)
 
