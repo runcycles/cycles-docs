@@ -24,17 +24,23 @@ A free interactive calculator that compares per-call, per-day, per-month, and pe
 
 ## How the calculation works
 
-Default model rates were verified on **September 30, 2026** against [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing). The lineup includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna, GPT-6 Sol, Claude Fable 5.1, Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku 4.5.
+Default model rates were verified on **November 12, 2026** against [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing). The presets include GPT-6 Astra, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Luna, GPT-6 Sol, Claude Fable 5.2, Claude Opus 5.5, Claude Sonnet 5.5, and Claude Haiku 5.5.
 
-Prices are in USD for standard API processing without caching. GPT rates assume at most **272,000 input tokens per call**; each model's context limit still applies. Model prices change frequently; edit any rate to match current provider pricing or your contract. Shared URLs preserve saved models and rates, so an older link can contain older prices.
+Prices are in USD for standard API processing without caching. Editable cells contain **base rates** while automatic context pricing is enabled. For the listed GPT models, prompts above **272,000 input tokens** apply 2× input and 1.5× output rates to the entire call. Claude Haiku 5.5 applies 5× input and output rates above **100,000 input tokens** ($0.50 input / $2.50 output per million at default rates). Fable 5.2, Opus 5.5, and Sonnet 5.5 have no long-context price increase.
+
+Multipliers apply by exact preset model name, including when you edit its base rates. Turn automatic context pricing off to enter effective rates directly. Custom or renamed models use the entered rates unchanged. Context and output limits are not enforced; verify that your workload fits each model. If calls cross a pricing threshold, estimate each group separately rather than using an average prompt length.
+
+Shared URLs preserve saved models, rates, and the context-pricing setting. Older links with saved models stay in manual pricing mode to avoid applying a surcharge twice. **Replace rows with latest presets** refreshes the lineup and enables automatic context pricing while keeping your workload inputs. Workload-only links use current defaults.
 
 The cost for a single LLM call is:
 
 ```
-cost_per_call = (input_tokens × input_price_per_M + output_tokens × output_price_per_M) ÷ 1,000,000
+cost_per_call = (input_tokens × effective_input_price_per_M + output_tokens × effective_output_price_per_M) ÷ 1,000,000
 ```
 
 Per-day, per-month, and per-year columns multiply by `calls_per_day`, then by 30 and 365 respectively.
+
+For example, GPT-6.1 Sol at 2,000 input tokens, 800 output tokens, and 10,000 calls/day costs **$0.012/call, $120/day, $3,600 per 30-day month, and $43,800 per 365-day year**. CSV and Markdown exports retain numeric precision instead of rounding totals to whole dollars. Invalid inputs show a dash and are excluded from the cheapest-model comparison.
 
 Use total billed output tokens, including [OpenAI reasoning tokens](https://developers.openai.com/api/docs/guides/reasoning#how-reasoning-works) or [Claude thinking tokens](https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost), rather than just the visible answer. Token counts depend on the model's tokenizer, so identical text can produce different counts. The cheapest positive per-year total is highlighted; equal token volumes compare rates, not model quality or equal-text costs.
 
@@ -45,7 +51,7 @@ Use total billed output tokens, including [OpenAI reasoning tokens](https://deve
 - **Fast and Ultrafast modes, data residency, and tool fees.** These can add charges beyond standard token rates.
 - **Fine-tuning costs.** Per-token rates differ for fine-tuned model variants.
 - **Reserved or committed-use pricing.** Enterprise contracts often beat list pricing materially.
-- **Automatic context-window pricing tiers.** Above 272,000 input tokens, the default GPT models charge 2× the input rate and 1.5× the output rate for the entire request. Enter those rates manually for long-context workloads. Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 have standard rates throughout their 1M-token context windows; Haiku 4.5 has a 200K-token context window. Check model limits before budgeting a request.
+- **Model-limit validation and custom-model pricing tiers.** The calculator estimates cost; it does not confirm that a model accepts the requested input or output length. Automatic tiers cover only the named presets.
 
 For accurate enterprise planning, treat the calculator as a directional estimate and verify with your provider account manager.
 
