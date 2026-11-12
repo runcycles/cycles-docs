@@ -1,17 +1,18 @@
 <script setup>
-import { reactive, computed, ref } from 'vue'
+import { reactive, computed, ref, onMounted } from 'vue'
 import CalculatorToolbar from './CalculatorToolbar.vue'
 import { useCalcState } from './lib/calc-state.js'
+import { PRICING_VERIFIED_ON, defaultModels, hydrateCostState, calculateCosts, cheapestAnnualCost, formatCost as fmt, costExportCells } from './lib/cost-calculator.js'
 import { toMarkdownTable, toCsv, downloadText, captureElementToPng, copyText } from './lib/calc-export.js'
 
 /*
   Defaults reflect each provider's published per-million-token pricing as of
-  2026-09-30. Verify against the source before relying on these for budgeting:
+  2026-11-12. Verify against the source before relying on these for budgeting:
    - OpenAI:    https://developers.openai.com/api/docs/pricing
    - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing
-  Standard API rates in USD, without caching, for <=272K input tokens.
+  Standard API base rates in USD, without caching.
   Excludes batch/flex discounts, fine-tuning, fast/ultrafast modes, tools,
-  and data-residency premiums. Long-context rates must be entered manually.
+  and data-residency premiums. Published context tiers apply to known presets.
   Shared URLs deliberately preserve their saved models and editable rates.
 */
 
@@ -33,35 +34,14 @@ const state = reactive({
   inputTokens:  2000,
   outputTokens: 800,
   callsPerDay:  10000,
-  models: [
-    { name: 'GPT-6 Astra',      inputPerM: 10.00, outputPerM: 50.00 },
-    { name: 'GPT-6.1 Sol',      inputPerM:  2.00, outputPerM: 10.00 },
-    { name: 'GPT-6 Luna',       inputPerM:  0.10, outputPerM:  0.50 },
-    { name: 'GPT-6 Sol',        inputPerM:  2.00, outputPerM: 10.00 },
-    { name: 'Claude Fable 5.1',  inputPerM: 10.00, outputPerM: 50.00 },
-    { name: 'Claude Opus 5.5',   inputPerM:  4.00, outputPerM: 20.00 },
-    { name: 'Claude Sonnet 5.5', inputPerM:  2.00, outputPerM: 10.00 },
-    { name: 'Claude Haiku 4.5',  inputPerM:  1.00, outputPerM:  5.00 },
-  ],
+  autoContextPricing: true,
+  models: defaultModels(),
 })
 
 const calcState = useCalcState(state, {
   initialStateB64: props.initialState,
   hydrate(incoming) {
-    if (typeof incoming.workloadName === 'string')        state.workloadName = incoming.workloadName
-    if (typeof incoming.workloadDescription === 'string') state.workloadDescription = incoming.workloadDescription
-    if (typeof incoming.inputTokens  === 'number') state.inputTokens  = incoming.inputTokens
-    if (typeof incoming.outputTokens === 'number') state.outputTokens = incoming.outputTokens
-    if (typeof incoming.callsPerDay  === 'number') state.callsPerDay  = incoming.callsPerDay
-    if (Array.isArray(incoming.models)) {
-      state.models = incoming.models
-        .filter(m => m && typeof m.name === 'string')
-        .map(m => ({
-          name: String(m.name),
-          inputPerM:  Number(m.inputPerM)  || 0,
-          outputPerM: Number(m.outputPerM) || 0,
-        }))
-    }
+    hydrateCostState(state, incoming)
   },
 })
 
@@ -71,52 +51,32 @@ function addModel() {
 function removeModel(i) {
   state.models.splice(i, 1)
 }
-
-const rows = computed(() =>
-  state.models.map(m => {
-    const perCall =
-      (Number(state.inputTokens)  / 1_000_000) * Number(m.inputPerM) +
-      (Number(state.outputTokens) / 1_000_000) * Number(m.outputPerM)
-    const perDay   = perCall * Number(state.callsPerDay)
-    const perMonth = perDay * 30
-    const perYear  = perDay * 365
-    return { ...m, perCall, perDay, perMonth, perYear }
-  })
-)
-
-const cheapestPerYear = computed(() => {
-  const ys = rows.value.map(r => r.perYear).filter(v => v > 0)
-  return ys.length ? Math.min(...ys) : 0
-})
-
-function fmt(v) {
-  if (!isFinite(v)) return '—'
-  if (v >= 100) return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-  if (v >= 1)   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-  return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 4 })
+function resetModels() {
+  state.models = defaultModels()
+  state.autoContextPricing = true
 }
+
+const rows = computed(() => calculateCosts(state))
+const cheapestPerYear = computed(() => cheapestAnnualCost(rows.value))
+const hasInvalidCosts = computed(() => rows.value.some(row => !Number.isFinite(row.perYear)))
+// URL state can differ from the server-rendered defaults. Vue does not repair
+// class mismatches during production hydration, so apply highlights after mount.
+const mounted = ref(false)
+onMounted(() => { mounted.value = true })
 
 // ---- Export -----------------------------------------------------------------
 
 const tableRef = ref(null)
 
 function exportRowsHeaders() {
-  return ['Model', 'Input $/M', 'Output $/M', 'Per call', 'Per day', 'Per month', 'Per year']
+  return ['Model', 'Effective input USD/M', 'Effective output USD/M', 'Per call USD', 'Per day USD', 'Per 30-day month USD', 'Per 365-day year USD']
 }
 function exportRowsCells() {
-  return rows.value.map(r => [
-    r.name,
-    Number(r.inputPerM).toFixed(2),
-    Number(r.outputPerM).toFixed(2),
-    fmt(r.perCall),
-    fmt(r.perDay),
-    fmt(r.perMonth),
-    fmt(r.perYear),
-  ])
+  return costExportCells(rows.value)
 }
 
 function exportSummary() {
-  return `${state.inputTokens} input + ${state.outputTokens} output tokens · ${state.callsPerDay.toLocaleString()} calls/day`
+  return `${state.inputTokens} input + ${state.outputTokens} output tokens · ${state.callsPerDay.toLocaleString()} calls/day · ${state.autoContextPricing ? 'Published context tiers for preset names' : 'Manual rates'} · USD, uncached standard API · 30-day month / 365-day year`
 }
 
 function brandMeta() {
@@ -169,6 +129,11 @@ async function downloadPng() {
       :on-download-png="downloadPng"
     />
 
+    <label class="context-option">
+      <input v-model="state.autoContextPricing" type="checkbox" />
+      Apply published long-context multipliers to preset model names
+    </label>
+
     <div ref="tableRef" class="capture-region">
       <div class="workload-block">
         <label class="workload-field">
@@ -184,29 +149,41 @@ async function downloadPng() {
       <div class="inputs">
         <label class="field">
           <span class="field-label">Input tokens / call</span>
-          <input v-model.number="state.inputTokens"  type="number" min="0" step="100" />
+          <input v-model.number="state.inputTokens" type="number" min="0" step="1" />
         </label>
         <label class="field">
-          <span class="field-label">Output tokens / call</span>
-          <input v-model.number="state.outputTokens" type="number" min="0" step="50" />
+          <span class="field-label">Billed output tokens / call</span>
+          <input v-model.number="state.outputTokens" type="number" min="0" step="1" />
         </label>
         <label class="field">
           <span class="field-label">Calls / day</span>
-          <input v-model.number="state.callsPerDay"  type="number" min="0" step="100" />
+          <input v-model.number="state.callsPerDay" type="number" min="0" step="any" />
         </label>
       </div>
 
       <div class="table-wrap">
         <p class="pricing-scope">
-          USD · Standard API rates · GPT rates assume at most 272K input tokens per call.
-          For longer prompts, enter the provider's long-context rates manually.
+          USD · Standard uncached API · Month = 30 days · Year = 365 days.
+          Check model context and output limits before budgeting a request.
+        </p>
+        <p class="pricing-scope" v-if="state.autoContextPricing">
+          Enter base rates. Above 272K input tokens: GPT presets use 2× input / 1.5× output.
+          Above 100K: Haiku 5.5 uses 5× both rates. Multipliers apply to the whole call,
+          including edited base rates. Other names use the entered rates unchanged.
+        </p>
+        <p class="pricing-scope" v-else>
+          Manual pricing: entered rates are used unchanged. Older shared links keep this behavior;
+          enable context pricing only if the entered rates are base rates.
+        </p>
+        <p v-if="hasInvalidCosts" class="input-error" role="status">
+          Enter finite, nonnegative token counts, call counts, and rates. Invalid or overflowing totals show —.
         </p>
         <table class="cost-table">
           <thead>
             <tr>
               <th>Model</th>
-              <th>Input $ / M</th>
-              <th>Output $ / M</th>
+              <th>{{ state.autoContextPricing ? 'Base input' : 'Input' }} $ / M</th>
+              <th>{{ state.autoContextPricing ? 'Base output' : 'Output' }} $ / M</th>
               <th>Per call</th>
               <th>Per day</th>
               <th>Per month</th>
@@ -215,10 +192,13 @@ async function downloadPng() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in rows" :key="i" :class="{ best: row.perYear > 0 && row.perYear === cheapestPerYear }">
-              <td><input v-model="state.models[i].name" type="text" class="name-input" /></td>
-              <td><input v-model.number="state.models[i].inputPerM"  type="number" min="0" step="0.01" class="rate-input" /></td>
-              <td><input v-model.number="state.models[i].outputPerM" type="number" min="0" step="0.01" class="rate-input" /></td>
+            <tr v-for="(row, i) in rows" :key="i" :class="{ best: mounted && row.perYear > 0 && row.perYear === cheapestPerYear }">
+              <td>
+                <input v-model="state.models[i].name" type="text" class="name-input" aria-label="Model name" />
+                <small v-if="row.longContext" class="tier-note">Long context: {{ fmt(row.effectiveInputPerM) }} in / {{ fmt(row.effectiveOutputPerM) }} out per M</small>
+              </td>
+              <td><input v-model.number="state.models[i].inputPerM" type="number" min="0" step="any" class="rate-input" :aria-label="`${row.name} input rate per million tokens`" /></td>
+              <td><input v-model.number="state.models[i].outputPerM" type="number" min="0" step="any" class="rate-input" :aria-label="`${row.name} output rate per million tokens`" /></td>
               <td>{{ fmt(row.perCall) }}</td>
               <td>{{ fmt(row.perDay) }}</td>
               <td>{{ fmt(row.perMonth) }}</td>
@@ -228,21 +208,19 @@ async function downloadPng() {
           </tbody>
         </table>
         <button type="button" class="add-row" @click="addModel">+ Add model</button>
+        <button type="button" class="add-row reset-models" @click="resetModels">Replace rows with latest presets</button>
       </div>
     </div>
 
     <p class="disclaimer">
-      Default rates last verified on 2026-09-30 against
+      Default rates last verified on {{ PRICING_VERIFIED_ON }} against
       <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener">OpenAI</a>
       and
       <a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener">Anthropic</a>;
       edit any cell to match your contracted rate. Shared links keep their saved rates, which may be older.
-      Calculation: <code>(input_tokens × input_$/M + output_tokens × output_$/M) ÷ 1,000,000 × calls/day</code>.
+      Daily cost: <code>(input_tokens × effective_input_$/M + output_tokens × effective_output_$/M) ÷ 1,000,000 × calls/day</code>.
       Excludes cache reads/writes, batch/flex discounts, fine-tuning, fast/ultrafast modes, tool fees,
-      and data-residency premiums. Rates do not adjust automatically for long context:
-      above 272K input tokens, the listed GPT models charge 2× input and 1.5× output rates.
-      Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 retain standard rates across their 1M context windows.
-      Haiku 4.5 has a 200K context window; check model limits before budgeting a request.
+      and data-residency premiums. Custom or renamed models need their own applicable rates.
       Include billed reasoning/thinking tokens in output totals. Token counts vary by tokenizer;
       the same text can use different token counts across models.
     </p>
@@ -333,6 +311,11 @@ async function downloadPng() {
 
 .table-wrap { overflow-x: auto; margin: 0 -4px; }
 .pricing-scope { margin: 0 4px 12px; font-size: 12.5px; color: var(--vp-c-text-2); }
+.context-option { display: flex; align-items: center; gap: 8px; margin: 0 4px 8px; font-size: 13px; }
+.context-option input { appearance: auto; }
+.tier-note { display: block; font-size: 11px; color: var(--vp-c-text-2); }
+.input-error { color: var(--vp-c-danger-1); font-size: 13px; }
+.reset-models { margin-left: 12px; }
 .cost-table {
   width: 100%;
   border-collapse: collapse;
