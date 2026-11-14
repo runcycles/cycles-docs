@@ -11,14 +11,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
@@ -42,5 +38,19 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .vitepress/dist
+
+  # Give the uploaded artifact time to become visible to the Pages API.
+  # A failed deployment can also be retried without uploading a duplicate.
+  # https://github.com/actions/deploy-pages/issues/451
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - uses: actions/deploy-pages@v5
         id: deployment
