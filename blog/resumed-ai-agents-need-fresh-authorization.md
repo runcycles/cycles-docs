@@ -109,7 +109,7 @@ Repeat with an approval that expires during suspension, and with the authority s
 
 **Pass:** the restored worker reaches live admission on the intended governing scope and receives `BUDGET_EXCEEDED`, with no new reservation or dispatch and unchanged balances. The 20-point action cannot fit the remaining 10 points. The restart must neither reset the ledger nor silently map the task to a new allocation.
 
-In a separate fixture, resume two workers with the same business operation ID concurrently and sufficient capacity. After both workers finish, require exactly one accepted business effect. A shared ID alone does not enforce this: the integration needs coordinated operation ownership or downstream deduplication that remains valid throughout recovery.
+In a separate fixture, give two restored workers the same 20-point business operation and a fresh 100-point allocation. Force an overlap at the operation-ownership or deduplication boundary and record both workers reaching it. After both finish, require exactly one accepted business effect, total settlement of 20 points, and no unresolved redundant holds. Release an unused hold only after confirming it funded no effect. A shared ID alone does not enforce this: the integration needs coordinated operation ownership or downstream deduplication that remains valid throughout recovery.
 
 Record the actual derived scope, not just the run label printed by the agent. The [scope-derivation reference](/protocol/how-scope-derivation-works-in-cycles) is useful when verifying which Cycles ledgers the request encounters.
 
@@ -121,6 +121,8 @@ Record the actual derived scope, not just the run label printed by the agent. Th
 4. Let the integration perform its documented outcome-recovery procedure.
 
 **Pass:** the sink still contains exactly one accepted refund, the durable application record obtains its original receipt, and known usage is reconciled without duplicate settlement. A second HTTP request can be legitimate if the provider deduplicates it; count accepted effects separately from transport attempts.
+
+Repeat with refund permission revoked after the lost response and before restoration. Recovery must use separately permitted status queries or leave the outcome unresolved. Require zero effect-capable refund replays, inspecting attempted requests as well as accepted effects: provider deduplication must not hide an unauthorized attempt.
 
 Also test a sink that cannot return a reliable outcome and no longer guarantees deduplication. The expected result is an unresolved operation held for reconciliation, with no blind replacement refund. Successful state restoration is not a reason to discard that uncertainty.
 
