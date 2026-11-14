@@ -25,7 +25,7 @@ This report synthesizes the current state: the incidents that have happened, the
 
 Two numbers tell the story:
 
-- **88% of organizations had confirmed or suspected AI agent incidents** in the past year ([Gravitee State of Agent Security 2026](https://www.gravitee.io/blog/88-of-companies-have-already-seen-ai-agent-security-failures)).
+- **88% of organizations had confirmed or suspected AI agent incidents** in the past year ([Gravitee State of AI Agent Security 2026 report, PDF](https://www.gravitee.io/hubfs/Downloadable%20Resource/state_of_ai_agent_security_report_pdf_2026.pdf)).
 - **Only 14.4% of teams reported full security and IT approval**, while **about 81% of teams** are already past the planning phase and into testing or production (same source).
 
 Technical capability is outpacing governance approval by roughly 6x: for every team with full security and IT approval, roughly five to six teams are already past planning and into testing or production.
