@@ -16,159 +16,162 @@ head:
 
 > **Part of: [LLM Cost Runtime Control Reference](/guides/llm-cost-runtime-control)** — the full pillar covering causes, enforcement patterns, multi-tenant boundaries, and unit economics.
 
-Consider an illustrative customer-support agent running on GPT-4o. A prototype-based estimate puts it at $800 per month; production-shaped assumptions put it at $4,200. The model rate is unchanged. The scenario reaches the higher total because it assumes 11 LLM calls per conversation instead of three, growing contexts, and additional retries on tool failures. The per-token price is not the only variable; the execution pattern is.
+Consider a support agent handling 100 conversations a day on Claude Sonnet 5.5. At 4,000 input [tokens](/glossary#tokens) and 800 output tokens per call, three calls per conversation cost $144 per 30-day month. Twelve calls per conversation cost $576. The model and token rates are unchanged; the execution pattern accounts for the difference.
 
 > **Explore your own call volume and token mix:** use the [Claude vs GPT cost calculator](/calculators/claude-vs-gpt-cost-comparison).
 
 <!-- more -->
 
-This post is a reference guide. We break down representative per-token pricing across major providers, then show what those prices mean under illustrative agent workload assumptions. Pricing was verified against provider documentation on **October 1, 2026**; recheck the linked provider pages before making a purchasing decision.
+This post breaks down representative token prices and four illustrative agent workloads. Prices were checked against provider documentation on **November 14, 2026**. These are model-token estimates, not total operating budgets: add tool services, compute, storage, observability, and development and operations work separately.
 
 ## Per-Token Pricing by Provider
 
-All prices below are selected standard text rates per 1 million [tokens](/glossary#tokens), with input and output billed separately. The tables exclude caching, batch/flex discounts, tools, and regional premiums. The listed GPT-6 and GPT-5.6 families above 272,000 input tokens have higher full-request rates (2× input, 1.5× output); Gemini 2.5 Pro above 200,000 uses $2.50 input / $15 output. Check each model’s terms. The worked scenarios use shorter contexts and unchanged token-count assumptions.
+All prices are USD per 1 million tokens, using standard paid text rates from each provider's direct API. They exclude caching, batch/flex discounts, faster service tiers, tools, and regional premiums. Third-party hosting and negotiated contracts can differ.
 
 ### [OpenAI](https://developers.openai.com/api/docs/pricing)
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
-|---|---|---|---|
-| gpt-6-astra | $10.00 | $50.00 | Standard text rate |
-| gpt-6.1-sol | $2.00 | $10.00 | Standard text rate |
-| gpt-6-luna | $0.10 | $0.50 | Standard text rate |
-| gpt-6-sol | $2.00 | $10.00 | Standard text rate |
-| gpt-4o | $2.50 | $10.00 | Older multimodal model used below |
-| gpt-4o-mini | $0.15 | $0.60 | Cost-optimized for high-volume |
-| gpt-4.1 | $2.00 | $8.00 | General-purpose model with long context |
-| gpt-4.1-mini | $0.40 | $1.60 | Balanced cost/capability |
-| o3 | $2.00 | $8.00 | Reasoning model |
-| o4-mini | $1.10 | $4.40 | Compact reasoning model |
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|---|---|---|
+| gpt-6-astra | $10.00 | $50.00 |
+| gpt-6.1-sol | $2.00 | $10.00 |
+| gpt-6.1-terra | $1.00 | $5.00 |
+| gpt-6-luna | $0.10 | $0.50 |
+| gpt-6-sol | $2.00 | $10.00 |
+
+For these models, prompts above 272,000 input tokens use 2× the input rate and 1.5× the output rate for the whole request, not just tokens above the threshold.
 
 ### [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|---|---|---|
+| Claude Fable 5.2 | $8.00 | $40.00 |
+| Claude Opus 5.5 | $4.00 | $20.00 |
+| Claude Sonnet 5.5 | $2.00 | $10.00 |
+| Claude Haiku 5.5 | $0.10 | $0.50 |
+
+Haiku 5.5 prompts above 100,000 input tokens use $0.50 input / $2.50 output for the whole request. The other Claude models listed here retain their standard rates across their supported context windows.
+
+### [Google](https://aistudio.google.com/docs/pricing)
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) | Rate timing |
 |---|---|---|---|
-| Claude Fable 5.1 | $10.00 | $50.00 | Standard text rate |
-| Claude Opus 5.5 | $4.00 | $20.00 | Standard text rate |
-| Claude Sonnet 5.5 | $2.00 | $10.00 | Standard text rate |
-| Claude Haiku 4.5 | $1.00 | $5.00 | Fast, lower-cost tier |
+| Gemini 4 Carbon | $2.00 | $10.00 | Through November 30, 2026; then $4.00 / $20.00 |
+| Gemini 3.8 Flash | $0.75 | $3.75 | Through December 31, 2026; then $1.50 / $7.50 |
+| Gemini 3.5 Flash-Lite | $0.30 | $2.50 | Standard text rates |
+| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | Earlier model, still listed |
 
-### [Google](https://ai.google.dev/gemini-api/docs/pricing)
+Google lists Gemini 2.5 Pro and 2.5 Flash as deprecated. On December 1, 2026, their API aliases are scheduled to route to Gemini 3.8 Flash and Gemini 3.5 Flash-Lite respectively, at the replacement models' rates. Recheck model availability and pricing before deployment.
 
-| Model | Input (per 1M tokens) | Output (per 1M tokens) | Notes |
-|---|---|---|---|
-| Gemini 2.5 Pro | $1.25 | $10.00 | Advanced reasoning |
-| Gemini 2.5 Flash | $0.30 | $2.50 | Hybrid reasoning and throughput |
-| Gemini 2.5 Flash-Lite | $0.10 | $0.40 | Lower-cost high-volume option |
+Within this selection, output prices span $0.40 to $50 per million tokens, a 125× range. That is a rate comparison, not a quality or total-cost ranking. Different models can require different numbers of tokens and attempts to complete the same task.
 
-A quick observation: even within this small representative set, output pricing ranges from $0.40 per million tokens for Gemini 2.5 Flash-Lite to $50 for Claude Fable 5.1 and GPT-6 Astra—a 125x spread. Model selection is a major cost lever, but only if the cheaper model still meets the workload's quality, latency, and tool-use requirements.
+## Why AI Agent Costs Grow
 
-## Why Agents Cost More Than You Think
+A simple interaction may need one model call. An agent that plans, calls tools, inspects results, and revises its work may need several. Measure calls per completed task, including unsuccessful runs, before extrapolating a prototype's bill.
 
-A chatbot makes one call per user message. An agent makes many.
+### Calls, Retries, and Fan-Out
 
-The disconnect between "per-token pricing looks cheap" and "my agent bill is huge" comes down to four multipliers that compound against each other.
+The coding example below assumes 25 calls per task; that is a planning input, not an industry benchmark. Likewise, one coordinator and four workers making eight calls each produce 40 calls per workflow. A tool operation does not necessarily require a new model call: its result might be processed in code or included in the next planned call.
 
-### Calls Per Task
-
-A simple Q&A interaction is one LLM call. A coding agent that reads a file, plans a change, writes code, runs tests, reads the output, and iterates is 15-40 calls for a single task. A deep research agent that searches, reads, synthesizes, and cross-references can hit 80-200 calls. The per-token price is irrelevant if you don't know your call count.
-
-### Retries and Retry Cascades
-
-Each retry is a full LLM call, not a cheap repeat. Layered retry logic (SDK, framework, application) can multiply a single failed call into 27 actual calls. We cover the mechanics in detail in [The True Cost of Uncontrolled AI Agents](/blog/true-cost-of-uncontrolled-agents).
+A retry can add model usage, tool charges, or only another network attempt, depending on what runs again. Count these separately. The [cost estimation cheat sheet](/how-to/cost-estimation-cheat-sheet) explains how to turn measured token and call counts into an estimate.
 
 ### Context Growth
 
-Every turn of an agent conversation appends to the context window. Turn 1 might send 2,000 tokens. Turn 8 sends 16,000 tokens because it includes the entire conversation history. This is not linear cost growth — it's quadratic-ish, because each call sends everything that came before it plus the new content.
+If each turn resends all prior content and adds 2,000 tokens, input length grows from 2,000 tokens on turn one to 16,000 on turn eight. Total input across the eight calls is:
 
-For an 8-turn conversation where each turn adds 2,000 tokens of new content:
-- Turn 1 input: 2,000 tokens
-- Turn 4 input: 8,000 tokens
-- Turn 8 input: 16,000 tokens
-- **Total input tokens across all 8 turns: 72,000** (not 16,000)
+**2,000 × (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) = 72,000 tokens.**
 
-### Fan-Out
+Under this assumption, cumulative input grows quadratically with the number of turns. It is not an unavoidable billing curve: truncation, summarization, selective retrieval, and prompt caching change what is sent or billed at the uncached rate.
 
-Multi-agent architectures multiply everything. A coordinator dispatching to 5 sub-agents turns a single request into 30-50 calls — and each sub-agent has its own retry logic and growing context. See [the cost amplification math](/blog/true-cost-of-uncontrolled-agents#the-math-how-agents-amplify-api-costs) for the full breakdown.
+## Illustrative AI Agent Cost Scenarios
 
-## Real-World Cost Scenarios
+These examples hold token counts constant across models to isolate pricing. They are not measured customer bills or predictions of equal task quality. Tokenizers, reasoning effort, tool use, and success rates vary; measure each candidate on your own workload. Output counts must include billable reasoning or thinking tokens, not just the visible answer.
 
-Here is what four common deployment shapes cost under explicit assumptions. These are planning examples, not measured customer bills; your token mix, caching, tools, retries, and negotiated pricing will change the result.
+Every scenario assumes each request stays below the applicable long-context price threshold, with no cache hits or retries. A low average alone does not establish that: price individual requests at their applicable tier when some prompts cross a threshold.
+
+The calculation is:
+
+**Cost per call = (input tokens × input rate + output tokens × output rate) / 1,000,000.**
+
+**Daily cost = cost per call × calls per day. Monthly cost = daily cost × 30.**
+
+Monthly figures use 30 active days at the snapshot rates; they are not calendar-month forecasts across a scheduled price change. Totals are calculated before rounding and displayed to cents.
 
 ### Scenario 1: Customer support bot
 
-A support bot handling customer questions — looking up orders, checking policies, generating responses.
+A support bot looks up orders, checks policies, and generates responses.
 
 | Parameter | Value |
 |---|---|
 | Conversations per day | 100 |
 | Turns per conversation | 8 |
-| LLM calls per turn | 1.5 (some turns need tool lookups) |
+| LLM calls per turn | 1.5 on average |
 | Total calls per day | 1,200 |
-| Avg input tokens per call | 4,000 (grows with conversation) |
+| Avg input tokens per call | 4,000 |
 | Avg output tokens per call | 800 |
 
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
-| gpt-4o | $0.018 | $21.60 | $648 |
-| gpt-4o-mini | $0.00108 | $1.30 | $38.88 |
-| Claude Sonnet 5.5 | $0.016 | $19.20 | $576 |
-| Claude Haiku 4.5 | $0.008 | $9.60 | $288 |
-| Gemini 2.5 Flash | $0.0032 | $3.84 | $115.20 |
+| gpt-6.1-sol | $0.016 | $19.20 | $576.00 |
+| gpt-6.1-terra | $0.008 | $9.60 | $288.00 |
+| gpt-6-luna | $0.0008 | $0.96 | $28.80 |
+| Claude Sonnet 5.5 | $0.016 | $19.20 | $576.00 |
+| Claude Haiku 5.5 | $0.0008 | $0.96 | $28.80 |
+| Gemini 3.5 Flash-Lite | $0.0032 | $3.84 | $115.20 |
 
-Under these assumptions, the same support bot costs about $39 per month on gpt-4o-mini or $576 on Claude Sonnet 5.5. That spread is material, but it is not a quality-adjusted comparison.
+At these token counts, the model-token estimate ranges from $28.80 to $576 per month. A cheaper model only saves money in practice if its additional retries, escalations, and human review do not erase the rate advantage.
 
 ### Scenario 2: Coding agent
 
-An agent that reads codebases, generates changes, runs tests, and iterates on failures. Longer context windows because code files are large.
+An agent reads code, generates changes, runs tests, and iterates on failures.
 
 | Parameter | Value |
 |---|---|
 | Tasks per day | 50 |
-| LLM calls per task | 25 (avg of 15-40 range) |
+| LLM calls per task | 25 assumed average |
 | Total calls per day | 1,250 |
-| Avg input tokens per call | 6,000 (code context is large) |
+| Avg input tokens per call | 6,000 |
 | Avg output tokens per call | 2,000 |
 
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
-| gpt-4o | $0.035 | $43.75 | $1,313 |
-| gpt-4.1 | $0.028 | $35.00 | $1,050 |
-| Claude Sonnet 5.5 | $0.032 | $40.00 | $1,200 |
-| Claude Opus 5.5 | $0.064 | $80.00 | $2,400 |
-| o3 | $0.028 | $35.00 | $1,050 |
+| gpt-6-astra | $0.16 | $200.00 | $6,000.00 |
+| gpt-6.1-sol | $0.032 | $40.00 | $1,200.00 |
+| gpt-6.1-terra | $0.016 | $20.00 | $600.00 |
+| Claude Sonnet 5.5 | $0.032 | $40.00 | $1,200.00 |
+| Claude Opus 5.5 | $0.064 | $80.00 | $2,400.00 |
 
-At this volume, the illustrative Claude Opus 5.5 workload costs $2,400 per month. That reflects the combination of a premium model and agent-scale call volume. Routing only the hardest subtasks to a premium model can reduce the blended rate.
+The Opus example costs $2,400 per month under these assumptions. Routing only selected subtasks to a more expensive model can reduce the blended rate; evaluate cost per successfully completed task as well as cost per call.
 
 ### Scenario 3: Data pipeline agent
 
-An agent that processes documents — extracting data, classifying content, generating summaries.
+An agent extracts data, classifies content, and summarizes documents.
 
 | Parameter | Value |
 |---|---|
 | Documents per day | 1,000 |
-| LLM calls per document | 3 (extract, classify, summarize) |
+| LLM calls per document | 3 |
 | Total calls per day | 3,000 |
 | Avg input tokens per call | 3,000 |
 | Avg output tokens per call | 500 |
 
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
-| gpt-4o-mini | $0.00075 | $2.25 | $67.50 |
-| gpt-4.1-mini | $0.002 | $6.00 | $180 |
-| Gemini 2.5 Flash-Lite | $0.0005 | $1.50 | $45 |
-| Gemini 2.5 Flash | $0.00215 | $6.45 | $193.50 |
-| Claude Haiku 4.5 | $0.0055 | $16.50 | $495 |
+| gpt-6-luna | $0.00055 | $1.65 | $49.50 |
+| gpt-6.1-terra | $0.0055 | $16.50 | $495.00 |
+| Gemini 2.5 Flash-Lite | $0.0005 | $1.50 | $45.00 |
+| Gemini 3.5 Flash-Lite | $0.00215 | $6.45 | $193.50 |
+| Claude Haiku 5.5 | $0.00055 | $1.65 | $49.50 |
 
-High-volume, repeatable pipelines are where lower-cost models can materially change unit economics. Under this example, Gemini 2.5 Flash-Lite processes 1,000 documents per day for $45 per month. Measure extraction quality on your own data before routing solely on price.
+The lowest token estimate here is $45 per month. Check extraction accuracy and failure handling before routing by price. If the pipeline can run asynchronously, separately evaluate the provider's batch rates and turnaround constraints.
 
 ### Scenario 4: Multi-agent workflow
 
-A coordinator agent dispatches work to specialized sub-agents — a planner, a researcher, a writer, a reviewer, and a formatter. Each sub-agent makes its own LLM calls.
+A coordinator dispatches to four workers: a researcher, a writer, a reviewer, and a formatter. All five agents make eight calls each in this constructed example, including coordination and final synthesis.
 
 | Parameter | Value |
 |---|---|
 | Workflows per day | 40 |
-| Agents per workflow | 5 |
+| Agents per workflow | 5, including the coordinator |
 | Calls per agent per workflow | 8 |
 | Total calls per day | 1,600 |
 | Avg input tokens per call | 5,000 |
@@ -176,60 +179,39 @@ A coordinator agent dispatches work to specialized sub-agents — a planner, a r
 
 | Model | Cost per call | Daily cost | Monthly cost |
 |---|---|---|---|
-| gpt-4o | $0.028 | $44.00 | $1,320 |
-| gpt-4.1 | $0.022 | $35.20 | $1,056 |
-| Claude Sonnet 5.5 | $0.025 | $40.00 | $1,200 |
-| Mixed (Sonnet 5.5 coordinator + Haiku 4.5 workers) | $0.015 avg | $24.00 | $720 |
+| gpt-6.1-sol | $0.025 | $40.00 | $1,200.00 |
+| gpt-6.1-terra | $0.0125 | $20.00 | $600.00 |
+| Claude Sonnet 5.5 | $0.025 | $40.00 | $1,200.00 |
+| Mixed: Sonnet 5.5 coordinator + Haiku 5.5 workers | $0.006 average | $9.60 | $288.00 |
 
-The "mixed" row assumes one Sonnet 5.5 coordinator call for every four Haiku 4.5 worker calls. It is 40% cheaper than the all-Sonnet example under this exact mix; different orchestration ratios produce different savings.
+The mixed row assigns 20% of calls to Sonnet and 80% to Haiku, with identical token counts per call: `0.2 × $0.025 + 0.8 × $0.00125 = $0.006`. That is 76% below the all-Sonnet estimate. Different worker prompts, output lengths, or orchestration ratios change the result.
 
-## The Hidden Cost Multipliers
-
-The scenarios above assume clean execution — no failures, no retries, no runaway loops. Production isn't clean. Here are the multipliers that turn estimates into surprises.
+## What Can Change the Estimate?
 
 ### Retry Overhead
 
-A 5% tool failure rate with 3 retries per failure adds 15% to your total call count. That's the optimistic case. If retry logic exists at multiple layers (SDK, framework, application), failures cascade multiplicatively. A 5% failure rate with three-layer retry logic can produce a 45% increase in actual calls.
+Suppose each attempt independently has a 5% chance of failure and the application allows up to three retries, stopping on success. Expected attempts per original operation are `1 + 0.05 + 0.05² + 0.05³ = 1.052625`: about **5.26% more attempts**. Translating that into dollars requires knowing which attempts incur charges and how many tokens they consume.
 
-### Growing Context Windows
+Failures during an outage may be correlated. If three nested layers each allow three total attempts (the initial attempt plus two retries), a persistent failure can reach `3 × 3 × 3 = 27` downstream attempts. That is a worst-case count under those assumptions, not an average billing multiplier. Assign retry responsibility deliberately and bound both attempts and elapsed time.
 
-The estimates above use average token counts. But agent conversations grow over time. A coding agent that starts with a 4,000-token context on step 1 might be sending 30,000 tokens by step 20 — because every previous step's output is in the context. The last few steps of a long agent run can cost 5-8x more than the first few steps.
+### Tool and Infrastructure Charges
 
-### Tool Call Overhead
+[Function definitions consume input tokens](https://developers.openai.com/api/docs/guides/function-calling#token-usage); generated tool names and arguments consume output tokens; results included in a later prompt consume input tokens. A large retrieved document can add much more input than the tool call itself. The scenario averages must already include this traffic or be adjusted for it.
 
-Each tool call adds tokens in both directions — the tool call schema in the output and the tool result in the next input. A single function call might add 200-500 tokens of overhead per round-trip. An agent that makes 3 tool calls per step adds 600-1,500 tokens of pure overhead per step, compounding across the conversation.
+Hosted tools and external services may also charge per search, execution, storage unit, or request. Track these alongside model tokens, and add the application infrastructure and engineering work needed to operate the service. A token-only table cannot establish the full cost of running an agent.
 
-### Concurrency Spikes
+### Concurrency and Rate Limits
 
-Ten users triggering multi-agent workflows simultaneously means 160 concurrent LLM calls in Scenario 4. If your rate limits can't handle the burst, you get 429 errors, which trigger retries, which create more load. Concurrency doesn't just multiply cost linearly — it creates failure modes that multiply cost super-linearly.
+Ten simultaneous workflows from Scenario 4 represent 400 total calls, not 400 simultaneous calls. If each workflow runs four workers concurrently and each worker issues one call at a time, up to 40 worker calls could overlap; coordinator scheduling can change the peak.
+
+Concurrency alone does not change the token price. It can trigger throttling, queues, and additional attempts, so model the scheduler and retry policy separately from total call volume.
 
 ## What Budget Enforcement Changes
 
-Knowing your costs is the first step. Controlling them is the next.
+Token rates help choose a model; measured call patterns help size the workload. Concurrent agents also need a shared allocation boundary. [Runtime budget enforcement](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) reserves capacity before protected work and reconciles actual usage afterward.
 
-Agent costs are a function of call patterns, not just token prices. A 10% change in model pricing matters far less than a runaway loop that makes 500 calls instead of 50. We wrote about [why monitoring alone isn't sufficient](/blog/true-cost-of-uncontrolled-agents#the-observability-gap) and how [pre-execution runtime authority](/blog/true-cost-of-uncontrolled-agents#runtime-authority-as-infrastructure) closes the gap.
+In Cycles, the application uses the [reserve-commit lifecycle](/protocol/how-reserve-commit-works-in-cycles) around each instrumented operation. A live reservation request that cannot fit the budget returns `409 BUDGET_EXCEEDED`; the application must stop or choose a permitted alternative. A successful reservation covers the requested estimate. For a firm spend boundary, bound the operation's possible usage and reserve enough to cover it; settlement of usage above the reservation follows the configured [overage policy](/glossary#overage-policy). Reconciliation cannot undo an external call or cover uninstrumented work.
 
-[Cycles](/) can provide this layer at the operations your application instruments. The application reserves an estimate before protected work and commits actual usage afterward. A live reservation that cannot fit returns an error; the application decides how to stop or degrade.
+## Next Steps
 
-## From cost visibility to cost control
-
-Token rates help choose a model; call-shape measurements help size the workload. Neither guarantees that concurrent agents stay within a shared allocation. A [runtime budget boundary](/concepts/why-rate-limits-are-not-enough-for-autonomous-systems) adds that third concern: reserve capacity before each instrumented operation, then reconcile the actual amount.
-
-## Next steps
-
-If you're estimating costs for a new agent deployment or trying to understand an existing one:
-
-- The [Cost Estimation Cheat Sheet](/how-to/cost-estimation-cheat-sheet) provides formulas and lookup tables for quick sizing
-- [Common Budget Patterns](/how-to/common-budget-patterns) covers the most effective ways to structure budgets across the scenarios described above
-- [AI Agent Cost Management: The Complete Guide](/blog/ai-agent-cost-management-guide) — the maturity model from monitoring to hard enforcement
-- [AI Agent Budget Control: Enforce Hard Spend Limits](/blog/ai-agent-budget-control-enforce-hard-spend-limits) — how the reserve-commit pattern works
-- [5 AI Agent Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — concrete failure scenarios with dollar-amount breakdowns
-- The [End-to-End Tutorial](/quickstart/end-to-end-tutorial) walks through setting up Cycles with a working agent in under 30 minutes
-
-The cheapest agent incident is the one that never happens. Start by knowing your numbers. Then put a system in place to enforce them.
-
-## Related how-to guides
-
-- [Integrating with AWS Bedrock](/how-to/integrating-cycles-with-aws-bedrock)
-- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
-- [Integrating with OpenAI](/how-to/integrating-cycles-with-openai)
+For implementation, the [end-to-end tutorial](/quickstart/end-to-end-tutorial) walks through a budget-guarded OpenAI call. [Common budget patterns](/how-to/common-budget-patterns) explains how to organize allocations across users, workflows, and tenants. The [AI agent cost management guide](/blog/ai-agent-cost-management-guide) places those controls alongside monitoring and alerting.
