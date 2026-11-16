@@ -30,6 +30,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { reconcileManualCounts } from './lib/manual-counts.mjs'
 
 const ORG = 'runcycles'
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || ''
@@ -237,20 +238,16 @@ async function main() {
   const releasesResult = await updateReleases(repos, cache.releasesByRepo)
   const ghpkgResult = await updateGhPackages()
 
-  // Write installs-cache.json (clones + releases always; ghPackages only
-  // if the GHCR step succeeded — otherwise preserve the manual file).
+  // Always reconcile the manual GHCR/Maven sources, including when the
+  // GHCR probe is unavailable. Match the build-time loader's source HWMs.
   cache.clones = clonesResult.total
   cache.clonesByRepo = clonesResult.byRepo
   cache.releases = releasesResult.total
   cache.releasesByRepo = releasesResult.byRepo
-  if (ghpkgResult) {
-    cache.ghPackages = ghpkgResult.total
-  }
-  // Recompute displayed total (matches installs.data.ts formula —
-  // excludes clones, includes registry + GitHub-side fields).
-  const newTotal = (cache.npm ?? 0) + (cache.pypi ?? 0) + (cache.crates ?? 0)
-                 + cache.releases + (cache.ghPackages ?? 0) + (cache.maven ?? 0)
-  cache.total = Math.max(newTotal, cache.total ?? 0)
+  const manualExists = existsSync(MANUAL_PATH)
+  const manual = manualExists ? JSON.parse(readFileSync(MANUAL_PATH, 'utf-8')) : {}
+  const reconciled = reconcileManualCounts(cache, manual, ghpkgResult?.byPackage)
+  Object.assign(cache, reconciled.cache)
   cache.fetchedAt = new Date().toISOString()
   writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2) + '\n')
   console.log(`wrote ${CACHE_PATH}`)
@@ -258,11 +255,9 @@ async function main() {
   // Also refresh manual-package-counts.json from the GHCR API so the
   // build-time loader (which reads the manual file as ghPackages source)
   // stays in sync. Fall through silently if GHCR step was skipped.
-  if (ghpkgResult && existsSync(MANUAL_PATH)) {
-    const manual = JSON.parse(readFileSync(MANUAL_PATH, 'utf-8'))
-    manual.lastVerifiedAt = new Date().toISOString().slice(0, 10)
-    manual.ghPackages = { ...(manual.ghPackages ?? {}), ...ghpkgResult.byPackage }
-    writeFileSync(MANUAL_PATH, JSON.stringify(manual, null, 2) + '\n')
+  if (ghpkgResult && manualExists) {
+    reconciled.manual.lastVerifiedAt = new Date().toISOString().slice(0, 10)
+    writeFileSync(MANUAL_PATH, JSON.stringify(reconciled.manual, null, 2) + '\n')
     console.log(`wrote ${MANUAL_PATH}`)
   }
 }

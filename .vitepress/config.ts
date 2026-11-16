@@ -97,6 +97,13 @@ function resolveOgImage(pageData) {
 }
 
 export default defineConfig({
+  vite: {
+    ssr: {
+      // The OpenAPI client imports VitePress composables. Bundle it so
+      // VitePress's client alias applies during server-side rendering too.
+      noExternal: ['vitepress-openapi'],
+    },
+  },
   base: '/',
   appearance: 'dark',
   title: 'Cycles',

@@ -108,9 +108,9 @@
     "cycles-ap2-python": 0,
     "cycles-claude-plugin": 0
   },
-  "ghPackages": 2959,
-  "maven": 1477,
-  "total": 24071,
+  "ghPackages": 3439,
+  "maven": 1901,
+  "total": 24975,
   "fetchedAt": "2026-11-15T13:08:03.895Z",
   "npmByPackage": {
     "runcycles": 3963,
