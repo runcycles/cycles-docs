@@ -46,9 +46,13 @@ def check(condition, message):
         raise RuntimeError(message)
 
 
+EMIT_LOCK = threading.Lock()
+
+
 def emit(event, **fields):
     try:
-        print(json.dumps({"event": event, **fields}), flush=True)
+        with EMIT_LOCK:  # One whole JSON line per event, even across workers
+            print(json.dumps({"event": event, **fields}), flush=True)
     except Exception:
         pass  # Diagnostics must never interrupt release or commit
 
@@ -158,7 +162,11 @@ def reserve(client, subject, op):
         release(client, rid, op, "Not dispatched: fixture cannot enforce this decision")
         raise RuntimeError("Use a test tenant with no caps configured; this fixture cannot enforce them")
     # The server may grant less than the requested TTL; trust its remaining_ttl_ms.
-    lease_ms = min(TTL_MS, body.get("remaining_ttl_ms", TTL_MS))
+    granted = body.get("remaining_ttl_ms")
+    if isinstance(granted, bool) or not isinstance(granted, int) or granted < 0:
+        release(client, rid, op, "Not dispatched: no usable lease observation")
+        raise RuntimeError(f"Admission for {op} carried no valid remaining_ttl_ms")
+    lease_ms = min(TTL_MS, granted)
     emit("reserved", **context(subject, op), reservation_id=rid)
     return Hold(rid, sent_at + lease_ms / 1000)
 
@@ -213,20 +221,26 @@ def send(client, targets, subject, op, barrier=None):
     return "sent"
 
 
-def ledger(client, scope_subject):
-    """Find the RISK_POINTS row for exactly this scope, following pagination."""
+def scope_rows(client, scope_subject):
+    """Every balance row for exactly this scope, keyed by unit, across all pages."""
     path = "/".join(f"{k}:{v}" for k, v in scope_subject.items())
     params = {**scope_subject, "limit": "200"}
+    rows = {}
     while True:
         response = client.get_balances(**params)
         if response.status != 200 or not response.body:
             raise RuntimeError(f"Balance read failed: HTTP {response.status}")
         for row in response.body["balances"]:
-            if row["scope_path"] == path and row["remaining"]["unit"] == RISK:
-                return row["spent"]["amount"], row["reserved"]["amount"]
+            if row["scope_path"] == path:
+                rows[row["remaining"]["unit"]] = (row["spent"]["amount"], row["reserved"]["amount"])
         if not response.body.get("has_more"):
-            return None
+            return rows
         params["cursor"] = response.body["next_cursor"]
+
+
+def ledger(client, scope_subject):
+    """(spent, reserved) for the RISK_POINTS ledger at exactly this scope, or None."""
+    return scope_rows(client, scope_subject).get(RISK)
 
 
 def admin_post_budget(scope, value, api_key):
@@ -253,7 +267,8 @@ def main():
 
     with CyclesClient(config) as client:
         # An ancestor RISK_POINTS ledger would admit targets with no ledger.
-        check(ledger(client, {"tenant": tenant}) is None,
+        tenant_units = set(scope_rows(client, {"tenant": tenant}))
+        check(RISK not in tenant_units,
               "Tenant scope has a RISK_POINTS ledger; use a tenant without one")
 
         # The operator, not the agent, writes the rules of engagement.
@@ -280,14 +295,16 @@ def main():
         emit("PASS", scenario="run_cap", requests=1, denied=1, target_spent=REQUEST_POINTS)
 
         # 3. A target with no ledger: no authority exists to reserve against.
-        #    Exactly two outcomes are documented, depending on whether an
-        #    ancestor holds a ledger in another unit. Anything else fails.
+        #    The expected pair depends on whether the tenant scope holds a
+        #    ledger in another unit. Only the pair for this tenant passes.
         stray = subject_for(tenant, engagement, out_of_scope, "run-solo")
         dry = preflight(client, stray, f"{batch}-b1")
         live = send(client, targets, stray, f"{batch}-b1")
-        no_ledger = dry == (200, "DENY", "BUDGET_NOT_FOUND") and live == "refused:404:NOT_FOUND"
-        other_unit = dry == (400, "UNIT_MISMATCH", None) and live == "refused:400:UNIT_MISMATCH"
-        check(no_ledger or other_unit, f"Unexpected result for unlisted target: {dry} / {live}")
+        no_ledger = not tenant_units
+        expected = (((200, "DENY", "BUDGET_NOT_FOUND"), "refused:404:NOT_FOUND") if no_ledger
+                    else ((400, "UNIT_MISMATCH", None), "refused:400:UNIT_MISMATCH"))
+        check((dry, live) == expected,
+              f"Unexpected result for unlisted target: {dry} / {live}, expected {expected}")
         check(targets.count(out_of_scope) == 0, "A refused request reached the unlisted target")
         # The runtime key cannot write the missing ledger into existence.
         minted = admin_post_budget(f"{base}/workflow:{out_of_scope}", TARGET_ALLOCATION, runtime_key)

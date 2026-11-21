@@ -32,10 +32,10 @@ That leaves several questions outside what a network sandbox decides:
 | Question | Network sandbox | Metered authority at the harness |
 |---|---|---|
 | Where can traffic go? | Yes, while isolation holds | No |
-| Which targets did an operator authorize for this engagement? | Only as network rules | Yes, as a ledger per target |
+| Which targets did an operator authorize for this engagement? | Only as network rules | Partly: a target with no ledger on its path gets nothing, but the allowlist stays in the harness |
 | How many actions may one run take against a target? | No | Yes, a run ledger |
 | How many may all runs take together? | No | Yes, a shared target ledger |
-| Who can widen the scope? | Whoever can change the network | Whoever holds a budget-writing key |
+| Who can raise a target's allocation? | Not applicable | Whoever holds a budget-writing key |
 | What does the operator know when isolation fails? | Whatever network monitoring caught | The [reservations](/glossary#reservation) the harness made and the refusals it logged |
 
 Egress isolation and action limits address different failures. Isolation decides which destinations are reachable. It does not limit how many requests go to a destination that is reachable, and when it fails, nothing the agent carries with it is any smaller. The agent that gets out has the same tools, the same step count, and the same instructions it had inside.
@@ -155,7 +155,7 @@ Each request reserves and commits 20 points. Target ledgers are allocated 100 po
 | `out_of_scope` | Same run, target with no ledger | The preflight and the live reservation both grant nothing, and the runtime key gets `403 INSUFFICIENT_PERMISSIONS` writing a ledger; zero requests |
 | `fleet` | Eight concurrent runs, each within its own allocation | Five sent, three denied; the target ledger shows 100 spent and nothing reserved |
 
-The `out_of_scope` scenario accepts exactly two outcomes, depending on the tenant, and fails on anything else:
+The `out_of_scope` scenario reads which units have a ledger at the tenant scope, expects the matching row below, and fails on anything else:
 
 | Tenant setup | Preflight (`dry_run`) | Live reservation |
 |---|---|---|
@@ -175,7 +175,7 @@ On a tenant with no ledger at the tenant scope, the third line reads `"preflight
 
 ## Log refusals so they can be counted
 
-The complaint's 80-versus-27 allegation is a dispute about a count of loss-of-control incidents. A refusal is not an incident. It is one attempted operation, and it can come from ordinary exhaustion or a configuration mistake as easily as from an agent heading somewhere it should not. Refusals are still the record worth keeping, because they exist before anything has gone wrong and they are what an incident count is later reconstructed from. [Proving you had controls](/blog/prove-you-had-controls-agent-liability-2026) covers why that record is increasingly what gets asked for.
+The complaint's 80-versus-27 allegation is a dispute about a count of loss-of-control incidents. A refusal is not an incident. It is one attempted operation, and it can come from ordinary exhaustion or a configuration mistake as easily as from an agent heading somewhere it should not. Refusal logs are still worth keeping. They show which attempts the harness blocked, and they exist before anything has gone wrong. They do not show admitted actions or work done outside the harness, so correlate them by operation ID with dispatch records and target telemetry when investigating an incident. [Proving you had controls](/blog/prove-you-had-controls-agent-liability-2026) covers why that record is increasingly what gets asked for.
 
 Be precise about where refusals are recorded, because the server does not keep a per-attempt list for you:
 
