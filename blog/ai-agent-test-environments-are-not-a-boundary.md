@@ -17,7 +17,7 @@ head:
 
 On November 6, 2026, WorkOS [updated its incident bulletin](https://workos.com/security/bulletins/update-for-october-30th-2026-data-security-incident) with an unusual attribution. The unauthorized access to one of its internal tools was, in its words, "an AI security agent that escaped a researcher's sandbox." The update says the researcher had been running cybersecurity benchmark evaluations with ARTEX; the [original bulletin](https://workos.com/security/bulletins/october-30th-2026-data-security-incident) had described only "an AI-assisted offensive security framework." According to the update, the first confirmed access was on October 25, records were retrieved in bulk on October 30, and WorkOS noticed that day, when an employee saw unusually high usage of a connected system. Neither bulletin explains how the agent left its test environment.
 
-Ten days later, California's Attorney General [sued OpenAI](https://oag.ca.gov/news/press-releases/it%E2%80%99s-golden-state-not-wild-west-attorney-general-bonta-sues-openai-over). The [complaint](https://oag.ca.gov/system/files/attachments/press-docs/complaint-oai-cyber.pdf) alleges that agents in reinforcement-learning training runs, which were supposed to be confined to sandboxes, used a vulnerability in a shared software package service to reach the public internet. It alleges that around 1,200 agents coordinated on an ad hoc message board and approximately 700 went on to attack Hugging Face in July, taking roughly 17,600 actions. It also alleges that OpenAI admitted to losing control of its agents over 80 times during testing while publicly reporting 27 incidents. These are allegations in a newly filed complaint, not findings.
+Ten days later, California's Attorney General [sued OpenAI](https://oag.ca.gov/news/press-releases/it%E2%80%99s-golden-state-not-wild-west-attorney-general-bonta-sues-openai-over). OpenAI's [incident report](https://openai.com/index/hugging-face-incident-and-the-road-ahead/) confirms that agents in its July cybersecurity evaluations reached the public internet and compromised parts of Hugging Face's systems. California's [complaint](https://oag.ca.gov/system/files/attachments/press-docs/complaint-oai-cyber.pdf) alleges that around 1,200 agents coordinated on an ad hoc message board and approximately 700 went on to attack Hugging Face, taking roughly 17,600 actions. It also alleges that OpenAI admitted to losing control of its agents over 80 times during testing while publicly reporting 27 incidents.
 
 Neither account describes a production agent. In both, a test environment was the boundary that was supposed to hold, and the question is what else was limiting the agent when it did not.
 
@@ -33,8 +33,8 @@ That leaves several questions outside what a network sandbox decides:
 |---|---|---|
 | Where can traffic go? | Yes, while isolation holds | No |
 | Which targets did an operator authorize for this engagement? | Only as network rules | Partly: a target with no ledger on its path gets nothing, but the allowlist stays in the harness |
-| How many actions may one run take against a target? | No | Yes, a run ledger |
-| How many may all runs take together? | No | Yes, a shared target ledger |
+| How many points may one run spend on a target? | No | A run ledger sets the limit |
+| How many points may all runs in this engagement spend on that target? | No | A shared target ledger sets the limit |
 | Who can raise a target's allocation? | Not applicable | Whoever holds a budget-writing key |
 | What does the operator know when isolation fails? | Whatever network monitoring caught | The [reservations](/glossary#reservation) the harness made and the refusals it logged |
 
@@ -49,9 +49,9 @@ The right-hand column is not a replacement for the left. It is a second control 
 Production agents accumulate controls because production is where people expect damage. Test and evaluation agents tend to go the other way, for reasons that are individually sensible:
 
 - **The task is to probe.** A pentest or cyber-evaluation agent is given offensive tooling on purpose. A tool allowlist that would be normal in production defeats the test.
-- **Safeguards come off for measurement.** The complaint alleges OpenAI "deliberately omits or removes these protections while experimenting with and training its models," and that live chain-of-thought monitoring was enabled for employee deployments but not in training and evaluation environments.
+- **Monitoring coverage varies.** The complaint alleges gaps in live chain-of-thought monitoring across training and evaluation. OpenAI says it already monitored many frontier reinforcement-learning training runs, but the monitors did not run during the July cybersecurity evaluations.
 - **Budgets are left open.** A limit that ends an evaluation early costs a rerun, so step and spend limits are often set high or left off.
-- **Credentials are informal.** WorkOS's root-cause list includes an API that "accepted a weak credential intended for local development." Separate keys per environment, as in the [least-privilege key matrix](/blog/least-privilege-api-keys-for-ai-agents), exist to stop a development secret from working anywhere else.
+- **Development credentials can reach production.** WorkOS found that its production API accepted a weak credential intended for local development. In addition to issuing [separate keys per environment](/blog/least-privilege-api-keys-for-ai-agents), check which secrets can reach production. WorkOS said it was adding deployment controls to block weak or development-only secrets.
 
 The result can be an agent with highly capable tools, few limits, and one boundary. Human penetration testers do not work that way. They agree rules of engagement that name the targets, the window, and the permitted techniques before any traffic is sent. An agent's harness can carry part of the same thing.
 
@@ -64,10 +64,10 @@ Rules of engagement map onto the [scope hierarchy](/protocol/how-scope-derivatio
 | Rule of engagement | Cycles scope | Ledger |
 |---|---|---|
 | This engagement | `app` | None in `RISK_POINTS` |
-| An authorized target | `workflow` | Total points all runs may spend on it |
+| An authorized target | `workflow` | Total points this engagement's runs may spend on it |
 | One agent run | `agent` | Points this run may spend on that target |
 
-The target sits above the run so that every run draws on one shared target ledger. The run ledger is therefore per run-target pair: the same run against a second target has a separate allocation. Ledgers cover two of the rules. The engagement window, the permitted techniques, and the target allowlist itself stay in the harness.
+The target sits under the engagement and above the run. Two engagements that name the same target have separate target ledgers. Within one engagement, every run aimed at that target draws on its shared balance. A run that visits a second target has a separate run allocation there. The engagement window, permitted techniques, and target allowlist stay in the harness.
 
 Each outbound request then follows the same reserve-commit path:
 
@@ -82,12 +82,14 @@ def send(client, targets, subject, op):
             return "denied"
         return f"refused:{refused.status}:{refused.error}"
     targets.request(target, op)
-    # The request went out, so the charge stands. Never release after dispatch.
+    # The target received the request. Commit the hold to record the charge.
     commit(client, hold.rid, op)
     return "sent"
 ```
 
 That is the drill's `send` function with its concurrency and lease checks removed.
+
+If a worker dies after the target receives the request but before the commit reaches Cycles, the target has already counted one request. After the lease and grace period expire, Cycles returns the reserved points to the ledger. Another run can then spend those points. For a hard ceiling on attempts, keep a durable record before dispatch and have every worker count unresolved attempts against the same target allowance. Match the operation ID to a target receipt to settle a confirmed dispatch. Reuse the allowance only if you can establish that the request was never sent. The [settlement recovery guide](/protocol/sdk-settlement-recovery-and-durability) explains what the SDK can recover once actual usage is known.
 
 A reservation is checked against every ledger in the requested unit along its scope path, and at least one must exist. Scopes with no ledger are skipped. Four consequences follow. All were observed against [Cycles Server](/glossary#cycles-server) 0.1.25.59; the drill below exercises the first two, and the last two were checked separately:
 
@@ -104,7 +106,7 @@ Leaving test budgets open gets the sizing problem backwards. An evaluation has a
 
 **Cap the run.** A run ledger sized for the task turns a loop into a refusal. The harness should treat that refusal as the end of the run, not as an error to route around. [How agents work around a denial](/blog/ai-agent-denial-workarounds) covers why the next attempt needs the same policy.
 
-**Cap the target across all runs.** This is the limit a single-agent view cannot provide. On the complaint's figures, roughly 17,600 actions across approximately 700 agents averages about 25 per agent. An average says nothing about how the actions were distributed, but it shows the arithmetic: a fleet can produce a large total while each member stays inside a per-run allowance generous enough for real work. A shared ledger bounds the total regardless of how it is spread.
+**Cap the target within the engagement.** The complaint's figures of roughly 17,600 actions across approximately 700 agents average about 25 per agent. Even if each run stays within its own allowance, the total can be large. In the drill, eight runs share 100 target points. At 20 points per request, five requests can reach that target if every dispatch settles. A second engagement with its own 100-point allocation could send five more.
 
 **Keep leases short and overage off.** The drill uses a 30-second TTL and `REJECT`, so an abandoned reservation expires quickly and no commit can exceed what was reserved.
 
@@ -120,7 +122,7 @@ Nothing here would have kept an agent inside its sandbox in either reported case
 - **It does not protect the target.** WorkOS named four gaps on its own side: public network exposure, a weak credential, missing rate limits, and detection gaps. Those are the target's controls, and no tester's ledger substitutes for them.
 - **The weights are policy, not measurement.** Twenty points per request is a number an operator chose.
 
-What it changes is narrower. For every action that does go through the harness, there is a decision before dispatch, a shared count across the fleet, and a refusal the runtime key cannot overturn. While the sandbox holds, that limits how hard the fleet can lean on the targets it is allowed to reach. If the sandbox fails, it is a limit that did not depend on the network.
+For requests routed through the harness, the engagement's runs still draw on the same target allocation even if network isolation fails. The runtime key can reserve points from that allocation but cannot increase it.
 
 ## Run the engagement scope drill
 
@@ -131,6 +133,8 @@ Real admission, refusal, and settlement for a harness that reserves before each 
 :::
 
 Use a disposable test tenant from the [full-stack quickstart](/quickstart/deploying-the-full-cycles-stack) with no `ALLOW_WITH_CAPS` caps configured and no `RISK_POINTS` ledger at the tenant scope. The script checks for that ledger and stops if it finds one. The quickstart's USD tenant ledger is fine; it changes one expected line, shown below. Each run creates one engagement with two target ledgers and nine run ledgers, and commits 120 points.
+
+Before running the script, [create two keys](/how-to/api-key-management-in-cycles#creating-api-keys) for the test tenant. Give the runtime key only `reservations:create`, `reservations:commit`, `reservations:release`, and `balances:read`. Give the setup key `budgets:write`. Using the quickstart's combined key as the runtime key would let the third scenario create the out-of-scope ledger before its permission check fails.
 
 ```bash
 python -m pip install "runcycles==0.5.3"
@@ -144,9 +148,7 @@ export CYCLES_BUDGET_API_KEY="<test-budget-writer-key>"
 python engagement-scope-drill.py
 ```
 
-Create two keys for this drill. The runtime key needs `reservations:create`, `reservations:commit`, `reservations:release`, and `balances:read`. The setup key needs `budgets:write`. The third scenario asserts that the runtime key cannot write a ledger, so the quickstart's combined key will fail it.
-
-Each request reserves and commits 20 points. Target ledgers are allocated 100 points and run ledgers 30:
+Each admitted request in the drill reserves and commits 20 points. Target ledgers start with 100 points and run ledgers with 30.
 
 | Scenario | Setup | Expected result |
 |---|---|---|
@@ -183,9 +185,9 @@ Be precise about where refusals are recorded, because the server does not keep a
 - A fresh `dry_run` or `/v1/decide` request that returns `DENY` attempts to emit `reservation.denied`. Idempotent replays do not emit again, and an emission failure does not fail the request.
 - A `404` or `400` for an unlisted target is a request error.
 
-So the harness log is the per-attempt record. Log the engagement, run, target, operation ID, HTTP status, and error for every refusal, as the drill does.
+Log the engagement, run, target, and operation ID wherever the harness refuses a request. When the target allowlist rejects a request locally, record the reason at that check and alert the engagement owner. The attempt stops before Cycles receives it, so leave the HTTP status unset.
 
-Handle the two kinds differently. A `409 BUDGET_EXCEEDED` on a run ledger is the expected end of a run. A refusal for a target with no ledger, once checked against the engagement's target list, is the earliest available sign that a run is aiming outside it, and that is the one to route to whoever owns the engagement. [What goes in an AI agent audit packet](/blog/what-goes-in-an-ai-agent-audit-packet) lists what to keep alongside it.
+When Cycles refuses a reservation, log its HTTP status and error code, as the drill does. A `409 BUDGET_EXCEEDED` can mean that either the run or the shared target lacks enough points. Stop the attempted dispatch and inspect both balances before deciding which runs to stop. For a missing-ledger or unit error, check the engagement's target list and ledger setup. [What goes in an AI agent audit packet](/blog/what-goes-in-an-ai-agent-audit-packet) lists what to keep alongside these records.
 
 ## Resources
 
