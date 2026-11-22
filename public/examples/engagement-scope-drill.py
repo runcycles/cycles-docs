@@ -99,7 +99,7 @@ class Hold:
 
 def subject_for(tenant, engagement, target, run):
     # Engagement -> app, target -> workflow, run -> agent. The target sits
-    # above the run so that one target ledger is shared by every run. The run
+    # above the run so that runs in this engagement share a target ledger. The run
     # ledger is therefore per run-target pair.
     return {"tenant": tenant, "app": engagement, "workflow": target, "agent": run}
 
@@ -216,7 +216,7 @@ def send(client, targets, subject, op, barrier=None):
         release(client, hold.rid, op, "Not dispatched: synchronization or lease failure")
         raise
     targets.request(target, op)
-    # The request went out, so the charge stands. Never release after dispatch.
+    # The target received the request. Commit the hold to record the charge.
     commit(client, hold.rid, op)
     return "sent"
 
