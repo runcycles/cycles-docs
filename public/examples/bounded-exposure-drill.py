@@ -206,9 +206,12 @@ def act(client, journal, subject, op, barrier=None):
         if barrier:
             barrier.wait()
         return "denied"
-    except Exception:
+    except Exception as error:
+        # Name the operation before unblocking the other workers: their
+        # BrokenBarrierError would otherwise be the only error reported.
+        emit("unresolved", op=op, action_class=action_class, error=str(error))
         if barrier:
-            barrier.abort()  # Unblock the other workers instead of hanging
+            barrier.abort()
         raise
     try:
         if barrier:
@@ -361,7 +364,13 @@ def main():
                 return act(worker, journal, subject, f"{batch}-e{index}", barrier)
 
         with ThreadPoolExecutor(max_workers=FLEET_SIZE) as pool:
-            results = sorted(pool.map(fleet_attempt, range(FLEET_SIZE)))
+            futures = [pool.submit(fleet_attempt, index) for index in range(FLEET_SIZE)]
+        failures = [f.exception() for f in futures if f.exception() is not None]
+        if failures:
+            # Report the worker that failed, not one it unblocked.
+            causes = [e for e in failures if not isinstance(e, threading.BrokenBarrierError)]
+            raise (causes or failures)[0]
+        results = sorted(f.result() for f in futures)
         room = (AGGREGATE - 60) // WEIGHTS["email"]
         check(results == ["denied"] * (FLEET_SIZE - room) + ["sent"] * room,
               f"Unexpected fleet result: {results}")

@@ -46,7 +46,7 @@ Limits, sublimits, and exclusions define what a policy pays. They do not limit w
 | A kind of action that is never funded | Exclusion | A ledger for the class with an allocation of zero | Cycles, on every reservation in that class with a positive weight |
 | Ceiling for one action | None exact | A maximum weight for a single action | The harness, before it reserves |
 
-The analogy is to the shape of the terms and nothing more. An insurance limit caps a payment after a loss. A ledger caps weighted actions before they happen. The fourth row is deliberately not called a per-occurrence limit: in a policy, one occurrence can cover several related actions, and nothing here groups actions that way.
+The analogy is to the shape of the terms and nothing more. An insurance limit caps a payment after a loss. A ledger checks an action's weight before dispatch. The fourth row is deliberately not called a per-occurrence limit: in a policy, one occurrence can cover several related actions, and nothing here groups actions that way.
 
 The scope layout puts the policy at the `app` level, the action class at `workflow`, and the agent at `agent`. The class sits above the agent so that every agent draws on one sublimit. Each action then follows the same reserve-commit path:
 
@@ -84,11 +84,11 @@ A reservation is checked against every ledger in the requested unit along its sc
 
 With those ledgers in place, the answer to the questionnaire's third question is a sentence that can be checked:
 
-> In this period, actions routed through the harness can commit at most 200 points. At most 60 of those can be refunds. None can be deletes. The harness dispatches no action weighted above 40.
+> In this period, while the stated allocations remain in force, actions routed through the harness can commit at most 200 points. At most 60 of those can be refunds. None can be deletes. The harness dispatches no action weighted above 40.
 
-The first three numbers can be read from the server. On the pinned server, a key with `balances:read` gets `allocated`, `spent`, `reserved`, and `remaining` for each ledger in its tenant from the [balances endpoint](/protocol/querying-balances-in-cycles-understanding-budget-state). The protocol requires only `remaining` in a balance row, so check what your server returns before relying on the other three. The fourth number is harness configuration and has to be shown some other way.
+The first three numbers can be read from the server. On the pinned server, a key with `balances:read` gets `allocated`, `spent`, `reserved`, and `remaining` for each ledger in its tenant from the [balances endpoint](/protocol/querying-balances-in-cycles-understanding-budget-state). Of those four amounts, the protocol requires only `remaining` in a balance row, so check what your server returns before relying on the other three. The fourth number is harness configuration and has to be shown some other way.
 
-The sentence says "commit" on purpose. If a worker dies after an action runs and before its commit arrives, the reservation expires after its lease and [grace period](/glossary#grace-period), and the points return to the ledger. Committed points never exceed the allocation, but the number of actions that actually ran can. Closing that gap takes a durable record written before dispatch, as the [settlement recovery guide](/protocol/sdk-settlement-recovery-and-durability) describes.
+The sentence says "commit" on purpose. If a worker dies after an action runs and before its commit arrives, the reservation expires after its lease and [grace period](/glossary#grace-period), and the points return to the ledger. Committed points never exceed the allocation, but the total weight of the actions that actually ran can. A record written before dispatch shows that an action was intended, not whether it ran. Closing the gap means recovering the tool's receipt or querying the operation's outcome, then retrying settlement durably. The [settlement recovery guide](/protocol/sdk-settlement-recovery-and-durability) covers the retry once actual usage is known.
 
 Whether 200 points is a tolerable amount of harm depends on how the weights were chosen. The [risk-point assignment guide](/how-to/assigning-risk-points-to-agent-tools) covers that.
 
@@ -112,7 +112,7 @@ None of the sources above evaluates Cycles, and this post has no evidence that a
 - **The insured writes the weights.** An operator who sets a destructive action to 1 point has a large limit in practice. Anyone relying on the bound would need to review the weight table and the class assignments.
 - **Only routed actions count.** The limits apply to actions that go through the harness. An agent with another path to the same tool is outside them.
 - **It does not address correlated loss.** The July report treats accumulation, where many policyholders fail for a shared reason such as one upstream model, as a separate problem. A per-policy ledger does nothing about it.
-- **A limit is not a finding of fault.** Whether a loss is covered turns on policy wording and facts. A ledger shows what was permitted and what was refused.
+- **A limit is not a finding of fault.** Whether a loss is covered turns on policy wording and facts. Balances show held and spent points. Harness logs, and decision evidence where the server provides it, identify individual refusals.
 
 What remains is a ceiling that is set before any loss, that the runtime key cannot move, and that someone other than the operator can read.
 
