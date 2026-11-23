@@ -12,8 +12,10 @@ ledger in the same unit is a further limit this drill does not account for.
 What this drill does not implement: any link between points and money, a
 durable record of dispatched actions, transport retry, or heartbeats. It
 holds both API keys in one process for convenience; a real harness gets only
-the runtime key. On an unexpected error, stop and inspect the printed
-operation IDs.
+the runtime key. It finishes all work before it renews the ledgers, so no
+commit can land between two resets. On an unexpected error, stop and inspect
+the printed operation IDs: a reservation whose response was lost can stay
+held until its TTL and grace period pass.
 """
 
 from collections import Counter
@@ -33,7 +35,7 @@ RISK = "RISK_POINTS"
 # Illustrative policy terms. The weights are an operator's choice, not a
 # measurement of loss.
 WEIGHTS = {"email": 10, "refund": 30, "delete": 40, "export": 80}
-PER_OCCURRENCE = 40       # Checked in the harness before any reservation
+PER_ACTION = 40           # Checked in the harness before any reservation
 AGGREGATE = 200           # All action classes together, per period
 SUBLIMITS = {"refund": 60}
 EXCLUDED = ("delete",)    # A ledger with zero allocation
@@ -70,10 +72,15 @@ class Denied(Exception):
 class Journal:
     """Stands in for the outside world and for the harness's own records."""
 
+    reserve_calls: list = field(default_factory=list)  # (op, action_class)
     dispatched: list = field(default_factory=list)   # (op, action_class)
     committed: dict = field(default_factory=dict)    # op -> (action_class, points)
     refusals: list = field(default_factory=list)     # (op, action_class, reason)
     lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def reserving(self, op, action_class):
+        with self.lock:
+            self.reserve_calls.append((op, action_class))
 
     def dispatch(self, op, action_class):
         with self.lock:
@@ -147,7 +154,9 @@ def reserve(client, subject, op):
         # Any other 4xx means the policy ledgers are not set up as expected.
         # A transport error or 5xx means the reservation may exist. A
         # production adapter retries with the same key; this drill stops.
-        raise RuntimeError(f"Admission unresolved for {op}: HTTP {response.status} {body.get('error')}")
+        raise RuntimeError(f"Admission unresolved for {op}: HTTP {response.status} {body.get('error')}. "
+                           f"Reconcile with idempotency key {op}-reserve; a hold may remain "
+                           "until its TTL and grace period pass")
     rid = body.get("reservation_id")
     if not rid:
         raise RuntimeError(f"Invalid admission for {op}: no reservation_id")
@@ -182,13 +191,14 @@ def commit(client, rid, op, points):
 
 
 def act(client, journal, subject, op, barrier=None):
-    """The only path to an action: per-occurrence check, reserve, dispatch, commit."""
+    """The only path to an action: per-action check, reserve, dispatch, commit."""
     action_class = subject["workflow"]
     points = WEIGHTS[action_class]
-    if points > PER_OCCURRENCE:
+    if points > PER_ACTION:
         # Refused in the harness. Cycles never sees this attempt.
-        journal.refuse(op, action_class, "PER_OCCURRENCE")
-        return "refused:local:PER_OCCURRENCE"
+        journal.refuse(op, action_class, "PER_ACTION")
+        return "refused:local:PER_ACTION"
+    journal.reserving(op, action_class)
     try:
         hold = reserve(client, subject, op)
     except Denied:
@@ -277,6 +287,10 @@ def main():
     def class_scope(action_class):
         return {**policy_scope, "workflow": action_class}
 
+    # A zero-point reservation passes a zero-allocation ledger, so an
+    # exclusion only holds while every weight is positive.
+    check(all(points > 0 for points in WEIGHTS.values()), "Every weight must be positive")
+
     with CyclesClient(config) as client:
         check(RISK not in scope_rows(client, {"tenant": tenant}),
               "Tenant scope has a RISK_POINTS ledger; use a tenant without one")
@@ -299,10 +313,10 @@ def main():
             "aggregate": ledger(client, policy_scope)[0],
             "sublimits": {c: ledger(client, class_scope(c))[0] for c in SUBLIMITS},
             "excluded": [c for c in EXCLUDED if ledger(client, class_scope(c))[0] == 0],
-            "per_occurrence": PER_OCCURRENCE,
+            "per_action": PER_ACTION,
         }
         check(terms == {"aggregate": AGGREGATE, "sublimits": SUBLIMITS,
-                        "excluded": list(EXCLUDED), "per_occurrence": PER_OCCURRENCE},
+                        "excluded": list(EXCLUDED), "per_action": PER_ACTION},
               f"Ledgers do not match the policy terms: {terms}")
         raised = fund(base, "CREDIT", AGGREGATE, runtime_key, f"{batch}-raise")
         raised_error = (raised.json() or {}).get("error") if raised.status_code == 403 else None
@@ -312,12 +326,15 @@ def main():
         emit("PASS", scenario="stated_bound", **terms,
              runtime_key_raise_limit="403:INSUFFICIENT_PERMISSIONS")
 
-        # 2. An action heavier than the per-occurrence limit is refused in
-        #    the harness. No reservation is made.
-        check(attempt("export", "agent-0", "x1") == "refused:local:PER_OCCURRENCE",
-              "Per-occurrence limit did not refuse")
+        # 2. An action heavier than the per-action ceiling is refused in
+        #    the harness. No reservation is requested.
+        check(attempt("export", "agent-0", "x1") == "refused:local:PER_ACTION",
+              "Per-action ceiling did not refuse")
+        export_reservations = sum(1 for _, c in journal.reserve_calls if c == "export")
+        check(export_reservations == 0, "A locally refused action requested a reservation")
         check(ledger(client, policy_scope) == (AGGREGATE, 0, 0), "A local refusal touched the ledger")
-        emit("PASS", scenario="per_occurrence", actions=journal.count("export"), reservations=0)
+        emit("PASS", scenario="per_action", actions=journal.count("export"),
+             reservations=export_reservations)
 
         # 3. An excluded class has a ledger with nothing in it.
         excluded_subject = subject_for(tenant, policy, "delete", "agent-0")
@@ -333,8 +350,9 @@ def main():
         check(ledger(client, policy_scope) == (AGGREGATE, 60, 0), "Aggregate ledger mismatch")
         emit("PASS", scenario="sublimit", actions=2, denied=1, sublimit_spent=60, aggregate_spent=60)
 
-        # 5. Twenty agents each try one email at once. The class has no
-        #    ledger of its own, so only the aggregate decides.
+        # 5. Twenty agents each try one email. Admitted reservations stay
+        #    open until all twenty are decided, so the holds overlap. The
+        #    class has no ledger of its own, so only the aggregate decides.
         barrier = threading.Barrier(FLEET_SIZE, timeout=15)
 
         def fleet_attempt(index):
@@ -356,31 +374,44 @@ def main():
         for action_class, points in journal.committed.values():
             by_class[action_class] += points
         allocated, spent, reserved = ledger(client, policy_scope)
-        check(sorted(op for op, _ in journal.dispatched) == sorted(journal.committed),
-              "An action ran without a committed reservation")
+        check(sorted(journal.dispatched) == sorted((op, c) for op, (c, _) in journal.committed.items()),
+              "Dispatched actions and committed reservations do not match")
         check(sum(by_class.values()) == spent and spent + reserved <= allocated,
               "Harness records disagree with the aggregate ledger")
         check(by_class["refund"] == ledger(client, class_scope("refund"))[1],
               "Harness records disagree with the sublimit ledger")
         refusals = Counter(reason for _, _, reason in journal.refusals)
-        emit("PASS", scenario="loss_run", actions=len(journal.dispatched),
+        # One excluded delete, one refund over the sublimit, and the fleet's denials.
+        check(refusals == {"BUDGET_EXCEEDED": 2 + FLEET_SIZE - room, "PER_ACTION": 1},
+              f"Unexpected refusal totals: {dict(refusals)}")
+        emit("PASS", scenario="period_record", actions=len(journal.dispatched),
              committed_by_class=dict(sorted(by_class.items())), aggregate_spent=spent,
              aggregate_limit=allocated, refusals=dict(sorted(refusals.items())))
 
         # 7. A new period restates the limits and clears spend. The exclusion
-        #    has nothing to restate. The old period's total is gone from the
-        #    ledger, which is why step 6 read it first.
-        check(attempt("email", "agent-0", "n0") == "denied", "Exhausted aggregate admitted an action")
+        #    has nothing to restate. All work has finished, so no commit can
+        #    land between the two resets. The reset response carries the
+        #    closing total; after it, the ledger no longer does.
         budget_key = os.environ["CYCLES_BUDGET_API_KEY"]
-        fund(base, "RESET_SPENT", AGGREGATE, budget_key, f"{batch}-renew").raise_for_status()
+        renewed = fund(base, "RESET_SPENT", AGGREGATE, budget_key, f"{batch}-renew")
+        renewed.raise_for_status()
+        closing_spent = renewed.json()["previous_spent"]["amount"]
+        check(closing_spent == AGGREGATE, f"Unexpected closing total: {closing_spent}")
         for action_class, limit in SUBLIMITS.items():
             fund(f"{base}/workflow:{action_class}", "RESET_SPENT", limit, budget_key,
                  f"{batch}-renew-{action_class}").raise_for_status()
+        check(ledger(client, policy_scope) == (AGGREGATE, 0, 0), "Aggregate ledger was not renewed")
+        for action_class, limit in SUBLIMITS.items():
+            check(ledger(client, class_scope(action_class)) == (limit, 0, 0),
+                  f"Sublimit ledger for {action_class} was not renewed")
+        for action_class in EXCLUDED:
+            check(ledger(client, class_scope(action_class)) == (0, 0, 0),
+                  f"Exclusion ledger for {action_class} changed")
         check(attempt("email", "agent-0", "n1") == "sent", "Renewed aggregate refused an action")
         check(attempt("delete", "agent-0", "n2") == "denied", "Exclusion did not survive renewal")
         check(ledger(client, policy_scope) == (AGGREGATE, WEIGHTS["email"], 0),
               "Aggregate ledger mismatch after renewal")
-        emit("PASS", scenario="renewal", before="denied", after="sent",
+        emit("PASS", scenario="renewal", closing_spent=closing_spent, after="sent",
              excluded_after="denied", aggregate_spent=WEIGHTS["email"])
 
 
