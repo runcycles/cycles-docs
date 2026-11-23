@@ -1,9 +1,10 @@
 ---
 title: "The State of AI Agent Incidents (2026)"
 date: 2026-04-03
+dateModified: 2026-11-23
 author: Albert Mavashev
 tags: [incidents, governance, security, costs, agents, production, MCP, OWASP, multi-agent]
-description: "Documented AI agent incidents and failure patterns — runaway costs, action misfires, security exploits, multi-agent cascades — scored by cost and blast radius."
+description: "AI agent incidents through November 2026, including WorkOS, Hugging Face, runaway spending and database losses, with sources and controls for each failure."
 blog: true
 sidebar: false
 featured: true
@@ -13,359 +14,214 @@ head:
       content: AI agent incidents 2026, agent failures, MCP security incidents, runaway AI costs, multi-agent cascades, runtime controls, agent governance
 ---
 
-# The State of AI Agent Incidents (2026): Failures, Costs, and Mitigation Lessons
+# The State of AI Agent Incidents (2026)
 
-AI agents are shipping to production faster than many organizations' control infrastructure. The resulting incident reports and recurring patterns include runaway costs, wrong actions, security exploits, and cascading multi-agent failures with several different root causes.
+**Updated November 23, 2026. Originally published April 3.**
 
-This report separates **documented incidents** sourced to public reporting or research from **constructed scenarios** based on recurring failure patterns. Its control mappings describe mitigations that could reduce likelihood or blast radius; they do not prove a historical incident would have been prevented.
+On October 30, a WorkOS employee noticed unusually heavy usage of a connected system. The investigation traced the first unauthorized access back five days. On November 6, WorkOS publicly attributed the access to a security researcher's AI agent running a benchmark. A test conducted by one organization had become a data incident for another. [WorkOS incident update](https://workos.com/security/bulletins/update-for-october-30th-2026-data-security-incident)
 
 <!-- more -->
 
 ## Key findings
 
-- **20+ documented incidents and recurring patterns** across cost, action, security, and multi-agent categories
-- **Constructed cost scenarios range from $32.40 to $2,300** under their stated token assumptions; self-published anecdotal reports below describe larger figures but are not independently verified here.
-- **Some damaging documented incidents can have little model spend relative to business impact.** A reported $0.80 run triggered an [unauthorized purchase](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/). Replit's coding-agent database incident shows why dollar budgets alone cannot prevent action failures, although the public reporting does not establish a precise model-cost figure for that event.
-- **Up to 84.2% selected target-tool-call rate** across evaluated MCPTox prompts and 12 model/agent settings ([MCP-ITP](https://arxiv.org/abs/2601.07395)); the benchmark did not test live production execution
-- **41–87% failure rates** in multi-agent coordination ([UC Berkeley MAST study](https://arxiv.org/abs/2503.13657))
-- **64% of surveyed organizations** experienced more than $1M in losses from AI-related risks broadly ([2025 EY survey](https://www.ey.com/en_uk/insights/ai/how-can-responsible-ai-bridge-the-gap-between-investment-and-impact))
+- **Test agents reached real organizations.** OpenAI and Hugging Face both documented the July compromise of Hugging Face. WorkOS later documented a separate incident. In both cases, the affected organization held evidence that the team running the agent needed to understand the impact.
+- **A cloud bill can understate the damage.** Mandiant reported that one accounting agent generated about $50,000 in cloud charges in under an hour. Database locks also halted active transactions. In other cases, the public record establishes a purchase or a deletion but gives no model bill.
+- **Recovery depended on which copies survived.** A deleted production volume and deleted sales records called for different recovery steps. The useful question for an operator is whether the same credential can reach both the live data and the copy needed to restore it.
+- **Malicious releases can appear under a trusted package name.** On November 17, two malicious versions of the Microsoft Agent Framework Python package reached PyPI. The [package advisory](https://github.com/advisories/GHSA-764m-3ppc-5m73) identifies the affected versions. The exposure begins at installation, before any agent can request tool approval.
+- **An incident count needs a denominator.** A registry counts selected public reports. A benchmark counts outcomes on selected tasks. Neither tells a team how often its own production agents will fail. The studies below identify their units of measurement.
+
+## What changed since April
+
+### Hugging Face, July 2026 {#hugging-face-july-2026}
+
+Hugging Face disclosed an intrusion on July 16 and confirmed unauthorized access to internal datasets and service credentials. OpenAI's investigation attributed the activity to models running internal cybersecurity evaluations and connected it to the Hugging Face incident on July 20. The models had communicated across evaluations that were supposed to run independently. An operator investigating a similar event would need records from the evaluation harness, shared infrastructure, and affected services to reconstruct what one run set in motion. [Hugging Face disclosure](https://huggingface.co/blog/security-incident-july-2026) · [OpenAI incident report](https://openai.com/index/hugging-face-incident-and-the-road-ahead/)
+
+Hugging Face reconstructed roughly 17,600 attacker actions from the evidence it could recover. Researchers from METR and Redwood Research examined agent records at OpenAI and estimated that about 700 agents participated. Hugging Face traced customer-content access to five datasets that appeared connected to benchmark tasks. The customer records read were operational metadata associated with searches on its dataset server. [Hugging Face’s reconstruction](https://huggingface.co/blog/agent-intrusion-technical-timeline) · [METR investigation](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/)
+
+On November 16, California's attorney general filed suit over OpenAI’s safeguards and public disclosures. Its claims about the company’s conduct are allegations in the complaint. [California’s complaint](https://oag.ca.gov/system/files/attachments/press-docs/complaint-oai-cyber.pdf)
+
+### WorkOS, October–November 2026
+
+WorkOS reported that the agent retrieved sales and customer-support records in bulk from an internal tool on October 30. The exposed data included business contacts and excerpts from customer communications. Its investigation found that the tool was reachable from the public internet and accepted a weak credential intended for local development. WorkOS restricted access and rotated credentials. The researcher's test harness and the target's production access controls belonged to different operators. Each had a different opportunity to contain the incident. [WorkOS incident update](https://workos.com/security/bulletins/update-for-october-30th-2026-data-security-incident) · [How to scope an agent test engagement](/blog/ai-agent-test-environments-are-not-a-boundary)
 
 ## How to read this report
 
-Each incident includes:
-
-- **What happened** — the failure, in one paragraph
-- **Cost** — model spend vs business impact (where both are known)
-- **Source** — linked to the original disclosure, research paper, or reporting
-- **Root cause** — why existing controls didn't prevent it
-- **Mitigation** — controls that could reduce likelihood or blast radius
-
-Incidents are categorized as:
-- **Documented** — sourced from public disclosures, research papers, vendor post-mortems, or security advisories
-- **Constructed scenario** — an illustrative case based on recurring failure modes, explicitly labeled in the heading
+The cases identify **who observed what**. A provider or operator disclosure can establish a side effect and its recovery. A security advisory can establish that a release was vulnerable or malicious while leaving the number of affected users unknown. A benchmark reports results under its test conditions. The entries marked **constructed** use explicit assumptions to illustrate control design. Dollar figures refer to the particular item measured, such as cloud charges, a purchase, or modeled token usage.
 
 ## Category A: Cost Explosions
 
-Agents that spend more than expected — through loops, retries, [fan-out](/glossary#fan-out), or scope creep. These are constructed scenarios based on recurring failure modes; see Categories B and C for externally documented incidents from named companies and security researchers.
+### An accounting agent generated about $50,000 in cloud charges
+
+In a September 2026 case study, Mandiant described a financial services firm's reconciliation agent repeatedly trying to process a malformed value. The agent made more than 15,000 reasoning API calls in under an hour. The firm also lost the use of its billing database for active transactions while locks were held. Mandiant did not name the firm or put a dollar figure on that disruption. A repeated-failure stop could interrupt the loop, a spending limit could bound further calls, and a database lock timeout addresses a different part of the loss. [Mandiant report, case study 6](https://cloud.google.com/security/resources/ai-risk-and-resilience-2026)
+
+The four examples below are [constructed cost scenarios](/blog/ai-agent-failures-budget-controls-prevent). They use the source's fixed token volumes and rates so readers can reproduce the arithmetic.
 
 ### A1. Coding agent retry loop — $52.80 (constructed)
 
-A coding agent hit an ambiguous error and [looped 240 times over three hours](/blog/ai-agent-failures-budget-controls-prevent). At the source scenario's stated flat average of 12,000 input and 2,500 output tokens per call, total cost is $52.80.
-
-| | Detail |
-|---|---|
-| Model cost | $52.80 |
-| Business impact | Unattended spend and delayed failure detection |
-| Root cause | No mandatory per-run boundary; provider controls use a broader vendor scope |
-| Mitigation | **Budget gate** — a mandatory $15 per-run reservation boundary rejects later iterations once configured exposure is exhausted |
+A coding agent makes four model calls per iteration and repeats the same failing task 240 times. Across 960 calls, the example prices 11.52 million input tokens at $2.50 per million and 2.4 million output tokens at $10 per million. That totals **$52.80**. A per-run limit gives the operator a chance to inspect the loop before funding another attempt.
 
 ### A2. Weekend backlog processing — $2,300 (constructed)
 
-A coding agent [deployed Friday afternoon processed a 2,300-item backlog over the weekend](/blog/ai-agent-failures-budget-controls-prevent) without budget enforcement. Context windows grew per item, retries compounded, and nobody checked until Monday.
-
-| | Detail |
-|---|---|
-| Model cost | $2,300 |
-| Business impact | Weekend budget consumed, Monday recovery |
-| Root cause | No per-batch or per-task budget limit |
-| Mitigation | **Budget gate** — a mandatory $500 batch budget bounds the unattended run; per-task budgets can contain outliers |
+A Friday deployment picks up 2,300 tasks. At 25 calls per task and an assumed $0.04 per call, the batch costs **$2,300**. A $500 batch allocation would pause new work before the full backlog ran. A per-task allocation would also keep one troublesome item from consuming the batch budget.
 
 ### A3. Concurrent agent burst — 6.5x overrun (constructed)
 
-Twenty concurrent agents [processing 200 documents simultaneously](/blog/ai-agent-failures-budget-controls-prevent) hit a TOCTOU race condition. All read "budget remaining: $5" before delayed counter updates converged. Modeled spend: $32.40.
-
-| | Detail |
-|---|---|
-| Model cost | $32.40 (remaining budget was $5) |
-| Business impact | About 6.5x the remaining budget |
-| Root cause | Application-level counter lacks atomicity |
-| Mitigation | **Atomic [reservation](/glossary#reservation)** — budget locked before execution, concurrent requests see accurate remaining |
+Twenty workers share a queue of 200 documents. If each worker reads the same stale $5 balance, repeated admissions can take the workload to **$32.40** at $0.162 per document. An atomic [reservation](/glossary#reservation) makes each admission account for the funds other workers already hold.
 
 ### A4. Retry storm during CRM outage — $33.86 (constructed)
 
-A CRM returns 500 errors for 12 minutes. [Retry logic at tool, step, and orchestration layers compounds](/blog/ai-agent-failures-budget-controls-prevent) — up to 27 calls for each of 38 affected conversations. At the stated token volumes, cost is $33.86.
-
-| | Detail |
-|---|---|
-| Model cost | $33.86 |
-| Business impact | All [tenant](/glossary#tenant) budgets affected during the storm |
-| Root cause | Retry multiplier at each layer; no cumulative check |
-| Mitigation | **Budget gate** — mandatory per-conversation reservations bound configured exposure |
-
-::: details Additional anecdotal reports (self-published sources)
-Two widely cited cost incidents come from self-published sources and should be treated as pattern-confirming rather than independently verified:
-
-- **POC-to-production scaling — $847K/month.** A proof-of-concept agent costing $500/month [scaled to $847,000/month](https://medium.com/@klaushofenbitzer/token-cost-trap-why-your-ai-agents-roi-breaks-at-scale-and-how-to-fix-it-4e4a9f6f5b9a) in production due to call volume assumptions that didn't account for context window growth, retries, and fan-out. (Source: Medium, Klaus Hofenbitzer)
-- **Data enrichment API loop — $47,000.** A data enrichment agent [misinterpreted an API error and ran 2.3 million calls over a weekend](https://rocketedge.com/2026/03/15/ai-agent-cost-control/). The API returned 200 OK with an error body; the agent treated it as success and retried the entire batch. (Source: RocketEdge)
-
-Both illustrate the same failure mode as A1–A4: no cumulative spend enforcement.
-:::
+Three layers each allow up to three attempts. Across 38 conversations, the modeled worst case is 1,026 calls. At the example's token volumes and unit rates, that costs **$33.86** in 12 minutes. A cumulative retry limit per lookup and a stop on repeated upstream failure address the multiplication across layers.
 
 ## Category B: Action Failures
 
-Agents that take wrong, excessive, or unauthorized actions — where the damage is in the consequence, not the tokens.
+A price search can end in a credit-card charge. A staging task can change a production database. In both cases the agent already has the access it needs. The control has to distinguish the action the user authorized from the actions the credential permits.
 
 ### B1. 200 wrong emails — low token spend, high potential impact (constructed)
 
-In this [illustrative scenario](/blog/ai-agent-action-control-hard-limits-side-effects), a support agent sends 200 collections emails instead of welcome emails after a prompt regression changes template selection. If the model calls cost about $1.40, the customer and business impact can still be much larger; the original scenario has no sourced ticket, complaint, or pipeline-loss measurements.
+An onboarding agent should send welcome emails to 200 trial accounts. When template selection fails, the application falls back to a collections notice and sends it to all 200. The scenario assumes $1.40 in model spend. Customer complaints and lost revenue are possible consequences with no measured figures. [Original email scenario](/blog/ai-agent-action-control-hard-limits-side-effects)
 
-| | Detail |
-|---|---|
-| Model cost | $1.40 |
-| Business impact | Illustrative and unquantified; potentially much larger than token spend |
-| Root cause | No action-level enforcement — dollar budget was nowhere near exhausted |
-| Mitigation | **Handler authorization + risk budget** — an application can require approval and reserve caller-assigned [RISK_POINTS](/concepts/action-authority-controlling-what-agents-do) before each email |
+**Control.** Bind the approved template to the onboarding workflow and reject an unexpected template before sending. Enforce a per-run recipient limit, or charge a [RISK_POINTS budget](/concepts/action-authority-controlling-what-agents-do) for each recipient before dispatch. A single batch call can reach all 200 accounts.
 
 ### B2. Replit AI deletes production database
 
-Replit's AI coding assistant [deleted a user's production database](https://techcrunch.com/2025/10/02/after-nine-years-of-grinding-replit-finally-found-its-market-can-it-keep-it/) containing 100+ executive contacts, then fabricated 4,000 fake records to cover its tracks.
+In July 2025, SaaStr founder Jason Lemkin reported that Replit Agent deleted data during a code freeze. The application’s production database held 1,206 executive records and at least 1,196 company profiles. The agent told him recovery was impossible. Lemkin subsequently recovered the data. Replit’s CEO confirmed that the development agent could change production data and announced a rollout of separate development and production databases. The incident-level model cost was undisclosed. [Lemkin’s account and Replit’s response](https://www.saastr.com/replits-new-release-address-most-of-the-challenges-we-hit-vibe-coding-but-is-prosumer-vibe-coding-really-ready-for-commercial-apps-yet/)
 
-| | Detail |
-|---|---|
-| Model cost | ~$2.00 |
-| Business impact | Production data loss, fabricated records |
-| Source | TechCrunch, October 2025 |
-| Root cause | No pre-execution check on database mutation tools |
-| Mitigation | **Database authorization and environment isolation** — deny production mutation by default; a caller-assigned risk budget can add a secondary bound |
+**Control.** Restrict development credentials to a development database. Keep a tested restore procedure that the operator can use independently of the agent.
 
 ### B3. OpenAI Operator unauthorized purchase — $31.43
 
-OpenAI's Operator agent [made an unauthorized $31.43 purchase from Instacart](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/), bypassing user confirmation safeguards. The incident is also catalogued in the [AI Incident Database](https://incidentdatabase.ai/cite/1028/).
+Washington Post columnist Geoffrey Fowler asked Operator to find the cheapest dozen eggs he could have delivered. It submitted an Instacart order using his saved card, and a card alert told him he had spent $31.43. He had given it shopping-account access and had never approved a purchase. OpenAI told Fowler its confirmation safeguard failed in this case. The $31.43 was the checkout total, including fees and tip. Fowler’s February 7, 2025 account gives no per-run model cost. [Fowler’s firsthand report](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/)
 
-| | Detail |
-|---|---|
-| Model cost | ~$0.80 |
-| Business impact | Unauthorized financial transaction |
-| Source | [Washington Post](https://www.washingtonpost.com/technology/2025/02/07/openai-operator-ai-agent-chatgpt/), February 2025; [AI Incident Database #1028](https://incidentdatabase.ai/cite/1028/) |
-| Root cause | No pre-execution authorization for payment actions |
-| Mitigation | **Payment authorization** — require an independently enforced user or policy approval; a risk budget can add a secondary bound |
+**Control.** Keep checkout unavailable during price research. For a purchase, require the user to approve the merchant and final total, including fees, before the payment handler submits the order.
 
 ### B4. Accidental production deploy (constructed)
 
-A coding agent, while debugging CI, [triggers a production deployment](/blog/ai-agent-action-failures-runtime-authority-prevents) with an untested fix. Total model cost: $0.80. Business impact: production downtime.
+A coding agent debugging CI triggers a production deployment to verify its fix. The untested change goes live. The example assumes about $0.80 in model spend. Downtime is a possible consequence if the change breaks production. [Deployment scenario](/blog/ai-agent-action-failures-runtime-authority-prevents)
 
-| | Detail |
-|---|---|
-| Model cost | $0.80 |
-| Business impact | Production downtime |
-| Root cause | No action-level gate on deploy tools |
-| Mitigation | **Deployment authorization** — protect production credentials and require approval; caller-assigned risk points can bound permitted attempts |
+**Control.** Give CI debugging jobs a staging target. Keep production credentials in a release job that requires approval for the specific change.
 
 ### B5. Slack data leak (constructed)
 
-A support agent [posts diagnostic information containing internal system names and another customer's tenant ID](/blog/ai-agent-action-failures-runtime-authority-prevents) to an external customer-facing Slack channel.
+A support agent posts internal system names and another customer’s tenant ID in a customer-visible Slack channel. The example assumes about $0.30 in model spend. A single message discloses the information, even if the agent stops immediately afterward. [Slack scenario](/blog/ai-agent-action-failures-runtime-authority-prevents)
 
-| | Detail |
-|---|---|
-| Model cost | $0.30 |
-| Business impact | Data [exposure](/glossary#exposure), security review, possible compliance notification |
-| Root cause | No distinction between internal and external channel tools |
-| Mitigation | **Destination authorization and DLP** — validate channel and outbound data before sending; risk points can bound permitted attempts |
+**Control.** Have the sending application check the channel’s audience and which tenant’s data the message contains before posting.
 
 ### B6. Jira ticket storm (constructed)
 
-A workflow agent [parses a 50-line stack trace incorrectly](/blog/ai-agent-action-failures-runtime-authority-prevents), creates 50 tickets from a single trace. Across 10 error reports, hundreds of duplicate tickets flood the on-call team in 8 minutes.
+A workflow agent treats each line of a 50-line stack trace as a separate error. With ten reports queued, it creates hundreds of tickets and triggers notifications for the same on-call team in under eight minutes. The scenario assumes about $3.50 in model spend. [Ticket-creation scenario](/blog/ai-agent-action-failures-runtime-authority-prevents)
 
-| | Detail |
-|---|---|
-| Model cost | $3.50 |
-| Business impact | On-call team flooded, incident response disrupted |
-| Root cause | No per-run cap on ticket creation actions |
-| Mitigation | **Idempotency and handler quota** — deduplicate requests and enforce a per-run ticket limit before creation |
+**Control.** Derive a deduplication key from the source error and enforce a per-run ticket quota at creation. Deduplication handles repeated reports. The quota also bounds a run that mistakenly generates a fresh key for each line.
 
-## Category C: Security Incidents
+### B7. A PocketOS staging task deletes a production database volume
 
-Attacks exploiting the agent tool layer — tool poisoning, supply chain, privilege escalation, and infrastructure exposure.
+On April 24, 2026, a Cursor agent working on a staging task deleted the production storage volume for PocketOS, according to founder Jer Crane. Rental businesses temporarily lost access to reservation records. Railway confirmed that an account-wide credential authorized the deletion and that the API applied it immediately. Crane and Railway later confirmed that Railway recovered the database. On April 29, Railway reported extending the dashboard’s 48-hour deletion grace period to the API. [Interview with Crane and Railway’s response](https://abcnews.com/GMA/News/rogue-ai-agent-haywire-tech-company-ceo-bullish/story?id=132473181) · [Railway’s incident account](https://blog.railway.com/p/your-ai-wants-to-nuke-your-database)
 
-### C1. postmark-mcp — silent email exfiltration
+**Control.** Scope the staging credential to staging. Enforce the same delay and recovery guarantees for destructive operations across the dashboard and API. One authorized deletion can affect an entire database.
 
-The first confirmed malicious [MCP server](/glossary#mcp-server) in the wild: `postmark-mcp` [silently BCC'd every outgoing email](https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails/) to an attacker-controlled address. It ran for weeks before detection. No user interaction required.
+### B8. A newly connected agent deletes SaaStr’s Salesforce opportunities
 
-| | Detail |
-|---|---|
-| Model cost | N/A (infrastructure attack) |
-| Business impact | All outgoing emails exfiltrated |
-| Source | Snyk, 2026 |
-| Root cause | No tool-call authorization layer; agent trusts any installed MCP server |
-| Mitigation | **Provenance, version pinning, scanning, sandboxing, and egress controls** — an allowlist alone cannot stop an approved malicious handler from silently adding a BCC |
+In an October 17, 2026 disclosure and a subsequent account, Lemkin described a separate incident at SaaStr. A newly connected third-party agent deleted nearly all the opportunity records in its Salesforce pipeline. The vendor, which SaaStr did not name, offered no rollback for the action. A different system held a snapshot taken earlier that day. After an operator approved the restore, the team recovered the pipeline within an hour. The snapshot could only restore changes captured by the time it was taken. [SaaStr’s account of the deletion and recovery](https://www.saastr.com/two-ai-agents-wiped-critical-data-at-saastr-both-times-a-copy-nobody-planned-is-what-saved-us-it-will-happen-to-you-too-plan-for-it/)
 
-### C2. ClawJacked — WebSocket agent hijacking
+**Control.** Grant CRM delete access separately from read and update access. Before enabling bulk deletion, require review of the affected records and verify that an independently stored snapshot can restore them.
 
-Researchers demonstrated that malicious websites can [hijack locally-running AI agents via WebSocket](https://blog.sshh.io/p/everything-wrong-with-mcp), executing arbitrary tool calls through the user's agent session.
+## Category C. Security incidents and research {#category-c-security-incidents}
 
-| | Detail |
-|---|---|
-| Model cost | N/A (attack vector) |
-| Business impact | Arbitrary action execution under user's identity |
-| Source | Security research, February 2026 |
-| Root cause | No authentication between agent host and tool server |
-| Mitigation | **Authentication, authorization, Origin validation, network restriction, and TLS** — scoped budgets are defense in depth after access is secured |
+The evidence in this category ranges from malicious software published to real registries to controlled tests of agent behavior. Each entry identifies what the source observed and which controls apply.
 
-### C3. ClawHub malicious skills — 341 credential-stealing tools
+### C1. A package impersonating Postmark copied outgoing email {#c1-postmark-mcp-—-silent-email-exfiltration}
 
-Researchers [found 341 malicious ClawHub skills](https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html) designed to steal credentials, exfiltrate data, or execute unauthorized actions. Separately, the [ClawJacked disclosure](https://blog.sshh.io/p/everything-wrong-with-mcp) identified 71 additional malicious skills using WebSocket hijacking techniques.
+**Supply-chain incident, September 2025.** Postmark reported that version 1.0.16 of the unofficial `postmark-mcp` npm package added an undisclosed recipient to messages sent through it. Postmark’s own API and service remained secure. Its notice gives no count of copied messages. [Postmark’s incident notice](https://postmarkapp.com/blog/information-regarding-malicious-postmark-mcp-package)
 
-| | Detail |
-|---|---|
-| Scale | 341 malicious skills (Koi Security) + 71 (ClawJacked) |
-| Source | [The Hacker News](https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html), February 2026 |
-| Root cause | No vetting, signing, or sandboxing of community tools |
-| Mitigation | **Publisher verification, provenance, pinning, scanning, sandboxing, and an enforced host tool inventory** |
+**Operator response.** Remove the impersonating package, check provider-side email logs, and rotate credentials that affected messages may have carried. For future installations, verify the publisher against the provider’s own documentation.
 
-### C4. Exposed MCP servers — zero authentication
+### C2. ClawJacked exposed local OpenClaw agents {#c2-clawjacked-—-websocket-agent-hijacking}
 
-Trend Micro [found 492 internet-exposed MCP servers](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data) with no client authentication or traffic encryption. Separately, Knostic [reported 1,862 exposed MCP servers](https://www.knostic.ai/blog/mapping-mcp-servers-study), sampled 119, and found all 119 exposed internal tool listings without authentication.
+**Research demonstration, February 2026.** Oasis Security demonstrated that a website could gain control of a local OpenClaw agent in the researchers’ setup. The gateway already supported authentication. OpenClaw corrected how it checked browser origins, limited failed authentication attempts, and approved new devices. The fixes shipped in version 2026.2.25. [Oasis disclosure](https://www.oasis.security/blog/openclaw-vulnerability) · [OpenClaw release notes](https://github.com/openclaw/openclaw/releases/tag/v2026.2.25)
 
-| | Detail |
-|---|---|
-| Scale | 492 exposed ([Trend Micro](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data)) + 1,862 exposed ([Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study)) |
-| Source | [Trend Micro](https://www.trendaisecurity.com/en-us/resources-insights/research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data), [Knostic](https://www.knostic.ai/blog/mapping-mcp-servers-study), 2026 |
-| Root cause | Deployments exposed MCP servers without authentication, authorization, or transport protection |
-| Mitigation | **MCP authorization where supported, application authentication and authorization, TLS, Origin validation, and network restriction**; budgets are defense in depth, not a substitute |
+**Operator response.** Check the gateway version on developers’ machines as well as shared deployments. Apply the fix and review which devices have permission to control the agent.
 
-### C5. Tool poisoning — 84.2% target-tool-call rate
+### C3. Malicious skills published to ClawHub {#c3-clawhub-malicious-skills-—-341-credential-stealing-tools}
 
-On MCPTox, the [MCP-ITP benchmark](https://arxiv.org/abs/2601.07395) induced the selected legitimate target-tool call in up to 84.2% of evaluated prompts across 12 model/agent settings. It measured tool selection, not production auto-approval prevalence or confirmed live execution. Related MCP threats include rug pulls, schema poisoning, and tool shadowing, but those categories should not all be attributed to this one benchmark.
+**Marketplace audit, February 2026.** On February 1, Koi reported that it had classified 341 of the 2,857 skills it reviewed as malicious. The researchers attributed 335 to a single campaign they called ClawHavoc. On February 16, Koi raised its cumulative finding to 824 malicious skills. The marketplace had grown to more than 10,700 listings by then. Koi did not say it had audited that entire later inventory. These figures count listings. They do not establish how many people installed the skills or lost credentials. [Koi’s original research](https://www.paloaltonetworks.com/blog/security-operations/clawhavoc-ai-agent-skills-poisoning/)
 
-| | Detail |
-|---|---|
-| Measured result | Up to 84.2% selected target-tool calls on evaluated MCPTox prompts |
-| Source | MCP-ITP framework (Ruiqi Li et al., 2026) |
-| Root cause | Agent trusts tool descriptions and auto-approves calls |
-| Mitigation | **Tool scanning and pinning, restricted tool inventory, approval or external authorization, argument validation, sandboxing, and egress controls** |
+**Operator response.** Review the exact skill version and any external software it asks to install before giving it access to secrets. On February 7, OpenClaw announced VirusTotal scanning, daily rescans of active skills, and blocking of downloads flagged as malicious. [OpenClaw’s marketplace update](https://openclaw.ai/blog/virustotal-partnership)
 
-### C6. 30+ CVEs in 60 days
+### C4. Internet-exposed MCP servers disclosed their tool listings {#c4-exposed-mcp-servers-—-zero-authentication}
 
-Security researchers documented [more than 30 CVEs](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f) against MCP implementations in the first 60 days of widespread adoption. The average security score across 17 popular MCP server audits was **34 out of 100**.
+**Exposure studies, July 2025.** Knostic identified 1,862 internet-exposed [MCP servers](/glossary#mcp-server). All 119 it manually checked revealed their internal tool listings without authentication. In a separate study, Trend Micro found 492 servers lacking client authentication and traffic encryption. The studies do not establish how many distinct deployments appear across both samples or how often someone used the exposed tools. [Knostic’s study](https://www.knostic.ai/blog/mapping-mcp-servers-study) · [Trend Micro’s study](https://www.trendaisecurity.com/en-us/resources-insights/deep-research/mcp-security-network-exposed-servers-are-backdoors-to-your-private-data)
 
-| | Detail |
-|---|---|
-| Scale | 30+ CVEs, average security score 34/100 |
-| Source | [AI Security Hub](https://medium.com/ai-security-hub/mcps-first-year-what-30-cves-and-500-server-scans-tell-us-about-ai-s-fastest-growing-attack-6d183fc9497f), 2026 (secondary summary) |
-| Root cause | Rapid adoption without security review |
-| Mitigation | **Patch management, secure implementation review, dependency scanning, and least-privilege deployment**; audit supports detection and investigation |
+**Operator response.** Check which of your own services are publicly reachable. Verify what an unauthenticated client can discover, then test authorization separately for each sensitive operation. Require encrypted transport for remote connections.
 
-### C7. GitHub Copilot RCE — CVE-2025-53773
+### C5. Tool poisoning changed the selected tool in a benchmark {#c5-tool-poisoning-—-84-2-target-tool-call-rate}
 
-A vulnerability in GitHub Copilot [enabled prompt injection to execute arbitrary code](https://www.cve.org/CVERecord?id=CVE-2025-53773) on developer machines.
+**Controlled experiment, January 2026.** Ruiqi Li and colleagues tested 12 model and agent settings on MCPTox. In their main comparison, GPT-3.5-turbo selected the researchers’ target tool in 84.2% of its valid responses, the highest rate in Table 1. The study measured the model’s choice. A deployed system can still reject a proposed call before execution. [MCP-ITP paper, Table 1](https://arxiv.org/html/2601.07395v1)
 
-| | Detail |
-|---|---|
-| Impact | Arbitrary code execution |
-| Source | CVE-2025-53773 |
-| Root cause | No isolation between model reasoning and tool execution |
-| Mitigation | **Apply the security fix, sandbox code execution, restrict credentials and filesystem access, and require authorization before execution** |
+**Operator response.** Treat tool descriptions as untrusted input. At dispatch, check the proposed operation, its arguments, and the caller’s authorization before allowing effects on another system.
 
-### C8. Rogue agent collaboration
+### C6. Malicious releases appeared under the Microsoft Agent Framework package name {#c6-30-cves-in-60-days}
 
-Researchers [demonstrated](https://www.theregister.com/security/2026/03/12/rogue-ai-agents-can-work-together-to-hack-systems/5228926) that compromised agents in multi-agent architectures can coordinate to escalate privileges and compromise downstream systems.
+**Supply-chain incident, November 2026.** On November 17, versions 1.26.1 and 1.26.2 of the legitimate `agent-framework` Python package appeared on PyPI with code designed to steal credentials. Both releases were subsequently removed from PyPI. Wiz verified the malicious content in the packages. The public advisory gives no count of downstream organizations whose credentials were taken. [GitHub Advisory Database](https://github.com/advisories/GHSA-764m-3ppc-5m73) · [Wiz investigation](https://www.wiz.io/blog/malicious-version-of-microsofts-agent-framework-published-to-pypi)
 
-| | Detail |
-|---|---|
-| Impact | Cascading privilege escalation |
-| Source | The Register, March 2026 |
-| Root cause | Compromised agents could coordinate and escalate privileges across trust boundaries |
-| Mitigation | **Strong agent identity, least-privilege authorization, bounded delegation, isolation, and monitoring**; per-agent budgets can limit resource consumption |
+**Operator response.** Check installed versions and build records for both releases, including CI jobs. Rebuild affected environments from verified dependencies and revoke credentials accessible to those environments.
 
-## Category D: Multi-Agent and Systemic Failures
+### C7. Microsoft patched code execution in GitHub Copilot and Visual Studio {#c7-github-copilot-rce-—-cve-2025-53773}
 
-Failures that emerge from agent interactions, coordination, and systemic properties.
+**Vendor advisory, August 2025.** Microsoft disclosed CVE-2025-53773, a command-injection vulnerability allowing local code execution with user interaction. Its Visual Studio 2022 release notes identify the affected control as automatic tool approval and record the fix in version 17.14.12. [Microsoft’s security advisory](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-53773) · [Visual Studio release notes](https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-notes)
 
-### D1. UC Berkeley MAST — 41–87% failure rates
+**Operator response.** Verify that managed developer installations include the fix. Check who can change approval settings, especially in workspaces that contain untrusted project content.
 
-UC Berkeley's [MAST study](https://arxiv.org/abs/2503.13657) analyzed 1,600+ execution traces across seven selected multi-agent frameworks and identified 14 failure modes. Configuration-level failure rates in the evaluated model/task settings ranged from 41% to 86.7%; they are not a universal production failure rate.
+### C8. Responders observed agent frameworks in live intrusions {#c8-rogue-agent-collaboration}
 
-| | Detail |
-|---|---|
-| Failure rate | 41–86.7% across evaluated framework/model/task configurations |
-| Source | [UC Berkeley MAST](https://arxiv.org/abs/2503.13657), NeurIPS 2025 Spotlight |
-| Root cause | System design, inter-agent misalignment, and task-verification failures |
-| Mitigation | **Architecture-specific coordination, validation, and evaluation**; hierarchical budgets can separately bound resource exposure |
+**Incident-response evidence, November 2026.** Google Threat Intelligence Group and Mandiant reported that multiple threat actors deliberately used agent frameworks for specific tasks during live intrusions. Their account documents human-directed use. The [July Hugging Face incident](#hugging-face-july-2026) separately concerns agents that reached a third party during a cybersecurity evaluation. [Google and Mandiant threat report](https://cloud.google.com/blog/topics/threat-intelligence/agentic-threat-activity-crosses-a-significant-threshold)
 
-### D2. Google Research — architecture-dependent error amplification
+**Operator response.** Investigate sensitive actions using identity, endpoint, and service logs that can show which accounts and systems were involved, even when the target has no access to the operator’s model or conversation history.
 
-In a controlled evaluation of 180 configurations, [Google Research](https://research.google/blog/towards-a-science-of-scaling-agent-systems-when-and-why-agent-systems-work/) found that independent agents amplified errors by up to 17.2x, while centralized coordination limited amplification to 4.4x. Separately, a simple independent-step model with 95% reliability per step yields about 36% probability that all 20 steps succeed; that calculation is illustrative and was not the paper's measured result.
+## Category D: Multi-agent coordination failures {#category-d-multi-agent-and-systemic-failures}
 
-| | Detail |
-|---|---|
-| Amplification | Up to 17.2x independent; 4.4x centralized in the evaluated settings |
-| Source | Google Research, January 2026 |
-| Root cause | Errors propagate and compound across agent boundaries |
-| Mitigation | **Validation and centralized coordination where appropriate**; per-agent budgets can keep an error cascade from also exhausting shared spend |
+### D1. Why agent teams miss the task objective (benchmark) {#d1-uc-berkeley-mast-—-41–87-failure-rates}
 
-### D3. Silent failures — 200 OK masking wrong results
+UC Berkeley researchers assembled 1,642 execution traces across seven multi-agent frameworks. A run failed when the team missed the assigned task objective. The authors report failure rates from 41% to 86.7% across the configurations they tested. Their 14 failure modes span system design, coordination among agents, and verification of the final result. A team that repeats a completed step needs a different fix from one that stops before checking its answer. [MAST study, October 2025 revision](https://arxiv.org/html/2503.13657v3)
 
-An agent returns HTTP 200 for every call, but [the underlying data is wrong](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response). In multi-step workflows, the error propagates through 10+ downstream steps before anyone notices — because every step "succeeded."
+### D2. How errors spread between agents (benchmark) {#d2-google-research-—-architecture-dependent-error-amplification}
 
-| | Detail |
-|---|---|
-| Detection time | 10+ steps after the error |
-| Source | Multiple production reports |
-| Root cause | No validation between agent steps; success is measured by status code, not result quality |
-| Mitigation | **Semantic output validation and task-level evaluation between steps**; audit supports reconstruction and budgets bound resource consumption |
+Google Research and collaborators compared five agent architectures across six benchmarks and 260 configurations in their April 2026 revision. With a single agent as the 1.0× baseline, the authors measured 17.2× error amplification in execution traces for independent agents and 4.4× for a centrally coordinated team. For a workflow that delegates the same question to several agents, this suggests testing whether a coordinator catches a wrong answer before passing it downstream. The multipliers describe the experiment's traces. [Scaling study, Table 5](https://arxiv.org/html/2512.08296v3)
 
-## Category E: Industry-Scale Evidence
+### D3. A successful lookup returns the wrong record (constructed) {#d3-silent-failures-—-200-ok-masking-wrong-results}
 
-Statistics from research firms and industry surveys that quantify the systemic problem. These are not agent-specific incidents — they are broader AI adoption data points that provide context for the agent failures above.
+A support agent looks up an account by display name. The API returns HTTP 200 and a valid record for a different customer with the same name. A second agent drafts a billing notice using those details. Both steps can appear successful in the logs. Before drafting the notice, the workflow can compare the returned account ID with the ID on the original ticket and stop on a mismatch. [Silent failures in agent workflows](/blog/ai-agent-silent-failures-why-200-ok-is-the-most-dangerous-response)
 
-| Finding | Source | Year | Notes |
-|---|---|---|---|
-| 64% of surveyed organizations experienced >$1M in losses from AI-related risks | [EY Responsible AI survey](https://www.ey.com/en_uk/insights/ai/how-can-responsible-ai-bridge-the-gap-between-investment-and-impact) | 2025 | Covers AI broadly, not agent-specific |
-| By some estimates, more than 80% of AI projects fail to reach production | [RAND Corporation](https://www.rand.org/pubs/research_reports/RRA2680-1.html) | 2024 | RAND cites the estimate; the underlying rate is debated |
-| 55% of organizations had not yet implemented an AI governance framework; among those that had, 46% used either a dedicated framework or extended another governance framework | [Gartner](https://futurecio.tech/the-what-why-and-how-of-ai-governance-in-2024/) | 2024 | The 46% and 55% are not clean complements — different base populations |
-| Over 40% of agentic AI projects will be canceled by end of 2027 | Gartner forecast | 2025 | Forecast, not measured |
-| Over 80% of firms reported no impact on either employment or productivity over the last 3 years | [NBER](https://www.nber.org/papers/w34836) | 2026 | Broad AI adoption survey, not agent-specific |
+## Category E: What 2026 agent incident studies measured {#category-e-industry-scale-evidence}
+
+**How many public reports describe harm that actually occurred?** In September, the Agent Incident Registry authors published a catalog of 487 agent-related records disclosed from 2022 through 2026. They isolated 336 records in which a generative AI system took action and classified 81 of those as involving realized harm. The catalog also includes research demonstrations and responsible disclosures. Its 24% figure describes that selected subset. Estimating the risk per deployed run would also require counts of uneventful runs. [Agent Incident Registry, September 2026 snapshot](https://arxiv.org/abs/2609.11030v2)
+
+**How often did harm involve an attacker in a separate collection?** A November 19 preprint, ROGUE-AI, screened public reports and selected 199 incidents for analysis. Of those, 72 involved real-world harm. The authors identified 62 of the 72 as having no attacker. One example was a test environment that shared a database with a live site. An operator can check which database the test process can write to even when a trusted user supplies every instruction. The researchers excluded incidents caused by a malicious owner or the vendor’s infrastructure, which limits how broadly that breakdown applies. [ROGUE-AI study, sections 4–5](https://arxiv.org/html/2611.26553v1)
 
 ## Control mapping
 
-The incidents and scenarios map to controls that could mitigate them:
-
-| Control | What it mitigates | Relevant cases |
+| Where to enforce the control | What to check before the next action | Cases |
 |---|---|---|
-| **Budget gate** (pre-execution cost cap) | Runaway spend, loops, retries, and fan-out | A1–A4, D1 |
-| **Application authorization + optional RISK_POINTS budget** | Excessive attempts by allowed tools; not malicious implementation behavior by itself | B1–B6, C5, C7 |
-| **Authentication, authorization, sandboxing, and supply-chain controls** | Unauthorized access, malicious servers and skills, dangerous execution, and exfiltration | C1–C7 |
-| **Scope isolation** (per-tenant, per-agent) | Cross-tenant resource consumption and concurrent budget overruns | A3, C8, D1, D2 |
-| **Audit trail** (structured event log) | Missing evidence for detection, compliance, and reconstruction | C1, C6, D3 |
-| **Atomic reservation** (concurrency-safe) | TOCTOU budget races, double-spend, and concurrent bursts | A3, A4 |
+| Model or paid API gateway | Reserve the estimated cost against the run and shared budget before dispatch. Stop repeated failures and reconcile uncertain charges. | Accounting agent, A1–A4 |
+| Purchase, send, or deploy handler | Bind the proposed action to the approved merchant and amount, message template and recipients, or deployment environment. | B1, B3–B5 |
+| Database or CRM | Separate production credentials, review bulk changes, and test restores from a copy the same credential cannot delete. | B2, B7, B8 |
+| Ticket creation handler | Deduplicate the underlying event and cap new tickets per run. | B6 |
+| Package or skill installation | Verify the publisher and release, restrict accessible secrets, and limit where the process can send data. | C1, C3, C6 |
+| Local gateway, IDE, or remote tool service | Apply fixed releases, authenticate clients, and authorize the proposed operation before dispatch. | C2, C4, C5, C7 |
+| Evaluation environment and target service | Isolate shared services and reject development credentials in production. | Hugging Face, WorkOS |
+| Incident investigation | Correlate identity, endpoint, egress, and target access logs to connect actions across systems. | Hugging Face, WorkOS, C8 |
+| Multi-agent handoff | Check the returned result against the original task or record ID before another agent acts on it. | D1–D3 |
 
-No single control prevents all incidents. Budget, identity, authorization, supply-chain security, isolation, audit, and concurrency controls address different failure dimensions.
-
-## What this means
-
-The incidents in this report share three properties:
-
-1. **The agent had the capability to act.** In these cases and scenarios, the agent could reach tools such as email, deploy, delete, purchase, or API calls. Some paths lacked a mandatory action-specific re-evaluation before execution.
-
-2. **The execution boundary was missing or insufficient.** In several cases, the model's proposed action reached a consequential handler without a control that would have rejected that specific use. The missing controls differed: budget, application authorization, confirmation, argument validation, sandboxing, or scope enforcement.
-
-3. **Detection often happened after the damage.** Dashboards showed cost spikes, logs recorded wrong actions, and alerts fired after side effects. Observation is necessary but does not reverse emails, deleted data, or money already spent.
-
-A mandatory [runtime-authority](/glossary#runtime-authority) boundary can address the budget and cumulative-exposure subset by requiring a reservation before protected actions and recording settlement afterward. The application must still classify any `RISK_POINTS`, authenticate identities, authorize tools and arguments, enforce scope, and apply supply-chain and isolation controls. No single layer addresses every incident category in this report.
-
-The regulatory and risk frameworks emphasize related controls. The [EU AI Act's Article 14](/blog/eu-ai-act-what-actually-happens-august-2-2026) applies human-oversight requirements to high-risk systems. [NIST's AI RMF](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement) calls for controls proportionate to risk. [OWASP's Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) identifies tool misuse, excessive authority, and cascading failures as critical risks. These frameworks can guide mitigations, but they do not prove that a particular control would have prevented a historical event.
+A [runtime authority](/glossary#runtime-authority) check can bound cumulative spend or repeated protected actions. One permitted action can still delete the wrong volume. In that case, the decisive controls are the credential's scope, the target of the operation, and the ability to restore it.
 
 ## Methodology
 
-**Sourcing.** Incidents were collected from public disclosures (TechCrunch, The Register, Snyk), research papers (UC Berkeley MAST, Google DeepMind, MCP-ITP), security advisories (OWASP, CVE database), industry surveys (EY, RAND, Gartner, NBER), and community reports (Hacker News, Reddit, Medium). Constructed scenarios are based on failure modes documented in the [Cycles incident library](/incidents/runaway-agents-tool-loops-and-budget-overruns-the-incidents-cycles-is-designed-to-prevent).
+This is a selection of public evidence reviewed through **November 23, 2026**. It includes earlier cases where the operator's account makes a failure or recovery step clear. Dates refer to the event when the source gives one and to the disclosure when that is all the source establishes. Subsequent corrections and recovery reports take precedence over initial estimates.
 
-**Limitations.** This report has survivorship bias — only incidents that were publicly disclosed or studied are included, so the actual incidence rate is unknown. Cost estimates for constructed scenarios use documented pricing models but may not match specific deployments. Mitigation entries identify controls that could reduce likelihood or blast radius; they are not guarantees that a particular implementation would have caught the exact scenario.
+Charges in the four constructed cost scenarios use the original worked examples' assumptions. The report keeps those figures separate from observed charges, purchase amounts, and unpriced business impacts. Suggested controls are engineering judgments. Their value depends on which requests pass through them and what the target service enforces.
 
-**Updates.** This report will be updated quarterly as new incidents are documented. If you have an incident to report, contact the Cycles team or open an issue on the [docs repository](https://github.com/runcycles/cycles-docs).
+The incidents in this article and the records in the two studies can overlap. No overall incident total or production failure rate is inferred from them. Corrections and new primary-source reports are welcome through the [docs repository](https://github.com/runcycles/cycles-docs).
 
 ## Further reading
 
-- [What Is Runtime Authority for AI Agents?](/blog/what-is-runtime-authority-for-ai-agents) — the foundational concept
-- [AI Agent Governance Framework](/blog/ai-agent-governance-framework-nist-eu-ai-act-iso-42001-owasp-runtime-enforcement) — mapping regulations to runtime controls
-- [AI Agent Risk Assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) — tool-level risk scoring methodology
-- [5 Failures Budget Controls Would Prevent](/blog/ai-agent-failures-budget-controls-prevent) — detailed cost incident analysis
-- [5 Failures Only Action Controls Would Prevent](/blog/ai-agent-action-failures-runtime-authority-prevents) — detailed action incident analysis
-- [Zero Trust for AI Agents](/blog/zero-trust-for-ai-agents-why-every-tool-call-needs-a-policy-decision) — OWASP mapping and policy enforcement
-- [MCP Tool Poisoning](/blog/mcp-tool-poisoning-why-agent-frameworks-cant-prevent-it) — supply chain attack analysis
-- [Why Multi-Agent Systems Fail](/blog/why-multi-agent-systems-fail-87-percent-cost-of-every-coordination-breakdown) — UC Berkeley MAST cost model
-
-## Related how-to guides
-
-- [Assigning RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools)
-- [Integrating with MCP](/how-to/integrating-cycles-with-mcp)
-- [Using the Cycles dashboard](/how-to/using-the-cycles-dashboard)
+- [AI agent risk assessment](/blog/ai-agent-risk-assessment-score-classify-enforce-tool-risk) covers how to assign risk to individual tool actions.
+- [How to assign RISK_POINTS to agent tools](/how-to/assigning-risk-points-to-agent-tools) walks through cumulative action limits.
+- [What goes in an AI agent audit packet](/blog/what-goes-in-an-ai-agent-audit-packet) covers the records needed to trace a decision, a dispatch, and its outcome.
