@@ -71,7 +71,7 @@ def act(client, journal, subject, op):
     return "sent"
 ```
 
-That is the drill's `act` function with its synchronization and lease checks removed.
+That is the drill's `act` function with its synchronization, lease checks, and admission-error logging removed.
 
 A reservation is checked against every ledger in the requested unit along its scope path. Four behaviors follow, all observed against [Cycles Server](/glossary#cycles-server) 0.1.25.59 and exercised by the drill below:
 
