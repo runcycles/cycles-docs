@@ -683,3 +683,14 @@ date,repo,rank,referrer,views,uniques
 2026-11-15,cycles-runaway-demo,3,vuink.com,1,1
 2026-11-15,cycles-agent-action-authority-demo,1,Google,1,1
 2026-11-15,cycles-ap2-python,1,aocr.org,3,3
+2026-11-22,cycles-openai-agents,1,github.com,1,1
+2026-11-22,cycles-docs,1,github.com,19,4
+2026-11-22,cycles-spring-boot-starter,1,Google,1,1
+2026-11-22,cycles-spring-boot-starter,2,github.com,1,1
+2026-11-22,cycles-spring-ai-starter,1,github.com,1,1
+2026-11-22,.github,1,github.com,2,1
+2026-11-22,cycles-server,1,github.com,7,2
+2026-11-22,cycles-client-rust,1,Google,1,1
+2026-11-22,cycles-protocol,1,Google,3,2
+2026-11-22,cycles-protocol,2,github.com,2,1
+2026-11-22,cycles-claude-plugin,1,github.com,1,1
