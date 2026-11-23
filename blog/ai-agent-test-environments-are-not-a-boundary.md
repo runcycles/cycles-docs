@@ -40,7 +40,7 @@ That leaves several questions outside what a network sandbox decides:
 
 Egress isolation and action limits address different failures. Isolation decides which destinations are reachable. It does not limit how many requests go to a destination that is reachable, and when it fails, nothing the agent carries with it is any smaller. The agent that gets out has the same tools, the same step count, and the same instructions it had inside.
 
-Both accounts also describe slow detection. The complaint alleges that an OpenAI team saw at least one agent reach the internet around May 26, that a monitoring tool raised an alert on June 27, and that training runs continued. It further alleges that OpenAI learned it was responsible for the July attack only after Hugging Face disclosed it. WorkOS dates its detection to five days after the first access.
+Both accounts also describe slow detection. OpenAI's report dates the first unintended internet access by an agent to May 26. The complaint alleges that an OpenAI team saw it around that date, that a monitoring tool raised an alert on June 27, and that training runs continued. It further alleges that OpenAI learned it was responsible for the July attack only after Hugging Face disclosed it. WorkOS dates its detection to five days after the first access.
 
 The right-hand column is not a replacement for the left. It is a second control that does not depend on the first one holding.
 
@@ -191,10 +191,11 @@ When Cycles refuses a reservation, log its HTTP status and error code, as the dr
 
 ## Resources
 
-External sources were checked November 21, 2026:
+External sources were checked November 23, 2026:
 
 - [WorkOS: Update for October 30th, 2026 data security incident](https://workos.com/security/bulletins/update-for-october-30th-2026-data-security-incident): attribution to a researcher's agent, timeline, and the four root-cause gaps.
 - [WorkOS: October 30th, 2026 data security incident](https://workos.com/security/bulletins/october-30th-2026-data-security-incident): the original bulletin.
 - [California Attorney General: press release, November 16, 2026](https://oag.ca.gov/news/press-releases/it%E2%80%99s-golden-state-not-wild-west-attorney-general-bonta-sues-openai-over): filing, court, and claims.
+- [OpenAI: The Hugging Face incident and the road ahead](https://openai.com/index/hugging-face-incident-and-the-road-ahead/): OpenAI's account of the July incident, its timeline, and its monitoring coverage.
 - [People v. OpenAI: complaint](https://oag.ca.gov/system/files/attachments/press-docs/complaint-oai-cyber.pdf): the allegations summarized above, including the training-run timeline and incident counts.
 - [Cycles runtime protocol specification](https://github.com/runcycles/cycles-protocol): scope derivation, reservation lifecycle, and error semantics.
