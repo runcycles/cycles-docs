@@ -60,7 +60,7 @@ The table carries three kinds of signal:
 - **A class the incumbent never touched.** The credit tool was always in the catalogue. Now it is in use.
 - **Cheap growth.** Lookups doubled and added 12 points. Weighting keeps that from drowning out the other two.
 
-To get a footprint, give each model its own [scope](/glossary#scope) for the rehearsal, with a ledger per action class, and point the tools at stubs. The drill maps the rehearsal run to `workflow` and the action class to `toolset`, so the server keeps a running total for every class. Give the rehearsal ledgers a large allocation. They are there to measure, and a tight limit would cut the candidate's footprint short and hide the difference.
+To get a footprint, give each model its own [scope](/glossary#scope) for the rehearsal, with a ledger per action class, and point the tools at stubs. The drill maps the rehearsal run to `workflow` and the action class to `toolset`, so the server keeps a running total for every class. Give the rehearsal ledgers a large allocation. They are there to measure, and a tight limit would cut the candidate's footprint short and hide the difference. Put the rehearsal scope where no ancestor has a `RISK_POINTS` ledger, such as a separate test tenant. An ancestor's ledger is checked and charged too, so a rehearsal under a production scope could be cut short by that ledger or spend its headroom.
 
 ## Why a dry run does not measure a footprint
 
@@ -179,7 +179,7 @@ A passing run ends each scenario with a `PASS` line. These were reproduced with 
 
 The script also prints one line per refusal and one per finished run. Its harness records a refusal and stops the ticket. A real harness would choose a [degradation path](/how-to/how-to-think-about-degradation-paths-in-cycles-deny-downgrade-disable-or-defer) at that point, such as handing the ticket to a person, and the drill does not implement one. Its outcome-only grader is the kind the first scenario is meant to show the limits of.
 
-To use the method on a real upgrade, replace the two scripts with your agent running on each model, keep the prompt, tools, and task set fixed, point the tools at stubs, and run each model several times. Report the spread of each class's points across runs alongside the mean.
+The drill is a fixture, and it fails on any result other than the scripted one. To use the method on a real upgrade, reuse its reservation, journal, and reconciliation logic, and replace the scripts and their fixed expectations with your agent running on each model. Keep the prompt, tools, and task set fixed, point the tools at stubs, and run each model several times. Report each run's footprint, then the spread of each class's points across runs alongside the mean.
 
 A model upgrade is usually reviewed as a change in quality and cost. Its footprint by action class is a third thing to read, and the review that reads it can decide what the new model is allowed to do more of before production does.
 

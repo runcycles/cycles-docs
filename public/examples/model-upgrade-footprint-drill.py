@@ -221,8 +221,10 @@ def act(client, journal, run, subject, ticket, op):
 
 
 def work(client, journal, model, run, subject_for, batch):
-    """Run every ticket through one model. On a denial, stop that ticket and
-    leave it for a person. Returns the number of tickets resolved."""
+    """Run every ticket through one model. On a refusal, record it and stop
+    that ticket's remaining actions; no handoff is implemented. A ticket whose
+    required actions had already run still counts as resolved. Returns the
+    number of tickets resolved."""
     resolved = 0
     for ticket, kind in enumerate(TICKETS):
         for step, action_class in enumerate(model(ticket, kind)):
@@ -384,8 +386,9 @@ def main():
              planned_points=planned, aggregate=aggregate, spent_after=0)
 
         # 5. Held allocations. The incumbent finishes every ticket inside
-        #    them. The candidate is stopped by them: its second replies use
-        #    up the reply ledger, and its credits draw on the aggregate.
+        #    them. The candidate is stopped by them: its credits, second
+        #    replies, and read-backs use up the aggregate, and the tickets
+        #    after that are refused at their first lookup.
         check(work(client, journal, incumbent, "incumbent-held",
                    subject_for("incumbent-held"), batch) == len(TICKETS),
               "The incumbent did not fit its own allocations")
