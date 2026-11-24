@@ -6,17 +6,18 @@ Nothing leaves the machine except calls to the Cycles runtime and admin
 servers. No model is called: INCUMBENT and CANDIDATE are fixed scripts that
 choose actions for twelve support tickets, and every "action" lands on a
 local fixture that records what it ran.
-Each invocation creates five scopes under one app and commits 1,635
-RISK_POINTS in total.
+Each invocation creates five workflow scopes under one app, with 28
+ledgers between them, and commits 1,635 RISK_POINTS in total.
 The tenant must have NO RISK_POINTS ledger at the tenant scope: an ancestor
 ledger in the same unit is a further limit this drill does not account for.
 
 What this drill does not implement: real model behavior, concurrency, a
 durable record of dispatched actions, transport retry, or heartbeats. It
 holds both API keys in one process for convenience; a real harness gets only
-the runtime key. On an unexpected error, stop and inspect the printed
-operation IDs: a reservation whose response was lost can stay held until its
-TTL and grace period pass.
+the runtime key. A handled admission error names the idempotency key to
+reconcile with. An interruption between sending a reservation and reading
+its response prints nothing, and that hold stays until its TTL and grace
+period pass.
 """
 
 from collections import Counter
@@ -53,6 +54,19 @@ TOLERANCE = {"lookup": 15, "reply": 20, "update": 0, "refund": 0}
 MEASURE = 10_000          # Rehearsal ledgers measure. They are not limits.
 TTL_MS = 30_000           # Short lease, per the spec's leasing guidance
 DISPATCH_MARGIN_S = 5     # Refuse to dispatch on a lease about to lapse
+# What the two scripts must produce. The drill fails on any other result.
+EXPECT_INCUMBENT = {"lookup": 12, "refund": 120, "reply": 120, "update": 40}
+EXPECT_CANDIDATE = {"credit": 60, "lookup": 24, "refund": 120, "reply": 160, "update": 40}
+EXPECT_HELD = {
+    "resolved": 9,
+    "by_class": {"credit": 60, "lookup": 17, "refund": 90, "reply": 120, "update": 40},
+    "refusals": [(8, "lookup"), (9, "lookup"), (10, "lookup"), (11, "lookup")],
+}
+EXPECT_EXCLUDED = {
+    "resolved": 10,
+    "by_class": {"lookup": 20, "refund": 120, "reply": 140, "update": 40},
+    "refusals": [(1, "credit"), (7, "credit"), (10, "reply"), (11, "reply")],
+}
 
 
 def incumbent(index, kind):
@@ -107,6 +121,9 @@ class Journal:
     def ran(self, run, ticket):
         return [c for name, t, c in self.dispatched if name == run and t == ticket]
 
+    def refused(self, run):
+        return [(t, c) for name, t, c in self.refusals if name == run]
+
     def denied_by_class(self, run):
         return dict(sorted(Counter(c for name, _, c in self.refusals if name == run).items()))
 
@@ -133,6 +150,8 @@ def preflight(client, subject, op):
     body = response.body or {}
     if response.status != 200:
         raise RuntimeError(f"Preflight unresolved for {op}: HTTP {response.status} {body.get('error')}")
+    if "reservation_id" in body or "expires_at_ms" in body:
+        raise RuntimeError(f"Dry run for {op} returned a live reservation")
     return body.get("decision")
 
 
@@ -220,7 +239,7 @@ def work(client, journal, model, run, subject_for, batch):
 
 
 def scope_rows(client, scope_subject):
-    """Every RISK_POINTS balance row at or below this scope, keyed by scope path."""
+    """Every RISK_POINTS balance row matching this subject filter, keyed by scope path."""
     params = {**scope_subject, "limit": "200"}
     rows = {}
     while True:
@@ -264,6 +283,7 @@ def main():
               "Tenant scope has a RISK_POINTS ledger; use a tenant without one")
 
         journal = Journal()
+        provisioned = {}  # run -> {scope path: allocation}
 
         def path(run, action_class=None):
             base = f"tenant:{tenant}/app:{app}/workflow:{run}"
@@ -272,29 +292,33 @@ def main():
         def setup(run, aggregate, class_limits):
             """One scope per run: an aggregate ledger and a ledger per listed class."""
             provision(path(run), aggregate)
+            provisioned[run] = {path(run): aggregate}
             for action_class, limit in class_limits.items():
                 provision(path(run, action_class), limit)
+                provisioned[run][path(run, action_class)] = limit
 
         def subject_for(run):
             return lambda action_class: {"tenant": tenant, "app": app,
                                          "workflow": run, "toolset": action_class}
 
-        def spent(run):
-            """(aggregate spent, {class: spent} for classes that have a ledger)."""
+        def snapshot(run):
+            """{scope path: (allocated, spent, reserved, remaining)} for one run."""
             rows = scope_rows(client, {"tenant": tenant, "app": app, "workflow": run})
-            check(all(row["reserved"]["amount"] == 0 for row in rows.values()),
-                  f"Run {run} left points on hold")
-            by_class = {p.rsplit("toolset:", 1)[1]: row["spent"]["amount"]
-                        for p, row in rows.items() if "/toolset:" in p}
-            return rows[path(run)]["spent"]["amount"], dict(sorted(by_class.items()))
+            return {p: tuple(row[k]["amount"] for k in ("allocated", "spent", "reserved", "remaining"))
+                    for p, row in rows.items()}
 
         def reconcile(run):
-            """The harness journal and the server's ledgers must agree."""
-            total, by_class = spent(run)
+            """Every ledger provisioned for this run must exist and must hold
+            exactly what the harness journal says was committed."""
             recorded = journal.points_by_class(run)
-            check(sum(recorded.values()) == total, f"{run}: journal and aggregate ledger disagree")
-            check(all(recorded.get(c, 0) == points for c, points in by_class.items()),
-                  f"{run}: journal and class ledgers disagree")
+            total = sum(recorded.values())
+            expected = {}
+            for scope_path, allocated in provisioned[run].items():
+                used = (recorded.get(scope_path.rsplit("toolset:", 1)[1], 0)
+                        if "/toolset:" in scope_path else total)
+                expected[scope_path] = (allocated, used, 0, allocated - used)
+            actual = snapshot(run)
+            check(actual == expected, f"{run}: ledgers and journal disagree: {actual} != {expected}")
             return total, recorded
 
         # 1. Rehearsal. Both models work the same tickets against stubbed
@@ -314,8 +338,8 @@ def main():
         #    server's ledgers and reconciled with the harness journal.
         old_total, old = reconcile("incumbent-rehearsal")
         new_total, new = reconcile("candidate-rehearsal")
-        check(spent("candidate-rehearsal")[1] == {c: new.get(c, 0) for c in WEIGHTS},
-              "Class ledgers do not match the candidate footprint")
+        check(old == EXPECT_INCUMBENT and new == EXPECT_CANDIDATE,
+              f"Unexpected footprints: {old} and {new}")
         emit("PASS", scenario="footprint", incumbent=old, incumbent_total=old_total,
              candidate=new, candidate_total=new_total)
 
@@ -347,13 +371,15 @@ def main():
         #    its own, so every preflight says ALLOW. The plan does not fit.
         plan = [(t, s, c) for t, kind in enumerate(TICKETS)
                 for s, c in enumerate(candidate(t, kind))]
+        before = snapshot("candidate-held")
         decisions = Counter(
             preflight(client, subject_for("candidate-held")(c), f"{batch}-plan-t{t}-s{s}")
             for t, s, c in plan)
         planned = sum(WEIGHTS[c] for _, _, c in plan)
         check(decisions == {"ALLOW": len(plan)}, f"Unexpected preflight decisions: {dict(decisions)}")
-        check(planned > aggregate and spent("candidate-held")[0] == 0,
-              "Dry runs changed a ledger, or the plan fits the aggregate")
+        check(planned > aggregate, "The plan fits the aggregate")
+        check(snapshot("candidate-held") == before and reconcile("candidate-held")[0] == 0,
+              "Dry runs changed a ledger")
         emit("PASS", scenario="dry_run", preflights=len(plan), allow=decisions["ALLOW"],
              planned_points=planned, aggregate=aggregate, spent_after=0)
 
@@ -363,7 +389,7 @@ def main():
         check(work(client, journal, incumbent, "incumbent-held",
                    subject_for("incumbent-held"), batch) == len(TICKETS),
               "The incumbent did not fit its own allocations")
-        check(reconcile("incumbent-held")[0] == old_total and not journal.denied_by_class("incumbent-held"),
+        check(reconcile("incumbent-held")[1] == EXPECT_INCUMBENT and not journal.refused("incumbent-held"),
               "The incumbent's held run differs from its rehearsal")
         held_resolved = work(client, journal, candidate, "candidate-held",
                              subject_for("candidate-held"), batch)
@@ -371,6 +397,9 @@ def main():
         check(held_total <= aggregate, "Committed points exceed the aggregate")
         check(all(held.get(c, 0) <= limit for c, limit in limits.items()),
               "Committed points exceed a class allocation")
+        check({"resolved": held_resolved, "by_class": held,
+               "refusals": journal.refused("candidate-held")} == EXPECT_HELD,
+              "Unexpected result for the held candidate run")
         emit("PASS", scenario="held", aggregate=aggregate, incumbent_resolved=len(TICKETS),
              candidate_resolved=held_resolved, candidate_spent=held_total,
              candidate_by_class=held, candidate_denied=journal.denied_by_class("candidate-held"))
@@ -382,7 +411,9 @@ def main():
         excluded_total, excluded = reconcile("candidate-held-excluded")
         check("credit" not in excluded and excluded_total <= aggregate,
               "The excluded class ran, or the aggregate was exceeded")
-        check(excluded_resolved >= held_resolved, "Excluding the new class resolved fewer tickets")
+        check({"resolved": excluded_resolved, "by_class": excluded,
+               "refusals": journal.refused("candidate-held-excluded")} == EXPECT_EXCLUDED,
+              "Unexpected result for the run with the new class excluded")
         emit("PASS", scenario="new_class", candidate_resolved=excluded_resolved,
              candidate_spent=excluded_total, candidate_by_class=excluded,
              candidate_denied=journal.denied_by_class("candidate-held-excluded"))
