@@ -14,11 +14,11 @@ The [changelog](/changelog) is the current version and release-history authority
 | Component | Current version | Compatibility target |
 |---|---:|---|
 | Runtime specification | `0.1.25.16` document revision | Protocol `v0.1.25` |
-| Governance specification | `0.1.25.42` | Governance `v0.1.25` |
-| Runtime server | `0.1.25.59` | Runtime specification `0.1.25.16` |
-| Admin server | `0.1.25.55` | Governance specification `0.1.25.42` |
-| Events service | `0.1.25.25` | Shared v0.1.25 Redis event, delivery, and evidence records |
-| Dashboard | `0.1.25.85` | Current admin, runtime, and evidence views |
+| Governance specification | `0.1.25.44` | Governance `v0.1.25` |
+| Runtime server | `0.1.25.61` | Runtime specification `0.1.25.16` |
+| Admin server | `0.1.25.56` | Governance specification `0.1.25.44` |
+| Events service | `0.1.25.26` | Shared v0.1.25 Redis event, delivery, and evidence records |
+| Dashboard | `0.1.25.87` | Current admin, runtime, and evidence views |
 
 Client SDK and integration versions are listed in the [current version matrix](/changelog#current-versions). They can be upgraded independently unless their release notes require a newer server feature.
 
@@ -56,7 +56,9 @@ When release notes and this summary disagree, follow the release notes and YAML 
 
 ## Rolling order
 
-For additive v0.1.25 patches, upgrade components in this order:
+For the admin `0.1.25.56` cutover, upgrade every runtime producer to `0.1.25.61` and every events worker to `0.1.25.26` first. Once both are healthy, drain and stop all older admin writers, including replicas and scheduled jobs. Take a Redis snapshot before starting the new admin and let its startup migration encrypt existing webhook headers. Restore traffic after readiness. Older writers can erase encrypted headers. See the [release cutover and rollback instructions](https://github.com/runcycles/cycles-dashboard/blob/v0.1.25.87/OPERATIONS.md#upgrades-and-rollback).
+
+For other additive v0.1.25 patches, upgrade components in this order:
 
 1. **Events service** — it consumes event, delivery, and evidence records produced by the other services.
 2. **Runtime and admin servers** — upgrade one instance at a time; either service can precede the other unless a release note names a paired security rollout.

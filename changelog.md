@@ -7,7 +7,7 @@ description: "Release history and current versions for the Cycles Protocol, serv
 
 Release history for the Cycles Protocol and reference implementations.
 
-## v0.1.25.x — patch releases (April-July 2026)
+## v0.1.25.x — patch releases (April-November 2026)
 
 Since the initial v0.1.25 Events & Webhooks release, each component has shipped a stream of patch releases. Wire format is stable within `0.1.x`; every change below is **additive** unless explicitly marked breaking.
 
@@ -16,11 +16,11 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 | Component | Version | Release date |
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.16) | 2026-07-28 |
-| Governance spec (admin) | v0.1.25.42 | 2026-07-21 |
-| `cycles-server` (runtime) | v0.1.25.59 | 2026-07-28 |
-| `cycles-server-admin` | v0.1.25.55 | 2026-07-21 |
-| `cycles-server-events` | v0.1.25.25 | 2026-07-18 |
-| `cycles-dashboard` | v0.1.25.85 | 2026-07-21 |
+| Governance spec (admin) | v0.1.25.44 | 2026-11-27 |
+| `cycles-server` (runtime) | v0.1.25.61 | 2026-11-27 |
+| `cycles-server-admin` | v0.1.25.56 | 2026-11-27 |
+| `cycles-server-events` | v0.1.25.26 | 2026-11-27 |
+| `cycles-dashboard` | v0.1.25.87 | 2026-11-27 |
 
 **Client SDKs and plugins.** The language clients and plugin integrations are versioned independently from the protocol / server / dashboard tracks — they track the client API surface rather than the wire spec. Current releases:
 
@@ -346,10 +346,10 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `@runcycles/mcp-server` | 0.6.1 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.9.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Budget Guard for Claude Code | 0.2.1 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.1 |
-| Cycles Server (runtime) | v0.1.25.59 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
-| Cycles Admin Server | v0.1.25.55 | Governance spec v0.1.25.42 |
-| Cycles Events Service | v0.1.25.25 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
-| Cycles Dashboard | v0.1.25.85 | Admin v0.1.25.42 for current governance views; runtime v0.1.25.37+ for reservation evidence links; events v0.1.25.14+ for signed evidence |
+| Cycles Server (runtime) | v0.1.25.61 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
+| Cycles Admin Server | v0.1.25.56 | Governance spec v0.1.25.44 |
+| Cycles Events Service | v0.1.25.26 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
+| Cycles Dashboard | v0.1.25.87 | Bundles admin v0.1.25.56, runtime v0.1.25.61 and events v0.1.25.26 |
 
 The four language-client versions in the compatibility table are backward-compatible with server v0.1.23. Integration packages can require a newer client or server feature; follow each package's release notes. New v0.1.24 features (budget patch, policy patch, capped `ALLOW_IF_AVAILABLE` commits) require server v0.1.24+. New v0.1.25 features (event emission, webhook delivery, events service, `policy_id` / `deny_detail` on `reservation.denied`) require server v0.1.25.
 
