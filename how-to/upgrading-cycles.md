@@ -15,7 +15,7 @@ The [changelog](/changelog) is the current version and release-history authority
 |---|---:|---|
 | Runtime specification | `0.1.25.16` document revision | Protocol `v0.1.25` |
 | Governance specification | `0.1.25.44` | Governance `v0.1.25` |
-| Runtime server | `0.1.25.62` on main, `0.1.25.61` published | Runtime specification `0.1.25.16` |
+| Runtime server | `0.1.25.62` | Runtime specification `0.1.25.16` |
 | Admin server | `0.1.25.56` | Governance specification `0.1.25.44` |
 | Events service | `0.1.25.26` | Shared v0.1.25 Redis event, delivery, and evidence records |
 | Dashboard | `0.1.25.87` | Current admin, runtime, and evidence views |

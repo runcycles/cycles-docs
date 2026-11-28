@@ -17,7 +17,7 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.16) | 2026-07-28 |
 | Governance spec (admin) | v0.1.25.44 | 2026-11-27 |
-| `cycles-server` (runtime) | v0.1.25.62 (on main) | Pending. Latest published release is [v0.1.25.61](https://github.com/runcycles/cycles-server/releases/tag/v0.1.25.61). |
+| `cycles-server` (runtime) | v0.1.25.62 | 2026-11-28 |
 | `cycles-server-admin` | v0.1.25.56 | 2026-11-27 |
 | `cycles-server-events` | v0.1.25.26 | 2026-11-27 |
 | `cycles-dashboard` | v0.1.25.87 | 2026-11-27 |
@@ -53,6 +53,7 @@ The four current language SDKs are validated against runtime spec revision 0.1.2
 
 ### Runtime server (`cycles-server`)
 
+- **v0.1.25.62** (2026-11-28) — Concurrent requests using the same API key share one BCrypt verification when the cached result expires. Each request still checks the current key and tenant records. [Release notes](https://github.com/runcycles/cycles-server/releases/tag/v0.1.25.62)
 - **v0.1.25.59** (2026-07-28) — emits server-authoritative `remaining_ttl_ms` on successful live reserve and extend responses. Both create and extend same-key replays recompute it from current Redis time (returning `0` once inactive); all other replay fields remain verbatim, and the volatile field is excluded from CyclesEvidence.
 - **v0.1.25.58** (2026-07-14) — Successful keyed direct-event replays now increment `cycles_events_total{decision="APPLIED",reason="IDEMPOTENT_REPLAY"}`. Mutation-only overdraft telemetry remains exactly-once.
 - **v0.1.25.57** (2026-07-14) — Test-and-documentation release adding deterministic lost-response recovery coverage and frozen rolling-upgrade Redis fixtures. No production behavior or wire change.
@@ -346,7 +347,7 @@ The default `commit_overage_policy` changed from **`REJECT`** to **`ALLOW_IF_AVA
 | `@runcycles/mcp-server` | 0.6.1 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | `@runcycles/openclaw-budget-guard` | 0.9.0 | v0.1.23+, v0.1.24+, v0.1.25+ |
 | Cycles Budget Guard for Claude Code | 0.2.1 | v0.1.23+, v0.1.24+, v0.1.25+; companion MCP server 0.6.1 |
-| Cycles Server (runtime) | v0.1.25.61 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
+| Cycles Server (runtime) | v0.1.25.62 | Protocol v0.1.25 (runtime revision v0.1.25.16) plus CyclesEvidence v0.2.2 signer-authority layer |
 | Cycles Admin Server | v0.1.25.56 | Governance spec v0.1.25.44 |
 | Cycles Events Service | v0.1.25.26 | Shared Redis dispatch queue plus CyclesEvidence signing queue |
 | Cycles Dashboard | v0.1.25.87 | Bundles admin v0.1.25.56, runtime v0.1.25.61 and events v0.1.25.26 |
