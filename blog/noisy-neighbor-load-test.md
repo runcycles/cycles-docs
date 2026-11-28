@@ -35,13 +35,13 @@ Our earlier benchmarks put up to 200 concurrent clients on shared and independen
 
 The generator scheduled new cycles by the clock, including while earlier cycles were still in flight. A client that waits for each response before sending its next request eases off exactly when the service starts taking longer. An arrival schedule lets you ask what happens to a customer who continues sending traffic through that slowdown. [Grafana's explanation of open and closed load models](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)
 
-In a pilot with a two-CPU runtime, the five-second client deadline expired on every dispatched warm-up cycle. We started over on an empty stack, gave the runtime eight CPUs and completed one cycle per tenant before applying concurrent load. We changed both conditions together, so the pilot can't tell us which change mattered.
+In a pilot with a two-CPU runtime, all 200 quiet cycles and all 256 background cycles that started during warm-up timed out. The generator missed the other 1,744 scheduled background starts. We started over on an empty stack, gave the runtime eight CPUs and completed one cycle per tenant before applying concurrent load. We changed both conditions together, so the pilot can't tell us which change mattered.
 
 For the measured run, we followed those first 17 cycles with a 20-second warm-up, then measured each condition for 60 seconds per pass. The generator had a two-CPU quota. Redis had one CPU and persistence disabled. All three ran on the same Docker Desktop host, an AMD Ryzen Threadripper 3990X. We used [Cycles server](/glossary#cycles-server) 0.1.25.61, admin 0.1.25.56, Redis 7.4.9 and Node 20.20.2. The two passes shared the same processes and retained their data between conditions.
 
 ## Quiet-tenant p99 under background load
 
-Each pass had one idle minute. Both lines in its panel start at that same measurement.
+Both lines share one quiet-only measurement per pass. Pass 1 ran from zero to 200 offered background cycles per second. Pass 2 ran from 200 back to zero on the same stack. Both lanes used the same Node clock and start time, so each scheduled quiet arrival under load coincided with a scheduled background arrival.
 
 ![Quiet-tenant p99 latency across two passes at 0, 50 and 200 offered background cycles per second. Both tenant mixes reach their highest p99 at 200.](/blog/noisy-neighbor-latency.png)
 
@@ -69,11 +69,11 @@ docker compose run --rm -T load > results.jsonl
 docker compose down -v
 ```
 
-Each output line describes one minute. `probe` is the quiet customer and `background` covers the other tenants. Latency starts when the generator dispatches a cycle and ends after it reads the commit response. Each lane reports completed cycles, missed starts, timeouts, other errors and dispatch delay. A cycle more than 25 ms late or arriving with 64 cycles already in flight in its lane counts as a missed start. Each HTTP call has a five-second deadline. Read those counts before interpreting a percentile calculated from successful cycles.
+Each output line describes one minute. `probe` is the quiet customer and `background` covers the other tenants. Latency starts when the generator dispatches a cycle and ends after it reads the commit response. Each lane reports completed cycles, missed starts, timeouts, other errors and dispatch delay. A cycle more than 25 ms late or arriving with 64 cycles already in flight in its lane counts as a missed start. Reserve and commit each have a five-second client deadline. Read those counts before interpreting a percentile calculated from successful cycles.
 
 For a job queue, give the quiet customer a small job that arrives every 100 ms. Time it from enqueue until the worker acknowledges completion. Then add bulk jobs from one account and repeat with the same jobs spread across accounts. A separate count of jobs still unacknowledged at the deadline keeps a fast percentile from hiding a growing backlog.
 
 **Resources**
 
 - [Reserve-commit request lifecycle](/protocol/how-reserve-commit-works-in-cycles)
-- [Measured trial summaries](/examples/noisy-neighbor/results.jsonl)
+- <a href="/examples/noisy-neighbor/results.jsonl" download>Download the ten measured trial summaries (JSON Lines)</a>
