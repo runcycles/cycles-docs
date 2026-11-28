@@ -17,7 +17,7 @@ Since the initial v0.1.25 Events & Webhooks release, each component has shipped 
 |---|---|---|
 | Protocol spec (runtime) | v0.1.25 (document revision v0.1.25.16) | 2026-07-28 |
 | Governance spec (admin) | v0.1.25.44 | 2026-11-27 |
-| `cycles-server` (runtime) | v0.1.25.61 | 2026-11-27 |
+| `cycles-server` (runtime) | v0.1.25.62 (on main) | Pending. Latest published release is [v0.1.25.61](https://github.com/runcycles/cycles-server/releases/tag/v0.1.25.61). |
 | `cycles-server-admin` | v0.1.25.56 | 2026-11-27 |
 | `cycles-server-events` | v0.1.25.26 | 2026-11-27 |
 | `cycles-dashboard` | v0.1.25.87 | 2026-11-27 |
